@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples\Tenantry.Samples.Aot\Tenantry.Samples.Aot.csproj" />
+    <Project Path="samples\Tenantry.Samples.EfCoreConsole\Tenantry.Samples.EfCoreConsole.csproj" />
+    <Project Path="samples\Tenantry.Samples.EfCoreWeb\Tenantry.Samples.EfCoreWeb.csproj" />
+    <Project Path="samples\Tenantry.Samples.Quickstart\Tenantry.Samples.Quickstart.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />
+    <Project Path="src\Tenantry.Core\Tenantry.Core.csproj" />
+    <Project Path="src\Tenantry.EfCore\Tenantry.EfCore.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests\Tenantry.AspNetCore.Tests\Tenantry.AspNetCore.Tests.csproj" />
+    <Project Path="tests\Tenantry.Core.Tests\Tenantry.Core.Tests.csproj" />
+    <Project Path="tests\Tenantry.EfCore.Tests\Tenantry.EfCore.Tests.csproj" />
+    <Project Path="tests\Tenantry.IntegrationTests\Tenantry.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

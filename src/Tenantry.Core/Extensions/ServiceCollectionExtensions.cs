@@ -1,0 +1,56 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Tenantry.Core.Internal;
+
+namespace Tenantry.Core.Extensions;
+
+/// <summary>
+/// Extension methods for registering core TenantKit services.
+/// </summary>
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers the core TenantKit services: the tenant context accessor (AsyncLocal singleton)
+    /// and the <see cref="ITenantContext{TKey}"/> / <see cref="ITenantScope{TKey}"/> interfaces.
+    /// </summary>
+    /// <remarks>
+    /// Use this entry point for worker services, console apps, and other non-HTTP hosts.
+    /// For ASP.NET Core applications, use <c>AddMultiTenancy&lt;TKey&gt;()</c> instead,
+    /// which calls this method internally and adds HTTP-specific resolution on top.
+    ///
+    /// All registrations are idempotent — calling both <c>AddTenantryCore</c> and
+    /// <c>AddMultiTenancy</c> is safe.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Worker service — no ASP.NET Core required
+    /// builder.Services.AddTenantryCore&lt;Guid&gt;(tenant =&gt;
+    /// {
+    ///     tenant.AddEfCoreIsolation(options =&gt; options.StrictIsolation = true);
+    /// });
+    ///
+    /// // Set tenant manually before doing EF Core work:
+    /// var accessor = sp.GetRequiredService&lt;ITenantScope&lt;Guid&gt;&gt;();
+    /// accessor.SetTenant(new TenantDescriptor&lt;Guid&gt; { TenantId = tenantId, Name = "Acme" });
+    /// try { /* EF Core work */ }
+    /// finally { accessor.ClearTenant(); }
+    /// </code>
+    /// </example>
+    public static IServiceCollection AddTenantryCore<TKey>(
+        this IServiceCollection services,
+        Action<ITenantBuilder<TKey>>? configure = null)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        services.TryAddSingleton<TenantScope<TKey>>();
+        services.TryAddSingleton<ITenantContext<TKey>>(sp => sp.GetRequiredService<TenantScope<TKey>>());
+        services.TryAddSingleton<ITenantScope<TKey>>(sp => sp.GetRequiredService<TenantScope<TKey>>());
+
+        if (configure is not null)
+        {
+            TenantBuilder<TKey> builder = new(services);
+            configure(builder);
+        }
+
+        return services;
+    }
+}

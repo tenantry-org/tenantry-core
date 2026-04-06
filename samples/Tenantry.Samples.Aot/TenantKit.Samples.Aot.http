@@ -1,0 +1,24 @@
+@host = http://localhost:5268
+
+### List orders for Acme
+GET {{host}}/orders
+X-Tenant-Id: acme
+Accept: application/json
+
+### List orders for Globex
+GET {{host}}/orders
+X-Tenant-Id: globex
+Accept: application/json
+
+### Show current tenant
+GET {{host}}/me
+X-Tenant-Id: acme
+Accept: application/json
+
+### Health check (no tenant needed)
+GET {{host}}/health
+Accept: application/json
+
+### Orders without tenant header (should fail)
+GET {{host}}/orders
+Accept: application/json

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <PublishAot>true</PublishAot>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />
+      <ProjectReference Include="..\..\src\Tenantry.Core\Tenantry.Core.csproj" />
+    </ItemGroup>
+
+</Project>

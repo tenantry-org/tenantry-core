@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on tags like v0.1.0-alpha, v1.0.0, etc.
+
+jobs:
+  release:
+    name: Build, Test & Publish to NuGet
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # MinVer needs full history for version calculation
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore TenantKit.slnx
+
+      - name: Build
+        run: dotnet build TenantKit.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test TenantKit.slnx -c Release --no-build --logger "console;verbosity=minimal"
+
+      - name: Pack
+        run: |
+          dotnet pack src/TenantKit.Core          -c Release --no-build -o ./artifacts
+          dotnet pack src/TenantKit.AspNetCore    -c Release --no-build -o ./artifacts
+          dotnet pack src/TenantKit.EfCore        -c Release --no-build -o ./artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts/*.nupkg
+
+      - name: Push to NuGet
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./artifacts/*.nupkg
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

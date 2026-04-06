@@ -1,0 +1,30 @@
+@host = http://localhost:5172
+
+### Get orders for Acme tenant
+GET {{host}}/orders
+X-Tenant-Id: acme
+
+### Get orders for Globex tenant
+GET {{host}}/orders
+X-Tenant-Id: globex
+
+### Get current tenant info for Acme
+GET {{host}}/me
+X-Tenant-Id: acme
+
+### Get current tenant info for Globex, using the query string resolver we registered
+GET {{host}}/me?tenant=globex
+X-Or-This-Alternative: ignored # We have to pass this alternative due to the ValidateTenantAccessAny call
+
+### Using the query string resolver without the alternative header will fail with 403
+GET {{host}}/me?tenant=globex
+
+### Get current tenant info for Globex
+GET {{host}}/me
+X-Tenant-Id: globex
+
+### Get current tenant info without tenant header (should return 404)
+GET {{host}}/me
+
+### Health check (no tenant required)
+GET {{host}}/health

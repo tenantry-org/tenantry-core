@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageDescription>ASP.NET Core integration for TenantKit. Provides tenant resolvers (header, subdomain, route, claim, query string), resolution middleware, and DI registration extensions.</PackageDescription>
+    <PackageTags>multi-tenancy;aspnetcore;middleware;saas;tenantkit;tenant-isolation</PackageTags>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tenantry.Core\Tenantry.Core.csproj" IncludeAssets="compile;runtime;build;native;contentfiles;analyzers;buildtransitive" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>
