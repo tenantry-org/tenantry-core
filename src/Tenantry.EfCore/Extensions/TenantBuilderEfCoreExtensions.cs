@@ -11,11 +11,11 @@ public static class TenantBuilderEfCoreExtensions
 {
     /// <summary>
     /// Registers EF Core tenant isolation services (interceptor, strict isolation).
-    /// Call this inside your <c>AddMultiTenancy</c> configuration lambda.
+    /// Call this inside your <c>AddTenantry</c> configuration lambda.
     /// </summary>
     /// <example>
     /// <code>
-    /// builder.Services.AddMultiTenancy&lt;Guid&gt;(tenant =&gt;
+    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt;
     /// {
     ///     tenant.ResolveFromHeader("X-Tenant-Id");
     ///     tenant.UseInMemoryStore(tenants);

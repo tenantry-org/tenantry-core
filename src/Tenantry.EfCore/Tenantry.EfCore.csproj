@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageDescription>EF Core integration for TenantKit. Provides the interceptor-first tenant isolation path, shared database strategy, strict isolation mode, and optional MultiTenantDbContext base class.</PackageDescription>
-    <PackageTags>multi-tenancy;efcore;aspnetcore;saas;tenantkit;tenant-isolation</PackageTags>
+    <PackageDescription>EF Core integration for Tenantry. Provides the interceptor-first tenant isolation path, shared database strategy, strict isolation mode, and optional MultiTenantDbContext base class.</PackageDescription>
+    <PackageTags>multi-tenancy;efcore;aspnetcore;saas;tenantry;tenant-isolation</PackageTags>
     <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>
 

@@ -5,7 +5,7 @@ using Tenantry.AspNetCore.Internal;
 namespace Tenantry.AspNetCore.Extensions;
 
 /// <summary>
-/// Extension methods for adding TenantKit middleware to the request pipeline.
+/// Extension methods for adding Tenantry middleware to the request pipeline.
 /// </summary>
 public static class ApplicationBuilderExtensions
 {

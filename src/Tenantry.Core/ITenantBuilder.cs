@@ -6,7 +6,7 @@ namespace Tenantry.Core;
 /// <summary>
 /// Minimal builder interface that captures <typeparamref name="TKey"/> and exposes
 /// the service collection. Satellite packages (e.g. Tenantry.EfCore) add extension
-/// methods on this interface so users only specify TKey once in <c>AddMultiTenancy</c>.
+/// methods on this interface so users only specify TKey once in <c>AddTenantry</c>.
 /// </summary>
 /// <typeparam name="TKey">
 /// The tenant identifier type. Must implement <see cref="IEquatable{T}"/> and <see cref="IParsable{T}"/>.

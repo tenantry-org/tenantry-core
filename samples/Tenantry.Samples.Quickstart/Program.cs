@@ -4,7 +4,7 @@ using Tenantry.Core;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register TenantKit
+// Register Tenantry
 builder.Services.AddTenantry<string>(tenant =>
 {
     // Read the tenant ID from the X-Tenant-Id HTTP header.

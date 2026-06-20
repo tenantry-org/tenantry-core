@@ -5,12 +5,12 @@ using Tenantry.EfCore.Internal;
 namespace Tenantry.EfCore.Extensions;
 
 /// <summary>
-/// Extension methods for wiring TenantKit into <see cref="DbContextOptionsBuilder"/>.
+/// Extension methods for wiring Tenantry into <see cref="DbContextOptionsBuilder"/>.
 /// </summary>
 public static class DbContextOptionsBuilderExtensions
 {
     /// <summary>
-    /// Adds TenantKit interceptors to the <see cref="DbContextOptionsBuilder"/>.
+    /// Adds Tenantry interceptors to the <see cref="DbContextOptionsBuilder"/>.
     /// Requires <c>AddEfCoreIsolation()</c> to have been called inside <c>AddTenantryCore()</c>.
     /// </summary>
     /// <param name="optionsBuilder">The options builder for the application's <see cref="DbContext"/>.</param>

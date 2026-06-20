@@ -4,14 +4,14 @@ using Tenantry.AspNetCore.Attributes;
 namespace Tenantry.AspNetCore.Extensions;
 
 /// <summary>
-/// Extension methods for applying TenantKit endpoint metadata.
+/// Extension methods for applying Tenantry endpoint metadata.
 /// </summary>
 public static class EndpointConventionBuilderExtensions
 {
     extension<TBuilder>(TBuilder builder) where TBuilder : IEndpointConventionBuilder
     {
         /// <summary>
-        /// Requires TenantKit to resolve a tenant for the endpoint.
+        /// Requires Tenantry to resolve a tenant for the endpoint.
         /// </summary>
         public TBuilder RequireTenant()
         {

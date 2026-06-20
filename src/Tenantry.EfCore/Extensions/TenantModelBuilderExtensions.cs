@@ -12,7 +12,7 @@ namespace Tenantry.EfCore.Extensions;
 public static class TenantModelBuilderExtensions
 {
 #if NET10_0_OR_GREATER 
-    private const string TenantKitFilterKey = "__TenantKitFilter__";
+    private const string TenantryFilterKey = "__TenantryFilter__";
 #endif
     
     /// <summary>
@@ -22,7 +22,7 @@ public static class TenantModelBuilderExtensions
     /// </summary>
     /// <typeparam name="TKey">
     /// The tenant identifier type. Must match the key type used in
-    /// <see cref="ITenantScoped{TKey}"/> and the TenantKit DI registration.
+    /// <see cref="ITenantScoped{TKey}"/> and the Tenantry DI registration.
     /// </typeparam>
     /// <typeparam name="TContext">
     /// A <see cref="DbContext"/> subtype that also implements <see cref="ITenantAwareDbContext{TKey}"/>.
@@ -78,12 +78,12 @@ public static class TenantModelBuilderExtensions
             // If nothing registered we can add keyed and exit
             if (existingFilters.Count == 0)
             {
-                builder.HasQueryFilter(TenantKitFilterKey, tenantFilter);
+                builder.HasQueryFilter(TenantryFilterKey, tenantFilter);
                 continue;
             }
             
             // Check if we've already applied our filter, can exit
-            if (existingFilters.Any(f => f.Key == TenantKitFilterKey))
+            if (existingFilters.Any(f => f.Key == TenantryFilterKey))
             {
                 continue;
             }
@@ -101,7 +101,7 @@ public static class TenantModelBuilderExtensions
             }
             
             // Otherwise, we can safely add the keyed filter
-            builder.HasQueryFilter(TenantKitFilterKey, tenantFilter);
+            builder.HasQueryFilter(TenantryFilterKey, tenantFilter);
 #else
             // Pre-EF10: combine with existing filter since keyed filters aren't supported
             var existingFilter = entityType.GetQueryFilter();

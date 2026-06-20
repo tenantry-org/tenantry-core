@@ -6,10 +6,10 @@ namespace Tenantry.Core;
 /// </summary>
 /// <typeparam name="TKey">
 /// The tenant identifier type. Must match the <c>TKey</c> used in the rest of
-/// the TenantKit registration (e.g. <see cref="System.Guid"/>, <see langword="string"/>).
+/// the Tenantry registration (e.g. <see cref="System.Guid"/>, <see langword="string"/>).
 /// </typeparam>
 /// <remarks>
-/// When using the TenantKit EF Core integration, the <c>TenantId</c> property will be
+/// When using the Tenantry EF Core integration, the <c>TenantId</c> property will be
 /// automatically set by an interceptor on <c>SaveChanges</c>.
 /// No entity is saved to the wrong tenant. No base class is required.
 /// </remarks>

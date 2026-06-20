@@ -5,21 +5,21 @@ using Tenantry.Core.Internal;
 namespace Tenantry.Core.Extensions;
 
 /// <summary>
-/// Extension methods for registering core TenantKit services.
+/// Extension methods for registering core Tenantry services.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the core TenantKit services: the tenant context accessor (AsyncLocal singleton)
+    /// Registers the core Tenantry services: the tenant context accessor (AsyncLocal singleton)
     /// and the <see cref="ITenantContext{TKey}"/> / <see cref="ITenantScope{TKey}"/> interfaces.
     /// </summary>
     /// <remarks>
     /// Use this entry point for worker services, console apps, and other non-HTTP hosts.
-    /// For ASP.NET Core applications, use <c>AddMultiTenancy&lt;TKey&gt;()</c> instead,
+    /// For ASP.NET Core applications, use <c>AddTenantry&lt;TKey&gt;()</c> instead,
     /// which calls this method internally and adds HTTP-specific resolution on top.
     ///
     /// All registrations are idempotent — calling both <c>AddTenantryCore</c> and
-    /// <c>AddMultiTenancy</c> is safe.
+    /// <c>AddTenantry</c> is safe.
     /// </remarks>
     /// <example>
     /// <code>
@@ -29,11 +29,12 @@ public static class ServiceCollectionExtensions
     ///     tenant.AddEfCoreIsolation(options =&gt; options.StrictIsolation = true);
     /// });
     ///
-    /// // Set tenant manually before doing EF Core work:
-    /// var accessor = sp.GetRequiredService&lt;ITenantScope&lt;Guid&gt;&gt;();
-    /// accessor.SetTenant(new TenantDescriptor&lt;Guid&gt; { TenantId = tenantId, Name = "Acme" });
-    /// try { /* EF Core work */ }
-    /// finally { accessor.ClearTenant(); }
+    /// // Enter a tenant scope before doing EF Core work:
+    /// var scope = sp.GetRequiredService&lt;ITenantScope&lt;Guid&gt;&gt;();
+    /// using (scope.BeginScope(new TenantDescriptor&lt;Guid&gt; { TenantId = tenantId, Name = "Acme" }))
+    /// {
+    ///     // EF Core work runs in the tenant context here
+    /// }
     /// </code>
     /// </example>
     public static IServiceCollection AddTenantryCore<TKey>(

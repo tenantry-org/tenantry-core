@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageDescription>ASP.NET Core integration for TenantKit. Provides tenant resolvers (header, subdomain, route, claim, query string), resolution middleware, and DI registration extensions.</PackageDescription>
-    <PackageTags>multi-tenancy;aspnetcore;middleware;saas;tenantkit;tenant-isolation</PackageTags>
+    <PackageDescription>ASP.NET Core integration for Tenantry. Provides tenant resolvers (header, subdomain, route, claim, query string), resolution middleware, and DI registration extensions.</PackageDescription>
+    <PackageTags>multi-tenancy;aspnetcore;middleware;saas;tenantry;tenant-isolation</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
     <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>

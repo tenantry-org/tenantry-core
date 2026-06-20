@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageDescription>Core interfaces and abstractions for TenantKit. Provides ITenantInfo, ITenantContext, ITenantStore, ITenantBuilder, and tenant isolation exceptions.</PackageDescription>
-    <PackageTags>multi-tenancy;aspnetcore;saas;tenantkit;tenant-isolation</PackageTags>
+    <PackageDescription>Core interfaces and abstractions for Tenantry. Provides ITenantDescriptor, ITenantContext, ITenantStore, ITenantBuilder, and tenant isolation exceptions.</PackageDescription>
+    <PackageTags>multi-tenancy;aspnetcore;saas;tenantry;tenant-isolation</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
     <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>

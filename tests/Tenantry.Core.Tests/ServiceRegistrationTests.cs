@@ -8,7 +8,7 @@ namespace Tenantry.Core.Tests;
 public sealed class ServiceRegistrationTests
 {
     [Fact]
-    public void AddTenantKitCore_WithNullConfigure_RegistersCoreServices()
+    public void AddTenantryCore_WithNullConfigure_RegistersCoreServices()
     {
         ServiceCollection services = new();
         services.AddTenantryCore<string>();
@@ -24,7 +24,7 @@ public sealed class ServiceRegistrationTests
     }
 
     [Fact]
-    public void AddTenantKitCore_UseStoreFactory_RegistersFactoryStore()
+    public void AddTenantryCore_UseStoreFactory_RegistersFactoryStore()
     {
         ServiceCollection services = new();
         services.AddTenantryCore<string>(builder =>
@@ -41,7 +41,7 @@ public sealed class ServiceRegistrationTests
     }
 
     [Fact]
-    public void AddTenantKitCore_UseStoreGeneric_RegistersStoreType()
+    public void AddTenantryCore_UseStoreGeneric_RegistersStoreType()
     {
         ServiceCollection services = new();
         services.AddTenantryCore<string>(builder =>

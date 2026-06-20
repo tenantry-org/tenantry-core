@@ -24,7 +24,7 @@ internal sealed class TenantConfigurationValidatorHostedService<TKey> : IHostedS
         if (!_resolvers.Any())
         {
             throw new InvalidOperationException(
-                $"TenantKit is misconfigured for tenant key type '{typeof(TKey).Name}': no tenant resolvers were registered. " +
+                $"Tenantry is misconfigured for tenant key type '{typeof(TKey).Name}': no tenant resolvers were registered. " +
                 $"Add at least one resolver such as tenant.ResolveFromHeader(...), tenant.ResolveFromRouteValue(...), " +
                 $"tenant.ResolveFromClaim(...), tenant.ResolveFromSubdomain(), or tenant.UseResolver(...).");
         }
@@ -34,7 +34,7 @@ internal sealed class TenantConfigurationValidatorHostedService<TKey> : IHostedS
         if (scope.ServiceProvider.GetService<ITenantStore<TKey>>() is null)
         {
             throw new InvalidOperationException(
-                $"TenantKit is misconfigured for tenant key type '{typeof(TKey).Name}': no tenant store was registered. " +
+                $"Tenantry is misconfigured for tenant key type '{typeof(TKey).Name}': no tenant store was registered. " +
                 $"Add a tenant store such as tenant.UseInMemoryStore(...), tenant.UseStore<TStore>(), or tenant.UseStore(...).");
         }
 

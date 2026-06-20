@@ -59,7 +59,7 @@ public interface IAspNetCoreTenantBuilder<TKey> : ITenantBuilder<TKey>
     IAspNetCoreTenantBuilder<TKey> UseResolver(Func<IServiceProvider, ITenantResolver> factory);
 
     /// <summary>
-    /// Requires tenant resolution by default for requests that pass through TenantKit middleware.
+    /// Requires tenant resolution by default for requests that pass through Tenantry middleware.
     /// </summary>
     IAspNetCoreTenantBuilder<TKey> RequireTenantByDefault();
 

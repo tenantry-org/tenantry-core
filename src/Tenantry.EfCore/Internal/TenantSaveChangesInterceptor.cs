@@ -22,7 +22,7 @@ namespace Tenantry.EfCore.Internal;
 ///   <item>Throws <see cref="TenantIsolationViolationException"/> (before any data is written) if a violation is detected.</item>
 /// </list>
 ///
-/// Register via <c>builder.AddEfCoreIsolation()</c> inside <c>AddTenantKit</c> or <c>AddTenantryCore</c>, then call
+/// Register via <c>builder.AddEfCoreIsolation()</c> inside <c>AddTenantry</c> or <c>AddTenantryCore</c>, then call
 /// <c>options.AddTenantInterceptors(sp)</c> in your <c>AddDbContext</c> callback.
 /// </remarks>
 internal sealed class TenantSaveChangesInterceptor<TKey>(

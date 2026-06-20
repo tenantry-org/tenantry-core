@@ -1,4 +1,4 @@
-// TenantKit EF Core Sample — Demonstrates realistic multi-tenant EF Core usage
+// Tenantry EF Core Sample — Demonstrates realistic multi-tenant EF Core usage
 //
 // This sample shows:
 // - Real EF Core migrations (not EnsureCreated)
@@ -38,7 +38,7 @@ using Tenantry.Samples.EfCoreWeb.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── 1. Register TenantKit ─────────────────────────────────────────────────────
+// ── 1. Register Tenantry ─────────────────────────────────────────────────────
 builder.Services.AddTenantry<string>(tenant =>
 {
     tenant.ResolveFromHeader("X-Tenant-Id");
@@ -215,7 +215,7 @@ app.MapGet("/me", (ITenantContext<string> ctx) =>
 });
 
 Console.WriteLine("""
-TenantKit EF Core Sample is running!
+Tenantry EF Core Sample is running!
 
 Tenants (seeded from database):
   Acme:   acme

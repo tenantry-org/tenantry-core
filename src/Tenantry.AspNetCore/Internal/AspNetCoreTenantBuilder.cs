@@ -101,7 +101,7 @@ internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services)
     }
 
     /// <summary>
-    /// Requires tenant resolution by default for requests that pass through TenantKit middleware.
+    /// Requires tenant resolution by default for requests that pass through Tenantry middleware.
     /// Endpoints can override this default with <c>AllowMissingTenant()</c>.
     /// </summary>
     public IAspNetCoreTenantBuilder<TKey> RequireTenantByDefault()
@@ -178,7 +178,7 @@ internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services)
 
     /// <summary>
     /// Validates that the current request is allowed to access the resolved tenant
-    /// before TenantKit sets the tenant context.
+    /// before Tenantry sets the tenant context.
     /// </summary>
     /// <param name="validator">
     /// A synchronous validator that returns <see langword="true"/> when the current user
@@ -195,7 +195,7 @@ internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services)
 
     /// <summary>
     /// Validates that the current request is allowed to access the resolved tenant
-    /// before TenantKit sets the tenant context.
+    /// before Tenantry sets the tenant context.
     /// </summary>
     /// <param name="validator">
     /// An asynchronous validator that returns <see langword="true"/> when the current user
@@ -215,5 +215,5 @@ internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services)
             .LastOrDefault(sd => sd.ServiceType == typeof(TenantResolutionOptions<TKey>))
             ?.ImplementationInstance as TenantResolutionOptions<TKey>
         ?? throw new InvalidOperationException(
-            $"TenantKit internal error: {nameof(TenantResolutionOptions<>)} was not registered.");
+            $"Tenantry internal error: {nameof(TenantResolutionOptions<>)} was not registered.");
 }

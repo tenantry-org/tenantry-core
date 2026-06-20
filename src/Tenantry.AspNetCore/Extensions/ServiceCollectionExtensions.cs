@@ -5,12 +5,12 @@ using Tenantry.Core.Extensions;
 namespace Tenantry.AspNetCore.Extensions;
 
 /// <summary>
-/// Extension methods for registering TenantKit services.
+/// Extension methods for registering Tenantry services.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers TenantKit services for ASP.NET Core and returns an <see cref="IAspNetCoreTenantBuilder{TKey}"/>
+    /// Registers Tenantry services for ASP.NET Core and returns an <see cref="IAspNetCoreTenantBuilder{TKey}"/>
     /// for further configuration.
     /// </summary>
     /// <typeparam name="TKey">
