@@ -1,6 +1,5 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Tenantry.EfCore.Tests.Infrastructure;
 
 namespace Tenantry.EfCore.Tests;
 

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Http;
-using Tenantry.AspNetCore.Extensions;
 using Tenantry.Core;
 
 namespace Tenantry.AspNetCore.Internal;

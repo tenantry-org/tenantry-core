@@ -3,7 +3,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Tenantry.EfCore.Internal;
-using Tenantry.EfCore.Tests.Infrastructure;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
 
@@ -54,13 +53,15 @@ public sealed class InterceptorNoTenantContextTests
         // no-detector warning branch in ApplyTenantIsolation.
         var ctx = TestTenantContext.Empty();
         await using var conn = DbContextFactory.CreateSharedConnection();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
 
         db.Orders.Add(new Order { Description = "Sync no tenant" });
 
         var act = () => db.SaveChanges();
 
         act.Should().NotThrow();
+        
+        await db.DisposeAsync();
     }
 
     [Fact]
@@ -112,14 +113,16 @@ public sealed class InterceptorNoTenantContextTests
             .UseSqlite(connection)
             .AddInterceptors(interceptor)
             .Options;
-
-        await using var db = new TestDbContext(options, tenantContext);
+        
+        var db = new TestDbContext(options, tenantContext);
         await db.Database.EnsureCreatedAsync();
 
         db.Orders.Add(new Order { Description = "no tenant with detector" });
 
         Func<Task> act = () => db.SaveChangesAsync();
         await act.Should().NotThrowAsync();
+        
+        await db.DisposeAsync();
     }
 
     [Fact]
@@ -141,19 +144,42 @@ public sealed class InterceptorNoTenantContextTests
             .AddInterceptors(interceptor)
             .Options;
 
-        await using var db = new TestDbContext(options, tenantContext);
+        var db = new TestDbContext(options, tenantContext);
         await db.Database.EnsureCreatedAsync();
 
         db.Orders.Add(new Order { Description = "no tenant" });
 
         Func<Task> act = () => db.SaveChangesAsync();
         await act.Should().NotThrowAsync();
+        
+        await db.DisposeAsync();
     }
 
     private sealed class NullContextEventData : DbContextEventData
     {
         // DbContextEventData stores constructor args as-is; null! for eventDefinition
-        // is safe because the interceptor never invokes the message generator.
+        // it is safe because the interceptor never invokes the message generator.
         public NullContextEventData() : base(null!, (_, _) => string.Empty, null) { }
+    }
+
+    [Fact]
+    public async Task Apply_SkipsNonTenantScopedEntities()
+    {
+        // Verifies the branch where an entry.Entity is not ITenantScoped — the applier should skip it.
+        var ctx = TestTenantContext.For("acme");
+
+        await using var conn = DbContextFactory.CreateSharedConnection();
+        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+
+        // A mapped entity type that does not implement ITenantScoped<string>
+        var nonTenant = new NonTenant { Name = "plain" };
+
+        // Add to change tracker (no need to save) so there's an EntityEntry for it
+        db.NonTenants.Add(nonTenant);
+
+        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+
+        act.Should().NotThrow();
+        await db.DisposeAsync();
     }
 }

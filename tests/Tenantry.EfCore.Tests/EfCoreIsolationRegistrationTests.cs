@@ -1,9 +1,9 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Tenantry.Core;
 using Tenantry.Core.Extensions;
 using Tenantry.Core.Internal;
+using Tenantry.Core.Stores;
 using Tenantry.EfCore.Extensions;
 using Tenantry.EfCore.Internal;
 
@@ -75,4 +75,20 @@ public sealed class EfCoreIsolationRegistrationTests
     /// <summary>Minimal ITenantBuilder implementation for unit tests.</summary>
     private sealed class TestTenantBuilder<TKey>(IServiceCollection services) : TenantBuilder<TKey>(services)
         where TKey : IEquatable<TKey>, IParsable<TKey>;
+
+    [Fact]
+    public void TenantBuilder_UseStoreFactory_RegistersFactoryDirectly()
+    {
+        ServiceCollection services = new();
+        ITenantBuilder<string> builder = new TestTenantBuilder<string>(services);
+
+        builder.UseStore(_ => new InMemoryTenantStore<string>([]));
+
+        using var sp = services.BuildServiceProvider();
+        using var scope = sp.CreateScope();
+
+        var store = scope.ServiceProvider.GetRequiredService<ITenantStore<string>>();
+
+        store.Should().NotBeNull();
+    }
 }

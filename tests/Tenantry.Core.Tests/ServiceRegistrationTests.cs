@@ -57,6 +57,7 @@ public sealed class ServiceRegistrationTests
         store.Should().BeOfType<StubTenantStore>();
     }
 
+
     private sealed class StubTenantStore : ITenantStore<string>
     {
         public ValueTask<ITenantDescriptor<string>?> GetTenantAsync(string tenantId, CancellationToken cancellationToken = default)
@@ -65,4 +66,6 @@ public sealed class ServiceRegistrationTests
         public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken cancellationToken = default)
             => ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([]);
     }
+
+    // no additional internal-visibility tests here; internal TenantBuilder is exercised from the EfCore.Tests assembly
 }

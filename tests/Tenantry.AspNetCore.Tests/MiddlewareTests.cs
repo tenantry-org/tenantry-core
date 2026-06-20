@@ -2,7 +2,6 @@ using System.Security.Claims;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.Logging;
 using Tenantry.AspNetCore.Extensions;
 using Tenantry.AspNetCore.Attributes;
 using Tenantry.Core;

@@ -27,6 +27,7 @@ public class TestDbContext(DbContextOptions<TestDbContext> options, ITenantConte
     : DbContext(options), ITenantAwareDbContext<string>
 {
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<NonTenant> NonTenants => Set<NonTenant>();
 
     /// <inheritdoc />
     public string? CurrentTenantId => tenantContext.CurrentTenantId;
@@ -80,3 +81,16 @@ public class GuidTestDbContext(DbContextOptions<GuidTestDbContext> options, ITen
         modelBuilder.ApplyTenantFilters<Guid, GuidTestDbContext>(this);
     }
 }
+
+/// <summary>
+/// A mapped entity that does not implement ITenantScoped — used to ensure the isolation applier
+/// and validator skip non-tenant-scoped types.
+/// </summary>
+public class NonTenant
+{
+    public int Id { get; set; }
+    
+    [MaxLength(64)]
+    public string Name { get; set; } = string.Empty;
+}
+

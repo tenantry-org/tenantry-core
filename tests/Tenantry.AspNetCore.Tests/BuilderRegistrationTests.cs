@@ -1,6 +1,4 @@
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using Tenantry.AspNetCore.Extensions;
 using Tenantry.AspNetCore.Resolution;
 
@@ -18,7 +16,7 @@ public sealed class BuilderRegistrationTests
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant =>
         {
-            tenant.ResolveFromClaim("tenant_id");
+            tenant.ResolveFromClaim();
             tenant.UseInMemoryStore([]);
         });
 
@@ -33,7 +31,7 @@ public sealed class BuilderRegistrationTests
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant =>
         {
-            tenant.ResolveFromRouteValue("tenant");
+            tenant.ResolveFromRouteValue();
             tenant.UseInMemoryStore([]);
         });
 

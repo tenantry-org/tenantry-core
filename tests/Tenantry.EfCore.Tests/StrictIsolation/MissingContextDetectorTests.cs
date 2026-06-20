@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using Tenantry.EfCore.Internal;
-using Tenantry.EfCore.Tests.Infrastructure;
 
 namespace Tenantry.EfCore.Tests.StrictIsolation;
 
@@ -69,14 +68,14 @@ public sealed class MissingContextDetectorTests
         }
 
         public sealed record LogEntry(LogLevel LogLevel, string Message);
+    }
+    
+    private sealed class NullScope : IDisposable
+    {
+        public static NullScope Instance { get; } = new();
 
-        private sealed class NullScope : IDisposable
+        public void Dispose()
         {
-            public static NullScope Instance { get; } = new();
-
-            public void Dispose()
-            {
-            }
         }
     }
 }

@@ -1,6 +1,5 @@
 using AwesomeAssertions;
 using Tenantry.Core;
-using Tenantry.EfCore.Tests.Infrastructure;
 
 namespace Tenantry.EfCore.Tests;
 

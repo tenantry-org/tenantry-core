@@ -2,7 +2,6 @@ using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Tenantry.Core.Exceptions;
 using Tenantry.EfCore.Internal;
-using Tenantry.EfCore.Tests.Infrastructure;
 
 namespace Tenantry.EfCore.Tests.StrictIsolation;
 
@@ -160,5 +159,52 @@ public sealed class StrictIsolationValidatorTests
         ex.EntityTypeName.Should().Be(nameof(Order));
         ex.OffendingTenantId.Should().Be("attacker");
         ex.ExpectedTenantId.Should().Be("acme");
+    }
+
+    [Fact]
+    public async Task NonTargetState_IsSkipped()
+    {
+        var ctx = TestTenantContext.For("acme");
+        var validator = MakeValidator();
+
+        await using var conn = DbContextFactory.CreateSharedConnection();
+        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+
+        // Save an acme order so it exists in the DB and is tracked
+        db.Orders.Add(new Order { TenantId = "acme", Description = "original" });
+        await db.SaveChangesAsync();
+
+
+        // Detach the tracked entity and re-attach a new instance with the same key but
+        // a different TenantId. Attach sets the entry to Unchanged which exercises the
+        // "non-target state" branch in the validator.
+        var saved = await db.Orders.FirstAsync();
+        db.Entry(saved).State = EntityState.Detached;
+
+        var attachedWithWrongTenant = new Order { Id = saved.Id, TenantId = "globex", Description = saved.Description };
+        db.Attach(attachedWithWrongTenant); // State = Unchanged
+
+        var act = () => validator.Validate(db.ChangeTracker.Entries(), ctx);
+
+        act.Should().NotThrow();
+        await db.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task NonTenantEntity_IsSkipped()
+    {
+        var ctx = TestTenantContext.For("acme");
+        var validator = MakeValidator();
+
+        await using var conn = DbContextFactory.CreateSharedConnection();
+        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+
+        // Add a mapped entity that does not implement ITenantScoped — validator should skip it
+        db.NonTenants.Add(new NonTenant { Name = "plain" });
+
+        var act = () => validator.Validate(db.ChangeTracker.Entries(), ctx);
+
+        act.Should().NotThrow();
+        await db.DisposeAsync();
     }
 }

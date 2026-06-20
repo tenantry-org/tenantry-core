@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Tenantry.Core;
 using Tenantry.EfCore.Extensions;
 using Tenantry.EfCore.Internal;
-using Tenantry.EfCore.Tests.Infrastructure;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
 
