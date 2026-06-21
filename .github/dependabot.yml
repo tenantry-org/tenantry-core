@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Ordered: first matching group wins, so test deps land here rather than in "microsoft".
+      test:
+        patterns:
+          - "xunit*"
+          - "*Moq*"
+          - "coverlet*"
+          - "Microsoft.NET.Test.Sdk"
+      microsoft:        # EF Core / ASP.NET / Extensions tend to version together
+        patterns:
+          - "Microsoft.*"
+          - "System.*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"

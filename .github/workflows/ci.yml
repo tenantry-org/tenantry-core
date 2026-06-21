@@ -6,83 +6,17 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true   # superseded PR pushes can be cancelled
+
 jobs:
   build-and-test:
-    name: Build & Test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # MinVer needs full history; SonarCloud needs it for SCM blame
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
-
-      - name: Setup Java (required by the Sonar scanner)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Install tooling
-        run: |
-          dotnet tool install --global dotnet-sonarscanner
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-
-      - name: Restore
-        run: dotnet restore Tenantry.slnx
-
-      - name: SonarCloud begin
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: >
-          dotnet sonarscanner begin
-          /k:"tenantry-org_tenantry-core"
-          /o:"tenantry-org"
-          /d:sonar.host.url="https://sonarcloud.io"
-          /d:sonar.token="${SONAR_TOKEN}"
-          /d:sonar.cs.opencover.reportsPaths="coverage/**/coverage.opencover.xml"
-          /d:sonar.coverage.exclusions="samples/**"
-          /d:sonar.qualitygate.wait=true
-
-      - name: Build
-        run: dotnet build Tenantry.slnx -c Release --no-restore
-
-      - name: Test (all) + coverage
-        run: >
-          dotnet test Tenantry.slnx -c Release --no-build
-          --collect:"XPlat Code Coverage;Format=opencover"
-          --results-directory ./coverage
-          --logger "console;verbosity=minimal"
-
-      - name: SonarCloud end (uploads analysis, fails on quality gate)
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
-
-      - name: Coverage gate (>= 90% line coverage)
-        run: |
-          reportgenerator \
-            -reports:"coverage/**/coverage.opencover.xml" \
-            -targetdir:coverage/report \
-            -reporttypes:JsonSummary
-          line=$(jq '.summary.linecoverage' coverage/report/Summary.json)
-          echo "Total line coverage: ${line}%"
-          awk "BEGIN { exit !(${line} >= 90) }" || {
-            echo "::error::Line coverage ${line}% is below the required 90%"
-            exit 1
-          }
-
-      - name: Verify AOT publish
-        run: dotnet publish samples/Tenantry.Samples.Aot -c Release
+    uses: ./.github/workflows/build-test.yml
+    secrets: inherit
 
   pack:
     name: Pack NuGet

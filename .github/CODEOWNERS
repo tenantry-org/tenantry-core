@@ -1,0 +1,7 @@
+# Default owner for everything in the repo
+*                       @olliejm
+
+# Supply-chain-critical paths — always reviewed by a maintainer
+/.github/               @olliejm
+/src/                   @olliejm
+Directory.Build.props   @olliejm
