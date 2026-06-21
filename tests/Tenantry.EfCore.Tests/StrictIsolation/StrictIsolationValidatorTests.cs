@@ -44,6 +44,24 @@ public sealed class StrictIsolationValidatorTests
     }
 
     [Fact]
+    public async Task AddedEntity_EmptyStringTenantId_IsSkipped()
+    {
+        var ctx = TestTenantContext.For("acme");
+        var validator = MakeValidator();
+
+        await using var conn = DbContextFactory.CreateSharedConnection();
+        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        // string.Empty is treated as unstamped (devs often init strings to "" rather than
+        // null), so the validator skips it just like null — the interceptor will stamp it.
+        db.Orders.Add(new Order { TenantId = string.Empty, Description = "unstamped" });
+
+        var act = () => validator.Validate(db.ChangeTracker.Entries(), ctx);
+
+        act.Should().NotThrow();
+        await db.DisposeAsync();
+    }
+
+    [Fact]
     public async Task AddedEntity_MatchingTenantId_DoesNotThrow()
     {
         var ctx = TestTenantContext.For("acme");
@@ -183,6 +201,27 @@ public sealed class StrictIsolationValidatorTests
 
         var attachedWithWrongTenant = new Order { Id = saved.Id, TenantId = "globex", Description = saved.Description };
         db.Attach(attachedWithWrongTenant); // State = Unchanged
+
+        var act = () => validator.Validate(db.ChangeTracker.Entries(), ctx);
+
+        act.Should().NotThrow();
+        await db.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task AddedEntity_NonStringKey_DoesNotThrow()
+    {
+        // With a value-type key (Guid), the `tenantId is string` fast-path in IsUnstamped is
+        // never matched — this exercises the non-string branch of the unstamped check that
+        // the string-keyed tests can't reach.
+        var tenantId = Guid.NewGuid();
+        var ctx = new GuidTestTenantContext().As(tenantId);
+        var validator = new StrictIsolationValidator<Guid>(
+            NullLogger<StrictIsolationValidator<Guid>>.Instance);
+
+        await using var conn = DbContextFactory.CreateSharedConnection();
+        var db = await DbContextFactory.CreateGuidInterceptorContextAsync(ctx, conn);
+        db.Orders.Add(new GuidOrder { TenantId = tenantId, Description = "matching" });
 
         var act = () => validator.Validate(db.ChangeTracker.Entries(), ctx);
 

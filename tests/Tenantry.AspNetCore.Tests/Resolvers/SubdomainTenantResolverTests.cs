@@ -69,4 +69,18 @@ public sealed class SubdomainTenantResolverTests
 
         result.Should().BeNull();
     }
+
+    [Fact]
+    public async Task MultiSegmentHost_WithEmptyLeadingSegment_ReturnsNull()
+    {
+        // ".example.com" has 3 segments (so it passes the length check), but the first
+        // label is blank — the resolved subdomain is whitespace, so we return null
+        // rather than an empty string.
+        SubdomainTenantResolver resolver = new();
+        var context = ContextWithHost(".example.com");
+
+        var result = await resolver.ResolveAsync(context);
+
+        result.Should().BeNull();
+    }
 }

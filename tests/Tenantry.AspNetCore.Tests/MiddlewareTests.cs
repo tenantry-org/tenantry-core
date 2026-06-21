@@ -351,6 +351,91 @@ public sealed class MiddlewareTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ValidateTenantAccess_WhenNamedUserIsDenied_Returns403()
+    {
+        // Identical to the denied case above, but the principal carries a Name claim and an
+        // authentication type. This exercises the authenticated/named-user branch of the
+        // access-denied warning log (User.Identity?.Name is non-null), complementing the
+        // anonymous case which hits the "(anonymous)" fallback.
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+
+        builder.Services.AddTenantry<string>(tenant =>
+        {
+            tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.UseInMemoryStore(
+            [
+                new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
+                new TenantDescriptor<string> { TenantId = "globex", Name = "Globex LLC" },
+            ]);
+            tenant.ValidateTenantAccess((httpContext, tenantInfo) =>
+                httpContext.User.HasClaim("tenant_id", tenantInfo.TenantId));
+        });
+
+        await using var app = builder.Build();
+        app.Use(async (context, next) =>
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.Name, "alice"),
+                new Claim("tenant_id", "acme"),
+            ], "test"));
+            await next(context);
+        });
+        app.UseTenantry();
+        app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
+        await app.StartAsync();
+
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
+
+        var response = await client.GetAsync("/tenant");
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
+        body.Should().Be("Tenant access denied.");
+    }
+
+    [Fact]
+    public async Task ValidateTenantAccess_WhenUnauthenticatedUserIsDenied_Returns403()
+    {
+        // The principal has no identity at all (User.Identity is null) and is denied —
+        // exercises the null-identity branch of the access-denied warning log, which falls
+        // back to "(anonymous)".
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+
+        builder.Services.AddTenantry<string>(tenant =>
+        {
+            tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.UseInMemoryStore(
+            [
+                new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
+            ]);
+            tenant.ValidateTenantAccess((_, _) => false);
+        });
+
+        await using var app = builder.Build();
+        app.Use(async (context, next) =>
+        {
+            context.User = new ClaimsPrincipal(); // no identities -> User.Identity is null
+            await next(context);
+        });
+        app.UseTenantry();
+        app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
+        await app.StartAsync();
+
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
+
+        var response = await client.GetAsync("/tenant");
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
+        body.Should().Be("Tenant access denied.");
+    }
+
+    [Fact]
     public async Task ValidateTenantAccessByClaim_WhenSingleClaimMatches_AllowsRequest()
     {
         var builder = WebApplication.CreateBuilder();
