@@ -38,7 +38,7 @@ internal sealed class MissingContextDetector<TKey>(ILogger<MissingContextDetecto
         logger.LogWarning(
             "Operation '{Operation}' executed without a resolved tenant context. " +
             "Query filters will not be applied and TenantId will not be stamped. " +
-            "If this endpoint requires tenant isolation, ensure app.UseMultiTenancy() " +
+            "If this endpoint requires tenant isolation, ensure app.UseTenantry() " +
             "is registered before this middleware in the pipeline",
             operationDescription);
 

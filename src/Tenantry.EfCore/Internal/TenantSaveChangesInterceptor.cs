@@ -73,7 +73,7 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
                 logger.LogWarning(
                     "SaveChanges called without a resolved tenant context. " +
                     "Entities will not have TenantId stamped and cross-tenant validation is skipped. " +
-                    "Ensure app.UseMultiTenancy() is registered in the middleware pipeline");
+                    "Ensure app.UseTenantry() is registered in the middleware pipeline");
             }
             
             return;
