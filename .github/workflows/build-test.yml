@@ -41,9 +41,8 @@ jobs:
         run: dotnet restore Tenantry.slnx
 
       - name: SonarCloud begin
-        # Secrets are not exposed to PRs from forks — skip Sonar there (it still runs on
-        # push to master). Build/test/coverage gates below run regardless.
-        if: ${{ github.event.pull_request.head.repo.fork != true }}
+        # Secrets are not exposed to PRs from forks etc - only run on pushes
+        if: github.event_name == 'push'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
@@ -67,7 +66,7 @@ jobs:
           --logger "console;verbosity=minimal"
 
       - name: SonarCloud end (uploads analysis, fails on quality gate)
-        if: ${{ github.event.pull_request.head.repo.fork != true }}
+        if: github.event_name == 'push'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
