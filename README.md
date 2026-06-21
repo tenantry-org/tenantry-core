@@ -1,5 +1,8 @@
 # Tenantry
 
+[![CI](https://github.com/tenantry-org/tenantry-core/actions/workflows/ci.yml/badge.svg)](https://github.com/tenantry-org/tenantry-core/actions/workflows/ci.yml)
+[![Release](https://github.com/tenantry-org/tenantry-core/actions/workflows/release.yml/badge.svg)](https://github.com/tenantry-org/tenantry-core/actions/workflows/release.yml)
+
 A flexible, modern, and unopinionated multi-tenancy library for .NET.
 
 ## Packages

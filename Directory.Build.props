@@ -7,7 +7,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <Authors>Tenantry Contributors</Authors>
-    <RepositoryUrl>https://github.com/tenantry-dotnet/tenantry-core</RepositoryUrl>
+    <RepositoryUrl>https://github.com/tenantry-org/tenantry-core</RepositoryUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
