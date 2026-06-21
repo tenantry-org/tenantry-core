@@ -79,3 +79,9 @@ publish/
 
 .claude/
 *.db
+
+# Local SonarCloud MCP tooling (personal agent setup — not part of the library)
+.sonarcloud.env
+.sonarcloud.env.example
+.mcp.json
+scripts/sonar-mcp.sh
