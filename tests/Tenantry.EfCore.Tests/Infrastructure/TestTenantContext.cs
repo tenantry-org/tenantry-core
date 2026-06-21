@@ -84,9 +84,7 @@ public sealed class GuidTestTenantContext : ITenantContext<Guid>
     /// at CLR level (not <c>Nullable&lt;TKey&gt;</c>). Returns <c>default</c> when no tenant
     /// is set; check <see cref="HasTenant"/> to distinguish from a legitimate empty Guid.
     /// </remarks>
-#pragma warning disable CS8766 // Nullability of return type doesn't match implicitly implemented member
-    public Guid CurrentTenantId => CurrentTenantLocal.Value?.TenantId ?? default;
-#pragma warning restore CS8766
+    public Guid CurrentTenantId => CurrentTenantLocal.Value?.TenantId ?? Guid.Empty;
 
     /// <summary>Sets the current tenant to the given ID and returns this instance.</summary>
     public GuidTestTenantContext As(Guid tenantId)

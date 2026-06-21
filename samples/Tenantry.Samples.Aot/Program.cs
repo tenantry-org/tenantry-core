@@ -1,6 +1,7 @@
-using System.Text.Json.Serialization;
 using Tenantry.AspNetCore.Extensions;
 using Tenantry.Core;
+using Tenantry.Samples.Aot.Models;
+using Tenantry.Samples.Aot.Serialization;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
@@ -44,12 +45,3 @@ app.MapGet("/health", () => "ok")
     .AllowMissingTenant();
 
 await app.RunAsync();
-
-internal record Order(string TenantId, string Description, decimal Amount);
-
-internal record TenantResponse(string TenantId, string Name);
-
-[JsonSerializable(typeof(IEnumerable<Order>))]
-[JsonSerializable(typeof(TenantResponse))]
-[JsonSerializable(typeof(string))]
-internal partial class AppJsonSerializerContext : JsonSerializerContext;

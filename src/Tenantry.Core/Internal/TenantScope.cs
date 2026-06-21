@@ -29,16 +29,16 @@ internal sealed class TenantScope<TKey> : ITenantScope<TKey>
     {
         ArgumentNullException.ThrowIfNull(tenant);
 
-        if (CurrentTenantLocal.Value is not null)
-            throw new InvalidOperationException(
-                "A tenant scope is already active. Nested scopes are not supported");
-
+        // Save the current tenant and restore it on dispose. This supports nested scopes: an inner
+        // scope shadows the outer one, and the outer tenant is restored when the inner scope is
+        // disposed. (The ambient value flows down into awaited callees, never back up to the caller.)
+        var previous = CurrentTenantLocal.Value;
         CurrentTenantLocal.Value = tenant;
-        return new ScopeHandle();
+        return new ScopeHandle(previous);
     }
 
-    private sealed class ScopeHandle : IDisposable
+    private sealed class ScopeHandle(ITenantDescriptor<TKey>? previous) : IDisposable
     {
-        public void Dispose() => CurrentTenantLocal.Value = null;
+        public void Dispose() => CurrentTenantLocal.Value = previous;
     }
 }

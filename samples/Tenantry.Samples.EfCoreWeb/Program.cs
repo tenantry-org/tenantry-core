@@ -35,6 +35,7 @@ using Tenantry.Core;
 using Tenantry.EfCore.Extensions;
 using Tenantry.Samples.EfCoreWeb.Data;
 using Tenantry.Samples.EfCoreWeb.Entities;
+using Tenantry.Samples.EfCoreWeb.Requests;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -231,9 +232,3 @@ Try these commands:
 """);
 
 await app.RunAsync();
-
-// ── DTOs ──────────────────────────────────────────────────────────────────────
-
-internal record CreateOrderRequest(List<CreateOrderItemRequest> Items);
-
-internal record CreateOrderItemRequest(int ProductId, int Quantity);

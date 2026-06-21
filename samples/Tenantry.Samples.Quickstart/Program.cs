@@ -1,6 +1,7 @@
 // ReSharper disable UnusedParameter.Local
 using Tenantry.AspNetCore.Extensions;
 using Tenantry.Core;
+using Tenantry.Samples.Quickstart.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -76,9 +77,3 @@ app.MapGet("/health", () => Results.Ok("ok"))
     .AllowMissingTenant();
 
 await app.RunAsync();
-
-internal class Order
-{
-    public string TenantId { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-}

@@ -13,10 +13,11 @@ public interface ITenantScope<TKey> : ITenantContext<TKey>
 {
     /// <summary>
     /// Activates a tenant for the current execution context (e.g. an HTTP request or background job).
-    /// The returned <see cref="IDisposable"/> clears the tenant when disposed.
+    /// Scopes may nest: an inner scope shadows the outer tenant, and disposing it restores the outer
+    /// tenant (the outermost scope restores "no tenant"). The returned <see cref="IDisposable"/>
+    /// restores the previously active tenant when disposed.
     /// </summary>
     /// <param name="tenant">The tenant to activate.</param>
-    /// <returns>A handle that clears the tenant context on disposal.</returns>
-    /// <exception cref="InvalidOperationException">A tenant scope is already active.</exception>
+    /// <returns>A handle that restores the previously active tenant on disposal.</returns>
     IDisposable BeginScope(ITenantDescriptor<TKey> tenant);
 }
