@@ -5,6 +5,21 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    # These packages are pinned per target framework with floating ranges
+    # (e.g. "[9.0.0, 10.0.0)") so a net9.0 build resolves the latest 9.x at
+    # restore time and never crosses a major boundary. Dependabot does not
+    # understand range syntax: it rewrites the range to the single resolved
+    # version (e.g. "10.0.9"), which both pins the dependency and breaks the
+    # TFM contract. Since restore already floats these to the newest in-range
+    # patch, a Dependabot bump is redundant, so we ignore them. When a new
+    # major TFM is added, add its range manually.
+    ignore:
+      - dependency-name: "Microsoft.EntityFrameworkCore"
+      - dependency-name: "Microsoft.EntityFrameworkCore.Sqlite"
+      - dependency-name: "Microsoft.EntityFrameworkCore.SqlServer"
+      - dependency-name: "Microsoft.Extensions.DependencyInjection"
+      - dependency-name: "Microsoft.Extensions.DependencyInjection.Abstractions"
+      - dependency-name: "Microsoft.AspNetCore.TestHost"
     groups:
       # Ordered: first matching group wins, so test deps land here rather than in "microsoft".
       test:
