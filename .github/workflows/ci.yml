@@ -35,7 +35,7 @@ jobs:
         run: dotnet test Tenantry.slnx -c Release --no-build --logger "console;verbosity=minimal"
 
       - name: Verify AOT publish
-        run: dotnet publish samples/TenantKit.Samples.Aot -c Release
+        run: dotnet publish samples/Tenantry.Samples.Aot -c Release
 
   pack:
     name: Pack NuGet
