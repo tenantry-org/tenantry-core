@@ -31,11 +31,11 @@
     <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
   </PropertyGroup>
 
-  <!-- Sample projects: net10.0 only, no docs -->
+  <!-- Sample projects: net10.0 only, no docs. NOT test projects — they must not be
+       picked up by `dotnet test` (they have no test SDK, so testhost would be missing). -->
   <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('/samples/'))">
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
     <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
   </PropertyGroup>
 

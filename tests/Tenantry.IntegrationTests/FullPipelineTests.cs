@@ -32,7 +32,11 @@ public sealed class FullPipelineTests : IAsyncLifetime
     {
         await _sqlServer.StartAsync();
 
-        var builder = WebApplication.CreateBuilder();
+        // Force Development so the Developer Exception Page turns unhandled exceptions
+        // (isolation violations, NOT NULL failures) into 500s. Without this, the host
+        // defaults to Production in CI — no exception handler is registered, and TestServer
+        // rethrows straight to the HttpClient instead of returning 500.
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
         builder.WebHost.UseTestServer();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
@@ -300,7 +304,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
     [Fact]
     public async Task MultipleResolvers_HeaderNullQueryStringWins_SecondResolverUsed()
     {
-        var builder = WebApplication.CreateBuilder();
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
         builder.WebHost.UseTestServer();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
