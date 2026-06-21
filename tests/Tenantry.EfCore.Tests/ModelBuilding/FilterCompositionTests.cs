@@ -231,6 +231,7 @@ public class FilterCompositionTests
 
     private class FilterableItem : ITenantScoped<string>
     {
+        [Key]
         public int Id { get; set; }
         
         [MaxLength(64)]
@@ -309,6 +310,7 @@ public class FilterCompositionTests
 
     private class UnkeyedItem : ITenantScoped<string>
     {
+        [Key]
         public int Id { get; set; }
 
         [MaxLength(64)]
