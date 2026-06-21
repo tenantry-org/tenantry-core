@@ -9,6 +9,9 @@ jobs:
   release:
     name: Build, Test & Publish to NuGet
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # enable GitHub OIDC token issuance for this job
+      contents: write  # needed for creating releases; also allows the action to read the repo for changelog generation
 
     steps:
       - name: Checkout
@@ -19,7 +22,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
 
       - name: Restore
         run: dotnet restore Tenantry.slnx
@@ -32,25 +38,27 @@ jobs:
 
       - name: Pack
         run: |
-          dotnet pack src/TenantKit.Core          -c Release --no-build -o ./artifacts
-          dotnet pack src/TenantKit.AspNetCore    -c Release --no-build -o ./artifacts
-          dotnet pack src/TenantKit.EfCore        -c Release --no-build -o ./artifacts
+          dotnet pack src/Tenantry.Core          -c Release --no-build -o ./artifacts
+          dotnet pack src/Tenantry.AspNetCore    -c Release --no-build -o ./artifacts
+          dotnet pack src/Tenantry.EfCore        -c Release --no-build -o ./artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
           path: ./artifacts/*.nupkg
+          
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
 
       - name: Push to NuGet
-        run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: ./artifacts/*.nupkg
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
