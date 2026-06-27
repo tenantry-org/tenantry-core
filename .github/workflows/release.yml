@@ -13,11 +13,15 @@ concurrency:
   cancel-in-progress: false   # never cancel a half-done publish
 
 jobs:
-  # Run the exact same gates as CI (Sonar quality gate, coverage gate, AOT publish)
-  # against the tagged commit. Publishing is blocked unless this succeeds.
+  # Re-run build + tests + coverage gate + AOT publish against the tagged commit before
+  # publishing. SonarCloud is skipped: it cannot analyze a tag ref (auto-detection fails with
+  # "Not authorized or project not found"), and the tagged commit already passed the Sonar
+  # quality gate on master before it was tagged.
   ci:
     uses: ./.github/workflows/build-test.yml
     secrets: inherit
+    with:
+      run_sonar: false
 
   publish:
     name: Pack & Publish to NuGet

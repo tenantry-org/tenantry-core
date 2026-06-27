@@ -2,6 +2,14 @@ name: Build & Test
 
 on:
   workflow_call:   # reusable: invoked by ci.yml (push/PR) and release.yml (tags)
+    inputs:
+      run_sonar:
+        description: >
+          Run SonarCloud analysis + quality gate. Disabled on release (tag) builds: SonarCloud
+          cannot analyze a tag ref — its CI auto-detection fails with "Not authorized or project
+          not found". The tagged commit already passed the Sonar gate on master before tagging.
+        type: boolean
+        default: true
 
 permissions:
   contents: read   # least privilege; this workflow only reads the repo
@@ -41,6 +49,7 @@ jobs:
         run: dotnet restore Tenantry.slnx
 
       - name: SonarCloud begin
+        if: ${{ inputs.run_sonar }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
@@ -64,6 +73,7 @@ jobs:
           --logger "console;verbosity=minimal"
 
       - name: SonarCloud end (uploads analysis, fails on quality gate)
+        if: ${{ inputs.run_sonar }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
