@@ -29,9 +29,13 @@ internal sealed class TenantConfigurationValidatorHostedService<TKey> : IHostedS
                 $"tenant.ResolveFromClaim(...), tenant.ResolveFromSubdomain(), or tenant.UseResolver(...).");
         }
 
-        using var scope = _serviceProvider.CreateScope();
+        // Check that a store is REGISTERED without resolving (and therefore constructing) it. A custom
+        // store may be scoped and EF-backed, so instantiating it here just to null-check would create a
+        // DbContext as a startup side effect. IServiceProviderIsService reports registration presence for
+        // the closed generic without activating anything.
+        var isService = _serviceProvider.GetRequiredService<IServiceProviderIsService>();
 
-        if (scope.ServiceProvider.GetService<ITenantStore<TKey>>() is null)
+        if (!isService.IsService(typeof(ITenantStore<TKey>)))
         {
             throw new InvalidOperationException(
                 $"Tenantry is misconfigured for tenant key type '{typeof(TKey).Name}': no tenant store was registered. " +

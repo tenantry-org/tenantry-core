@@ -638,51 +638,6 @@ public sealed class MiddlewareTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ValidateTenantAccessAny_WhenAlternativeGroupMatches_AllowsRequest()
-    {
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-
-        builder.Services.AddTenantry<string>(tenant =>
-        {
-            tenant.ResolveFromHeader("X-Tenant-Id");
-            tenant.UseInMemoryStore(
-            [
-                new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
-                new TenantDescriptor<string> { TenantId = "globex", Name = "Globex LLC" },
-            ]);
-            tenant.ValidateTenantAccess((httpContext, _) =>
-                httpContext.User.Identity?.IsAuthenticated == true);
-            tenant.ValidateTenantAccessAny(
-                group => group.ValidateTenantAccessByClaim("tenant_id"),
-                group => group.ValidateTenantAccess((httpContext, tenantInfo) =>
-                    httpContext.User.HasClaim("tenant_admin", tenantInfo.TenantId)));
-        });
-
-        await using var app = builder.Build();
-        app.Use(async (context, next) =>
-        {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity(
-            [
-                new Claim("tenant_admin", "globex"),
-            ], "test"));
-            await next(context);
-        });
-        app.UseTenantry();
-        app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
-
-        using var client = app.GetTestClient();
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
-
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
-
-        response.IsSuccessStatusCode.Should().BeTrue();
-        body.Should().Be("globex");
-    }
-
-    [Fact]
     public async Task Request_WithNoTenantHeader_AndEndpointRequiresTenant_Returns400()
     {
         var builder = WebApplication.CreateBuilder();
@@ -808,38 +763,6 @@ public sealed class MiddlewareTests : IAsyncDisposable
         requiredResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
         optionalResponse.IsSuccessStatusCode.Should().BeTrue();
         optionalBody.Should().Be("(none)");
-    }
-
-    [Fact]
-    public async Task ValidateTenantAccessAny_WhenNoGroupMatches_DeniesRequest()
-    {
-        // All groups fail → the composite validator returns false (line 175 in AspNetCoreTenantBuilder).
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-
-        builder.Services.AddTenantry<string>(tenant =>
-        {
-            tenant.ResolveFromHeader("X-Tenant-Id");
-            tenant.UseInMemoryStore(
-            [
-                new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
-            ]);
-            tenant.ValidateTenantAccessAny(
-                group => group.ValidateTenantAccess((_, _) => false),
-                group => group.ValidateTenantAccess((_, _) => false));
-        });
-
-        await using var app = builder.Build();
-        app.UseTenantry();
-        app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
-
-        using var client = app.GetTestClient();
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
-
-        var response = await client.GetAsync("/tenant");
-
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
     }
 
     [Fact]

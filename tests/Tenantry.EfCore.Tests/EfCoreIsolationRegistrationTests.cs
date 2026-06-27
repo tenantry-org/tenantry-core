@@ -12,7 +12,7 @@ namespace Tenantry.EfCore.Tests;
 public sealed class EfCoreIsolationRegistrationTests
 {
     [Fact]
-    public void AddEfCoreIsolation_Default_RegistersInterceptorAndConfigurator()
+    public void AddEfCoreIsolation_Default_RegistersInterceptorOptionsAndValidator()
     {
         ServiceCollection services = new();
         ITenantBuilder<string> builder = new TestTenantBuilder<string>(services);
@@ -21,38 +21,42 @@ public sealed class EfCoreIsolationRegistrationTests
 
         services.Should().Contain(sd => sd.ServiceType == typeof(TenantSaveChangesInterceptor<string>));
         services.Should().Contain(sd => sd.ServiceType == typeof(ITenantInterceptorConfigurator));
-        services.Should().NotContain(sd => sd.ServiceType == typeof(StrictIsolationValidator<string>));
-        services.Should().NotContain(sd => sd.ServiceType == typeof(MissingContextDetector<string>));
+        services.Should().Contain(sd => sd.ServiceType == typeof(StrictIsolationValidator<string>));
+        services.Should().Contain(sd => sd.ServiceType == typeof(EfCoreIsolationOptions));
     }
 
     [Fact]
-    public void AddEfCoreIsolation_StrictIsolation_RegistersStrictServices()
+    public void AddEfCoreIsolation_Default_UsesWarnPolicyAndNoSpoofDetection()
     {
         ServiceCollection services = new();
         ITenantBuilder<string> builder = new TestTenantBuilder<string>(services);
 
-        builder.AddEfCoreIsolation(options => options.StrictIsolation = true);
+        builder.AddEfCoreIsolation();
 
-        services.Should().Contain(sd => sd.ServiceType == typeof(TenantSaveChangesInterceptor<string>));
-        services.Should().Contain(sd => sd.ServiceType == typeof(StrictIsolationValidator<string>));
-        services.Should().Contain(sd => sd.ServiceType == typeof(MissingContextDetector<string>));
+        using var sp = services.BuildServiceProvider();
+        var options = sp.GetRequiredService<EfCoreIsolationOptions>();
+
+        options.OnMissingTenant.Should().Be(MissingTenantBehavior.Warn);
+        options.DetectSpoofedWrites.Should().BeFalse();
     }
 
     [Fact]
-    public void AddEfCoreIsolation_StrictIsolationWithMissingContextWarningDisabled_DoesNotRegisterDetector()
+    public void AddEfCoreIsolation_CapturesConfiguredPolicy()
     {
         ServiceCollection services = new();
         ITenantBuilder<string> builder = new TestTenantBuilder<string>(services);
 
         builder.AddEfCoreIsolation(options =>
         {
-            options.StrictIsolation = true;
-            options.StrictIsolationOptions.WarnOnMissingContext = false;
+            options.OnMissingTenant = MissingTenantBehavior.Reject;
+            options.DetectSpoofedWrites = true;
         });
 
-        services.Should().Contain(sd => sd.ServiceType == typeof(TenantSaveChangesInterceptor<string>));
-        services.Should().Contain(sd => sd.ServiceType == typeof(StrictIsolationValidator<string>));
-        services.Should().NotContain(sd => sd.ServiceType == typeof(MissingContextDetector<string>));
+        using var sp = services.BuildServiceProvider();
+        var options = sp.GetRequiredService<EfCoreIsolationOptions>();
+
+        options.OnMissingTenant.Should().Be(MissingTenantBehavior.Reject);
+        options.DetectSpoofedWrites.Should().BeTrue();
     }
 
     [Fact]

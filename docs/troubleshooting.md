@@ -47,8 +47,8 @@ in order:
 
 ## `TenantIsolationViolationException` on save
 
-This is the system working: a `Modified`/`Deleted` entity (or, in strict mode, an `Added` one with an
-explicit wrong id) belongs to a different tenant than the current scope. The exception's
+This is the system working: a `Modified`/`Deleted` entity (or, with `DetectSpoofedWrites`, an `Added`
+one with an explicit wrong id) belongs to a different tenant than the current scope. The exception's
 `OffendingTenantId` and `ExpectedTenantId` tell you which.
 
 - You loaded an entity in one tenant's scope and modified it in another's. Do tenant work inside the

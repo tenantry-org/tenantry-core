@@ -50,7 +50,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
             ]);
             t.AddEfCoreIsolation(options =>
             {
-                options.StrictIsolation = true;
+                options.DetectSpoofedWrites = true;
             });
         });
 
@@ -318,7 +318,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
             ]);
             t.AddEfCoreIsolation(options =>
             {
-                options.StrictIsolation = true;
+                options.DetectSpoofedWrites = true;
             });
         });
 

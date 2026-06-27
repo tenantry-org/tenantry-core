@@ -28,14 +28,8 @@ builder.Services.AddTenantry<string>(tenant =>
     
     // Validators can be chained together and will be evaluated with logical AND (both this and the last must pass)
     // They can also be asynchronous
-    tenant.ValidateTenantAccess(async (ctx, tenantInfo, ct) => 
+    tenant.ValidateTenantAccess(async (ctx, tenantInfo, ct) =>
         await ValueTask.FromResult(!ctx.Request.Headers.ContainsKey("X-Also-Block-Access")));
-    
-    // This extension allows a logical OR (but in addition to any other validators in the chain)
-    // Just one of these needs to pass, but all previous validators must pass also, due to default logical AND
-    tenant.ValidateTenantAccessAny(
-        group => group.ValidateTenantAccess((ctx, _) => ctx.Request.Headers.ContainsKey("X-Tenant-Id")),
-        group => group.ValidateTenantAccess((ctx, _) => ctx.Request.Headers.ContainsKey("X-Or-This-Alternative")));
 
     // In-memory store — replace with a database/cache-backed ITenantStore implementation in production.
     // Startup will fail without a registered store

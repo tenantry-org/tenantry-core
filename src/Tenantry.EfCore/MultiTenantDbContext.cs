@@ -1,7 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Tenantry.Core;
 using Tenantry.EfCore.Extensions;
+using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore;
 
@@ -19,6 +22,15 @@ namespace Tenantry.EfCore;
 /// <para>
 /// To use: derive from <see cref="MultiTenantDbContext{TKey}"/>, call <c>base.OnModelCreating(modelBuilder)</c>
 /// at the start of your override, and inject <see cref="ITenantContext{TKey}"/> into the constructor.
+/// </para>
+/// <para>
+/// <strong>Isolation is self-wiring for derived contexts.</strong> When you call
+/// <c>AddEfCoreIsolation()</c> and register this context through <c>AddDbContext</c> (which supplies an
+/// application service provider), the tenant <c>SaveChanges</c> interceptor is attached automatically in
+/// <see cref="OnConfiguring"/> — you do <em>not</em> also need <c>options.AddTenantInterceptors(sp)</c>.
+/// This prevents the silent-isolation-loss failure mode of forgetting that wiring step. A
+/// <strong>raw <see cref="DbContext"/></strong> that does not derive from this base class must still call
+/// <c>options.AddTenantInterceptors(sp)</c> in its <c>AddDbContext</c> callback.
 /// </para>
 /// <code>
 /// public class AppDbContext : MultiTenantDbContext&lt;Guid&gt;
@@ -69,5 +81,26 @@ public abstract class MultiTenantDbContext<TKey> : DbContext, ITenantAwareDbCont
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyTenantFilters<TKey, MultiTenantDbContext<TKey>>(this);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Self-wires the tenant <c>SaveChanges</c> interceptor so that deriving from this base class plus
+    /// calling <c>AddEfCoreIsolation()</c> is sufficient — the separate
+    /// <c>options.AddTenantInterceptors(sp)</c> step becomes optional. The interceptor is resolved from
+    /// the application service provider this context was built with; this is a no-op when no provider is
+    /// available (e.g. a hand-built <see cref="DbContextOptionsBuilder"/>) or when isolation was not
+    /// registered. The wiring is idempotent, so an explicit <c>AddTenantInterceptors(sp)</c> call still
+    /// works without attaching the interceptor twice.
+    /// </remarks>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+
+        var serviceProvider = optionsBuilder.Options
+            .FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider;
+
+        if (serviceProvider?.GetService<ITenantInterceptorConfigurator>() is { } configurator)
+            configurator.AddInterceptors(optionsBuilder, serviceProvider);
     }
 }

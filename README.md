@@ -20,7 +20,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
 {
     tenant.ResolveFromHeader("X-Tenant-Id");                          // where the tenant comes from
     tenant.UseInMemoryStore(tenants);                                 // where tenants are defined
-    tenant.AddEfCoreIsolation(options => options.StrictIsolation = true); // how data is isolated
+    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true); // how data is isolated
 });
 ```
 
@@ -33,8 +33,8 @@ builder.Services.AddTenantry<Guid>(tenant =>
   `DbContext` via an EF Core `SaveChanges` interceptor — no base class required. An optional
   `MultiTenantDbContext<TKey>` base class is provided for greenfield convenience.
 - **Fails closed.** When no tenant is resolved, query filters match nothing rather than leaking every
-  tenant's rows. Optional **strict mode** rejects cross-tenant writes *before* anything is persisted
-  and warns when work runs without a tenant context.
+  tenant's rows. Cross-tenant writes are rejected *before* anything is persisted, and a configurable
+  `OnMissingTenant` policy (warn, allow, or reject) governs writes that run without a tenant context.
 - **HTTP and beyond.** `AddTenantry` covers ASP.NET Core (resolution middleware, access validation,
   endpoint metadata). `AddTenantryCore` brings the same isolation to console apps, worker services,
   and desktop UIs with no web stack.
@@ -46,7 +46,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
 | Package               | Version                                                                                                                | Description                                                                    |
 |-----------------------|------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
 | `Tenantry.Core`       | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Core.svg)](https://www.nuget.org/packages/Tenantry.Core)             | Core interfaces, tenant scope, tenant store, and DI registration               |
-| `Tenantry.EfCore`     | [![NuGet](https://img.shields.io/nuget/v/Tenantry.EfCore.svg)](https://www.nuget.org/packages/Tenantry.EfCore)         | EF Core integration — interceptor-based isolation, query filters, strict mode  |
+| `Tenantry.EfCore`     | [![NuGet](https://img.shields.io/nuget/v/Tenantry.EfCore.svg)](https://www.nuget.org/packages/Tenantry.EfCore)         | EF Core integration — interceptor-based isolation, query filters, isolation policy |
 | `Tenantry.AspNetCore` | [![NuGet](https://img.shields.io/nuget/v/Tenantry.AspNetCore.svg)](https://www.nuget.org/packages/Tenantry.AspNetCore) | ASP.NET Core integration — resolution middleware, resolvers, access validation |
 
 `Tenantry.EfCore` and `Tenantry.AspNetCore` both depend on `Tenantry.Core`. Reference whichever
@@ -109,7 +109,7 @@ using Tenantry.Core.Extensions;
 
 builder.Services.AddTenantryCore<Guid>(tenant =>
 {
-    tenant.AddEfCoreIsolation(options => options.StrictIsolation = true);
+    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
 });
 
 // …later, around a unit of work:
@@ -157,7 +157,7 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 | [ASP.NET Core integration](docs/aspnetcore-integration.md) | Registration, middleware, pipeline ordering, status codes |
 | [Tenant resolution](docs/tenant-resolution.md) | Header, subdomain, route, claim, query-string, and custom resolvers |
 | [Access control](docs/access-control.md) | Requiring tenants, access validators, claim-based validation |
-| [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, strict mode, migrations, admin queries |
+| [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
 | [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantryCore` in console apps, workers, and background jobs |
 | [AOT & trimming](docs/aot-and-trimming.md) | What is supported, per package, and why |
 | [Troubleshooting](docs/troubleshooting.md) | Common pitfalls and how to diagnose them |

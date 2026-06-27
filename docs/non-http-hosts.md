@@ -22,7 +22,7 @@ builder.Services.AddTenantryCore<Guid>(tenant =>
     tenant.UseInMemoryStore(tenants);
 
     // Same EF Core isolation as the web — strongly recommended in background work.
-    tenant.AddEfCoreIsolation(options => options.StrictIsolation = true);
+    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
 });
 
 builder.Services.AddDbContext<AppDbContext>((sp, options) =>

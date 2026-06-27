@@ -25,6 +25,11 @@ public interface ITenantBuilder<TKey>
     /// <summary>
     /// Registers a custom <see cref="ITenantStore{TKey}"/> implementation.
     /// </summary>
+    /// <remarks>
+    /// The store is registered with a <strong>scoped</strong> lifetime and is resolved per operation —
+    /// Tenantry creates a fresh scope for singleton/background callers — so the implementation may safely
+    /// depend on scoped services such as a <c>DbContext</c>.
+    /// </remarks>
     ITenantBuilder<TKey> UseStore<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>()
         where TStore : class, ITenantStore<TKey>;
@@ -32,5 +37,9 @@ public interface ITenantBuilder<TKey>
     /// <summary>
     /// Registers a custom <see cref="ITenantStore{TKey}"/> implementation with a factory function.
     /// </summary>
+    /// <remarks>
+    /// The store is registered with a <strong>scoped</strong> lifetime and is resolved per operation, so
+    /// the factory may return an instance that depends on scoped services such as a <c>DbContext</c>.
+    /// </remarks>
     ITenantBuilder<TKey> UseStore(Func<IServiceProvider, ITenantStore<TKey>> factory);
 }

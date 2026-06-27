@@ -46,7 +46,8 @@ builder.Services.AddTenantry<string>(tenant =>
     tenant.UseStore<EfCoreTenantStore>();
     tenant.AddEfCoreIsolation(options =>
     {
-        options.StrictIsolation = true;
+        // Reject Added entities pre-stamped with a foreign tenant id (spoofing detection).
+        options.DetectSpoofedWrites = true;
     });
 });
 

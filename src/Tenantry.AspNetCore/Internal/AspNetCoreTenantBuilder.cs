@@ -125,58 +125,6 @@ internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services)
     }
 
     /// <summary>
-    /// Adds a composite tenant access validator that succeeds when any configured validation group passes.
-    /// Validators within a group are combined with logical AND.
-    /// </summary>
-    public IAspNetCoreTenantBuilder<TKey> ValidateTenantAccessAny(
-        params Action<ITenantAccessValidationGroupBuilder<TKey>>[] groups)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
-        
-        if (groups.Length == 0)
-        {
-            throw new ArgumentException("At least one validation group must be provided.", nameof(groups));
-        }
-
-        List<IReadOnlyList<Func<HttpContext, ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>>>> builtGroups = [];
-
-        foreach (var configureGroup in groups)
-        {
-            ArgumentNullException.ThrowIfNull(configureGroup);
-
-            TenantAccessValidationGroupBuilder<TKey> groupBuilder = new();
-            configureGroup(groupBuilder);
-            builtGroups.Add(groupBuilder.Build());
-        }
-
-        return ValidateTenantAccess(async (httpContext, tenant, cancellationToken) =>
-        {
-            foreach (var group in builtGroups)
-            {
-                var passed = true;
-
-                foreach (var validator in group)
-                {
-                    if (await validator(httpContext, tenant, cancellationToken))
-                    {
-                        continue;
-                    }
-                    
-                    passed = false;
-                    break;
-                }
-
-                if (passed)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        });
-    }
-
-    /// <summary>
     /// Validates that the current request is allowed to access the resolved tenant
     /// before Tenantry sets the tenant context.
     /// </summary>

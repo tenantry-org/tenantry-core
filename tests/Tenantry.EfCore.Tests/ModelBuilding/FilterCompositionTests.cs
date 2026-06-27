@@ -126,9 +126,9 @@ public class FilterCompositionTests
 
         TenantSaveChangesInterceptor<string> interceptor = new(
             tenantContext,
-            NullLogger<TenantSaveChangesInterceptor<string>>.Instance,
-            [],
-            []);
+            new EfCoreIsolationOptions(),
+            new StrictIsolationValidator<string>(NullLogger<StrictIsolationValidator<string>>.Instance),
+            NullLogger<TenantSaveChangesInterceptor<string>>.Instance);
 
         var options = new DbContextOptionsBuilder<FilterCompositionDbContext>()
             .UseSqlite(connection)

@@ -130,7 +130,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
     tenant.UseStore<EfCoreTenantStore>();
     tenant.RequireTenantByDefault();             // no anonymous tenant access
     tenant.ValidateTenantAccessByClaim("tenant_id"); // caller must be entitled to the tenant
-    tenant.AddEfCoreIsolation(o => o.StrictIsolation = true);
+    tenant.AddEfCoreIsolation(o => o.DetectSpoofedWrites = true);
 });
 ```
 

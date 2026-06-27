@@ -56,7 +56,7 @@ public interface ITenantScoped<TKey>
 - Implement it directly, or derive from the convenience base class `TenantScoped<TKey>` which provides
   the `TenantId` property.
 - **Do not set `TenantId` yourself.** The EF Core interceptor stamps it from the active tenant scope
-  on `SaveChanges`. Setting it manually to the wrong value is exactly what strict mode rejects.
+  on `SaveChanges`. Setting it manually to the wrong value is exactly what `DetectSpoofedWrites` rejects.
 - Entities that do not implement this interface are global/shared and are never filtered or stamped.
 
 ## `ITenantContext<TKey>` — reading the current tenant

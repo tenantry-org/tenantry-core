@@ -5,8 +5,9 @@ halves:
 
 - **Read isolation** — a global query filter restricts every query against an `ITenantScoped<TKey>`
   entity to the current tenant.
-- **Write isolation** — a `SaveChanges` interceptor stamps `TenantId` on new rows and (in strict mode)
-  rejects cross-tenant writes before they reach the database.
+- **Write isolation** — a `SaveChanges` interceptor stamps `TenantId` on new rows and rejects
+  cross-tenant writes before they reach the database. A configurable policy controls what happens when
+  a write runs with no tenant, and an optional check rejects inserts pre-stamped with a foreign tenant.
 
 Both work on **any** `DbContext` — no base class required — and on **any** relational provider. They
 are driven by the same `ITenantContext<TKey>` used everywhere else, so HTTP and non-HTTP hosts behave
@@ -20,7 +21,11 @@ builder.Services.AddTenantry<Guid>(tenant =>
 {
     tenant.ResolveFromHeader("X-Tenant-Id");
     tenant.UseInMemoryStore(tenants);
-    tenant.AddEfCoreIsolation(options => options.StrictIsolation = true);
+    tenant.AddEfCoreIsolation(options =>
+    {
+        options.OnMissingTenant = MissingTenantBehavior.Reject;   // reject writes with no tenant
+        options.DetectSpoofedWrites = true;                       // reject inserts with a foreign tenant id
+    });
 });
 
 // 2. Attach the interceptor to your DbContext
@@ -36,9 +41,10 @@ public class Order : TenantScoped<Guid> { public int Id { get; set; } /* … */ 
 // 4. Apply the query filters in the DbContext (see "wiring the DbContext" below)
 ```
 
-`AddEfCoreIsolation` registers the interceptor and, when `StrictIsolation = true`, the strict validator
-and (by default) the missing-context detector. `AddTenantInterceptors(sp)` is what actually adds the
-interceptor to that specific `DbContext`'s options — call it in every `AddDbContext` you want isolated.
+`AddEfCoreIsolation` registers the interceptor and the configured isolation policy (see
+[write isolation](#write-isolation-the-interceptor) below). `AddTenantInterceptors(sp)` is what actually
+adds the interceptor to that specific `DbContext`'s options — call it in every `AddDbContext` you want
+isolated.
 
 ## Choosing how to wire the DbContext
 
@@ -158,44 +164,53 @@ The `SaveChanges`/`SaveChangesAsync` interceptor runs on every save against a co
 `AddTenantInterceptors`, and for entities implementing `ITenantScoped<TKey>`:
 
 - **Added** entities have their `TenantId` **stamped** from the current tenant — overwriting whatever
-  was set (in non-strict mode).
+  was set (unless `DetectSpoofedWrites` is on; see below).
 - **Modified / Deleted** entities are **validated**: if an entity belongs to a different tenant than
   the current scope, the interceptor throws `TenantIsolationViolationException` **before any data is
-  written** and the whole `SaveChanges` is aborted.
+  written** and the whole `SaveChanges` is aborted. This is **always on**, regardless of configuration.
 
-If there is **no resolved tenant**, the interceptor stamps nothing and logs a warning (see
-[strict mode](#strict-isolation-mode)). It does not throw, because some saves legitimately run outside
-a tenant (seeding global data, the tenant registry itself).
+If there is **no resolved tenant**, behaviour follows the `OnMissingTenant` policy (below).
 
 `TenantIsolationViolationException` carries `EntityTypeName`, `OffendingTenantId`, and
 `ExpectedTenantId` for diagnostics and lives in `Tenantry.Core.Exceptions`.
 
-## Strict isolation mode
+## Configuring write isolation
 
 ```csharp
 tenant.AddEfCoreIsolation(options =>
 {
-    options.StrictIsolation = true;                                  // default: false
-    options.StrictIsolationOptions.WarnOnMissingContext = true;      // default: true
+    options.OnMissingTenant = MissingTenantBehavior.Warn;   // default: Warn
+    options.DetectSpoofedWrites = false;                    // default: false
 });
 ```
 
-Strict mode hardens write isolation in two ways:
+### `OnMissingTenant` — what happens when a write runs with no tenant
 
-1. **Spoofing detection on inserts.** Without strict mode, an `Added` entity with an explicitly set,
-   *wrong* `TenantId` is silently overwritten with the correct one. With strict mode, the validator
-   inspects `Added`, `Modified`, and `Deleted` entries and **throws** if an entity carries a tenant id
-   that is neither unset nor the current tenant — catching code (or a malicious payload) trying to
-   write to another tenant. (An `Added` entity with an *unset* id is fine; the interceptor stamps it.)
-2. **Missing-context warnings.** When `WarnOnMissingContext` is true, a `SaveChanges` that runs with no
-   resolved tenant logs a structured warning, surfacing endpoints or background jobs that bypassed
-   tenant propagation.
+Some saves legitimately run outside a tenant (seeding global data, the tenant registry itself), so the
+default does not throw — but you can tighten it. The `MissingTenantBehavior` values:
 
-"Unset" treats both `null` and `string.Empty` as not-yet-assigned, because string-keyed entities are
-commonly initialised to `string.Empty`.
+| Value | Behaviour on an unscoped `SaveChanges` |
+|-------|----------------------------------------|
+| `Allow` | Save proceeds, nothing stamped, no log. |
+| `Warn` *(default)* | Save proceeds, nothing stamped, a structured warning is logged — surfaces endpoints or jobs that bypassed tenant propagation. |
+| `Reject` | Throws `TenantNotResolvedException` before anything is persisted. Use this when no write should ever run without a tenant. |
+| `Skip` | Treated as `Allow` for writes (it exists for background-job propagation, where it means "drop the job"). |
 
-Recommendation: enable strict mode. The overhead is negligible (a pass over the change tracker that
-EF Core walks anyway) and it converts silent isolation mistakes into loud, early failures.
+Reads are unaffected by this setting — they always fail closed (a query with no tenant matches nothing).
+
+### `DetectSpoofedWrites` — reject inserts pre-stamped with a foreign tenant
+
+By default, an `Added` entity with an explicitly set, *wrong* `TenantId` is silently overwritten with
+the correct one. With `DetectSpoofedWrites = true`, the validator inspects `Added`, `Modified`, and
+`Deleted` entries and **throws** `TenantIsolationViolationException` if an entity carries a tenant id
+that is neither unset nor the current tenant — catching code (or a malicious payload) trying to write
+to another tenant. (An `Added` entity with an *unset* id is fine; the interceptor stamps it.) "Unset"
+treats both `null` and `string.Empty` as not-yet-assigned, because string-keyed entities are commonly
+initialised to `string.Empty`.
+
+Recommendation: set `DetectSpoofedWrites = true` (negligible overhead — a pass over the change tracker
+EF Core walks anyway), and tighten `OnMissingTenant` to `Reject` for services where every write must be
+tenant-scoped.
 
 ## Migrations
 

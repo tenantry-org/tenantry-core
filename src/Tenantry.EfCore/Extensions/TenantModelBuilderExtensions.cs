@@ -91,9 +91,13 @@ public static class TenantModelBuilderExtensions
             // We need to check if unkeyed filters are already applied, in which case we have to merge them
             if (existingFilters.Any(f => f.Key == null))
             {
+                // Fold in ONLY the unkeyed (anonymous) filters and re-emit as unkeyed. Restricting to
+                // f.Key == null keeps a keyed predicate from being double-applied if a model ever mixes
+                // the two — EF10 already forbids that combination at build time, so this is defensive
+                // clarity. The Expression != null guard is retained because line below dereferences it.
                 tenantFilter = existingFilters
-                    .Where(f => f.Expression != null)
-                    .Aggregate(tenantFilter, (current, existingFilter) => 
+                    .Where(f => f.Key == null && f.Expression != null)
+                    .Aggregate(tenantFilter, (current, existingFilter) =>
                         CombineFilters(existingFilter.Expression!, current));
 
                 builder.HasQueryFilter(tenantFilter);

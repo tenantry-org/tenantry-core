@@ -23,7 +23,7 @@ public static class ServiceCollectionExtensions
     /// {
     ///     tenant.ResolveFromHeader("X-Tenant-Id");
     ///     tenant.UseInMemoryStore(tenants);
-    ///     tenant.AddEfCoreIsolation(options => options.StrictIsolation = true);
+    ///     tenant.AddEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Reject);
     /// });
     /// </code>
     /// </example>

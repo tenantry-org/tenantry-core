@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
     /// // Worker service — no ASP.NET Core required
     /// builder.Services.AddTenantryCore&lt;Guid&gt;(tenant =&gt;
     /// {
-    ///     tenant.AddEfCoreIsolation(options =&gt; options.StrictIsolation = true);
+    ///     tenant.AddEfCoreIsolation(options =&gt; options.OnMissingTenant = MissingTenantBehavior.Reject);
     /// });
     ///
     /// // Enter a tenant scope before doing EF Core work:

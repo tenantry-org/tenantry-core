@@ -5,6 +5,12 @@ namespace Tenantry.Core;
 /// Implement this interface to back tenants with a database, configuration file,
 /// or any other store.
 /// </summary>
+/// <remarks>
+/// A custom store registered via <c>UseStore&lt;TStore&gt;()</c> is <strong>scoped</strong>, and Tenantry
+/// resolves it per operation from a fresh dependency-injection scope (so singleton/background services
+/// can read tenants without capturing it). Implementations may therefore depend on scoped services such
+/// as a <c>DbContext</c>, but must not assume a singleton lifetime or cache scope-bound state across calls.
+/// </remarks>
 /// <typeparam name="TKey">
 /// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.
 /// </typeparam>

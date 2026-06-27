@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using Tenantry.Core;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Infrastructure;
@@ -37,13 +38,27 @@ public static class DbContextFactory
     /// </summary>
     public static async Task<TestDbContext> CreateInterceptorContextAsync(
         TestTenantContext tenantContext,
-        SqliteConnection connection)
+        SqliteConnection connection,
+        EfCoreIsolationOptions? isolationOptions = null)
     {
-        var options = BuildInterceptorOptions(tenantContext, connection);
+        var options = BuildInterceptorOptions(tenantContext, connection, isolationOptions);
         TestDbContext context = new(options, tenantContext);
         await context.Database.EnsureCreatedAsync();
         return context;
     }
+
+    /// <summary>
+    /// Builds a <see cref="TenantSaveChangesInterceptor{TKey}"/> for tests, with default
+    /// (<c>Warn</c>) isolation policy unless <paramref name="isolationOptions"/> is supplied.
+    /// </summary>
+    private static TenantSaveChangesInterceptor<TKey> BuildInterceptor<TKey>(
+        ITenantContext<TKey> tenantContext,
+        EfCoreIsolationOptions? isolationOptions = null)
+        where TKey : IEquatable<TKey>, IParsable<TKey> =>
+        new(tenantContext,
+            isolationOptions ?? new EfCoreIsolationOptions(),
+            new StrictIsolationValidator<TKey>(NullLogger<StrictIsolationValidator<TKey>>.Instance),
+            NullLogger<TenantSaveChangesInterceptor<TKey>>.Instance);
 
     /// <summary>
     /// Creates a <see cref="TestDbContext"/> on its own private in-memory database.
@@ -110,17 +125,12 @@ public static class DbContextFactory
 
     private static DbContextOptions<TestDbContext> BuildInterceptorOptions(
         TestTenantContext tenantContext,
-        SqliteConnection connection)
+        SqliteConnection connection,
+        EfCoreIsolationOptions? isolationOptions = null)
     {
-        TenantSaveChangesInterceptor<string> interceptor = new(
-            tenantContext,
-            NullLogger<TenantSaveChangesInterceptor<string>>.Instance,
-            [],
-            []);
-
         return new DbContextOptionsBuilder<TestDbContext>()
             .UseSqlite(connection)
-            .AddInterceptors(interceptor)
+            .AddInterceptors(BuildInterceptor(tenantContext, isolationOptions))
             .Options;
     }
 
@@ -128,15 +138,9 @@ public static class DbContextFactory
         TestTenantContext tenantContext,
         SqliteConnection connection)
     {
-        TenantSaveChangesInterceptor<string> interceptor = new(
-            tenantContext,
-            NullLogger<TenantSaveChangesInterceptor<string>>.Instance,
-            [],
-            []);
-
         return new DbContextOptionsBuilder<BaseClassTestDbContext>()
             .UseSqlite(connection)
-            .AddInterceptors(interceptor)
+            .AddInterceptors(BuildInterceptor(tenantContext))
             .Options;
     }
 
@@ -144,15 +148,9 @@ public static class DbContextFactory
         GuidTestTenantContext tenantContext,
         SqliteConnection connection)
     {
-        TenantSaveChangesInterceptor<Guid> interceptor = new(
-            tenantContext,
-            NullLogger<TenantSaveChangesInterceptor<Guid>>.Instance,
-            [],
-            []);
-
         return new DbContextOptionsBuilder<GuidTestDbContext>()
             .UseSqlite(connection)
-            .AddInterceptors(interceptor)
+            .AddInterceptors(BuildInterceptor(tenantContext))
             .Options;
     }
 }

@@ -17,9 +17,11 @@ namespace Tenantry.EfCore.Internal;
 ///
 /// On every <c>SaveChanges</c> or <c>SaveChangesAsync</c>:
 /// <list type="bullet">
+///   <item>Applies the configured <see cref="EfCoreIsolationOptions.OnMissingTenant"/> policy when no tenant is resolved.</item>
 ///   <item>Stamps <see cref="ITenantScoped{TKey}.TenantId"/> on all <c>Added</c> entities that implement <see cref="ITenantScoped{TKey}"/>.</item>
 ///   <item>Validates that no <c>Modified</c> or <c>Deleted</c> entity belongs to a different tenant.</item>
-///   <item>Throws <see cref="TenantIsolationViolationException"/> (before any data is written) if a violation is detected.</item>
+///   <item>When <see cref="EfCoreIsolationOptions.DetectSpoofedWrites"/> is enabled, also rejects <c>Added</c> entities pre-stamped with a foreign tenant.</item>
+///   <item>Throws <see cref="TenantIsolationViolationException"/> (before any data is written) if a cross-tenant violation is detected.</item>
 /// </list>
 ///
 /// Register via <c>builder.AddEfCoreIsolation()</c> inside <c>AddTenantry</c> or <c>AddTenantryCore</c>, then call
@@ -27,9 +29,9 @@ namespace Tenantry.EfCore.Internal;
 /// </remarks>
 internal sealed class TenantSaveChangesInterceptor<TKey>(
     ITenantContext<TKey> tenantContext,
-    ILogger<TenantSaveChangesInterceptor<TKey>> logger,
-    IEnumerable<StrictIsolationValidator<TKey>> strictValidators,
-    IEnumerable<MissingContextDetector<TKey>> missingContextDetectors)
+    EfCoreIsolationOptions options,
+    StrictIsolationValidator<TKey> spoofValidator,
+    ILogger<TenantSaveChangesInterceptor<TKey>> logger)
     : SaveChangesInterceptor
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
@@ -59,29 +61,18 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
             return;
         }
 
-        var validator = strictValidators.FirstOrDefault();
-        var detector = missingContextDetectors.FirstOrDefault();
-
         if (!tenantContext.HasTenant)
         {
-            if (detector is not null)
-            {
-                detector.CheckAndWarn(tenantContext, "SaveChanges");
-            }
-            else
-            {
-                logger.LogWarning(
-                    "SaveChanges called without a resolved tenant context. " +
-                    "Entities will not have TenantId stamped and cross-tenant validation is skipped. " +
-                    "Ensure app.UseTenantry() is registered in the middleware pipeline");
-            }
-            
+            HandleMissingTenant();
             return;
         }
 
         // In strict mode, validate before stamping — catches Added entities with an explicit
         // wrong TenantId (spoofing attempts) that would otherwise be silently overwritten.
-        validator?.Validate(context.ChangeTracker.Entries(), tenantContext);
+        if (options.DetectSpoofedWrites)
+        {
+            spoofValidator.Validate(context.ChangeTracker.Entries(), tenantContext);
+        }
 
         TenantWriteIsolationApplier.Apply(context.ChangeTracker.Entries(), tenantContext, diagnostics =>
         {
@@ -92,5 +83,31 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
                 diagnostics.OffendingTenantId,
                 diagnostics.ExpectedTenantId);
         });
+    }
+
+    private void HandleMissingTenant()
+    {
+        switch (options.OnMissingTenant)
+        {
+            case MissingTenantBehavior.Reject:
+                throw new TenantNotResolvedException(
+                    "SaveChanges was called without a resolved tenant context and " +
+                    "EfCoreIsolationOptions.OnMissingTenant is set to Reject. " +
+                    "Ensure app.UseTenantry() (or a manual tenant scope) is active before writing, " +
+                    "or relax the policy to Allow/Warn for operations that intentionally run without a tenant.");
+
+            case MissingTenantBehavior.Warn:
+                logger.LogWarning(
+                    "SaveChanges called without a resolved tenant context. " +
+                    "Entities will not have TenantId stamped and cross-tenant validation is skipped. " +
+                    "Ensure app.UseTenantry() is registered in the middleware pipeline");
+                break;
+
+            case MissingTenantBehavior.Allow:
+            case MissingTenantBehavior.Skip:
+            default:
+                // Proceed silently — the save runs without a stamped tenant.
+                break;
+        }
     }
 }

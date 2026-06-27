@@ -12,17 +12,6 @@ namespace Tenantry.AspNetCore.Tests;
 public sealed class InternalBuilderGuardTests
 {
     [Fact]
-    public void ValidationGroup_Build_WithNoValidators_Throws()
-    {
-        var group = new TenantAccessValidationGroupBuilder<string>();
-
-        var act = () => group.Build();
-
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*at least one validator*");
-    }
-
-    [Fact]
     public void ValidateTenantAccess_WhenOptionsNotRegistered_ThrowsInternalError()
     {
         // AddTenantry registers TenantResolutionOptions; constructing the builder over a

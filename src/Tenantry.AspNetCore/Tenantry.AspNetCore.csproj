@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Tenantry.AspNetCore.Tests"/>
+    <InternalsVisibleTo Include="Tenantry.IntegrationTests"/>
+  </ItemGroup>
+
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

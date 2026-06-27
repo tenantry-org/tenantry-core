@@ -2,6 +2,8 @@ using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
+using Tenantry.Core;
+using Tenantry.Core.Exceptions;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
@@ -83,28 +85,29 @@ public sealed class InterceptorNoTenantContextTests
         // DbContextEventData.Context is DbContext? — null is a valid (if rare) input.
         // Exercises the null-context guard in ApplyTenantIsolation.
         var ctx = TestTenantContext.For("acme");
-        var interceptor = new TenantSaveChangesInterceptor<string>(
-            ctx,
-            NullLogger<TenantSaveChangesInterceptor<string>>.Instance,
-            [], []);
+        var interceptor = BuildInterceptor(ctx);
 
         var act = () => interceptor.SavingChanges(new NullContextEventData(), default);
 
         act.Should().NotThrow();
     }
 
+    private static TenantSaveChangesInterceptor<string> BuildInterceptor(
+        TestTenantContext ctx,
+        EfCoreIsolationOptions? options = null) =>
+        new(ctx,
+            options ?? new EfCoreIsolationOptions(),
+            new StrictIsolationValidator<string>(NullLogger<StrictIsolationValidator<string>>.Instance),
+            NullLogger<TenantSaveChangesInterceptor<string>>.Instance);
+
     [Fact]
-    public async Task SavingChangesAsync_WithNoTenantAndDetector_CallsDetectorCheckAndWarn()
+    public async Task SaveChangesAsync_WithNoTenant_AndRejectPolicy_Throws()
     {
-        // Exercises L69: detector.CheckAndWarn(tenantContext, "SaveChanges") inside
-        // ApplyTenantIsolation — the branch reached when !HasTenant AND detector is not null.
+        // OnMissingTenant = Reject must throw before persisting when no tenant is resolved.
         var tenantContext = TestTenantContext.Empty();
-        MissingContextDetector<string> detector = new(
-            NullLogger<MissingContextDetector<string>>.Instance);
-        var interceptor = new TenantSaveChangesInterceptor<string>(
+        var interceptor = BuildInterceptor(
             tenantContext,
-            NullLogger<TenantSaveChangesInterceptor<string>>.Instance,
-            [], [detector]);
+            new EfCoreIsolationOptions { OnMissingTenant = MissingTenantBehavior.Reject });
 
         await using var connection = new SqliteConnection("DataSource=:memory:");
         await connection.OpenAsync();
@@ -113,28 +116,52 @@ public sealed class InterceptorNoTenantContextTests
             .UseSqlite(connection)
             .AddInterceptors(interceptor)
             .Options;
-        
+
         var db = new TestDbContext(options, tenantContext);
         await db.Database.EnsureCreatedAsync();
 
-        db.Orders.Add(new Order { Description = "no tenant with detector" });
+        db.Orders.Add(new Order { Description = "no tenant reject" });
 
         Func<Task> act = () => db.SaveChangesAsync();
-        await act.Should().NotThrowAsync();
-        
+        await act.Should().ThrowAsync<TenantNotResolvedException>();
+
         await db.DisposeAsync();
     }
 
     [Fact]
-    public async Task SavingChangesAsync_WithNoTenantAndNoDetector_ExecutesWarningBranch()
+    public async Task SaveChangesAsync_WithNoTenant_AndAllowPolicy_DoesNotThrow()
     {
-        // Constructs the interceptor inline (not via DbContextFactory) to directly
-        // exercise the else-LogWarning branch in ApplyTenantIsolation.
+        // OnMissingTenant = Allow proceeds silently without a stamped tenant.
         var tenantContext = TestTenantContext.Empty();
-        var interceptor = new TenantSaveChangesInterceptor<string>(
+        var interceptor = BuildInterceptor(
             tenantContext,
-            NullLogger<TenantSaveChangesInterceptor<string>>.Instance,
-            [], []);
+            new EfCoreIsolationOptions { OnMissingTenant = MissingTenantBehavior.Allow });
+
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(interceptor)
+            .Options;
+
+        var db = new TestDbContext(options, tenantContext);
+        await db.Database.EnsureCreatedAsync();
+
+        db.Orders.Add(new Order { Description = "no tenant allow" });
+
+        Func<Task> act = () => db.SaveChangesAsync();
+        await act.Should().NotThrowAsync();
+
+        await db.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task SavingChangesAsync_WithNoTenant_AndWarnPolicy_DoesNotThrow()
+    {
+        // The default Warn policy logs but proceeds.
+        var tenantContext = TestTenantContext.Empty();
+        var interceptor = BuildInterceptor(tenantContext);
 
         await using var connection = new SqliteConnection("DataSource=:memory:");
         await connection.OpenAsync();
@@ -151,7 +178,7 @@ public sealed class InterceptorNoTenantContextTests
 
         Func<Task> act = () => db.SaveChangesAsync();
         await act.Should().NotThrowAsync();
-        
+
         await db.DisposeAsync();
     }
 

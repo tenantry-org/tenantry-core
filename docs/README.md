@@ -15,7 +15,7 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 4. **[ASP.NET Core integration](aspnetcore-integration.md)** — `AddTenantry`, the resolution middleware, pipeline ordering, and HTTP status codes.
 5. **[Tenant resolution](tenant-resolution.md)** — header, subdomain, route, claim, and query-string resolvers, resolver ordering, and custom resolvers.
 6. **[Access control](access-control.md)** — requiring tenants per-endpoint or globally, access validators, and claim-based validation.
-7. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, strict mode, the optional base context, migrations, and admin/cross-tenant queries.
+7. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, the isolation policy, the optional base context, migrations, and admin/cross-tenant queries.
 8. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantryCore` for console apps, worker services, and background jobs.
 9. **[AOT & trimming](aot-and-trimming.md)** — exactly what is supported, per package, and why EF Core differs.
 10. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.

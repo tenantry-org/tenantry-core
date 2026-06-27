@@ -10,8 +10,8 @@ namespace Tenantry.EfCore.Extensions;
 public static class TenantBuilderEfCoreExtensions
 {
     /// <summary>
-    /// Registers EF Core tenant isolation services (interceptor, strict isolation).
-    /// Call this inside your <c>AddTenantry</c> configuration lambda.
+    /// Registers EF Core tenant isolation services (the SaveChanges interceptor and the
+    /// configured isolation policy). Call this inside your <c>AddTenantry</c> configuration lambda.
     /// </summary>
     /// <example>
     /// <code>
@@ -21,7 +21,8 @@ public static class TenantBuilderEfCoreExtensions
     ///     tenant.UseInMemoryStore(tenants);
     ///     tenant.AddEfCoreIsolation(options =&gt;
     ///     {
-    ///         options.StrictIsolation = true;
+    ///         options.OnMissingTenant = MissingTenantBehavior.Reject;
+    ///         options.DetectSpoofedWrites = true;
     ///     });
     /// });
     /// </code>
@@ -36,20 +37,13 @@ public static class TenantBuilderEfCoreExtensions
         EfCoreIsolationOptions options = new();
         configure?.Invoke(options);
 
+        // The resolved options are read by the interceptor at SaveChanges time, so register the
+        // configured instance directly. The spoof validator is cheap and only invoked when
+        // DetectSpoofedWrites is enabled.
+        builder.Services.TryAddSingleton(options);
+        builder.Services.TryAddSingleton<StrictIsolationValidator<TKey>>();
         builder.Services.TryAddSingleton<TenantSaveChangesInterceptor<TKey>>();
         builder.Services.TryAddSingleton<ITenantInterceptorConfigurator>(new TenantInterceptorConfigurator<TKey>());
-
-        if (!options.StrictIsolation)
-        {
-            return builder;
-        }
-        
-        builder.Services.TryAddSingleton<StrictIsolationValidator<TKey>>();
-
-        if (options.StrictIsolationOptions.WarnOnMissingContext)
-        {
-            builder.Services.TryAddSingleton<MissingContextDetector<TKey>>();
-        }
 
         return builder;
     }

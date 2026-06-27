@@ -52,7 +52,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
     ]);
 
     // (c) Isolation — turn on EF Core write protection.
-    tenant.AddEfCoreIsolation(options => options.StrictIsolation = true);
+    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
 });
 ```
 
@@ -176,4 +176,4 @@ curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000099" "…/orders"  # 404 
 - Replace the in-memory store with a real one — [Tenant stores](tenant-stores.md).
 - Resolve tenants from subdomains, routes, or claims — [Tenant resolution](tenant-resolution.md).
 - Restrict which users may access which tenants — [Access control](access-control.md).
-- Understand strict mode, admin queries, and migrations — [EF Core integration](efcore-integration.md).
+- Understand the isolation policy, admin queries, and migrations — [EF Core integration](efcore-integration.md).

@@ -102,20 +102,6 @@ public sealed class BuilderRegistrationTests
             sd.ImplementationFactory != null);
     }
 
-    [Fact]
-    public void ValidateTenantAccessAny_WithEmptyGroups_ThrowsArgumentException()
-    {
-        var act = () => new ServiceCollection().AddTenantry<string>(tenant =>
-        {
-            tenant.ResolveFromHeader("X-Tenant-Id");
-            tenant.UseInMemoryStore([]);
-            tenant.ValidateTenantAccessAny(); // empty params array
-        });
-
-        act.Should().Throw<ArgumentException>()
-            .WithMessage("*At least one validation group must be provided*");
-    }
-
     private sealed class TestTenantResolver : ITenantResolver
     {
         public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default)

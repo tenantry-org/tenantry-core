@@ -47,9 +47,9 @@ builder.Services.AddTenantryCore<Guid>(tenant =>
     // up by id from anywhere — e.g. when a queued message only carries the tenant id.
     tenant.UseInMemoryStore([acme, globex]);
 
-    // Turn on EF Core write isolation. Strict mode also validates Added/Modified/Deleted
-    // entities against the active tenant and throws before any data is written.
-    tenant.AddEfCoreIsolation(options => options.StrictIsolation = true);
+    // Turn on EF Core write isolation. Cross-tenant Modified/Deleted writes are always rejected
+    // DetectSpoofedWrites also rejects Added entities pre-stamped with a foreign tenant id.
+    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
 });
 
 // ── 2. Register the DbContext and attach the tenant interceptors ──────────────────────────

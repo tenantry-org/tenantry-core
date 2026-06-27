@@ -39,6 +39,11 @@ public interface IAspNetCoreTenantBuilder<TKey> : ITenantBuilder<TKey>
     /// <summary>
     /// Resolves the tenant from a query string parameter.
     /// </summary>
+    /// <remarks>
+    /// <strong>For local development and testing only — do not use in production.</strong> Query string
+    /// parameters are routinely logged by servers, proxies, and analytics, and are trivially spoofable,
+    /// so they are not a safe tenant-resolution mechanism for production traffic.
+    /// </remarks>
     IAspNetCoreTenantBuilder<TKey> ResolveFromQueryString(string parameterName = "tenantId");
 
     /// <summary>
@@ -67,12 +72,6 @@ public interface IAspNetCoreTenantBuilder<TKey> : ITenantBuilder<TKey>
     /// Validates tenant access by matching the resolved tenant against claims on the current request principal.
     /// </summary>
     IAspNetCoreTenantBuilder<TKey> ValidateTenantAccessByClaim(string claimType);
-
-    /// <summary>
-    /// Adds a composite tenant access validator that succeeds when any configured validation group passes.
-    /// </summary>
-    IAspNetCoreTenantBuilder<TKey> ValidateTenantAccessAny(
-        params Action<ITenantAccessValidationGroupBuilder<TKey>>[] groups);
 
     /// <summary>
     /// Adds a synchronous tenant access validator.
