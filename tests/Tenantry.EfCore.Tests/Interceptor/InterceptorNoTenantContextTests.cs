@@ -129,6 +129,63 @@ public sealed class InterceptorNoTenantContextTests
     }
 
     [Fact]
+    public async Task SaveChangesAsync_WithNoTenant_AndSkipPolicy_DoesNotThrow()
+    {
+        // OnMissingTenant = Skip behaves like Allow for EF Core (no job to abort).
+        var tenantContext = TestTenantContext.Empty();
+        var interceptor = BuildInterceptor(
+            tenantContext,
+            new EfCoreIsolationOptions { OnMissingTenant = MissingTenantBehavior.Skip });
+
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(interceptor)
+            .Options;
+
+        var db = new TestDbContext(options, tenantContext);
+        await db.Database.EnsureCreatedAsync();
+
+        db.Orders.Add(new Order { Description = "no tenant skip" });
+
+        Func<Task> act = () => db.SaveChangesAsync();
+        await act.Should().NotThrowAsync();
+
+        await db.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task SaveChangesAsync_WithNoTenant_AndUnknownPolicy_DoesNotThrow()
+    {
+        // Covers the default branch in HandleMissingTenant — defensive path for out-of-range
+        // enum values (same behaviour as Allow: proceed silently).
+        var tenantContext = TestTenantContext.Empty();
+        var interceptor = BuildInterceptor(
+            tenantContext,
+            new EfCoreIsolationOptions { OnMissingTenant = (MissingTenantBehavior)99 });
+
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(interceptor)
+            .Options;
+
+        var db = new TestDbContext(options, tenantContext);
+        await db.Database.EnsureCreatedAsync();
+
+        db.Orders.Add(new Order { Description = "unknown policy" });
+
+        Func<Task> act = () => db.SaveChangesAsync();
+        await act.Should().NotThrowAsync();
+
+        await db.DisposeAsync();
+    }
+
+    [Fact]
     public async Task SaveChangesAsync_WithNoTenant_AndAllowPolicy_DoesNotThrow()
     {
         // OnMissingTenant = Allow proceeds silently without a stamped tenant.

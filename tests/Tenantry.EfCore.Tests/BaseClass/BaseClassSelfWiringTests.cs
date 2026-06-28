@@ -53,6 +53,27 @@ public sealed class BaseClassSelfWiringTests
             .Should().ThrowAsync<TenantIsolationViolationException>();
     }
 
+    [Fact]
+    public async Task OnConfiguring_WithNoApplicationServiceProvider_IsNoOp()
+    {
+        // When no UseApplicationServiceProvider is set, OnConfiguring finds serviceProvider == null
+        // and skips self-wiring — no exception should be thrown.
+        var tenant = TestTenantContext.For("acme");
+        await using var conn = DbContextFactory.CreateSharedConnection();
+
+        var options = new DbContextOptionsBuilder<BaseClassTestDbContext>()
+            .UseSqlite(conn)
+            .Options;
+
+        await using var ctx = new BaseClassTestDbContext(options, tenant);
+        await ctx.Database.EnsureCreatedAsync();
+
+        ctx.Orders.Add(new Order { Description = "no sp" });
+        Func<Task> act = async () => await ctx.SaveChangesAsync();
+
+        await act.Should().NotThrowAsync();
+    }
+
     private static ServiceProvider BuildProvider(TestTenantContext tenant)
     {
         var services = new ServiceCollection();
