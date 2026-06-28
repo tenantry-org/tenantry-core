@@ -76,6 +76,24 @@ public sealed class EfCoreIsolationRegistrationTests
         result.Should().BeSameAs(optionsBuilder);
     }
 
+    [Fact]
+    public void AddTenantInterceptors_CalledTwice_IsIdempotent()
+    {
+        // Exercises the early-return branch in TenantInterceptorConfigurator.AddInterceptors
+        // that skips re-adding the interceptor when it is already present.
+        ServiceCollection services = new();
+        services.AddLogging();
+        services.AddTenantryCore<string>(builder => builder.AddEfCoreIsolation());
+
+        using var sp = services.BuildServiceProvider();
+
+        var optionsBuilder = new DbContextOptionsBuilder();
+        optionsBuilder.AddTenantInterceptors(sp);
+        var result = optionsBuilder.AddTenantInterceptors(sp);
+
+        result.Should().BeSameAs(optionsBuilder);
+    }
+
     /// <summary>Minimal ITenantBuilder implementation for unit tests.</summary>
     private sealed class TestTenantBuilder<TKey>(IServiceCollection services) : TenantBuilder<TKey>(services)
         where TKey : IEquatable<TKey>, IParsable<TKey>;

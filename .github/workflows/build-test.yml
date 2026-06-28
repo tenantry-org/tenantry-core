@@ -60,6 +60,7 @@ jobs:
           /d:sonar.token="${SONAR_TOKEN}"
           /d:sonar.cs.opencover.reportsPaths="coverage/**/coverage.opencover.xml"
           /d:sonar.coverage.exclusions="samples/**"
+          /d:sonar.cpd.exclusions="samples/**"
           /d:sonar.qualitygate.wait=true
 
       - name: Build
