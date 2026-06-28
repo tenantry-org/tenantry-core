@@ -5,8 +5,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Tenantry.AspNetCore.Extensions;
 using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
 using Tenantry.EfCore;
+using Tenantry.EfCore.Extensions;
 using Testcontainers.MsSql;
 
 namespace Tenantry.IntegrationTests;

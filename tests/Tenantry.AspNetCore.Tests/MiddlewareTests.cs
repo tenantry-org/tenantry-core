@@ -2,8 +2,8 @@ using System.Security.Claims;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
-using Tenantry.AspNetCore.Extensions;
 using Tenantry.AspNetCore.Attributes;
+using Tenantry.AspNetCore.Extensions;
 using Tenantry.Core;
 
 namespace Tenantry.AspNetCore.Tests;

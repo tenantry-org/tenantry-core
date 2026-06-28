@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
 using Tenantry.EfCore;
+using Tenantry.EfCore.Extensions;
 using Tenantry.Samples.EfCoreWeb.Entities;
 
 namespace Tenantry.Samples.EfCoreWeb.Data;
