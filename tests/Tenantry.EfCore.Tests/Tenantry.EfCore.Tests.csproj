@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AwesomeAssertions" Version="9.4.0" />
+    <PackageReference Include="AwesomeAssertions" Version="9.5.0" />
     <PackageReference Include="coverlet.collector" Version="10.0.1" />
     <PackageReference Condition="'$(TargetFramework)' == 'net8.0'" Include="Microsoft.EntityFrameworkCore.Sqlite" Version="[8.0.0, 9.0.0)" />
     <PackageReference Condition="'$(TargetFramework)' == 'net9.0'" Include="Microsoft.EntityFrameworkCore.Sqlite" Version="[9.0.0, 10.0.0)" />
