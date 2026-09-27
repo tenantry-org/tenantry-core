@@ -28,9 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ExecuteUpdate` can no longer set `TenantId` on a tenant-scoped entity. The query filter limited which
   rows a bulk update touched but not the values it wrote, so `SetProperty(o => o.TenantId, other)` moved
-  every row the current tenant could see into another tenant. It now throws
-  `TenantIsolationViolationException` before running. `AddTenantInterceptors` and `MultiTenantDbContext`
-  register the guard automatically.
+  every row the current tenant could see into another tenant. A guard now resolves each setter the way
+  EF Core does, by member access or `EF.Property`, through casts and through `Select`, `Join` and
+  `SelectMany` projections (EF Core maps `Select(o => new { T = o.TenantId })` then
+  `SetProperty(x => x.T, other)` to `TenantId`), and throws `TenantIsolationViolationException` before
+  running. It fails closed on setters it cannot resolve. `AddTenantInterceptors` and
+  `MultiTenantDbContext` register the guard automatically.
 - `UPDATE` and `DELETE` now only affect rows stored under the tenant an entity was loaded or attached
   with. Previously a caller could overwrite, reassign or delete another tenant's row by attaching an
   entity with that row's primary key and the current tenant's `TenantId`; `DetectSpoofedWrites` did not

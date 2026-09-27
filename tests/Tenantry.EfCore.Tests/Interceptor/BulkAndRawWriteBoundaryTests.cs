@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
+using Tenantry.Core;
 using Tenantry.Core.Exceptions;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
@@ -82,6 +83,146 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteUpdate_SettingTenantIdWithEfProperty_Throws()
+    {
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+
+        Func<Task> act = () => db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, "TenantId"), "globex"));
+
+        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
+    }
+
+    [Fact]
+    public async Task ExecuteUpdate_SettingTenantIdWithEfPropertyAndACapturedName_Throws()
+    {
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        var column = nameof(Order.TenantId);
+
+        Func<Task> act = () => db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, column), "globex"));
+
+        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
+    }
+
+    [Fact]
+    public async Task ExecuteUpdate_SettingTenantIdThroughTheInterface_Throws()
+    {
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+
+        Func<Task> act = () => db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => ((ITenantScoped<string>)o).TenantId, "globex"));
+
+        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
+    }
+
+    [Fact]
+    public async Task ExecuteUpdate_SettingTenantIdOnAProjectedEntity_Throws()
+    {
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+
+        Func<Task> act = () => db.Orders
+            .Select(o => new { Order = o, o.Description })
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Order.TenantId, "globex"));
+
+        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
+    }
+
+    [Fact]
+    public async Task ExecuteUpdate_SettingTenantIdOnAProjectedEntityWithEfProperty_Throws()
+    {
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+
+        Func<Task> act = () => db.Orders
+            .Select(o => new { Order = o, o.Description })
+            .ExecuteUpdateAsync(s => s.SetProperty(x => EF.Property<string>(x.Order, "TenantId"), "globex"));
+
+        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
+    }
+
+    // EF Core resolves a setter through the query's projections, so each of these sets Order.TenantId.
+    [Theory]
+    [InlineData("anonymous")]
+    [InlineData("renamed")]
+    [InlineData("nested")]
+    [InlineData("then filtered")]
+    [InlineData("object initializer")]
+    [InlineData("join")]
+    [InlineData("select many")]
+    public async Task ExecuteUpdate_SettingTenantIdThroughAProjectedMember_Throws(string shape)
+    {
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+
+        Func<Task> act = shape switch
+        {
+            "anonymous" => () => db.Orders.Select(o => new { o.TenantId, o.Description })
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.TenantId, "moved")),
+            "renamed" => () => db.Orders.Select(o => new { Owner = o.TenantId, o.Id })
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
+            "nested" => () => db.Orders.Select(o => new { Inner = new { o.TenantId } })
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Inner.TenantId, "moved")),
+            "then filtered" => () => db.Orders.Select(o => new { Owner = o.TenantId, o.Description })
+                .Where(x => x.Description != "")
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
+            "object initializer" => () => db.Orders.Select(o => new OrderView { Owner = o.TenantId })
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
+            "join" => () => db.Orders.Join(db.Orders, a => a.Id, b => b.Id, (a, b) => new { a, Owner = b.TenantId })
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
+            "select many" => () => db.Orders.SelectMany(a => db.Orders.Where(b => b.Id == a.Id), (a, b) => new { a.Id, Owner = b.TenantId })
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
+            _ => throw new ArgumentOutOfRangeException(nameof(shape)),
+        };
+
+        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
+    }
+
+    [Fact]
+    public async Task ExecuteUpdate_ThroughAProjectionTheGuardCannotResolve_FailsClosed()
+    {
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+
+        Func<Task> act = () => db.Orders.GroupBy(o => o.TenantId).Select(g => new { Owner = g.Key })
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved"));
+
+        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*cannot check*");
+        Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
+    }
+
+    [Fact]
+    public async Task ExecuteUpdate_SettingOtherPropertiesWithEfPropertyOrOnAProjection_IsAllowed()
+    {
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+
+        await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, "Description"), "by name"));
+        Rows().Should().BeEquivalentTo([("acme", "by name"), ("globex", "globex order")]);
+
+        await db.Orders
+            .Select(o => new { Order = o, o.TenantId })
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Order.Description, x => x.TenantId + " projected"));
+        Rows().Should().BeEquivalentTo([("acme", "acme projected"), ("globex", "globex order")]);
+
+        await db.Orders
+            .Join(db.Orders, a => a.Id, b => b.Id, (a, b) => new { a, Owner = b.TenantId })
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.a.Description, x => x.Owner + " joined"));
+        Rows().Should().BeEquivalentTo([("acme", "acme joined"), ("globex", "globex order")]);
+
+        var column = nameof(Order.Description);
+        await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, column), "captured"));
+        Rows().Should().BeEquivalentTo([("acme", "captured"), ("globex", "globex order")]);
+    }
+
+    [Fact]
     public async Task ExecuteUpdate_ReadingTenantIdAsAValue_IsAllowed()
     {
         await SeedAsync();
@@ -127,6 +268,11 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
 
         deleted.Should().Be(1);
         Rows().Should().BeEquivalentTo([("globex", "globex order")]);
+    }
+
+    private sealed class OrderView
+    {
+        public string Owner { get; set; } = string.Empty;
     }
 
     private async Task SeedAsync()
