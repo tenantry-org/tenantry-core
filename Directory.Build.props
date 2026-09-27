@@ -46,20 +46,9 @@
 
   <!-- MinVer + root README for src projects only -->
   <ItemGroup Condition="$(MSBuildProjectFullPath.Contains('/src/'))">
-    <PackageReference Include="MinVer" Version="7.*" PrivateAssets="All" />
+    <PackageReference Include="MinVer" Version="7.0.0" PrivateAssets="All" />
     <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath=""/>
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="README.md" />
-  </ItemGroup>
-
-  <!--
-    SQLitePCLRaw.lib.e_sqlite3 is pulled transitively by Microsoft.EntityFrameworkCore.Sqlite,
-    used only by the EF Core test project and the EfCoreWeb sample. Every published version
-    (incl. the latest, 2.1.11) is flagged by GHSA-2m69-gcr7-jv3q — there is no patched release
-    to upgrade to yet. Suppress the advisory (it does not affect the shipped library packages)
-    until an upstream fix is available.
-  -->
-  <ItemGroup>
-    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
   </ItemGroup>
 
 </Project>
