@@ -98,7 +98,11 @@ using (scope.BeginScope(acme))
 ```
 
 In ASP.NET Core the **middleware** calls `BeginScope` for you once the tenant is resolved. In console
-and worker apps **you** call it. See [Non-HTTP hosts](non-http-hosts.md).
+and worker apps, `ITenantScopeFactory<TKey>` opens a tenant scope together with a fresh DI scope, or you
+call `BeginScope` yourself. See [Non-HTTP hosts](non-http-hosts.md).
+
+Call `BeginScope` (or `ITenantScopeFactory.CreateScope`) in the method that does the work. Because of the
+`AsyncLocal` model below, a scope opened inside an `async` helper is not active for the helper's caller.
 
 ### Scopes nest
 
@@ -127,7 +131,8 @@ single `AsyncLocal` holding the innermost open scope. The implication matters:
   value cannot leak between concurrent requests/operations because each runs in its own async context.
 - A background `Task.Run(...)` started inside a scope inherits the tenant at the moment it is created.
   If you queue work to run *later* (after the scope disposes), capture the tenant id and open a fresh
-  scope when the work runs — do not rely on the ambient value still being set.
+  scope when the work runs (`ITenantScopeFactory.RunInScopeAsync`); do not rely on the ambient value
+  still being set.
 - Disposing a scope is idempotent and order-safe. Disposing the innermost scope restores the nearest
   scope that is still open; disposing any other scope (out of order, or from a different async flow)
   closes it without changing the active tenant.
@@ -144,7 +149,7 @@ This is covered in depth in [EF Core integration](efcore-integration.md#how-the-
 
 | Method | Package | Use for |
 |--------|---------|---------|
-| `AddTenantryCore<TKey>(configure?)` | `Tenantry.Core` | Console apps, workers, desktop UIs — registers the context/scope and lets you add isolation. No HTTP resolution. |
+| `AddTenantryCore<TKey>(configure?)` | `Tenantry.Core` | Console apps, workers, desktop UIs — registers the context/scope, `ITenantScopeFactory` and `ITenantStoreAccessor`, and lets you add isolation. No HTTP resolution. |
 | `AddTenantry<TKey>(configure)` | `Tenantry.AspNetCore` | ASP.NET Core — calls `AddTenantryCore` internally, then adds resolvers, middleware wiring, and startup validation. |
 
 All registrations are idempotent: calling both is safe, and the core services are only added once.

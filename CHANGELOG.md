@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Worker scopes for background work. `ITenantScopeFactory<TKey>.CreateScope(tenant)` opens a fresh DI
+  scope with the tenant active; disposing it, with `using` or `await using`, disposes its services while
+  the tenant is still active and then restores the previous tenant in the disposing code. For work that
+  starts from a tenant id, `RunInScopeAsync(tenantId, work, ct)` looks the tenant up and runs the work
+  inside its scope. There is deliberately no `CreateScopeAsync`: an `async` method cannot change its
+  caller's ambient tenant. `ITenantStoreAccessor<TKey>` lets singletons read a scoped store without
+  capturing it. `AddTenantryCore` and `AddTenantry` register both as singletons.
 - `Tenantry.Samples.SecureApi`, a production-shaped API: JWT authentication, tenant selection validated
   against the caller's `tenant` claims (403 otherwise), required tenants (400 without one) and EF Core
   isolation, with integration tests. The header-only quick starts are labelled as introductory.

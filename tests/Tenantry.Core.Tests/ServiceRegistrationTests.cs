@@ -24,6 +24,19 @@ public sealed class ServiceRegistrationTests
     }
 
     [Fact]
+    public void AddTenantryCore_RegistersWorkerScopeServicesAsSingletonsOnce()
+    {
+        ServiceCollection services = new();
+        services.AddTenantryCore<string>();
+        services.AddTenantryCore<string>();
+
+        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantScopeFactory<string>))
+            .Which.Lifetime.Should().Be(ServiceLifetime.Singleton);
+        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantStoreAccessor<string>))
+            .Which.Lifetime.Should().Be(ServiceLifetime.Singleton);
+    }
+
+    [Fact]
     public void AddTenantryCore_UseStoreFactory_RegistersFactoryStore()
     {
         ServiceCollection services = new();

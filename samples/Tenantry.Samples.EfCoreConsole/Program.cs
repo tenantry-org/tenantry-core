@@ -13,6 +13,7 @@
 //   5. Strict isolation catching a cross-tenant write before it hits the database.
 //   6. Fail-closed behaviour when no tenant scope is active.
 //   7. Bypassing isolation deliberately for admin/reporting with IgnoreQueryFilters().
+//   8. A worker-style sweep: every tenant in its own DI scope, with ITenantScopeFactory.
 //
 // Run:
 //   dotnet run --project samples/Tenantry.Samples.EfCoreConsole
@@ -28,7 +29,7 @@ using Tenantry.EfCore.Extensions;
 using Tenantry.Samples.EfCoreConsole;
 
 // Two tenants we will switch between. In a real worker these would come from your
-// ITenantStore (a database, config, message metadata, etc.).f
+// ITenantStore (a database, config, message metadata, etc.).
 var acme = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-0000000000a1"), Name = "Acme" };
 var globex = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-0000000000b2"), Name = "Globex" };
 
@@ -124,6 +125,21 @@ Print("No scope", $"sees {await db.Orders.CountAsync()} order(s) — isolation f
 // ── 8. Admin / reporting: bypass isolation on purpose ───────────────────────────────────────
 var total = await db.Orders.IgnoreQueryFilters().CountAsync();
 Print("Admin", $"IgnoreQueryFilters() sees ALL {total} order(s) across every tenant");
+
+// ── 9. A worker-style sweep over every tenant ───────────────────────────────────────────────
+// Hosted services use ITenantScopeFactory: each scope is a fresh DI scope (so a fresh DbContext) with
+// the tenant active, and disposing it restores "no tenant", so nothing carries over between tenants.
+var scopes = host.Services.GetRequiredService<ITenantScopeFactory<Guid>>();
+var tenants = host.Services.GetRequiredService<ITenantStoreAccessor<Guid>>();
+
+foreach (var tenant in await tenants.GetAllTenantsAsync())
+{
+    await using var tenantWork = scopes.CreateScope(tenant);
+    var tenantDb = tenantWork.ServiceProvider.GetRequiredService<SampleDbContext>();
+    Print($"Sweep: {tenant.Name}", $"sees {await tenantDb.Orders.CountAsync()} order(s)");
+}
+
+Print("After sweep", $"tenant active: {tenantScope.HasTenant}");
 
 return;
 

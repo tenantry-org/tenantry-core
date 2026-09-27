@@ -113,7 +113,7 @@ your `AddDbContext` callback. See the
 
 ## Quick start (console / worker — no ASP.NET Core)
 
-There is no request to resolve a tenant from, so you open and close the tenant scope yourself:
+There is no request to resolve a tenant from, so you open a tenant scope around each unit of work:
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
@@ -126,17 +126,18 @@ builder.Services.AddTenantryCore<Guid>(tenant =>
     tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
 });
 
-// …later, around a unit of work (serviceProvider is your host's IServiceProvider):
-var tenants = serviceProvider.GetRequiredService<ITenantScope<Guid>>();
+// …later, in a hosted service (inject ITenantScopeFactory<Guid> scopes):
 var acme = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" };
 
-using (tenants.BeginScope(acme))
-await using (var scope = serviceProvider.CreateAsyncScope())
+await using (var scope = scopes.CreateScope(acme))  // a fresh DI scope with Acme active
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     // EF Core reads are filtered to this tenant and writes are stamped with it.
     await db.SaveChangesAsync();
 }
+
+// With only an id (e.g. from a queue message), look the tenant up in the registered store and run as it:
+await scopes.RunInScopeAsync(message.TenantId, (scope, ct) => HandleAsync(scope, message, ct), cancellationToken);
 ```
 
 See the runnable [`Tenantry.Samples.EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) project

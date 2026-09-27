@@ -21,7 +21,7 @@ in order:
 
 1. **Is a tenant actually in scope?** Inject `ITenantContext<TKey>` and confirm `HasTenant` is true at
    the point of the query. On the web, `UseTenantry()` must have run and resolved a tenant. In a
-   worker, you must be inside a `BeginScope`.
+   worker, you must be inside a scope from `ITenantScopeFactory` (or `BeginScope`).
 2. **Did the request resolve a tenant?** A missing/blank header (or other source) means no tenant. If
    the endpoint should require one, add `.RequireTenant()` so you get a clear `400` instead of silent
    empties.
@@ -89,8 +89,15 @@ automatic; in a custom pipeline, ensure `UseRouting()` precedes `UseTenantry()`.
 ## Background/queued work loses the tenant
 
 The `AsyncLocal` tenant flows down into awaited work but does not survive past the scope's disposal.
-Capture the tenant **id** when enqueuing and open a fresh `BeginScope` when the deferred work runs. See
-[Non-HTTP hosts](non-http-hosts.md#scopes-async-and-threads).
+Capture the tenant **id** when enqueuing and run the deferred work with
+`ITenantScopeFactory.RunInScopeAsync(id, …)`. See [Non-HTTP hosts](non-http-hosts.md#scopes-async-and-threads).
+
+## The tenant is missing after a helper opened a scope
+
+A scope opened inside an `async` method is not active for that method's caller: an `async` method's
+changes to an `AsyncLocal` are undone when it returns. Open the scope in the method that does the work
+(`await using var scope = scopes.CreateScope(tenant);`), or pass the work in with
+`ITenantScopeFactory.RunInScopeAsync`.
 
 ## AOT/trim warnings from the EF Core integration
 

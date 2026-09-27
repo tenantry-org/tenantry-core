@@ -10,8 +10,10 @@ namespace Tenantry.Core.Extensions;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the core Tenantry services: the tenant context accessor (AsyncLocal singleton)
-    /// and the <see cref="ITenantContext{TKey}"/> / <see cref="ITenantScope{TKey}"/> interfaces.
+    /// Registers the core Tenantry services: the tenant context accessor (AsyncLocal singleton) behind
+    /// <see cref="ITenantContext{TKey}"/> and <see cref="ITenantScope{TKey}"/>, plus the
+    /// <see cref="ITenantScopeFactory{TKey}"/> and <see cref="ITenantStoreAccessor{TKey}"/> singletons used
+    /// by background work.
     /// </summary>
     /// <remarks>
     /// Use this entry point for worker services, console apps, and other non-HTTP hosts.
@@ -29,11 +31,12 @@ public static class ServiceCollectionExtensions
     ///     tenant.AddEfCoreIsolation(options =&gt; options.OnMissingTenant = MissingTenantBehavior.Reject);
     /// });
     ///
-    /// // Enter a tenant scope before doing EF Core work:
-    /// var scope = sp.GetRequiredService&lt;ITenantScope&lt;Guid&gt;&gt;();
-    /// using (scope.BeginScope(new TenantDescriptor&lt;Guid&gt; { TenantId = tenantId, Name = "Acme" }))
+    /// // Run EF Core work as a tenant, in its own DI scope:
+    /// var scopes = sp.GetRequiredService&lt;ITenantScopeFactory&lt;Guid&gt;&gt;();
+    /// await using (var scope = scopes.CreateScope(tenant))
     /// {
-    ///     // EF Core work runs in the tenant context here
+    ///     var db = scope.ServiceProvider.GetRequiredService&lt;AppDbContext&gt;();
+    ///     // reads are filtered to the tenant and writes are stamped with it
     /// }
     /// </code>
     /// </example>
@@ -45,6 +48,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<TenantScope<TKey>>();
         services.TryAddSingleton<ITenantContext<TKey>>(sp => sp.GetRequiredService<TenantScope<TKey>>());
         services.TryAddSingleton<ITenantScope<TKey>>(sp => sp.GetRequiredService<TenantScope<TKey>>());
+        services.TryAddSingleton<ITenantStoreAccessor<TKey>, TenantStoreAccessor<TKey>>();
+        services.TryAddSingleton<ITenantScopeFactory<TKey>, TenantScopeFactory<TKey>>();
 
         if (configure is not null)
         {

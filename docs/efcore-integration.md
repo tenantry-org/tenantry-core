@@ -326,7 +326,7 @@ tenant store, mixed tenanted/global entities, cross-boundary relationships, and 
 ## Non-HTTP usage
 
 In console apps, workers, and background jobs there is no middleware to open the scope. Register with
-`AddTenantryCore`, attach the interceptor exactly as above, and call `BeginScope` yourself around your
-unit of work. The runnable [`EfCoreConsole` sample](../samples/Tenantry.Samples.EfCoreConsole) shows
+`AddTenantryCore`, attach the interceptor exactly as above, and open a scope around each unit of work
+with `ITenantScopeFactory<TKey>`, which also gives each tenant its own `DbContext`. The runnable [`EfCoreConsole` sample](../samples/Tenantry.Samples.EfCoreConsole) shows
 stamping, read filtering, nested scopes, strict-mode rejection, and fail-closed reads. See
 [Non-HTTP hosts](non-http-hosts.md).

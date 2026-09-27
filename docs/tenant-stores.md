@@ -14,8 +14,12 @@ public interface ITenantStore<TKey>
 
 Exactly one store must be registered. `AddTenantry` validates this at startup and throws a clear
 `InvalidOperationException` if no store is registered. (`AddTenantryCore` does not validate, because a
-non-HTTP host may set tenants entirely via `BeginScope` and never need a store — see
-[Non-HTTP hosts](non-http-hosts.md).)
+non-HTTP host may create every scope from a descriptor it already holds and never need a store — see
+[Non-HTTP hosts](non-http-hosts.md). `ITenantStoreAccessor` and `ITenantScopeFactory.RunInScopeAsync` do
+need one, and say so if it is missing.)
+
+Singletons such as hosted services should read tenants through `ITenantStoreAccessor<TKey>`, which
+resolves the store from a fresh scope on each call, rather than injecting a scoped store directly.
 
 ## In-memory store
 

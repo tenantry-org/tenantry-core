@@ -48,5 +48,5 @@ Your endpoint + EF Core
    └─ writes ──► SaveChanges interceptor stamps/validates TenantId
 ```
 
-In a console or worker app there is no request, so you call `BeginScope` yourself; everything below
-that line behaves identically.
+In a console or worker app there is no request, so you open the scope yourself with
+`ITenantScopeFactory` (or `BeginScope`); everything below that line behaves identically.
