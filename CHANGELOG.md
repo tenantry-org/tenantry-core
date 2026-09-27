@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- DbContext pooling (`AddDbContextPool`, `AddPooledDbContextFactory`). `MultiTenantDbContext` has an
+  options-only constructor that reads Tenantry's ambient tenant context, so a pooled instance isolates
+  whichever tenant is active each time it is used. Call `AddTenantInterceptors(sp)` in the registration
+  callback of a pooled context.
+
 ### Security
 
 - `ExecuteUpdate` can no longer set `TenantId` on a tenant-scoped entity. The query filter limited which
@@ -28,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TenantIsolationViolationException` has a constructor for violations detected before any tenant value
   is known; `OffendingTenantId` and `ExpectedTenantId` are empty in that case.
 - The EF Core guide documents what is and isn't isolated: raw SQL and `IgnoreQueryFilters()` are
-  unisolated by design, and DbContext pooling is not supported.
+  unisolated by design.
 - **Breaking:** `EfCoreIsolationOptions.OnMissingTenant` defaults to `Reject`. Saving tenant-scoped entities
   without a resolved tenant throws `TenantNotResolvedException`; previously the default `Warn` let such a
   save update or delete any tenant's rows by key and insert rows with no tenant.

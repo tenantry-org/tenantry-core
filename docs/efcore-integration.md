@@ -53,14 +53,17 @@ that up; they produce identical behaviour.
 ### Option A — implement `ITenantAwareDbContext<TKey>` (works with any existing context)
 
 ```csharp
-public class AppDbContext : DbContext, ITenantAwareDbContext<Guid>
+using Microsoft.EntityFrameworkCore.Infrastructure; // GetService
+
+public class AppDbContext(DbContextOptions<AppDbContext> options)
+    : DbContext(options), ITenantAwareDbContext<Guid>
 {
-    private readonly ITenantContext<Guid> _tenantContext;
+    private ITenantContext<Guid>? _tenantContext;
 
-    public AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext<Guid> tenantContext)
-        : base(options) => _tenantContext = tenantContext;
-
-    public Guid? CurrentTenantId => _tenantContext.CurrentTenantId;
+    // Resolved from the application service provider on first use, so the constructor takes only the
+    // options and the context also works with DbContext pooling.
+    public Guid CurrentTenantId =>
+        (_tenantContext ??= this.GetService<ITenantContext<Guid>>()).CurrentTenantId;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -75,8 +78,8 @@ Use this when you have an existing `DbContext` or a required base class you cann
 ### Option B — derive from `MultiTenantDbContext<TKey>` (greenfield convenience)
 
 ```csharp
-public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext<Guid> ctx)
-    : MultiTenantDbContext<Guid>(options, ctx)
+public class AppDbContext(DbContextOptions<AppDbContext> options)
+    : MultiTenantDbContext<Guid>(options)
 {
     public DbSet<Order> Orders => Set<Order>();
 
@@ -91,8 +94,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
 The base class implements `ITenantAwareDbContext<TKey>` and calls `ApplyTenantFilters` for you. Always
 call `base.OnModelCreating(modelBuilder)` **first**.
 
-Either way, inject `ITenantContext<TKey>` — never `ITenantScope<TKey>` — into the context. The context
-only ever *reads* the tenant.
+Either way, the context only ever *reads* the tenant, through `ITenantContext<TKey>` (never
+`ITenantScope<TKey>`). Tenantry registers it as a singleton over ambient per-request state, so one context
+instance always sees the tenant that is active when it queries or saves. Contexts created outside dependency
+injection can pass an `ITenantContext<TKey>` to `MultiTenantDbContext`'s two-argument constructor instead.
 
 ## Read isolation: the global query filter
 
@@ -222,6 +227,29 @@ initialised to `string.Empty`.
 Recommendation: set `DetectSpoofedWrites = true` (negligible overhead — a pass over the change tracker
 EF Core walks anyway), and keep `OnMissingTenant` at `Reject` except in maintenance code.
 
+## DbContext pooling
+
+Pooled contexts are supported. A pooled instance is reused across requests, and because the context reads
+the ambient tenant on every query and save, each request sees only its own tenant. Two rules apply:
+
+- The context must have a single constructor that takes only its options (both options above do).
+- Call `AddTenantInterceptors(sp)` in the registration callback. EF Core does not let `OnConfiguring`
+  change a pooled context's options, so `MultiTenantDbContext` cannot attach them itself; if you forget,
+  the first use fails with an EF Core error about `OnConfiguring` and pooling rather than saving without
+  isolation.
+
+```csharp
+builder.Services.AddDbContextPool<AppDbContext>((sp, options) =>
+    options.UseSqlServer(connectionString).AddTenantInterceptors(sp));
+
+// or, for IDbContextFactory<AppDbContext>
+builder.Services.AddPooledDbContextFactory<AppDbContext>((sp, options) =>
+    options.UseSqlServer(connectionString).AddTenantInterceptors(sp));
+```
+
+This covers shared-database isolation. Pooling with a database per tenant needs the connection switched
+for each lease, which Tenantry Pro handles separately.
+
 ## What is and isn't isolated
 
 Tenantry isolates tenants in the application, through EF Core's query pipeline and `SaveChanges`. It is
@@ -236,7 +264,7 @@ access), add row-level security policies in the database as well, or use a datab
 | `ExecuteUpdate`, `ExecuteDelete` | Yes | The query filter limits affected rows to the current tenant; with no tenant they affect nothing. `ExecuteUpdate` may not set `TenantId` and throws `TenantIsolationViolationException` if it tries. |
 | `IgnoreQueryFilters()` | No, by design | Removes the tenant filter from that query, including `ExecuteUpdate`/`ExecuteDelete`, which then affect **every** tenant. Treat it as a privileged operation. |
 | Raw SQL (`FromSql`, `SqlQuery`, `ExecuteSql`) | No | Neither the filter nor the interceptors see raw SQL. Add the tenant predicate yourself. |
-| DbContext pooling | Not supported | A tenant-aware context takes the tenant context in its constructor, which `AddDbContextPool` cannot supply. Use `AddDbContext`. |
+| Pooled contexts | Yes | Each use reads the tenant active at that moment; see [DbContext pooling](#dbcontext-pooling). |
 | Other `DbContext` instances | No | Contexts created without `AddTenantInterceptors` (or not deriving from `MultiTenantDbContext`) get no write isolation. The interceptor logs a warning when a tenant-scoped entity's `TenantId` is not a concurrency token, which means `ApplyTenantFilters` was not called. |
 
 ## Migrations

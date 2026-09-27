@@ -20,25 +20,32 @@ namespace Tenantry.EfCore;
 /// This class is a convenience for greenfield projects.
 /// </para>
 /// <para>
-/// To use: derive from <see cref="MultiTenantDbContext{TKey}"/>, call <c>base.OnModelCreating(modelBuilder)</c>
-/// at the start of your override, and inject <see cref="ITenantContext{TKey}"/> into the constructor.
+/// To use: derive from <see cref="MultiTenantDbContext{TKey}"/>, give your context a constructor that takes
+/// only its <see cref="DbContextOptions{TContext}"/>, and call <c>base.OnModelCreating(modelBuilder)</c> at the
+/// start of your override. The current tenant comes from Tenantry's ambient <see cref="ITenantContext{TKey}"/>,
+/// resolved from the application service provider, so the same instance serves whichever tenant is active
+/// when it runs a query or saves.
 /// </para>
 /// <para>
-/// <strong>Isolation is self-wiring for derived contexts.</strong> When you call
+/// <strong>DbContext pooling is supported.</strong> Register with <c>AddDbContextPool</c> or
+/// <c>AddPooledDbContextFactory</c> and call <c>options.AddTenantInterceptors(sp)</c> in the options callback:
+/// EF Core does not let <see cref="OnConfiguring"/> change the options of a pooled context, so the
+/// self-wiring described below cannot run there, and a pooled context without the interceptors fails on
+/// first use instead of saving without isolation.
+/// </para>
+/// <para>
+/// <strong>Isolation is self-wiring for non-pooled contexts.</strong> When you call
 /// <c>AddEfCoreIsolation()</c> and register this context through <c>AddDbContext</c> (which supplies an
-/// application service provider), the tenant <c>SaveChanges</c> interceptor is attached automatically in
+/// application service provider), the tenant interceptors are attached automatically in
 /// <see cref="OnConfiguring"/> — you do <em>not</em> also need <c>options.AddTenantInterceptors(sp)</c>.
 /// This prevents the silent-isolation-loss failure mode of forgetting that wiring step. A
 /// <strong>raw <see cref="DbContext"/></strong> that does not derive from this base class must still call
-/// <c>options.AddTenantInterceptors(sp)</c> in its <c>AddDbContext</c> callback.
+/// <c>options.AddTenantInterceptors(sp)</c> in its registration callback.
 /// </para>
 /// <code>
-/// public class AppDbContext : MultiTenantDbContext&lt;Guid&gt;
+/// public class AppDbContext(DbContextOptions&lt;AppDbContext&gt; options) : MultiTenantDbContext&lt;Guid&gt;(options)
 /// {
 ///     public DbSet&lt;Order&gt; Orders =&gt; Set&lt;Order&gt;();
-///
-///     public AppDbContext(DbContextOptions&lt;AppDbContext&gt; options, ITenantContext&lt;Guid&gt; tenantContext)
-///         : base(options, tenantContext) { }
 ///
 ///     protected override void OnModelCreating(ModelBuilder modelBuilder)
 ///     {
@@ -46,6 +53,12 @@ namespace Tenantry.EfCore;
 ///         // ... your entity configuration
 ///     }
 /// }
+///
+/// // Either
+/// builder.Services.AddDbContext&lt;AppDbContext&gt;(options =&gt; options.UseSqlServer(connectionString));
+/// // or, pooled
+/// builder.Services.AddDbContextPool&lt;AppDbContext&gt;((sp, options) =&gt;
+///     options.UseSqlServer(connectionString).AddTenantInterceptors(sp));
 /// </code>
 /// </remarks>
 [RequiresUnreferencedCode("EF Core is not fully compatible with trimming.")]
@@ -53,10 +66,22 @@ namespace Tenantry.EfCore;
 public abstract class MultiTenantDbContext<TKey> : DbContext, ITenantAwareDbContext<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    private readonly ITenantContext<TKey> _tenantContext;
+    private readonly IServiceProvider? _applicationServiceProvider;
+    private ITenantContext<TKey>? _tenantContext;
 
     /// <summary>
-    /// Initialises a new instance of <see cref="MultiTenantDbContext{TKey}"/>.
+    /// Initialises a new instance that resolves the ambient <see cref="ITenantContext{TKey}"/> from the
+    /// application service provider on first use. Use this constructor for pooled contexts.
+    /// </summary>
+    protected MultiTenantDbContext(DbContextOptions options)
+        : base(options)
+    {
+        _applicationServiceProvider = options.FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider;
+    }
+
+    /// <summary>
+    /// Initialises a new instance that uses the given <see cref="ITenantContext{TKey}"/>, for contexts created
+    /// outside dependency injection.
     /// </summary>
     protected MultiTenantDbContext(DbContextOptions options, ITenantContext<TKey> tenantContext)
         : base(options)
@@ -66,11 +91,24 @@ public abstract class MultiTenantDbContext<TKey> : DbContext, ITenantAwareDbCont
 
     /// <inheritdoc />
     /// <remarks>
-    /// Delegates to the injected <see cref="ITenantContext{TKey}"/>. EF Core re-evaluates
-    /// this property on every query execution because it accesses a <c>DbContext</c>
-    /// property, ensuring the filter always reflects the current tenant.
+    /// Reads the ambient tenant each time it is accessed. EF Core re-evaluates this property on every query
+    /// execution because it accesses a <c>DbContext</c> property, so the filter always reflects the tenant
+    /// active at that moment, including when a pooled instance is reused for another tenant.
     /// </remarks>
-    public TKey? CurrentTenantId => _tenantContext.CurrentTenantId;
+    /// <exception cref="InvalidOperationException">
+    /// No <see cref="ITenantContext{TKey}"/> was passed to the constructor and none is registered in the
+    /// application service provider.
+    /// </exception>
+    public TKey? CurrentTenantId => TenantContext.CurrentTenantId;
+
+    // Tenantry registers ITenantContext<TKey> as a singleton over ambient (AsyncLocal) state, so resolving it
+    // once and keeping it across pooled leases is safe.
+    private ITenantContext<TKey> TenantContext =>
+        _tenantContext ??= _applicationServiceProvider?.GetService<ITenantContext<TKey>>()
+            ?? throw new InvalidOperationException(
+                $"{GetType().Name} has no ITenantContext<{typeof(TKey).Name}>. Register Tenantry " +
+                "(AddTenantry or AddTenantryCore) and create the context through AddDbContext, AddDbContextPool " +
+                "or AddPooledDbContextFactory, or pass an ITenantContext to the base constructor.");
 
     /// <inheritdoc />
     /// <remarks>
