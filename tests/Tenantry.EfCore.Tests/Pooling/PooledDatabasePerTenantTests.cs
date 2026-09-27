@@ -333,6 +333,48 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         RowsIn("acme").Should().Equal("acme:inside an open connection");
     }
 
+    // The lease and tenant still match, so without comparing the connection itself Acme would read and write
+    // Globex's database.
+    [Theory]
+    [InlineData("SetConnectionString")]
+    [InlineData("SetDbConnection")]
+    public async Task ContextWhoseConnectionTheAppReplaced_RefusesToRunCommands(string replacedBy)
+    {
+        await using var services = Build();
+        var ambient = services.GetRequiredService<ITenantScope<string>>();
+
+        using (ambient.BeginScope(Globex))
+        {
+            await using var seed = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
+            seed.Notes.Add(new PooledNote { Text = "globex's own note" });
+            await seed.SaveChangesAsync();
+        }
+
+        using (ambient.BeginScope(Acme))
+        {
+            await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
+
+            if (replacedBy == "SetConnectionString")
+            {
+                db.Database.SetConnectionString(_databases["globex"].ConnectionString);
+            }
+            else
+            {
+                db.Database.SetDbConnection(new SqliteConnection(_databases["globex"].ConnectionString), contextOwnsConnection: true);
+            }
+
+            var read = () => db.Notes.IgnoreQueryFilters().CountAsync();
+            db.Notes.Add(new PooledNote { Text = "acme row in globex's database" });
+            var save = () => db.SaveChangesAsync();
+
+            (await read.Should().ThrowAsync<TenantIsolationViolationException>()).WithMessage("*connection was changed*");
+            (await save.Should().ThrowAsync<TenantIsolationViolationException>()).WithMessage("*connection was changed*");
+        }
+
+        RowsIn("globex").Should().Equal("globex:globex's own note");
+        RowsIn("acme").Should().BeEmpty();
+    }
+
     [Fact]
     public async Task ContextNotConnectedForItsCurrentLease_RefusesToOpenAConnection()
     {

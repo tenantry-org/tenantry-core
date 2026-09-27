@@ -20,12 +20,24 @@ internal static class TenantDatabaseLeases
 {
     private static readonly ConditionalWeakTable<DbContext, Lease> Leases = new();
 
-    public static void Record(DbContext context, int lease, object? tenantId) =>
-        Leases.AddOrUpdate(context, new Lease(lease, tenantId));
+    // EF Core runs some commands without a context (a HiLo sequence fetch, for example), so the guard maps
+    // the command's connection back to the context that owns it. A pooled context keeps its DbConnection
+    // across leases (the pool closes it but does not dispose it).
+    private static readonly ConditionalWeakTable<DbConnection, DbContext> Connections = new();
+
+    public static void Record(DbContext context, int lease, object? tenantId)
+    {
+        var connection = context.Database.GetDbConnection();
+        Leases.AddOrUpdate(context, new Lease(lease, tenantId, connection, context.Database.GetConnectionString()));
+        Connections.AddOrUpdate(connection, context);
+    }
 
     public static bool TryGet(DbContext context, out Lease lease) => Leases.TryGetValue(context, out lease!);
 
-    internal sealed record Lease(int Number, object? TenantId);
+    public static DbContext? FindContext(DbConnection? connection) =>
+        connection is not null && Connections.TryGetValue(connection, out var context) ? context : null;
+
+    internal sealed record Lease(int Number, object? TenantId, DbConnection Connection, string? ConnectionString);
 }
 
 /// <summary>
@@ -37,7 +49,9 @@ internal static class TenantDatabaseLeases
 /// <c>ConnectionOpening</c> for a connection that is already open, whether the application opened it or a
 /// transaction did, so a context opened under one tenant and then used under another is caught only when its
 /// next command runs. <c>SaveChanges</c> is also checked before it starts, because EF Core wraps an exception
-/// thrown while a save runs its commands in a <c>DbUpdateException</c>.
+/// thrown while a save runs its commands in a <c>DbUpdateException</c>. A command EF Core runs without a
+/// context (a HiLo sequence fetch) is attributed to the context that owns its connection. The check also fails
+/// if the application replaced the lease's connection or connection string.
 /// </remarks>
 internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantContext)
     : IDbConnectionInterceptor, IDbCommandInterceptor, ISaveChangesInterceptor
@@ -63,7 +77,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         ConnectionEventData eventData,
         InterceptionResult result)
     {
-        Check(eventData.Context);
+        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(connection));
         return result;
     }
 
@@ -73,7 +87,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         InterceptionResult result,
         CancellationToken cancellationToken = default)
     {
-        Check(eventData.Context);
+        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(connection));
         return ValueTask.FromResult(result);
     }
 
@@ -82,7 +96,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         CommandEventData eventData,
         InterceptionResult<DbDataReader> result)
     {
-        Check(eventData.Context);
+        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(command.Connection));
         return result;
     }
 
@@ -92,7 +106,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         InterceptionResult<DbDataReader> result,
         CancellationToken cancellationToken = default)
     {
-        Check(eventData.Context);
+        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(command.Connection));
         return ValueTask.FromResult(result);
     }
 
@@ -101,7 +115,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         CommandEventData eventData,
         InterceptionResult<int> result)
     {
-        Check(eventData.Context);
+        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(command.Connection));
         return result;
     }
 
@@ -111,7 +125,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        Check(eventData.Context);
+        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(command.Connection));
         return ValueTask.FromResult(result);
     }
 
@@ -120,7 +134,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         CommandEventData eventData,
         InterceptionResult<object> result)
     {
-        Check(eventData.Context);
+        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(command.Connection));
         return result;
     }
 
@@ -130,7 +144,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         InterceptionResult<object> result,
         CancellationToken cancellationToken = default)
     {
-        Check(eventData.Context);
+        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(command.Connection));
         return ValueTask.FromResult(result);
     }
 
@@ -150,6 +164,15 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
                 $"This pooled '{contextType}' was not connected to a tenant's database for its current lease, so it " +
                 "would reuse the database of whichever tenant used it before. Obtain it from DI or from " +
                 "IDbContextFactory, which AddTenantDbContextPool connects to the current tenant's database.");
+        }
+
+        if (!ReferenceEquals(context.Database.GetDbConnection(), lease.Connection)
+            || !string.Equals(context.Database.GetConnectionString(), lease.ConnectionString, StringComparison.Ordinal))
+        {
+            throw new TenantIsolationViolationException(
+                contextType,
+                $"This '{contextType}''s connection was changed after it was connected to tenant '{lease.TenantId}''s " +
+                "database. Do not call SetConnectionString or SetDbConnection on a context from AddTenantDbContextPool.");
         }
 
         if (!tenantContext.HasTenant || !Equals(tenantContext.CurrentTenantId, lease.TenantId))

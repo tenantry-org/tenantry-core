@@ -313,17 +313,21 @@ builder.Services.AddTenantDbContextPool<AppDbContext, string>((sp, options) =>
 - Leasing without a current tenant throws `TenantNotResolvedException`.
 - Before a pooled context opens a connection, and again before every command it runs, a guard checks that
   the connection was set for this lease and belongs to the tenant that is current now. A context leased some
-  other way, or kept and used after switching to another tenant, throws `TenantIsolationViolationException`
-  instead of touching the wrong database. That includes a context whose connection is still open, whether you
-  opened it or a transaction did. Commands you run yourself on `Database.GetDbConnection()` bypass EF Core,
-  so the guard cannot see them.
+  other way, kept and used after switching to another tenant, or whose connection or connection string your
+  code replaced, throws `TenantIsolationViolationException` instead of touching the wrong database. That
+  includes a context whose connection is still open, whether you opened it or a transaction did.
+- The guard cannot see SQL you run yourself on `Database.GetDbConnection()`. Nor does it stop a query that
+  started before the tenant changed: a streaming or split query keeps reading from the database it started
+  on, and those rows belong to the tenant that was current when it started. Use SQLite in-memory databases
+  as tenant databases only in tests, because deleting one runs no command the guard can check.
 - The context needs a constructor that takes only its options, as for any pooled context.
 - The scoped context resolves the connection string synchronously, so it needs `GetConnectionString`.
   With only `GetConnectionStringAsync`, create contexts with `IDbContextFactory<T>.CreateDbContextAsync()`.
 
-It is tested with one pooled instance serving two tenant databases in turn, with concurrent leases, and with
-a context whose connection or transaction was opened under one tenant and then used under another, on
-SQLite, SQL Server, PostgreSQL and MySQL.
+It is tested on SQLite, SQL Server, PostgreSQL and MySQL with one pooled instance serving two tenant
+databases in turn, with concurrent leases, and with a context used as another tenant after its connection or
+transaction was opened: saving, querying, raw SQL, bulk updates and deletes, creating, migrating and deleting
+the database, and, on SQL Server and PostgreSQL, drawing HiLo keys.
 
 The runnable [`DatabasePerTenant` sample](../samples/Tenantry.Samples.DatabasePerTenant) gives each tenant
 its own SQLite file.
