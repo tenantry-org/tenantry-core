@@ -119,7 +119,7 @@ another context.
 ## The `AsyncLocal` model
 
 `ITenantContext<TKey>` and `ITenantScope<TKey>` are both registered as a **singleton** backed by a
-single `AsyncLocal<ITenantDescriptor<TKey>?>`. The implication matters:
+single `AsyncLocal` holding the innermost open scope. The implication matters:
 
 - The "current tenant" is **per async-execution-context**, not per object instance. The value flows
   *down* into every method you call and every `Task` you `await`, but never *up* to your caller.
@@ -128,6 +128,9 @@ single `AsyncLocal<ITenantDescriptor<TKey>?>`. The implication matters:
 - A background `Task.Run(...)` started inside a scope inherits the tenant at the moment it is created.
   If you queue work to run *later* (after the scope disposes), capture the tenant id and open a fresh
   scope when the work runs — do not rely on the ambient value still being set.
+- Disposing a scope is idempotent and order-safe. Disposing the innermost scope restores the nearest
+  scope that is still open; disposing any other scope (out of order, or from a different async flow)
+  closes it without changing the active tenant.
 
 ### Why `CurrentTenantId` is its own property
 

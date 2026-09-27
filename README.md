@@ -9,8 +9,9 @@
 
 A flexible, modern, and unopinionated multi-tenancy library for .NET.
 
-Tenantry isolates each tenant's data in a **shared database** using row-level isolation: a
-`TenantId` column on the entities you choose to make tenant-scoped. It does this without forcing
+Tenantry isolates each tenant's data in a **shared database**: the entities you choose to make
+tenant-scoped carry a `TenantId` column, and EF Core reads and writes against them are limited to the
+current tenant. It does this without forcing
 a base class on your entities, without a custom `DbContext`, and without taking over your request
 pipeline. You pick the tenant key type, how tenants are resolved, and where they are stored — and
 Tenantry wires the isolation in.
@@ -30,11 +31,12 @@ builder.Services.AddTenantry<Guid>(tenant =>
   `IEquatable<T>` and `IParsable<T>`. Resolve tenants from a header, subdomain, route, claim, query
   string, or your own resolver. Store them in memory, a database, or anywhere behind an interface.
 - **Interceptor-first isolation.** Tenant stamping and cross-tenant write protection work on **any**
-  `DbContext` via an EF Core `SaveChanges` interceptor — no base class required. An optional
+  `DbContext` via EF Core interceptors and `ApplyTenantFilters` — no base class required. An optional
   `MultiTenantDbContext<TKey>` base class is provided for greenfield convenience.
 - **Fails closed.** When no tenant is resolved, query filters match nothing rather than leaking every
-  tenant's rows. Cross-tenant writes are rejected *before* anything is persisted, and
-  tenant-scoped writes without a tenant context are rejected by default (`OnMissingTenant`).
+  tenant's rows. Updates and deletes of another tenant's rows are rejected before saving, and the
+  stored tenant is also part of every `UPDATE`/`DELETE` statement, so a forged key matches nothing.
+  Tenant-scoped writes without a tenant context are rejected by default (`OnMissingTenant`).
   Isolation is enforced by EF Core, not the database: raw SQL and `IgnoreQueryFilters()` are unisolated
   ([what is and isn't isolated](docs/efcore-integration.md#what-is-and-isnt-isolated)).
 - **HTTP and beyond.** `AddTenantry` covers ASP.NET Core (resolution middleware, access validation,

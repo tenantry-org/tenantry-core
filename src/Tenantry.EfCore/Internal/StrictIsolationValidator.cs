@@ -15,8 +15,8 @@ namespace Tenantry.EfCore.Internal;
 /// </typeparam>
 /// <remarks>
 /// This validator is enabled by <c>builder.AddEfCoreIsolation(options =&gt; options.DetectSpoofedWrites = true)</c>.
-/// It inspects <c>Added</c>, <c>Modified</c>, and <c>Deleted</c> entities —
-/// not just <c>Added</c> ones — providing the strongest possible pre-write guarantee.
+/// It inspects <c>Added</c>, <c>Modified</c>, and <c>Deleted</c> entities and rejects any that name another
+/// tenant, including inserts the interceptor would otherwise silently restamp.
 /// </remarks>
 internal sealed class StrictIsolationValidator<TKey>(
     ILogger<StrictIsolationValidator<TKey>> logger)

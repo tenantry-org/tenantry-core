@@ -5,11 +5,13 @@ halves:
 
 - **Read isolation** — a global query filter restricts every query against an `ITenantScoped<TKey>`
   entity to the current tenant.
-- **Write isolation** — a `SaveChanges` interceptor stamps `TenantId` on new rows and rejects
-  cross-tenant writes before they reach the database. A configurable policy controls what happens when
-  a write runs with no tenant, and an optional check rejects inserts pre-stamped with a foreign tenant.
+- **Write isolation** — a `SaveChanges` interceptor stamps `TenantId` on new rows and rejects updates
+  and deletes of another tenant's rows before saving; the stored tenant is also part of every `UPDATE`
+  and `DELETE` statement, and bulk updates cannot change `TenantId`. Tenant-scoped writes with no tenant
+  are rejected by default, and an optional check rejects inserts pre-stamped with a foreign tenant.
 
-Both work on **any** `DbContext` — no base class required — and on **any** relational provider. They
+Both work on **any** `DbContext` — no base class required — using only standard EF Core features, so
+they are provider-agnostic; the test suite covers SQLite and SQL Server. They
 are driven by the same `ITenantContext<TKey>` used everywhere else, so HTTP and non-HTTP hosts behave
 identically.
 

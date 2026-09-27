@@ -55,7 +55,9 @@ one with an explicit wrong id) belongs to a different tenant than the current sc
   owning tenant's scope.
 - You set `TenantId` manually to another tenant. Don't set it — let the interceptor stamp it.
 - A legitimate cross-tenant admin operation: use a fresh `DbContext` inside the correct tenant's scope
-  per tenant, or `IgnoreQueryFilters()` for reads (writes always validate).
+  per tenant, or `IgnoreQueryFilters()` for reads. `SaveChanges` still validates every write against the
+  current scope, but `IgnoreQueryFilters()` combined with `ExecuteUpdate`/`ExecuteDelete` affects every
+  tenant, so treat it as privileged.
 
 ## Filter uses a stale tenant / leaks across requests
 

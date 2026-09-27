@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- README, the EF Core guide, troubleshooting and XML docs describe isolation as it is enforced: in EF Core
+  rather than by the database, provider-agnostic but tested on SQLite and SQL Server, with raw SQL and
+  `IgnoreQueryFilters()` bulk writes outside it.
 - `ApplyTenantFilters` no longer claims to configure a `TenantId` index; it never did. Index `TenantId`
   yourself, usually as the leading column of composite indexes (see the EF Core guide).
 - `TenantIsolationViolationException` has a constructor for violations detected before any tenant value

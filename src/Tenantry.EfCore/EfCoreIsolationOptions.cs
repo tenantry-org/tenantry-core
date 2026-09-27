@@ -7,10 +7,12 @@ namespace Tenantry.EfCore;
 /// Passed to <c>builder.AddEfCoreIsolation(options => ...)</c>.
 /// </summary>
 /// <remarks>
-/// Two protections are <strong>always</strong> on, independent of these options: reads fail closed
-/// (query filters match nothing when no tenant is resolved), and <c>Modified</c>/<c>Deleted</c>
-/// entities belonging to a different tenant are rejected before <c>SaveChanges</c> persists anything.
-/// These options govern the remaining behaviours.
+/// These protections are <strong>always</strong> on, independent of these options: reads fail closed
+/// (query filters match nothing when no tenant is resolved); <c>Modified</c>/<c>Deleted</c> entities must
+/// belong to the current tenant, checked before saving and again by the stored tenant in each
+/// <c>UPDATE</c>/<c>DELETE</c>; and <c>ExecuteUpdate</c> cannot set <c>TenantId</c>. These options govern
+/// writes without a tenant and inserts that name another tenant. Raw SQL and <c>IgnoreQueryFilters()</c>
+/// are outside Tenantry's isolation.
 /// </remarks>
 public sealed class EfCoreIsolationOptions
 {
