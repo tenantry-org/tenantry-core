@@ -133,9 +133,12 @@ single `AsyncLocal` holding the innermost open scope. The implication matters:
   If you queue work to run *later* (after the scope disposes), capture the tenant id and open a fresh
   scope when the work runs (`ITenantScopeFactory.RunInScopeAsync`); do not rely on the ambient value
   still being set.
-- Disposing a scope is idempotent and order-safe. Disposing the innermost scope restores the nearest
-  scope that is still open; disposing any other scope (out of order, or from a different async flow)
-  closes it without changing the active tenant.
+- Disposing a scope is order-safe. Disposing the innermost scope restores the nearest scope that is
+  still open; disposing any other scope (out of order, or from a different async flow) closes it without
+  changing the active tenant.
+- Disposal restores the tenant only in the flow that disposes. If a child task disposes a handle it
+  inherited, the caller keeps that tenant until it disposes the handle as well, which then restores the
+  caller's previous tenant. Further disposals change nothing.
 
 ### Why `CurrentTenantId` is its own property
 

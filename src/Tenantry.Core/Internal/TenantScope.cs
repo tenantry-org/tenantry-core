@@ -29,10 +29,12 @@ internal sealed class TenantScope<TKey> : ITenantScope<TKey>
     /// <inheritdoc />
     /// <remarks>
     /// Scopes nest: an inner scope shadows the outer one, and disposing it restores the outer tenant. The
-    /// ambient value flows down into awaited callees, never back up to the caller. Disposing a scope is
-    /// idempotent. Disposing a scope that is not the innermost one in the current flow (out of order, or
-    /// from a different async flow) only closes it; the innermost scope stays active, and when it closes
-    /// the nearest scope that is still open is restored.
+    /// ambient value flows down into awaited callees, never back up to the caller. Disposing a scope that
+    /// is not the innermost one in the current flow (out of order, or from a different async flow) only
+    /// closes it; the innermost scope stays active, and when it closes the nearest scope that is still open
+    /// is restored. Disposal restores the tenant only in the flow that disposes: if a child task disposes a
+    /// handle it inherited, the caller keeps that tenant until it disposes the handle too, which then
+    /// restores the caller's previous tenant. Further disposals change nothing.
     /// </remarks>
     public IDisposable BeginScope(ITenantDescriptor<TKey> tenant)
     {
@@ -55,19 +57,21 @@ internal sealed class TenantScope<TKey> : ITenantScope<TKey>
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            // Closing is shared by every flow, but the ambient value belongs to each flow. So every call, even a
+            // repeat, restores the calling flow if its innermost scope is closed: this one, or one another flow
+            // closed (for example a child task that disposed a handle it inherited).
+            Volatile.Write(ref _disposed, 1);
+
+            var current = CurrentFrame.Value;
+
+            if (current is not { IsDisposed: true })
             {
+                // No scope, or the innermost scope is still open: it stays active, and this scope is skipped
+                // when it closes.
                 return;
             }
 
-            // Only the innermost scope of this flow changes the ambient value. Anything else is closed in
-            // place and skipped when the innermost scope is disposed.
-            if (!ReferenceEquals(CurrentFrame.Value, this))
-            {
-                return;
-            }
-
-            var restored = Parent;
+            var restored = current.Parent;
 
             while (restored is { IsDisposed: true })
             {

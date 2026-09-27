@@ -306,6 +306,17 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Scope_DisposedByAChildTaskFirst_IsStillRestoredWhenTheCallerDisposesIt()
+    {
+        await using (var scope = Scopes.CreateScope(Tenant("acme")))
+        {
+            await Task.Run(() => scope.DisposeAsync().AsTask());
+        }
+
+        Ambient.HasTenant.Should().BeFalse();
+    }
+
+    [Fact]
     public void CreateScope_NullTenant_Throws()
     {
         var act = () => Scopes.CreateScope(null!);
