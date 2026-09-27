@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry.Core;
 using Tenantry.Core.Extensions;
@@ -92,6 +93,9 @@ public sealed class EfCoreIsolationRegistrationTests
         var result = optionsBuilder.AddTenantInterceptors(sp);
 
         result.Should().BeSameAs(optionsBuilder);
+        var interceptors = optionsBuilder.Options.FindExtension<CoreOptionsExtension>()!.Interceptors!.ToList();
+        interceptors.OfType<TenantSaveChangesInterceptor<string>>().Should().ContainSingle();
+        interceptors.OfType<TenantBulkUpdateGuard<string>>().Should().ContainSingle();
     }
 
     /// <summary>Minimal ITenantBuilder implementation for unit tests.</summary>

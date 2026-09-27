@@ -35,6 +35,8 @@ builder.Services.AddTenantry<Guid>(tenant =>
 - **Fails closed.** When no tenant is resolved, query filters match nothing rather than leaking every
   tenant's rows. Cross-tenant writes are rejected *before* anything is persisted, and
   tenant-scoped writes without a tenant context are rejected by default (`OnMissingTenant`).
+  Isolation is enforced by EF Core, not the database: raw SQL and `IgnoreQueryFilters()` are unisolated
+  ([what is and isn't isolated](docs/efcore-integration.md#what-is-and-isnt-isolated)).
 - **HTTP and beyond.** `AddTenantry` covers ASP.NET Core (resolution middleware, access validation,
   endpoint metadata). `AddTenantryCore` brings the same isolation to console apps, worker services,
   and desktop UIs with no web stack.

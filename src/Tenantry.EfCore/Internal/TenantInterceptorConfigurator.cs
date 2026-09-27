@@ -18,18 +18,18 @@ internal sealed class TenantInterceptorConfigurator<TKey> : ITenantInterceptorCo
 {
     public DbContextOptionsBuilder AddInterceptors(DbContextOptionsBuilder optionsBuilder, IServiceProvider serviceProvider)
     {
-        // Idempotent: the interceptor can be wired from two places — the AddDbContext callback
+        // Idempotent: the interceptors can be wired from two places — the AddDbContext callback
         // (options.AddTenantInterceptors(sp)) and MultiTenantDbContext.OnConfiguring's self-wiring.
-        // EF runs every registered SaveChangesInterceptor, so adding ours twice would double-stamp and
-        // double-validate on each save. Skip if an instance of our interceptor is already present.
-        var alreadyAdded = optionsBuilder.Options
-            .FindExtension<CoreOptionsExtension>()?.Interceptors?
-            .OfType<TenantSaveChangesInterceptor<TKey>>().Any() ?? false;
+        // EF runs every registered interceptor, so adding ours twice would double-stamp and
+        // double-validate on each save. Skip any that are already present.
+        var existing = optionsBuilder.Options.FindExtension<CoreOptionsExtension>()?.Interceptors ?? [];
 
-        if (alreadyAdded)
-            return optionsBuilder;
+        if (!existing.OfType<TenantSaveChangesInterceptor<TKey>>().Any())
+            optionsBuilder.AddInterceptors(serviceProvider.GetRequiredService<TenantSaveChangesInterceptor<TKey>>());
 
-        var interceptor = serviceProvider.GetRequiredService<TenantSaveChangesInterceptor<TKey>>();
-        return optionsBuilder.AddInterceptors(interceptor);
+        if (!existing.OfType<TenantBulkUpdateGuard<TKey>>().Any())
+            optionsBuilder.AddInterceptors(TenantBulkUpdateGuard<TKey>.Instance);
+
+        return optionsBuilder;
     }
 }

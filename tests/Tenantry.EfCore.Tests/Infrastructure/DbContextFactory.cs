@@ -130,7 +130,7 @@ public static class DbContextFactory
     {
         return new DbContextOptionsBuilder<TestDbContext>()
             .UseSqlite(connection)
-            .AddInterceptors(BuildInterceptor(tenantContext, isolationOptions))
+            .AddInterceptors(BuildInterceptor(tenantContext, isolationOptions), TenantBulkUpdateGuard<string>.Instance)
             .Options;
     }
 
@@ -140,7 +140,7 @@ public static class DbContextFactory
     {
         return new DbContextOptionsBuilder<BaseClassTestDbContext>()
             .UseSqlite(connection)
-            .AddInterceptors(BuildInterceptor(tenantContext))
+            .AddInterceptors(BuildInterceptor(tenantContext), TenantBulkUpdateGuard<string>.Instance)
             .Options;
     }
 
@@ -150,7 +150,7 @@ public static class DbContextFactory
     {
         return new DbContextOptionsBuilder<GuidTestDbContext>()
             .UseSqlite(connection)
-            .AddInterceptors(BuildInterceptor(tenantContext))
+            .AddInterceptors(BuildInterceptor(tenantContext), TenantBulkUpdateGuard<Guid>.Instance)
             .Options;
     }
 }

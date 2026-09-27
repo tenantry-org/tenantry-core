@@ -222,6 +222,23 @@ initialised to `string.Empty`.
 Recommendation: set `DetectSpoofedWrites = true` (negligible overhead — a pass over the change tracker
 EF Core walks anyway), and keep `OnMissingTenant` at `Reject` except in maintenance code.
 
+## What is and isn't isolated
+
+Tenantry isolates tenants in the application, through EF Core's query pipeline and `SaveChanges`. It is
+**not** database-enforced row-level security: anything that reaches the database outside those paths is
+not tenant-checked. If you need the database itself to enforce isolation (for example against direct SQL
+access), add row-level security policies in the database as well, or use a database per tenant.
+
+| Operation | Isolated? | Behaviour |
+|-----------|-----------|-----------|
+| LINQ queries | Yes | The query filter limits results to the current tenant; with no tenant they match nothing. |
+| `SaveChanges` insert, update, delete | Yes | Inserts are stamped; updates and deletes must belong to the current tenant, checked in memory and in the SQL `WHERE` clause. Without a tenant, `OnMissingTenant` applies. |
+| `ExecuteUpdate`, `ExecuteDelete` | Yes | The query filter limits affected rows to the current tenant; with no tenant they affect nothing. `ExecuteUpdate` may not set `TenantId` and throws `TenantIsolationViolationException` if it tries. |
+| `IgnoreQueryFilters()` | No, by design | Removes the tenant filter from that query, including `ExecuteUpdate`/`ExecuteDelete`, which then affect **every** tenant. Treat it as a privileged operation. |
+| Raw SQL (`FromSql`, `SqlQuery`, `ExecuteSql`) | No | Neither the filter nor the interceptors see raw SQL. Add the tenant predicate yourself. |
+| DbContext pooling | Not supported | A tenant-aware context takes the tenant context in its constructor, which `AddDbContextPool` cannot supply. Use `AddDbContext`. |
+| Other `DbContext` instances | No | Contexts created without `AddTenantInterceptors` (or not deriving from `MultiTenantDbContext`) get no write isolation. The interceptor logs a warning when a tenant-scoped entity's `TenantId` is not a concurrency token, which means `ApplyTenantFilters` was not called. |
+
 ## Migrations
 
 The tenant filter and the `TenantId` index are part of the model, so they participate in migrations

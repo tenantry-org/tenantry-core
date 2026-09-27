@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- `ExecuteUpdate` can no longer set `TenantId` on a tenant-scoped entity. The query filter limited which
+  rows a bulk update touched but not the values it wrote, so `SetProperty(o => o.TenantId, other)` moved
+  every row the current tenant could see into another tenant. It now throws
+  `TenantIsolationViolationException` before running. `AddTenantInterceptors` and `MultiTenantDbContext`
+  register the guard automatically.
 - `UPDATE` and `DELETE` now only affect rows stored under the tenant an entity was loaded or attached
   with. Previously a caller could overwrite, reassign or delete another tenant's row by attaching an
   entity with that row's primary key and the current tenant's `TenantId`; `DetectSpoofedWrites` did not
@@ -20,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `TenantIsolationViolationException` has a constructor for violations detected before any tenant value
+  is known; `OffendingTenantId` and `ExpectedTenantId` are empty in that case.
+- The EF Core guide documents what is and isn't isolated: raw SQL and `IgnoreQueryFilters()` are
+  unisolated by design, and DbContext pooling is not supported.
 - **Breaking:** `EfCoreIsolationOptions.OnMissingTenant` defaults to `Reject`. Saving tenant-scoped entities
   without a resolved tenant throws `TenantNotResolvedException`; previously the default `Warn` let such a
   save update or delete any tenant's rows by key and insert rows with no tenant.

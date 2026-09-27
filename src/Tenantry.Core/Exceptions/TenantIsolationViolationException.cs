@@ -2,7 +2,7 @@ namespace Tenantry.Core.Exceptions;
 
 /// <summary>
 /// Thrown when a cross-tenant data isolation violation is detected during a
-/// <c>SaveChanges</c> or <c>SaveChangesAsync</c> call.
+/// <c>SaveChanges</c> or <c>SaveChangesAsync</c> call, or when a bulk update would set <c>TenantId</c>.
 /// This exception is raised <em>before</em> any changes are written to the database.
 /// </summary>
 public sealed class TenantIsolationViolationException : InvalidOperationException
@@ -37,6 +37,21 @@ public sealed class TenantIsolationViolationException : InvalidOperationExceptio
         EntityTypeName = entityTypeName;
         OffendingTenantId = offendingTenantId;
         ExpectedTenantId = expectedTenantId;
+    }
+
+    /// <summary>
+    /// Initialises a new instance for a violation detected before any tenant value is known, such as a bulk
+    /// update that would set <c>TenantId</c>. <see cref="OffendingTenantId"/> and
+    /// <see cref="ExpectedTenantId"/> are empty.
+    /// </summary>
+    /// <param name="entityTypeName">CLR type name of the violating entity.</param>
+    /// <param name="message">Why the operation was rejected.</param>
+    public TenantIsolationViolationException(string entityTypeName, string message)
+        : base(message)
+    {
+        EntityTypeName = entityTypeName;
+        OffendingTenantId = string.Empty;
+        ExpectedTenantId = string.Empty;
     }
 
     private static string BuildMessage(
