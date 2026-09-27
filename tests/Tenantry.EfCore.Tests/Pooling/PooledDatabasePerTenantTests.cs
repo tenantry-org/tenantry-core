@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,8 +14,10 @@ public sealed class PooledNote : ITenantScoped<string>
 {
     public int Id { get; set; }
 
+    [MaxLength(64)]
     public string TenantId { get; set; } = string.Empty;
 
+    [MaxLength(64)]
     public string Text { get; set; } = string.Empty;
 }
 

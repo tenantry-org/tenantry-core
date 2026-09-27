@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using Tenantry.Core;
 using Tenantry.EfCore;
@@ -8,8 +9,10 @@ public sealed class Note : ITenantScoped<string>
 {
     public int Id { get; set; }
 
+    [MaxLength(64)]
     public string TenantId { get; set; } = string.Empty;
 
+    [MaxLength(500)]
     public string Text { get; set; } = string.Empty;
 }
 
