@@ -13,8 +13,8 @@ namespace Tenantry.EfCore.Internal;
 /// </summary>
 /// <remarks>
 /// EF Core keeps a pooled context's connection string when the context returns to the pool, so a lease that
-/// skipped the factory would silently use the previous tenant's database. <see cref="TenantDatabaseConnectionGuard{TKey}"/>
-/// checks this record before every connection opens.
+/// skipped the factory would silently use the previous tenant's database. <see cref="TenantDatabaseGuard{TKey}"/>
+/// checks this record before a connection opens and before every command.
 /// </remarks>
 internal static class TenantDatabaseLeases
 {
@@ -29,13 +29,36 @@ internal static class TenantDatabaseLeases
 }
 
 /// <summary>
-/// Fails closed when a pooled database-per-tenant context would open a connection that was not set for its
+/// Fails closed when a pooled database-per-tenant context would use a connection that was not set for its
 /// current lease, or that belongs to a tenant other than the current one.
 /// </summary>
-internal sealed class TenantDatabaseConnectionGuard<TKey>(ITenantContext<TKey> tenantContext) : DbConnectionInterceptor
+/// <remarks>
+/// The check runs before EF Core opens a connection and again before every command. EF Core raises no
+/// <c>ConnectionOpening</c> for a connection that is already open, whether the application opened it or a
+/// transaction did, so a context opened under one tenant and then used under another is caught only when its
+/// next command runs. <c>SaveChanges</c> is also checked before it starts, because EF Core wraps an exception
+/// thrown while a save runs its commands in a <c>DbUpdateException</c>.
+/// </remarks>
+internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantContext)
+    : IDbConnectionInterceptor, IDbCommandInterceptor, ISaveChangesInterceptor
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public override InterceptionResult ConnectionOpening(
+    public InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+    {
+        Check(eventData.Context);
+        return result;
+    }
+
+    public ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        Check(eventData.Context);
+        return ValueTask.FromResult(result);
+    }
+
+    public InterceptionResult ConnectionOpening(
         DbConnection connection,
         ConnectionEventData eventData,
         InterceptionResult result)
@@ -44,10 +67,67 @@ internal sealed class TenantDatabaseConnectionGuard<TKey>(ITenantContext<TKey> t
         return result;
     }
 
-    public override ValueTask<InterceptionResult> ConnectionOpeningAsync(
+    public ValueTask<InterceptionResult> ConnectionOpeningAsync(
         DbConnection connection,
         ConnectionEventData eventData,
         InterceptionResult result,
+        CancellationToken cancellationToken = default)
+    {
+        Check(eventData.Context);
+        return ValueTask.FromResult(result);
+    }
+
+    public InterceptionResult<DbDataReader> ReaderExecuting(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<DbDataReader> result)
+    {
+        Check(eventData.Context);
+        return result;
+    }
+
+    public ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<DbDataReader> result,
+        CancellationToken cancellationToken = default)
+    {
+        Check(eventData.Context);
+        return ValueTask.FromResult(result);
+    }
+
+    public InterceptionResult<int> NonQueryExecuting(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<int> result)
+    {
+        Check(eventData.Context);
+        return result;
+    }
+
+    public ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        Check(eventData.Context);
+        return ValueTask.FromResult(result);
+    }
+
+    public InterceptionResult<object> ScalarExecuting(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<object> result)
+    {
+        Check(eventData.Context);
+        return result;
+    }
+
+    public ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<object> result,
         CancellationToken cancellationToken = default)
     {
         Check(eventData.Context);

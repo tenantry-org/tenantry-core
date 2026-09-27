@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry.Core;
+using Tenantry.Core.Exceptions;
 using Tenantry.Core.Extensions;
 using Tenantry.EfCore.Extensions;
 
@@ -92,6 +93,50 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
 
         (await StoredTenantIdsAsync(_acme)).Should().HaveCount(10).And.OnlyContain(id => id == "acme");
         (await StoredTenantIdsAsync(_globex)).Should().HaveCount(10).And.OnlyContain(id => id == "globex");
+    }
+
+    // EF Core raises ConnectionOpening only when it opens a closed connection, so a connection opened as Acme
+    // and still open when the context is used as Globex must be caught when commands run.
+    [Theory]
+    [InlineData("OpenConnection")]
+    [InlineData("BeginTransaction")]
+    public async Task ContextWithAnOpenConnection_UsedAfterTheTenantChanges_RefusesToRunCommands(string openedBy)
+    {
+        var ambient = _services.GetRequiredService<ITenantScope<string>>();
+        ProviderOrdersContext db;
+
+        using (ambient.BeginScope(_acme))
+        {
+            db = await _services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>().CreateDbContextAsync();
+
+            if (openedBy == "BeginTransaction")
+            {
+                await db.Database.BeginTransactionAsync();
+            }
+            else
+            {
+                await db.Database.OpenConnectionAsync();
+            }
+        }
+
+        await using (db)
+        using (ambient.BeginScope(_globex))
+        {
+            db.Orders.Add(new ProviderOrder { Description = "globex order in acme's database" });
+            var save = () => db.SaveChangesAsync();
+            var read = () => db.Orders.IgnoreQueryFilters().CountAsync();
+            var sql = () => db.Database.ExecuteSqlRawAsync("SELECT 1");
+
+            (await save.Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("*tenant 'acme'*current tenant is 'globex'*");
+            (await read.Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("*tenant 'acme'*current tenant is 'globex'*");
+            (await sql.Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("*tenant 'acme'*current tenant is 'globex'*");
+        }
+
+        (await StoredTenantIdsAsync(_acme)).Should().BeEmpty();
+        (await StoredTenantIdsAsync(_globex)).Should().BeEmpty();
     }
 
     private ServiceProvider Build(int poolSize)

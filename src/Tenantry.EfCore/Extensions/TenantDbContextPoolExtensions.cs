@@ -31,8 +31,9 @@ public static class TenantDbContextPoolExtensions
     /// gets the current tenant's. Leasing without a current tenant throws <c>TenantNotResolvedException</c>.
     /// </para>
     /// <para>
-    /// A guard also checks each pooled context before it opens a connection: the connection must have been
-    /// set for the context's current lease and for the tenant that is current now. Otherwise it throws
+    /// A guard also checks each pooled context before it opens a connection and before every command it runs,
+    /// including on a connection that is already open: the connection must have been set for the context's
+    /// current lease and for the tenant that is current now. Otherwise it throws
     /// <c>TenantIsolationViolationException</c> rather than use another tenant's database.
     /// </para>
     /// <para>
@@ -72,7 +73,7 @@ public static class TenantDbContextPoolExtensions
             (sp, options) =>
             {
                 optionsAction(sp, options);
-                options.AddInterceptors(new TenantDatabaseConnectionGuard<TKey>(sp.GetRequiredService<ITenantContext<TKey>>()));
+                options.AddInterceptors(new TenantDatabaseGuard<TKey>(sp.GetRequiredService<ITenantContext<TKey>>()));
             },
             poolSize);
 

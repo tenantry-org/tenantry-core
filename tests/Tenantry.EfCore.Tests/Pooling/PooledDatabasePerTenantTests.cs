@@ -174,6 +174,108 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         RowsIn("globex").Should().BeEmpty();
     }
 
+    public static TheoryData<string, string> OpenConnectionCases()
+    {
+        TheoryData<string, string> cases = new();
+
+        foreach (var openedBy in new[] { "OpenConnection", "BeginTransaction" })
+        foreach (var command in new[] { "SaveChangesAsync", "SaveChanges", "CountAsync", "Count", "ExecuteSqlRaw", "ExecuteDelete" })
+        {
+            cases.Add(openedBy, command);
+        }
+
+        return cases;
+    }
+
+    // EF Core raises ConnectionOpening only when it opens a closed connection, so a connection opened while
+    // Acme was current stays open, unchecked, when the same context is used as Globex. Every command must be
+    // checked, or a Globex-stamped row lands in Acme's database.
+    [Theory]
+    [MemberData(nameof(OpenConnectionCases))]
+    public async Task ContextWithAnOpenConnection_UsedAfterTheTenantChanges_RefusesToRunCommands(
+        string openedBy,
+        string command)
+    {
+        await using var services = Build();
+        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var factory = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
+        PooledNotesContext db;
+
+        using (ambient.BeginScope(Acme))
+        {
+            await using (var seed = factory.CreateDbContext())
+            {
+                seed.Notes.Add(new PooledNote { Text = "acme's own note" });
+                await seed.SaveChangesAsync();
+            }
+
+            db = factory.CreateDbContext();
+
+            if (openedBy == "BeginTransaction")
+            {
+                await db.Database.BeginTransactionAsync();
+            }
+            else
+            {
+                await db.Database.OpenConnectionAsync();
+            }
+        }
+
+        await using (db)
+        using (ambient.BeginScope(Globex))
+        {
+            db.Notes.Add(new PooledNote { Text = "globex row in acme's database" });
+
+            Func<Task> act = command switch
+            {
+                "SaveChangesAsync" => () => db.SaveChangesAsync(),
+                "SaveChanges" => () => Task.FromResult(db.SaveChanges()),
+                "CountAsync" => () => db.Notes.IgnoreQueryFilters().CountAsync(),
+                "Count" => () => Task.FromResult(db.Notes.IgnoreQueryFilters().Count()),
+                "ExecuteSqlRaw" => () => db.Database.ExecuteSqlRawAsync("DELETE FROM Notes"),
+                "ExecuteDelete" => () => db.Notes.IgnoreQueryFilters().ExecuteDeleteAsync(),
+                _ => throw new ArgumentOutOfRangeException(nameof(command))
+            };
+
+            (await act.Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("*tenant 'acme'*current tenant is 'globex'*");
+        }
+
+        RowsIn("acme").Should().Equal("acme:acme's own note");
+        RowsIn("globex").Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("OpenConnection")]
+    [InlineData("BeginTransaction")]
+    public async Task ContextWithAnOpenConnection_UsedByItsOwnTenant_RunsCommands(string openedBy)
+    {
+        await using var services = Build();
+        var ambient = services.GetRequiredService<ITenantScope<string>>();
+
+        using (ambient.BeginScope(Acme))
+        {
+            await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
+            var transaction = openedBy == "BeginTransaction" ? await db.Database.BeginTransactionAsync() : null;
+
+            if (transaction is null)
+            {
+                await db.Database.OpenConnectionAsync();
+            }
+
+            db.Notes.Add(new PooledNote { Text = "inside an open connection" });
+            await db.SaveChangesAsync();
+            (await db.Notes.CountAsync()).Should().Be(1);
+
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync();
+            }
+        }
+
+        RowsIn("acme").Should().Equal("acme:inside an open connection");
+    }
+
     [Fact]
     public async Task ContextNotConnectedForItsCurrentLease_RefusesToOpenAConnection()
     {
