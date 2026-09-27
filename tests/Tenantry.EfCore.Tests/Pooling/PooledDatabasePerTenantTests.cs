@@ -245,6 +245,63 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         RowsIn("globex").Should().BeEmpty();
     }
 
+    // The guard runs before Tenantry's own SaveChanges interceptor, so a rejected save does not stamp the wrong
+    // tenant onto pending inserts; otherwise spoof detection would then reject the owning tenant's own save.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectedSave_LeavesPendingInsertsUnstamped_SoTheOwningTenantCanStillSave(bool openConnection)
+    {
+        await using var services = Build();
+        var ambient = services.GetRequiredService<ITenantScope<string>>();
+
+        using (ambient.BeginScope(Acme))
+        {
+            await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
+
+            if (openConnection)
+            {
+                await db.Database.OpenConnectionAsync();
+            }
+
+            var note = new PooledNote { Text = "added by acme" };
+            db.Notes.Add(note);
+
+            using (ambient.BeginScope(Globex))
+            {
+                var act = () => db.SaveChangesAsync();
+                await act.Should().ThrowAsync<TenantIsolationViolationException>();
+            }
+
+            note.TenantId.Should().BeEmpty();
+            await db.SaveChangesAsync();
+        }
+
+        RowsIn("acme").Should().Equal("acme:added by acme");
+        RowsIn("globex").Should().BeEmpty();
+    }
+
+    // Deterministic: a context used outside its tenant fails at SaveChanges whether or not it has changes.
+    [Fact]
+    public async Task SaveChanges_WithNothingToSave_OutsideTheContextsTenant_Throws()
+    {
+        await using var services = Build();
+        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        PooledNotesContext db;
+
+        using (ambient.BeginScope(Acme))
+        {
+            db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
+        }
+
+        await using (db)
+        {
+            var act = () => db.SaveChangesAsync();
+
+            (await act.Should().ThrowAsync<TenantIsolationViolationException>()).WithMessage("*current tenant is '(none)'*");
+        }
+    }
+
     [Theory]
     [InlineData("OpenConnection")]
     [InlineData("BeginTransaction")]

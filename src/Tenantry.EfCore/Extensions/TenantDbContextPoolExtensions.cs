@@ -72,8 +72,10 @@ public static class TenantDbContextPoolExtensions
         services.AddPooledDbContextFactory<TContext>(
             (sp, options) =>
             {
-                optionsAction(sp, options);
+                // The guard goes first, so a context used under the wrong tenant is rejected before any other
+                // interceptor acts on it (for example, stamping pending inserts with the current tenant).
                 options.AddInterceptors(new TenantDatabaseGuard<TKey>(sp.GetRequiredService<ITenantContext<TKey>>()));
+                optionsAction(sp, options);
             },
             poolSize);
 
