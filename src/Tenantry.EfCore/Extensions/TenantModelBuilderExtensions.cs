@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Tenantry.Core;
 
 namespace Tenantry.EfCore.Extensions;
@@ -18,6 +19,8 @@ public static class TenantModelBuilderExtensions
     /// <summary>
     /// Discovers all entity types in the model that implement <see cref="ITenantScoped{TKey}"/>
     /// and applies a global query filter that restricts results to the current tenant.
+    /// Also marks <c>TenantId</c> as a concurrency token, so every <c>UPDATE</c> and <c>DELETE</c>
+    /// only matches a row stored under the tenant the entity was loaded or attached with.
     /// Also configures an index on the <c>TenantId</c> column for query performance.
     /// </summary>
     /// <typeparam name="TKey">
@@ -67,6 +70,8 @@ public static class TenantModelBuilderExtensions
             {
                 continue;
             }
+
+            MarkTenantIdAsConcurrencyToken(entityType);
 
             var builder = modelBuilder.Entity(entityType.ClrType);
             var tenantFilter = BuildFilterExpression<TKey, TContext>(entityType.ClrType, context);
@@ -118,6 +123,22 @@ public static class TenantModelBuilderExtensions
             builder.HasQueryFilter(tenantFilter);
 #endif
         }
+    }
+
+    // Makes EF Core include the stored TenantId in the WHERE clause of every UPDATE and DELETE, so a write
+    // can only affect a row that belongs to the tenant the entity was loaded or attached with. A forged
+    // TenantId therefore matches no row and SaveChanges fails with DbUpdateConcurrencyException instead
+    // of overwriting or deleting another tenant's data. This changes no columns, so no schema migration
+    // is needed. Keyless entity types are never updated and are skipped.
+    private static void MarkTenantIdAsConcurrencyToken(IMutableEntityType entityType)
+    {
+        if (entityType.IsKeyless ||
+            entityType.FindProperty(nameof(ITenantScoped<>.TenantId)) is not { } tenantIdProperty)
+        {
+            return;
+        }
+
+        tenantIdProperty.IsConcurrencyToken = true;
     }
 
     [RequiresDynamicCode("Expression tree construction requires dynamic code generation.")]

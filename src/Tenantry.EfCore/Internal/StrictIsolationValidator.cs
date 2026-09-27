@@ -14,7 +14,7 @@ namespace Tenantry.EfCore.Internal;
 /// The tenant identifier type. See <see cref="ITenantScoped{TKey}"/> for constraints.
 /// </typeparam>
 /// <remarks>
-/// This validator is enabled by <c>builder.AddEfCoreIsolation(options =&gt; options.StrictIsolation = true)</c>.
+/// This validator is enabled by <c>builder.AddEfCoreIsolation(options =&gt; options.DetectSpoofedWrites = true)</c>.
 /// It inspects <c>Added</c>, <c>Modified</c>, and <c>Deleted</c> entities —
 /// not just <c>Added</c> ones — providing the strongest possible pre-write guarantee.
 /// </remarks>
@@ -59,7 +59,19 @@ internal sealed class StrictIsolationValidator<TKey>(
                 continue;
             }
 
-            if (IsUnstamped(tenantEntity.TenantId) || tenantEntity.TenantId.Equals(currentTenantId))
+            // For Modified/Deleted entries the original value is the tenant the row is matched on, so it
+            // must not name another tenant either (e.g. an entity loaded under one tenant's scope and
+            // saved under another's).
+            var offendingTenantId = tenantEntity.TenantId;
+            var isForeign = IsForeign(offendingTenantId, currentTenantId);
+
+            if (!isForeign && entry.State is EntityState.Modified or EntityState.Deleted)
+            {
+                offendingTenantId = TenantOwnership.OriginalTenantId<TKey>(entry)!;
+                isForeign = IsForeign(offendingTenantId, currentTenantId);
+            }
+
+            if (!isForeign)
             {
                 continue;
             }
@@ -67,7 +79,7 @@ internal sealed class StrictIsolationValidator<TKey>(
             IsolationDiagnostics diagnostics = new()
             {
                 EntityTypeName = entry.Entity.GetType().Name,
-                OffendingTenantId = tenantEntity.TenantId.ToString()!,
+                OffendingTenantId = offendingTenantId.ToString()!,
                 ExpectedTenantId = currentTenantId.ToString()!,
             };
 
@@ -93,6 +105,9 @@ internal sealed class StrictIsolationValidator<TKey>(
     /// properties to <c>string.Empty</c> rather than <see langword="null"/> to satisfy
     /// nullable-reference-type analysis.
     /// </summary>
+    private static bool IsForeign(TKey tenantId, TKey currentTenantId) =>
+        !IsUnstamped(tenantId) && !EqualityComparer<TKey>.Default.Equals(tenantId, currentTenantId);
+
     private static bool IsUnstamped(TKey tenantId) =>
         EqualityComparer<TKey>.Default.Equals(tenantId, default!) ||
         tenantId is string {Length: 0};

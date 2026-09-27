@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
@@ -19,7 +20,8 @@ namespace Tenantry.EfCore.Internal;
 /// <list type="bullet">
 ///   <item>Applies the configured <see cref="EfCoreIsolationOptions.OnMissingTenant"/> policy when no tenant is resolved.</item>
 ///   <item>Stamps <see cref="ITenantScoped{TKey}.TenantId"/> on all <c>Added</c> entities that implement <see cref="ITenantScoped{TKey}"/>.</item>
-///   <item>Validates that no <c>Modified</c> or <c>Deleted</c> entity belongs to a different tenant.</item>
+///   <item>Validates that every <c>Modified</c> or <c>Deleted</c> entity was loaded or attached as, and still belongs to, the current tenant.</item>
+///   <item>Relies on the <c>TenantId</c> concurrency token added by <c>ApplyTenantFilters</c> so that a forged <c>TenantId</c> matches no row; EF Core then throws <see cref="DbUpdateConcurrencyException"/>.</item>
 ///   <item>When <see cref="EfCoreIsolationOptions.DetectSpoofedWrites"/> is enabled, also rejects <c>Added</c> entities pre-stamped with a foreign tenant.</item>
 ///   <item>Throws <see cref="TenantIsolationViolationException"/> (before any data is written) if a cross-tenant violation is detected.</item>
 /// </list>
@@ -35,6 +37,9 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
     : SaveChangesInterceptor
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
+    // Entity types already reported as lacking database-enforced ownership; warned once per process.
+    private static readonly ConcurrentDictionary<Type, byte> UnenforcedOwnershipReported = new();
+
     /// <inheritdoc />
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData,
@@ -52,6 +57,44 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
     {
         ApplyTenantIsolation(eventData.Context);
         return base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public override InterceptionResult ThrowingConcurrencyException(
+        ConcurrencyExceptionEventData eventData,
+        InterceptionResult result)
+    {
+        LogTenantScopedWriteMatchedNoRow(eventData);
+        return base.ThrowingConcurrencyException(eventData, result);
+    }
+
+    /// <inheritdoc />
+    public override ValueTask<InterceptionResult> ThrowingConcurrencyExceptionAsync(
+        ConcurrencyExceptionEventData eventData,
+        InterceptionResult result,
+        CancellationToken cancellationToken = default)
+    {
+        LogTenantScopedWriteMatchedNoRow(eventData);
+        return base.ThrowingConcurrencyExceptionAsync(eventData, result, cancellationToken);
+    }
+
+    // A tenant-scoped UPDATE or DELETE that affects no row is either an ordinary concurrency conflict or
+    // an attempt to write another tenant's row with a forged TenantId. The two cannot be told apart
+    // without another query, so EF Core's DbUpdateConcurrencyException is left as is and logged here.
+    private void LogTenantScopedWriteMatchedNoRow(ConcurrencyExceptionEventData eventData)
+    {
+        foreach (var entry in eventData.Entries)
+        {
+            if (entry.Entity is ITenantScoped<TKey>)
+            {
+                logger.LogWarning(
+                    "A {State} of tenant-scoped entity '{EntityType}' in tenant '{TenantId}' matched no row. " +
+                    "The row does not exist, belongs to another tenant, or was changed concurrently",
+                    entry.State,
+                    entry.Entity.GetType().Name,
+                    tenantContext.CurrentTenantId);
+            }
+        }
     }
 
     private void ApplyTenantIsolation(DbContext? context)
@@ -82,6 +125,17 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
                 diagnostics.EntityTypeName,
                 diagnostics.OffendingTenantId,
                 diagnostics.ExpectedTenantId);
+        },
+        entry =>
+        {
+            if (UnenforcedOwnershipReported.TryAdd(entry.Metadata.ClrType, 0))
+            {
+                logger.LogWarning(
+                    "Entity '{EntityType}' implements ITenantScoped but its TenantId is not a concurrency token, " +
+                    "so UPDATE and DELETE statements do not check the stored tenant. Call " +
+                    "modelBuilder.ApplyTenantFilters(...) in OnModelCreating",
+                    entry.Metadata.ClrType.Name);
+            }
         });
     }
 

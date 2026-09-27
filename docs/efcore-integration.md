@@ -165,9 +165,16 @@ The `SaveChanges`/`SaveChangesAsync` interceptor runs on every save against a co
 
 - **Added** entities have their `TenantId` **stamped** from the current tenant — overwriting whatever
   was set (unless `DetectSpoofedWrites` is on; see below).
-- **Modified / Deleted** entities are **validated**: if an entity belongs to a different tenant than
-  the current scope, the interceptor throws `TenantIsolationViolationException` **before any data is
-  written** and the whole `SaveChanges` is aborted. This is **always on**, regardless of configuration.
+- **Modified / Deleted** entities are **validated**: the entity must have been loaded or attached as the
+  current tenant and must still belong to it. Otherwise the interceptor throws
+  `TenantIsolationViolationException` **before any data is written** and the whole `SaveChanges` is
+  aborted. This is **always on**, regardless of configuration.
+- **The database enforces ownership too.** `ApplyTenantFilters` marks `TenantId` as a concurrency token,
+  so every `UPDATE` and `DELETE` includes `AND TenantId = <tenant the entity was loaded or attached with>`.
+  A detached entity that pairs another tenant's primary key with the current tenant's `TenantId` passes
+  the in-memory check but matches no row, so EF Core throws `DbUpdateConcurrencyException` and nothing is
+  changed. The interceptor logs a warning when a tenant-scoped write matches no row. No schema change is
+  needed; your next migration's model snapshot records the concurrency token.
 
 If there is **no resolved tenant**, behaviour follows the `OnMissingTenant` policy (below).
 

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Tenantry.Core;
@@ -10,7 +11,8 @@ internal static class TenantWriteIsolationApplier
     public static void Apply<TKey>(
         IEnumerable<EntityEntry> entries,
         ITenantContext<TKey> tenantContext,
-        Action<IsolationDiagnostics>? onViolation = null)
+        Action<IsolationDiagnostics>? onViolation = null,
+        Action<EntityEntry>? onOwnershipNotEnforced = null)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         if (!tenantContext.HasTenant)
@@ -35,24 +37,28 @@ internal static class TenantWriteIsolationApplier
 
                 case EntityState.Modified:
                 case EntityState.Deleted:
-                    if (tenantEntity.TenantId.Equals(currentTenantId))
+                    // The row must have been loaded or attached as the current tenant (the original value,
+                    // which becomes the UPDATE/DELETE predicate) and must still belong to it (the current
+                    // value). Checking both rejects moving a row between tenants and writing an entity that
+                    // was loaded under another tenant's scope.
+                    var originalTenantId = TenantOwnership.OriginalTenantId<TKey>(entry);
+
+                    if (!TenantOwnership.IsOwnedBy(originalTenantId, currentTenantId))
                     {
-                        break;
+                        ThrowViolation(entry, originalTenantId, currentTenantId, onViolation);
                     }
 
-                    IsolationDiagnostics diagnostics = new()
+                    if (!TenantOwnership.IsOwnedBy(tenantEntity.TenantId, currentTenantId))
                     {
-                        EntityTypeName = entry.Entity.GetType().Name,
-                        OffendingTenantId = tenantEntity.TenantId.ToString()!,
-                        ExpectedTenantId = currentTenantId.ToString()!,
-                    };
+                        ThrowViolation(entry, tenantEntity.TenantId, currentTenantId, onViolation);
+                    }
 
-                    onViolation?.Invoke(diagnostics);
+                    if (!TenantOwnership.IsEnforcedByDatabase(entry))
+                    {
+                        onOwnershipNotEnforced?.Invoke(entry);
+                    }
 
-                    throw new TenantIsolationViolationException(
-                        diagnostics.EntityTypeName,
-                        diagnostics.OffendingTenantId,
-                        diagnostics.ExpectedTenantId);
+                    break;
 
                 case EntityState.Detached:
                 case EntityState.Unchanged:
@@ -60,5 +66,28 @@ internal static class TenantWriteIsolationApplier
                     break;
             }
         }
+    }
+
+    [DoesNotReturn]
+    private static void ThrowViolation<TKey>(
+        EntityEntry entry,
+        TKey? offendingTenantId,
+        TKey currentTenantId,
+        Action<IsolationDiagnostics>? onViolation)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        IsolationDiagnostics diagnostics = new()
+        {
+            EntityTypeName = entry.Entity.GetType().Name,
+            OffendingTenantId = offendingTenantId?.ToString() ?? "<null>",
+            ExpectedTenantId = currentTenantId.ToString()!,
+        };
+
+        onViolation?.Invoke(diagnostics);
+
+        throw new TenantIsolationViolationException(
+            diagnostics.EntityTypeName,
+            diagnostics.OffendingTenantId,
+            diagnostics.ExpectedTenantId);
     }
 }
