@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ApplyTenantFilters` no longer claims to configure a `TenantId` index; it never did. Index `TenantId`
+  yourself, usually as the leading column of composite indexes (see the EF Core guide).
 - `TenantIsolationViolationException` has a constructor for violations detected before any tenant value
   is known; `OffendingTenantId` and `ExpectedTenantId` are empty in that case.
 - The EF Core guide documents what is and isn't isolated: raw SQL and `IgnoreQueryFilters()` are

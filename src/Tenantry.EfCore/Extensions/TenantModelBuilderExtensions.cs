@@ -21,7 +21,8 @@ public static class TenantModelBuilderExtensions
     /// and applies a global query filter that restricts results to the current tenant.
     /// Also marks <c>TenantId</c> as a concurrency token, so every <c>UPDATE</c> and <c>DELETE</c>
     /// only matches a row stored under the tenant the entity was loaded or attached with.
-    /// Also configures an index on the <c>TenantId</c> column for query performance.
+    /// No index is added: every tenant-filtered query compares <c>TenantId</c>, so index it yourself, usually
+    /// as the leading column of composite indexes that match your queries.
     /// </summary>
     /// <typeparam name="TKey">
     /// The tenant identifier type. Must match the key type used in

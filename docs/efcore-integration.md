@@ -106,7 +106,15 @@ implement `ITenantScoped<TKey>`:
 
 - adds a global query filter equivalent to
   `entity => context.CurrentTenantId != default && entity.TenantId == context.CurrentTenantId`, and
-- configures an index on the `TenantId` column for query performance.
+- marks `TenantId` as a concurrency token, so updates and deletes also match on the stored tenant.
+
+Tenantry does not add indexes. Because every filtered query compares `TenantId`, index it yourself: usually
+as the **leading column of composite indexes** that match your queries, rather than on its own.
+
+```csharp
+modelBuilder.Entity<Order>().HasIndex(o => new { o.TenantId, o.CreatedAt });
+modelBuilder.Entity<Order>().HasIndex(o => new { o.TenantId, o.Reference }).IsUnique(); // unique per tenant
+```
 
 So a plain `db.Orders.ToListAsync()` returns only the current tenant's rows — you never write
 `Where(o => o.TenantId == …)` by hand. Entities without `ITenantScoped<TKey>` are untouched and remain
@@ -269,8 +277,8 @@ access), add row-level security policies in the database as well, or use a datab
 
 ## Migrations
 
-The tenant filter and the `TenantId` index are part of the model, so they participate in migrations
-normally:
+The tenant filter and the `TenantId` concurrency token are part of the model, so they participate in
+migrations normally (neither changes the schema):
 
 ```bash
 dotnet ef migrations add Initial
@@ -279,9 +287,8 @@ dotnet ef database update
 
 A couple of notes:
 
-- The `TenantId` column comes from your entity (via `ITenantScoped<TKey>`/`TenantScoped<TKey>`); the
-  index on it is added by `ApplyTenantFilters`. Generate migrations after wiring the filters so the
-  index is captured.
+- The `TenantId` column comes from your entity (via `ITenantScoped<TKey>`/`TenantScoped<TKey>`). Add
+  the indexes your queries need (see above); `ApplyTenantFilters` does not create any.
 - Design-time tooling (`dotnet ef`) constructs your `DbContext` without a real tenant. That is fine —
   the filter's fail-closed guard simply means design-time has "no tenant", which does not affect schema
   generation.
