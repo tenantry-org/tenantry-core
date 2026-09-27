@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its `TenantId`. An entity loaded under one tenant and saved after switching scope now throws
   `TenantIsolationViolationException`.
 
+### Fixed
+
+- Disposing a tenant scope twice, or out of order, no longer restores a tenant whose scope has already
+  closed. Disposal is idempotent, and disposing a scope that is not the innermost one in the current flow
+  (out of order, or from another async flow) closes it without changing the active tenant; the nearest
+  scope that is still open is restored when the innermost one closes.
+
 ### Changed
 
 - `ApplyTenantFilters` no longer claims to configure a `TenantId` index; it never did. Index `TenantId`

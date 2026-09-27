@@ -51,4 +51,69 @@ public sealed class TenantScopeTests
         scope.HasTenant.Should().BeFalse("disposing the outermost scope restores 'no tenant'");
         scope.CurrentTenant.Should().BeNull();
     }
+
+    [Fact]
+    public void Dispose_CalledTwice_DoesNotDisturbALaterScope()
+    {
+        var scope = BuildScope();
+        var first = scope.BeginScope(Tenant("acme"));
+        first.Dispose();
+
+        using (scope.BeginScope(Tenant("globex")))
+        {
+            first.Dispose();
+
+            scope.CurrentTenantId.Should().Be("globex", "a second dispose of a closed scope does nothing");
+        }
+
+        scope.HasTenant.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Dispose_OutOfOrder_KeepsTheInnerScopeAndThenRestoresNoTenant()
+    {
+        var scope = BuildScope();
+        var outer = scope.BeginScope(Tenant("acme"));
+        var inner = scope.BeginScope(Tenant("globex"));
+
+        outer.Dispose();
+        scope.CurrentTenantId.Should().Be("globex", "closing the outer scope first leaves the inner one active");
+
+        inner.Dispose();
+        scope.HasTenant.Should().BeFalse("the outer scope is already closed, so it is not restored");
+    }
+
+    [Fact]
+    public void Dispose_MiddleScopeFirst_RestoresTheNearestOpenScope()
+    {
+        var scope = BuildScope();
+        using var outer = scope.BeginScope(Tenant("acme"));
+        var middle = scope.BeginScope(Tenant("globex"));
+        var inner = scope.BeginScope(Tenant("initech"));
+
+        middle.Dispose();
+        inner.Dispose();
+
+        scope.CurrentTenantId.Should().Be("acme");
+    }
+
+    [Fact]
+    public async Task Dispose_FromAnotherAsyncFlow_DoesNotChangeTheCallersTenant()
+    {
+        var scope = BuildScope();
+
+        using (scope.BeginScope(Tenant("acme")))
+        {
+            // The scope begins inside Task.Run, so it is never visible to this flow.
+            var handle = await Task.Run(() => scope.BeginScope(Tenant("globex")));
+
+            handle.Dispose();
+
+            scope.CurrentTenantId.Should().Be("acme");
+        }
+
+        scope.HasTenant.Should().BeFalse();
+    }
+
+    private static TenantDescriptor<string> Tenant(string id) => new() { TenantId = id, Name = id };
 }

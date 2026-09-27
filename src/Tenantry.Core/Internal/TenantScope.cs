@@ -13,32 +13,68 @@ namespace Tenantry.Core.Internal;
 internal sealed class TenantScope<TKey> : ITenantScope<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    private static readonly AsyncLocal<ITenantDescriptor<TKey>?> CurrentTenantLocal = new();
+    // The ambient value is the innermost open scope. Each scope links to the one it shadows, so closing
+    // scopes in any order (or from another async flow) restores the nearest scope that is still open.
+    private static readonly AsyncLocal<Frame?> CurrentFrame = new();
 
     /// <inheritdoc />
-    public ITenantDescriptor<TKey>? CurrentTenant => CurrentTenantLocal.Value;
+    public ITenantDescriptor<TKey>? CurrentTenant => CurrentFrame.Value?.Tenant;
 
     /// <inheritdoc />
-    public bool HasTenant => CurrentTenantLocal.Value is not null;
+    public bool HasTenant => CurrentFrame.Value is not null;
 
     /// <inheritdoc />
-    public TKey? CurrentTenantId => CurrentTenantLocal.Value is { } tenant ? tenant.TenantId : default;
+    public TKey? CurrentTenantId => CurrentFrame.Value is { } frame ? frame.Tenant.TenantId : default;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Scopes nest: an inner scope shadows the outer one, and disposing it restores the outer tenant. The
+    /// ambient value flows down into awaited callees, never back up to the caller. Disposing a scope is
+    /// idempotent. Disposing a scope that is not the innermost one in the current flow (out of order, or
+    /// from a different async flow) only closes it; the innermost scope stays active, and when it closes
+    /// the nearest scope that is still open is restored.
+    /// </remarks>
     public IDisposable BeginScope(ITenantDescriptor<TKey> tenant)
     {
         ArgumentNullException.ThrowIfNull(tenant);
 
-        // Save the current tenant and restore it on dispose. This supports nested scopes: an inner
-        // scope shadows the outer one, and the outer tenant is restored when the inner scope is
-        // disposed. (The ambient value flows down into awaited callees, never back up to the caller.)
-        var previous = CurrentTenantLocal.Value;
-        CurrentTenantLocal.Value = tenant;
-        return new ScopeHandle(previous);
+        Frame frame = new(tenant, CurrentFrame.Value);
+        CurrentFrame.Value = frame;
+        return frame;
     }
 
-    private sealed class ScopeHandle(ITenantDescriptor<TKey>? previous) : IDisposable
+    private sealed class Frame(ITenantDescriptor<TKey> tenant, Frame? parent) : IDisposable
     {
-        public void Dispose() => CurrentTenantLocal.Value = previous;
+        private int _disposed;
+
+        public ITenantDescriptor<TKey> Tenant { get; } = tenant;
+
+        private Frame? Parent { get; } = parent;
+
+        private bool IsDisposed => Volatile.Read(ref _disposed) == 1;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            {
+                return;
+            }
+
+            // Only the innermost scope of this flow changes the ambient value. Anything else is closed in
+            // place and skipped when the innermost scope is disposed.
+            if (!ReferenceEquals(CurrentFrame.Value, this))
+            {
+                return;
+            }
+
+            var restored = Parent;
+
+            while (restored is { IsDisposed: true })
+            {
+                restored = restored.Parent;
+            }
+
+            CurrentFrame.Value = restored;
+        }
     }
 }
