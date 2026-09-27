@@ -46,6 +46,10 @@ jobs:
             9.0.x
             10.0.x
 
+      - name: Show selected SDK
+        # global.json pins the 10.0 feature band, so an installed preview SDK is never used.
+        run: dotnet --version
+
       - name: Restore
         run: dotnet restore Tenantry.slnx
 
