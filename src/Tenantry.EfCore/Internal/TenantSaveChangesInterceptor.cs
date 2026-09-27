@@ -18,7 +18,7 @@ namespace Tenantry.EfCore.Internal;
 ///
 /// On every <c>SaveChanges</c> or <c>SaveChangesAsync</c>:
 /// <list type="bullet">
-///   <item>Applies the configured <see cref="EfCoreIsolationOptions.OnMissingTenant"/> policy when no tenant is resolved.</item>
+///   <item>Applies the configured <see cref="EfCoreIsolationOptions.OnMissingTenant"/> policy (default <c>Reject</c>) when tenant-scoped entities are written without a resolved tenant.</item>
 ///   <item>Stamps <see cref="ITenantScoped{TKey}.TenantId"/> on all <c>Added</c> entities that implement <see cref="ITenantScoped{TKey}"/>.</item>
 ///   <item>Validates that every <c>Modified</c> or <c>Deleted</c> entity was loaded or attached as, and still belongs to, the current tenant.</item>
 ///   <item>Relies on the <c>TenantId</c> concurrency token added by <c>ApplyTenantFilters</c> so that a forged <c>TenantId</c> matches no row; EF Core then throws <see cref="DbUpdateConcurrencyException"/>.</item>
@@ -106,7 +106,7 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
 
         if (!tenantContext.HasTenant)
         {
-            HandleMissingTenant();
+            HandleMissingTenant(context);
             return;
         }
 
@@ -139,29 +139,52 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
         });
     }
 
-    private void HandleMissingTenant()
+    private void HandleMissingTenant(DbContext context)
     {
+        var scopedWrites = context.ChangeTracker.Entries()
+            .Where(entry => entry.Entity is ITenantScoped<TKey> &&
+                            entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToList();
+
+        // A save that writes no tenant-scoped entity (e.g. a host-level catalogue) needs no tenant.
+        if (scopedWrites.Count == 0)
+        {
+            return;
+        }
+
+        var entityTypes = string.Join(", ", scopedWrites.Select(entry => entry.Metadata.ClrType.Name).Distinct());
+
         switch (options.OnMissingTenant)
         {
-            case MissingTenantBehavior.Reject:
-                throw new TenantNotResolvedException(
-                    "SaveChanges was called without a resolved tenant context and " +
-                    "EfCoreIsolationOptions.OnMissingTenant is set to Reject. " +
-                    "Ensure app.UseTenantry() (or a manual tenant scope) is active before writing, " +
-                    "or relax the policy to Allow/Warn for operations that intentionally run without a tenant.");
-
             case MissingTenantBehavior.Warn:
                 logger.LogWarning(
-                    "SaveChanges called without a resolved tenant context. " +
-                    "Entities will not have TenantId stamped and cross-tenant validation is skipped. " +
-                    "Ensure app.UseTenantry() is registered in the middleware pipeline");
+                    "SaveChanges is writing tenant-scoped entities ({EntityTypes}) without a resolved tenant. " +
+                    "Updates and deletes are not tenant-checked (EfCoreIsolationOptions.OnMissingTenant = Warn)",
+                    entityTypes);
                 break;
 
             case MissingTenantBehavior.Allow:
-            case MissingTenantBehavior.Skip:
-            default:
-                // Proceed silently — the save runs without a stamped tenant.
                 break;
+
+            default:
+                throw new TenantNotResolvedException(
+                    $"SaveChanges is writing tenant-scoped entities ({entityTypes}) without a resolved tenant. " +
+                    "Run the write inside a tenant scope (app.UseTenantry() for requests, ITenantScope.BeginScope " +
+                    "elsewhere), or set EfCoreIsolationOptions.OnMissingTenant to Allow or Warn for maintenance " +
+                    "code that deliberately writes across tenants.");
+        }
+
+        // Even when unscoped writes are allowed, a new row must name its tenant: an unowned row is never
+        // visible through the tenant filter and belongs to no one.
+        var unowned = scopedWrites.FirstOrDefault(entry =>
+            entry.State == EntityState.Added &&
+            TenantOwnership.IsUnstamped(((ITenantScoped<TKey>)entry.Entity).TenantId));
+
+        if (unowned is not null)
+        {
+            throw new TenantNotResolvedException(
+                $"A new '{unowned.Metadata.ClrType.Name}' is being saved without a resolved tenant and without a " +
+                "TenantId. Set TenantId explicitly or save it inside a tenant scope.");
         }
     }
 }

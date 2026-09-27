@@ -33,8 +33,8 @@ builder.Services.AddTenantry<Guid>(tenant =>
   `DbContext` via an EF Core `SaveChanges` interceptor — no base class required. An optional
   `MultiTenantDbContext<TKey>` base class is provided for greenfield convenience.
 - **Fails closed.** When no tenant is resolved, query filters match nothing rather than leaking every
-  tenant's rows. Cross-tenant writes are rejected *before* anything is persisted, and a configurable
-  `OnMissingTenant` policy (warn, allow, or reject) governs writes that run without a tenant context.
+  tenant's rows. Cross-tenant writes are rejected *before* anything is persisted, and
+  tenant-scoped writes without a tenant context are rejected by default (`OnMissingTenant`).
 - **HTTP and beyond.** `AddTenantry` covers ASP.NET Core (resolution middleware, access validation,
   endpoint metadata). `AddTenantryCore` brings the same isolation to console apps, worker services,
   and desktop UIs with no web stack.

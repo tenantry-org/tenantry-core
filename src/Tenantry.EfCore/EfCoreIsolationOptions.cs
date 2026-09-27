@@ -14,17 +14,35 @@ namespace Tenantry.EfCore;
 /// </remarks>
 public sealed class EfCoreIsolationOptions
 {
+    private MissingTenantBehavior _onMissingTenant = MissingTenantBehavior.Reject;
+
     /// <summary>
-    /// What happens when <c>SaveChanges</c> runs without a resolved tenant context.
+    /// What happens when <c>SaveChanges</c> writes <see cref="ITenantScoped{TKey}" /> entities without a
+    /// resolved tenant. Saves that write no tenant-scoped entity are never affected.
     /// <list type="bullet">
-    ///   <item><description><see cref="MissingTenantBehavior.Allow" /> — save without stamping a tenant, silently.</description></item>
-    ///   <item><description><see cref="MissingTenantBehavior.Warn" /> — save without stamping a tenant and log a warning. <strong>Default.</strong></description></item>
-    ///   <item><description><see cref="MissingTenantBehavior.Reject" /> — throw <see cref="Core.Exceptions.TenantNotResolvedException" /> before persisting.</description></item>
-    ///   <item><description><see cref="MissingTenantBehavior.Skip" /> — behaves like <see cref="MissingTenantBehavior.Allow" /> for writes (there is nothing to skip).</description></item>
+    ///   <item><description><see cref="MissingTenantBehavior.Reject" /> — throw <see cref="Core.Exceptions.TenantNotResolvedException" /> before persisting. <strong>Default.</strong></description></item>
+    ///   <item><description><see cref="MissingTenantBehavior.Warn" /> — allow the write and log a warning.</description></item>
+    ///   <item><description><see cref="MissingTenantBehavior.Allow" /> — allow the write silently.</description></item>
     /// </list>
-    /// Reads are unaffected — they always fail closed regardless of this setting.
+    /// <see cref="MissingTenantBehavior.Warn" /> and <see cref="MissingTenantBehavior.Allow" /> are for
+    /// maintenance code that deliberately writes across tenants: updates and deletes are then not
+    /// tenant-checked, and a new entity must set its <c>TenantId</c> explicitly, because an unowned row is
+    /// always rejected. Reads always fail closed, whatever this setting.
     /// </summary>
-    public MissingTenantBehavior OnMissingTenant { get; set; } = MissingTenantBehavior.Warn;
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The value is <see cref="MissingTenantBehavior.Skip" /> (which only applies to background-job
+    /// propagation) or not a defined value.
+    /// </exception>
+    public MissingTenantBehavior OnMissingTenant
+    {
+        get => _onMissingTenant;
+        set => _onMissingTenant = value is MissingTenantBehavior.Reject or MissingTenantBehavior.Warn or MissingTenantBehavior.Allow
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                nameof(value),
+                value,
+                "OnMissingTenant must be Reject, Warn or Allow. Skip only applies to background-job propagation.");
+    }
 
     /// <summary>
     /// When <see langword="true" />, an <c>Added</c> entity that carries an explicitly-set

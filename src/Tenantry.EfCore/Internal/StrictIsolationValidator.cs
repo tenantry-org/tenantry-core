@@ -54,7 +54,7 @@ internal sealed class StrictIsolationValidator<TKey>(
             // Added entities with an unset TenantId are safe — the interceptor will stamp them.
             // IsUnstamped treats both null and string.Empty as "not yet assigned", since C# developers
             // commonly initialise string properties to string.Empty rather than null.
-            if (entry.State == EntityState.Added && IsUnstamped(tenantEntity.TenantId))
+            if (entry.State == EntityState.Added && TenantOwnership.IsUnstamped(tenantEntity.TenantId))
             {
                 continue;
             }
@@ -98,17 +98,6 @@ internal sealed class StrictIsolationValidator<TKey>(
         }
     }
 
-    /// <summary>
-    /// Returns true when <paramref name="tenantId"/> represents an unset/unstamped value.
-    /// For reference types this is <see langword="null"/>; for <see cref="string"/> it also
-    /// covers <see cref="string.Empty"/>, since C# developers commonly initialise string
-    /// properties to <c>string.Empty</c> rather than <see langword="null"/> to satisfy
-    /// nullable-reference-type analysis.
-    /// </summary>
     private static bool IsForeign(TKey tenantId, TKey currentTenantId) =>
-        !IsUnstamped(tenantId) && !EqualityComparer<TKey>.Default.Equals(tenantId, currentTenantId);
-
-    private static bool IsUnstamped(TKey tenantId) =>
-        EqualityComparer<TKey>.Default.Equals(tenantId, default!) ||
-        tenantId is string {Length: 0};
+        !TenantOwnership.IsUnstamped(tenantId) && !EqualityComparer<TKey>.Default.Equals(tenantId, currentTenantId);
 }

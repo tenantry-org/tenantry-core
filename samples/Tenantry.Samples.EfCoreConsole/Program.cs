@@ -118,7 +118,7 @@ using (tenantScope.BeginScope(globex))
 
 // ── 7. No active scope = fail closed ───────────────────────────────────────────────────────
 // With no tenant resolved, the filter matches nothing, so reads return zero rows rather than
-// leaking every tenant's data. (A SaveChanges here would also log a missing-context warning.)
+// leaking every tenant's data. A SaveChanges of tenant-scoped entities here would be rejected.
 Print("No scope", $"sees {await db.Orders.CountAsync()} order(s) — isolation fails closed");
 
 // ── 8. Admin / reporting: bypass isolation on purpose ───────────────────────────────────────

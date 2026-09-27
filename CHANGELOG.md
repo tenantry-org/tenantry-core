@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `EfCoreIsolationOptions.OnMissingTenant` defaults to `Reject`. Saving tenant-scoped entities
+  without a resolved tenant throws `TenantNotResolvedException`; previously the default `Warn` let such a
+  save update or delete any tenant's rows by key and insert rows with no tenant.
+- `OnMissingTenant` only applies when a save writes tenant-scoped entities. Saves of host-level data (the
+  tenant registry, global reference data) no longer need a tenant under any policy.
+- Under `Warn` and `Allow`, a new tenant-scoped entity must set `TenantId` explicitly; an unowned row is
+  rejected.
+- Setting `OnMissingTenant` to `Skip` or an undefined value throws `ArgumentOutOfRangeException`. `Skip`
+  previously behaved like `Allow` for writes.
 - A tenant-scoped `Modified` or `Deleted` entity with a `null` `TenantId` throws
   `TenantIsolationViolationException` instead of `NullReferenceException`.
 - The interceptor logs a warning when a tenant-scoped write matches no row, and once per entity type when

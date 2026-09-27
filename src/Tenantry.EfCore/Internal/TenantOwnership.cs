@@ -35,6 +35,14 @@ internal static class TenantOwnership
         tenantId is not null && EqualityComparer<TKey>.Default.Equals(tenantId, currentTenantId);
 
     /// <summary>
+    /// Returns true when <paramref name="tenantId"/> is unset: <see langword="null"/>, the type's default,
+    /// or <see cref="string.Empty"/> (string properties are commonly initialised to empty rather than null).
+    /// </summary>
+    public static bool IsUnstamped<TKey>(TKey? tenantId)
+        where TKey : IEquatable<TKey>, IParsable<TKey> =>
+        tenantId is null or string { Length: 0 } || EqualityComparer<TKey>.Default.Equals(tenantId, default!);
+
+    /// <summary>
     /// Returns true when the database enforces the stored tenant on <c>UPDATE</c> and <c>DELETE</c> for
     /// this entry: <c>TenantId</c> is a concurrency token or part of the primary key.
     /// </summary>

@@ -9,61 +9,131 @@ using Tenantry.EfCore.Internal;
 namespace Tenantry.EfCore.Tests.Interceptor;
 
 /// <summary>
-/// Verifies that SaveChanges without a resolved tenant context logs a warning and
-/// does not throw — entities are saved but without TenantId stamped.
+/// Verifies SaveChanges without a resolved tenant: tenant-scoped writes are rejected by default, maintenance
+/// writes are possible only through an explicit <see cref="EfCoreIsolationOptions.OnMissingTenant"/> opt-in,
+/// and saves that write no tenant-scoped entity are unaffected.
 /// </summary>
-public sealed class InterceptorNoTenantContextTests
+public sealed class InterceptorNoTenantContextTests : IDisposable
 {
+    private readonly SqliteConnection _connection = DbContextFactory.CreateSharedConnection();
+    private readonly TestTenantContext _tenant = TestTenantContext.Empty();
+
+    public void Dispose() => _connection.Dispose();
+
     [Fact]
-    public async Task SaveChanges_WithNoTenantContext_DoesNotThrow()
+    public async Task Default_AddingScopedEntityWithoutTenant_ThrowsAndPersistsNothing()
     {
-        var ctx = TestTenantContext.Empty();
-        await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        db.Orders.Add(new Order { Description = "no tenant" });
 
-        db.Orders.Add(new Order { Description = "No tenant" });
+        Func<Task> act = () => db.SaveChangesAsync();
 
-        Func<Task> act = async () => await db.SaveChangesAsync();
-
-        await act.Should().NotThrowAsync();
-        await db.DisposeAsync();
+        await act.Should().ThrowAsync<TenantNotResolvedException>().WithMessage("*Order*");
+        CountRows().Should().Be(0);
     }
 
     [Fact]
-    public async Task SaveChanges_WithNoTenantContext_SavesEntity()
+    public async Task Default_SyncSaveWithoutTenant_Throws()
     {
-        var ctx = TestTenantContext.Empty();
-        await using var conn = DbContextFactory.CreateSharedConnection();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
-
-        db.Orders.Add(new Order { Description = "No tenant order" });
-        await db.SaveChangesAsync();
-
-        // Query with IgnoreQueryFilters since there's no active tenant filter
-        var all = await db.Orders.IgnoreQueryFilters().AsNoTracking().ToListAsync();
-
-        all.Should().HaveCount(1);
-        all[0].Description.Should().Be("No tenant order");
-        all[0].TenantId.Should().BeEmpty(); // not stamped
-    }
-
-    [Fact]
-    public async Task SaveChanges_Sync_WithNoTenantContext_DoesNotThrow()
-    {
-        // Exercises the synchronous SavingChanges interceptor overload, which is not
-        // called by SaveChangesAsync. Uses no-tenant context to also cover the
-        // no-detector warning branch in ApplyTenantIsolation.
-        var ctx = TestTenantContext.Empty();
-        await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
-
-        db.Orders.Add(new Order { Description = "Sync no tenant" });
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        db.Orders.Add(new Order { Description = "no tenant" });
 
         var act = () => db.SaveChanges();
 
-        act.Should().NotThrow();
-        
-        await db.DisposeAsync();
+        act.Should().Throw<TenantNotResolvedException>();
+        CountRows().Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Default_UpdatingOrRemovingExistingRowWithoutTenant_ThrowsAndLeavesRowUnchanged(bool remove)
+    {
+        var acmeOrderId = await SeedAcmeOrderAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        Order forged = new() { Id = acmeOrderId, TenantId = "globex", Description = "overwritten" };
+
+        if (remove)
+        {
+            db.Orders.Remove(forged);
+        }
+        else
+        {
+            db.Orders.Update(forged);
+        }
+
+        Func<Task> act = () => db.SaveChangesAsync();
+
+        await act.Should().ThrowAsync<TenantNotResolvedException>();
+        ReadRow(acmeOrderId).Should().Be(("acme", "acme order"));
+    }
+
+    [Fact]
+    public async Task Default_WritingOnlyNonTenantEntitiesWithoutTenant_Succeeds()
+    {
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        db.NonTenants.Add(new NonTenant { Name = "catalogue entry" });
+
+        Func<Task> act = () => db.SaveChangesAsync();
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Theory]
+    [InlineData(MissingTenantBehavior.Allow)]
+    [InlineData(MissingTenantBehavior.Warn)]
+    public async Task OptIn_AddingScopedEntityWithExplicitTenantId_Succeeds(MissingTenantBehavior behavior)
+    {
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(
+            _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
+        db.Orders.Add(new Order { TenantId = "acme", Description = "seeded" });
+
+        await db.SaveChangesAsync();
+
+        CountRows().Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(MissingTenantBehavior.Allow)]
+    [InlineData(MissingTenantBehavior.Warn)]
+    public async Task OptIn_AddingScopedEntityWithoutTenantId_ThrowsAndPersistsNothing(MissingTenantBehavior behavior)
+    {
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(
+            _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
+        db.Orders.Add(new Order { Description = "unowned" });
+
+        Func<Task> act = () => db.SaveChangesAsync();
+
+        await act.Should().ThrowAsync<TenantNotResolvedException>().WithMessage("*TenantId*");
+        CountRows().Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(MissingTenantBehavior.Allow)]
+    [InlineData(MissingTenantBehavior.Warn)]
+    public async Task OptIn_UpdatingExistingRowWithoutTenant_Succeeds(MissingTenantBehavior behavior)
+    {
+        var acmeOrderId = await SeedAcmeOrderAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(
+            _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
+
+        db.Orders.Update(new Order { Id = acmeOrderId, TenantId = "acme", Description = "maintenance" });
+        await db.SaveChangesAsync();
+
+        ReadRow(acmeOrderId).Should().Be(("acme", "maintenance"));
+    }
+
+    [Theory]
+    [InlineData(MissingTenantBehavior.Skip)]
+    [InlineData((MissingTenantBehavior)99)]
+    public void OnMissingTenant_RejectsValuesWithNoMeaningForWrites(MissingTenantBehavior behavior)
+    {
+        EfCoreIsolationOptions options = new();
+
+        var act = () => options.OnMissingTenant = behavior;
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+        options.OnMissingTenant.Should().Be(MissingTenantBehavior.Reject);
     }
 
     [Fact]
@@ -72,9 +142,7 @@ public sealed class InterceptorNoTenantContextTests
         // TenantWriteIsolationApplier.Apply has an early-return guard for !HasTenant.
         // The interceptor short-circuits before calling Apply in this case, so we test
         // Apply directly to cover that defensive branch.
-        var ctx = TestTenantContext.Empty();
-
-        var act = () => TenantWriteIsolationApplier.Apply([], ctx);
+        var act = () => TenantWriteIsolationApplier.Apply([], _tenant.AsNone());
 
         act.Should().NotThrow();
     }
@@ -84,159 +152,52 @@ public sealed class InterceptorNoTenantContextTests
     {
         // DbContextEventData.Context is DbContext? — null is a valid (if rare) input.
         // Exercises the null-context guard in ApplyTenantIsolation.
-        var ctx = TestTenantContext.For("acme");
-        var interceptor = BuildInterceptor(ctx);
+        TenantSaveChangesInterceptor<string> interceptor = new(
+            _tenant.As("acme"),
+            new EfCoreIsolationOptions(),
+            new StrictIsolationValidator<string>(NullLogger<StrictIsolationValidator<string>>.Instance),
+            NullLogger<TenantSaveChangesInterceptor<string>>.Instance);
 
         var act = () => interceptor.SavingChanges(new NullContextEventData(), default);
 
         act.Should().NotThrow();
     }
 
-    private static TenantSaveChangesInterceptor<string> BuildInterceptor(
-        TestTenantContext ctx,
-        EfCoreIsolationOptions? options = null) =>
-        new(ctx,
-            options ?? new EfCoreIsolationOptions(),
-            new StrictIsolationValidator<string>(NullLogger<StrictIsolationValidator<string>>.Instance),
-            NullLogger<TenantSaveChangesInterceptor<string>>.Instance);
-
     [Fact]
-    public async Task SaveChangesAsync_WithNoTenant_AndRejectPolicy_Throws()
+    public async Task Apply_SkipsNonTenantScopedEntities()
     {
-        // OnMissingTenant = Reject must throw before persisting when no tenant is resolved.
-        var tenantContext = TestTenantContext.Empty();
-        var interceptor = BuildInterceptor(
-            tenantContext,
-            new EfCoreIsolationOptions { OnMissingTenant = MissingTenantBehavior.Reject });
+        // Verifies the branch where an entry.Entity is not ITenantScoped — the applier should skip it.
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        db.NonTenants.Add(new NonTenant { Name = "plain" });
 
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
+        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), _tenant);
 
-        var options = new DbContextOptionsBuilder<TestDbContext>()
-            .UseSqlite(connection)
-            .AddInterceptors(interceptor)
-            .Options;
-
-        var db = new TestDbContext(options, tenantContext);
-        await db.Database.EnsureCreatedAsync();
-
-        db.Orders.Add(new Order { Description = "no tenant reject" });
-
-        Func<Task> act = () => db.SaveChangesAsync();
-        await act.Should().ThrowAsync<TenantNotResolvedException>();
-
-        await db.DisposeAsync();
+        act.Should().NotThrow();
     }
 
-    [Fact]
-    public async Task SaveChangesAsync_WithNoTenant_AndSkipPolicy_DoesNotThrow()
+    private async Task<int> SeedAcmeOrderAsync()
     {
-        // OnMissingTenant = Skip behaves like Allow for EF Core (no job to abort).
-        var tenantContext = TestTenantContext.Empty();
-        var interceptor = BuildInterceptor(
-            tenantContext,
-            new EfCoreIsolationOptions { OnMissingTenant = MissingTenantBehavior.Skip });
-
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<TestDbContext>()
-            .UseSqlite(connection)
-            .AddInterceptors(interceptor)
-            .Options;
-
-        var db = new TestDbContext(options, tenantContext);
-        await db.Database.EnsureCreatedAsync();
-
-        db.Orders.Add(new Order { Description = "no tenant skip" });
-
-        Func<Task> act = () => db.SaveChangesAsync();
-        await act.Should().NotThrowAsync();
-
-        await db.DisposeAsync();
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        Order order = new() { Description = "acme order" };
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+        return order.Id;
     }
 
-    [Fact]
-    public async Task SaveChangesAsync_WithNoTenant_AndUnknownPolicy_DoesNotThrow()
+    private long CountRows()
     {
-        // Covers the default branch in HandleMissingTenant — defensive path for out-of-range
-        // enum values (same behaviour as Allow: proceed silently).
-        var tenantContext = TestTenantContext.Empty();
-        var interceptor = BuildInterceptor(
-            tenantContext,
-            new EfCoreIsolationOptions { OnMissingTenant = (MissingTenantBehavior)99 });
-
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<TestDbContext>()
-            .UseSqlite(connection)
-            .AddInterceptors(interceptor)
-            .Options;
-
-        var db = new TestDbContext(options, tenantContext);
-        await db.Database.EnsureCreatedAsync();
-
-        db.Orders.Add(new Order { Description = "unknown policy" });
-
-        Func<Task> act = () => db.SaveChangesAsync();
-        await act.Should().NotThrowAsync();
-
-        await db.DisposeAsync();
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM Orders";
+        return (long)command.ExecuteScalar()!;
     }
 
-    [Fact]
-    public async Task SaveChangesAsync_WithNoTenant_AndAllowPolicy_DoesNotThrow()
+    private (string TenantId, string Description)? ReadRow(int id)
     {
-        // OnMissingTenant = Allow proceeds silently without a stamped tenant.
-        var tenantContext = TestTenantContext.Empty();
-        var interceptor = BuildInterceptor(
-            tenantContext,
-            new EfCoreIsolationOptions { OnMissingTenant = MissingTenantBehavior.Allow });
-
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<TestDbContext>()
-            .UseSqlite(connection)
-            .AddInterceptors(interceptor)
-            .Options;
-
-        var db = new TestDbContext(options, tenantContext);
-        await db.Database.EnsureCreatedAsync();
-
-        db.Orders.Add(new Order { Description = "no tenant allow" });
-
-        Func<Task> act = () => db.SaveChangesAsync();
-        await act.Should().NotThrowAsync();
-
-        await db.DisposeAsync();
-    }
-
-    [Fact]
-    public async Task SavingChangesAsync_WithNoTenant_AndWarnPolicy_DoesNotThrow()
-    {
-        // The default Warn policy logs but proceeds.
-        var tenantContext = TestTenantContext.Empty();
-        var interceptor = BuildInterceptor(tenantContext);
-
-        await using var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<TestDbContext>()
-            .UseSqlite(connection)
-            .AddInterceptors(interceptor)
-            .Options;
-
-        var db = new TestDbContext(options, tenantContext);
-        await db.Database.EnsureCreatedAsync();
-
-        db.Orders.Add(new Order { Description = "no tenant" });
-
-        Func<Task> act = () => db.SaveChangesAsync();
-        await act.Should().NotThrowAsync();
-
-        await db.DisposeAsync();
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT TenantId, Description FROM Orders WHERE Id = $id";
+        command.Parameters.AddWithValue("$id", id);
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? (reader.GetString(0), reader.GetString(1)) : null;
     }
 
     private sealed class NullContextEventData : DbContextEventData
@@ -244,26 +205,5 @@ public sealed class InterceptorNoTenantContextTests
         // DbContextEventData stores constructor args as-is; null! for eventDefinition
         // it is safe because the interceptor never invokes the message generator.
         public NullContextEventData() : base(null!, (_, _) => string.Empty, null) { }
-    }
-
-    [Fact]
-    public async Task Apply_SkipsNonTenantScopedEntities()
-    {
-        // Verifies the branch where an entry.Entity is not ITenantScoped — the applier should skip it.
-        var ctx = TestTenantContext.For("acme");
-
-        await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
-
-        // A mapped entity type that does not implement ITenantScoped<string>
-        var nonTenant = new NonTenant { Name = "plain" };
-
-        // Add to change tracker (no need to save) so there's an EntityEntry for it
-        db.NonTenants.Add(nonTenant);
-
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
-
-        act.Should().NotThrow();
-        await db.DisposeAsync();
     }
 }

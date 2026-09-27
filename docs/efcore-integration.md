@@ -23,7 +23,6 @@ builder.Services.AddTenantry<Guid>(tenant =>
     tenant.UseInMemoryStore(tenants);
     tenant.AddEfCoreIsolation(options =>
     {
-        options.OnMissingTenant = MissingTenantBehavior.Reject;   // reject writes with no tenant
         options.DetectSpoofedWrites = true;                       // reject inserts with a foreign tenant id
     });
 });
@@ -186,22 +185,27 @@ If there is **no resolved tenant**, behaviour follows the `OnMissingTenant` poli
 ```csharp
 tenant.AddEfCoreIsolation(options =>
 {
-    options.OnMissingTenant = MissingTenantBehavior.Warn;   // default: Warn
+    options.OnMissingTenant = MissingTenantBehavior.Reject; // default: Reject
     options.DetectSpoofedWrites = false;                    // default: false
 });
 ```
 
 ### `OnMissingTenant` — what happens when a write runs with no tenant
 
-Some saves legitimately run outside a tenant (seeding global data, the tenant registry itself), so the
-default does not throw — but you can tighten it. The `MissingTenantBehavior` values:
+The policy applies only when a save writes entities that implement `ITenantScoped<TKey>`. Saves that
+write only host-level data (the tenant registry, a global catalogue, seeding reference data) never
+need a tenant and are unaffected. The `MissingTenantBehavior` values:
 
-| Value | Behaviour on an unscoped `SaveChanges` |
+| Value | Behaviour when tenant-scoped entities are saved with no tenant |
 |-------|----------------------------------------|
-| `Allow` | Save proceeds, nothing stamped, no log. |
-| `Warn` *(default)* | Save proceeds, nothing stamped, a structured warning is logged — surfaces endpoints or jobs that bypassed tenant propagation. |
-| `Reject` | Throws `TenantNotResolvedException` before anything is persisted. Use this when no write should ever run without a tenant. |
-| `Skip` | Treated as `Allow` for writes (it exists for background-job propagation, where it means "drop the job"). |
+| `Reject` *(default)* | Throws `TenantNotResolvedException` before anything is persisted. |
+| `Warn` | The save proceeds and a structured warning is logged. |
+| `Allow` | The save proceeds silently. |
+
+`Warn` and `Allow` are opt-ins for maintenance code that deliberately writes across tenants. Updates and
+deletes are then not tenant-checked, and a new entity must set `TenantId` explicitly: an unowned row is
+always rejected, whatever the policy. Prefer running maintenance per tenant inside
+`ITenantScope.BeginScope` instead. `Skip` exists for background-job propagation and is rejected here.
 
 Reads are unaffected by this setting — they always fail closed (a query with no tenant matches nothing).
 
@@ -216,8 +220,7 @@ treats both `null` and `string.Empty` as not-yet-assigned, because string-keyed 
 initialised to `string.Empty`.
 
 Recommendation: set `DetectSpoofedWrites = true` (negligible overhead — a pass over the change tracker
-EF Core walks anyway), and tighten `OnMissingTenant` to `Reject` for services where every write must be
-tenant-scoped.
+EF Core walks anyway), and keep `OnMissingTenant` at `Reject` except in maintenance code.
 
 ## Migrations
 

@@ -36,7 +36,7 @@ public sealed class EfCoreIsolationRegistrationTests
         using var sp = services.BuildServiceProvider();
         var options = sp.GetRequiredService<EfCoreIsolationOptions>();
 
-        options.OnMissingTenant.Should().Be(MissingTenantBehavior.Warn);
+        options.OnMissingTenant.Should().Be(MissingTenantBehavior.Reject);
         options.DetectSpoofedWrites.Should().BeFalse();
     }
 
