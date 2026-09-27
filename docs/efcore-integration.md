@@ -11,7 +11,7 @@ halves:
   are rejected by default, and an optional check rejects inserts pre-stamped with a foreign tenant.
 
 Both work on **any** `DbContext` — no base class required — using only standard EF Core features, so
-they are provider-agnostic; the test suite covers SQLite and SQL Server. They
+they are provider-agnostic; see [tested providers](#tested-providers) for what the test suite covers. They
 are driven by the same `ITenantContext<TKey>` used everywhere else, so HTTP and non-HTTP hosts behave
 identically.
 
@@ -259,6 +259,27 @@ builder.Services.AddPooledDbContextFactory<AppDbContext>((sp, options) =>
 
 This covers shared-database isolation. Pooling with a database per tenant needs the connection switched
 for each lease, which Tenantry Pro handles separately.
+
+## Tested providers
+
+Tenantry uses only standard EF Core features, but write isolation relies on each provider reporting the
+rows an `UPDATE`/`DELETE` *matched* (the stored-tenant predicate turns a forged write into a zero-row
+update that EF Core reports as a concurrency failure). The combinations below run the write-isolation
+suite against a real database: forged updates and deletes, entities loaded under another tenant,
+unchanged-value updates, writes without a tenant, tenant-filtered `ExecuteUpdate`/`ExecuteDelete`, the
+`TenantId` bulk-update guard, and pooled contexts.
+
+| Database | EF Core provider | Framework | Status |
+|----------|------------------|-----------|--------|
+| SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 8, 9, 10 | Tested (unit suite) |
+| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 10.0.9 | .NET 10 | Tested |
+| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 | .NET 10 | Tested |
+| MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
+| MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | — | Not tested (no EF Core 10 release) |
+
+Real-database runs currently cover .NET 10 only. If you use a MySQL connector option that reports
+*changed* rather than *matched* rows (for example `UseAffectedRows=true`), an update that changes no
+values reports zero rows and EF Core raises a false concurrency failure; keep the default.
 
 ## What is and isn't isolated
 
