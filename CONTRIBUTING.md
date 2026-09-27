@@ -16,6 +16,11 @@ dotnet build   Tenantry.slnx -c Release
 dotnet test    Tenantry.slnx -c Release
 ```
 
+Test and sample projects commit a `packages.lock.json`, and CI restores with `--locked-mode`, so it fails
+when a lock file is stale. When you change a package version in a test or sample project, run
+`dotnet restore Tenantry.slnx` and commit the lock files it rewrites. `src/` projects have no lock files; the
+version ranges their packages declare are checked by `scripts/check-package-ranges.cs` instead.
+
 ## Checks your PR must pass
 
 CI runs the same gates that block a release — make sure these hold locally before pushing:

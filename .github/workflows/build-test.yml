@@ -50,7 +50,8 @@ jobs:
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Restore
-        run: dotnet restore Tenantry.slnx
+        # Locked: fails if a test or sample project's packages.lock.json is out of date
+        run: dotnet restore Tenantry.slnx --locked-mode
 
       - name: SonarCloud begin
         if: ${{ inputs.run_sonar }}

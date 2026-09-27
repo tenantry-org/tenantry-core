@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "tenantry.aspnetcore": {
+        "type": "Project",
+        "dependencies": {
+          "Tenantry.Core": "[1.0.0, )"
+        }
+      },
+      "tenantry.core": {
+        "type": "Project"
+      }
+    }
+  }
+}

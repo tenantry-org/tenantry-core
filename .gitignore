@@ -18,8 +18,6 @@ BenchmarkDotNet.Artifacts/
 *.nupkg
 *.snupkg
 *.nuspec
-# Keep lock files if you use locked restore; remove next line if you commit them
-packages.lock.json
 .nuget/
 packages/
 

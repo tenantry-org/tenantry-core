@@ -30,6 +30,7 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <!-- Sample projects: net10.0 only, no docs. NOT test projects — they must not be
@@ -38,6 +39,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Keep the lock file out of the default items, so SDKs that copy *.json to the output (Worker) don't ship it -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);packages.lock.json</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(ExcludeFromCodeCoverage)' == 'true'">

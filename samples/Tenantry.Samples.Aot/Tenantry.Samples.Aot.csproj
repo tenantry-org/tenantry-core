@@ -6,6 +6,9 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <InvariantGlobalization>true</InvariantGlobalization>
         <PublishAot>true</PublishAot>
+        <!-- No lock file: this sample's only packages are the AOT compiler and trimmer bundled with the SDK,
+             pinned to the installed SDK's version and host platform, so a committed lock could never match CI. -->
+        <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
     </PropertyGroup>
 
     <ItemGroup>
