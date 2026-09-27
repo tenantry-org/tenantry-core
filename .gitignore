@@ -85,3 +85,6 @@ publish/
 .sonarcloud.env.example
 .mcp.json
 scripts/sonar-mcp.sh
+
+# Sample databases
+samples/Tenantry.Samples.SecureApi/notes.db*

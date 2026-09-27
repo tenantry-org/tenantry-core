@@ -8,6 +8,9 @@
 // - Seeding global reference data and tenants
 // - Admin queries with IgnoreQueryFilters()
 //
+// Callers are not authenticated and select the tenant with a header, so any caller can act as any
+// tenant. See Tenantry.Samples.SecureApi for authentication and tenant access validation.
+//
 // Run:
 //   dotnet ef database update
 //   dotnet run

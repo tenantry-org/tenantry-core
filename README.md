@@ -71,6 +71,10 @@ dotnet add package Tenantry.EfCore --prerelease
 
 ## Quick start (ASP.NET Core)
 
+> **Introductory setup.** Resolving the tenant from a header without authentication lets any caller
+> select any tenant. Use it to learn the API. For production, authenticate callers and validate that
+> they belong to the tenant they select, as in the [`SecureApi` sample](samples/Tenantry.Samples.SecureApi).
+
 ```csharp
 using Tenantry.AspNetCore.Extensions;
 using Tenantry.Core;
@@ -180,6 +184,7 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 
 | Sample | Demonstrates |
 |--------|--------------|
+| [`SecureApi`](samples/Tenantry.Samples.SecureApi) | **Start here for production:** JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation, integration tests |
 | [`Quickstart`](samples/Tenantry.Samples.Quickstart) | Minimal ASP.NET Core setup, resolvers, access validators, endpoint metadata |
 | [`EfCoreWeb`](samples/Tenantry.Samples.EfCoreWeb) | Realistic EF Core app: migrations, DB-backed store, mixed tenanted/global entities, admin queries |
 | [`EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantryCore` and manual scopes |

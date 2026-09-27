@@ -17,6 +17,10 @@ identically.
 
 ## Setup at a glance
 
+> **Introductory setup.** Resolving the tenant from a header without authentication lets any caller
+> select any tenant. Use it to learn the API. For production, authenticate callers and validate that
+> they belong to the tenant they select, as in the [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi).
+
 ```csharp
 // 1. Register isolation services inside AddTenantry / AddTenantryCore
 builder.Services.AddTenantry<Guid>(tenant =>
@@ -272,7 +276,7 @@ unchanged-value updates, writes without a tenant, tenant-filtered `ExecuteUpdate
 | Database | EF Core provider | Framework | Status |
 |----------|------------------|-----------|--------|
 | SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 8, 9, 10 | Tested (unit suite) |
-| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 10.0.9 | .NET 10 | Tested |
+| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 10.0.12 | .NET 10 | Tested |
 | PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 | .NET 10 | Tested |
 | MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
 | MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | — | Not tested (no EF Core 10 release) |

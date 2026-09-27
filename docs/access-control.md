@@ -5,7 +5,8 @@ Resolution answers *who is the tenant*. Access control answers two further quest
 1. **Is a tenant required** for this request? (Should a request with no resolved tenant be rejected?)
 2. **Is this caller allowed** to act as the resolved tenant? (Can user X access tenant Y?)
 
-These are independent and can be used together.
+These are independent and can be used together. The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi)
+combines both with JWT authentication, and its integration tests check the 401, 403 and 400 responses.
 
 ## Requiring a tenant
 

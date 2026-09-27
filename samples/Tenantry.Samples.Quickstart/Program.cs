@@ -1,4 +1,6 @@
 // ReSharper disable UnusedParameter.Local
+// Introductory sample: tenants come from a header and callers are not authenticated, so any caller can
+// select any tenant. See Tenantry.Samples.SecureApi for a production-shaped setup.
 using Tenantry.AspNetCore.Extensions;
 using Tenantry.Core;
 using Tenantry.Samples.Quickstart.Models;

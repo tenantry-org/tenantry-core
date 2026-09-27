@@ -4,6 +4,7 @@
     <Project Path="samples\Tenantry.Samples.EfCoreConsole\Tenantry.Samples.EfCoreConsole.csproj" />
     <Project Path="samples\Tenantry.Samples.EfCoreWeb\Tenantry.Samples.EfCoreWeb.csproj" />
     <Project Path="samples\Tenantry.Samples.Quickstart\Tenantry.Samples.Quickstart.csproj" />
+    <Project Path="samples\Tenantry.Samples.SecureApi\Tenantry.Samples.SecureApi.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />

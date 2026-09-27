@@ -39,6 +39,8 @@ using Tenantry.EfCore.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Introductory setup: any caller can select any tenant with the header. For production, add
+// authentication and tenant access validation (see access-control.md and the SecureApi sample).
 builder.Services.AddTenantry<Guid>(tenant =>
 {
     // (a) Resolution — how the tenant is identified on each request.

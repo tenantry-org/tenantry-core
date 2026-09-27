@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Tenantry.Samples.SecureApi`, a production-shaped API: JWT authentication, tenant selection validated
+  against the caller's `tenant` claims (403 otherwise), required tenants (400 without one) and EF Core
+  isolation, with integration tests. The header-only quick starts are labelled as introductory.
 - DbContext pooling (`AddDbContextPool`, `AddPooledDbContextFactory`). `MultiTenantDbContext` has an
   options-only constructor that reads Tenantry's ambient tenant context, so a pooled instance isolates
   whichever tenant is active each time it is used. Call `AddTenantInterceptors(sp)` in the registration
