@@ -189,6 +189,7 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 | [`Quickstart`](samples/Tenantry.Samples.Quickstart) | Minimal ASP.NET Core setup, resolvers, access validators, endpoint metadata |
 | [`EfCoreWeb`](samples/Tenantry.Samples.EfCoreWeb) | Realistic EF Core app: migrations, DB-backed store, mixed tenanted/global entities, admin queries |
 | [`EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantryCore` and manual scopes |
+| [`DatabasePerTenant`](samples/Tenantry.Samples.DatabasePerTenant) | A database per tenant with `UseConnectionStrings` and `ITenantConnectionStringResolver`, plus worker scopes |
 | [`Aot`](samples/Tenantry.Samples.Aot) | Native-AOT-published ASP.NET Core app |
 
 ## License

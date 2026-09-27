@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
     <Project Path="samples\Tenantry.Samples.Aot\Tenantry.Samples.Aot.csproj" />
+    <Project Path="samples\Tenantry.Samples.DatabasePerTenant\Tenantry.Samples.DatabasePerTenant.csproj" />
     <Project Path="samples\Tenantry.Samples.EfCoreConsole\Tenantry.Samples.EfCoreConsole.csproj" />
     <Project Path="samples\Tenantry.Samples.EfCoreWeb\Tenantry.Samples.EfCoreWeb.csproj" />
     <Project Path="samples\Tenantry.Samples.Quickstart\Tenantry.Samples.Quickstart.csproj" />

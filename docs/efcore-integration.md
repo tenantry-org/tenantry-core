@@ -262,7 +262,47 @@ builder.Services.AddPooledDbContextFactory<AppDbContext>((sp, options) =>
 ```
 
 This covers shared-database isolation. Pooling with a database per tenant needs the connection switched
-for each lease, which Tenantry Pro handles separately.
+for each lease; see [Database per tenant](#database-per-tenant).
+
+## Database per tenant
+
+To give each tenant its own database (or route tenants to different servers), tell Tenantry how to find a
+tenant's connection string, and resolve it when each context is created:
+
+```csharp
+builder.Services.AddTenantry<string>(tenant =>
+{
+    tenant.ResolveFromHeader("X-Tenant-Id");
+    tenant.UseStore<AppTenantStore>();
+    tenant.UseConnectionStrings(options =>
+        options.GetConnectionString = t => $"Server=db;Database=app_{t.TenantId};Integrated Security=true");
+    tenant.AddEfCoreIsolation();
+});
+
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
+    options.UseSqlServer(sp.GetRequiredService<ITenantConnectionStringResolver<string>>().Resolve())
+           .AddTenantInterceptors(sp));
+```
+
+`ITenantConnectionStringResolver<TKey>` is a singleton. `Resolve()` and `ResolveAsync()` use the current
+tenant and throw `TenantNotResolvedException` without one; `Resolve(tenant)` and `ResolveAsync(tenant)`
+take the tenant explicitly, for code that visits tenants without making each one current. Set
+`GetConnectionStringAsync` when the string comes from a secrets store: `ResolveAsync` prefers it, and the
+synchronous `Resolve` then needs `GetConnectionString` as well. The resolver calls your delegate every
+time and does not cache.
+
+Keep deriving from `MultiTenantDbContext` (or applying the filters yourself). With a database per tenant
+the filter and write checks are a second line of defence: a connection string that points at the wrong
+database then shows no rows and rejects writes instead of mixing tenants.
+
+Do not resolve the connection string in an `AddDbContextPool` or `AddPooledDbContextFactory` callback. It
+runs once, and EF Core keeps a pooled context's connection string between leases, so every pooled context
+would keep the first tenant's database. Use `AddDbContext` (or `AddDbContextFactory`) with a database per
+tenant. Tenantry Pro's `AddTenantDbContextPool` pools per-tenant databases by connecting each lease to the
+current tenant's database.
+
+The runnable [`DatabasePerTenant` sample](../samples/Tenantry.Samples.DatabasePerTenant) gives each tenant
+its own SQLite file.
 
 ## Tested providers
 

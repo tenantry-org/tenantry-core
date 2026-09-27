@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Per-tenant connection strings for a database per tenant. `UseConnectionStrings` (or
+  `AddTenantConnectionStrings`) takes a synchronous and/or asynchronous delegate, and the singleton
+  `ITenantConnectionStringResolver<TKey>` returns the current tenant's connection string or a given
+  tenant's. It does not cache, and rejects an empty value. `TenantConnectionStringResolver<TKey>` is public
+  so other resolvers can wrap it. New `DatabasePerTenant` sample.
 - Worker scopes for background work. `ITenantScopeFactory<TKey>.CreateScope(tenant)` opens a fresh DI
   scope with the tenant active; disposing it, with `using` or `await using`, disposes its services while
   the tenant is still active and then restores the previous tenant in the disposing code. For work that
