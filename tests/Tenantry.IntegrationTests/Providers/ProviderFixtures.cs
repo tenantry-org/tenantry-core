@@ -1,6 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using DotNet.Testcontainers.Containers;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using MySql.Data.MySqlClient;
+using Npgsql;
 using Tenantry.Core;
 using Tenantry.EfCore;
 using Testcontainers.MsSql;
@@ -21,6 +24,9 @@ public abstract class DatabaseFixture : IAsyncLifetime
 
     public abstract DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options);
 
+    /// <summary>The fixture's connection string, pointing at <paramref name="database"/> instead.</summary>
+    public abstract string WithDatabase(string database);
+
     public async Task InitializeAsync()
     {
         await Container.StartAsync();
@@ -40,6 +46,9 @@ public sealed class SqlServerFixture : DatabaseFixture
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
         options.UseSqlServer(ConnectionString);
+
+    public override string WithDatabase(string database) =>
+        new SqlConnectionStringBuilder(ConnectionString) { InitialCatalog = database }.ConnectionString;
 }
 
 public sealed class PostgreSqlFixture : DatabaseFixture
@@ -49,15 +58,22 @@ public sealed class PostgreSqlFixture : DatabaseFixture
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
         options.UseNpgsql(ConnectionString);
+
+    public override string WithDatabase(string database) =>
+        new NpgsqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString;
 }
 
 public sealed class MySqlFixture : DatabaseFixture
 {
     protected override IDatabaseContainer Container { get; } =
-        new MySqlBuilder("mysql:8.4").Build();
+        // Root, because the database-per-tenant tests create a database per tenant.
+        new MySqlBuilder("mysql:8.4").WithUsername("root").Build();
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
         options.UseMySQL(ConnectionString);
+
+    public override string WithDatabase(string database) =>
+        new MySqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString;
 }
 
 public sealed class ProviderOrder : ITenantScoped<string>

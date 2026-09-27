@@ -295,11 +295,32 @@ Keep deriving from `MultiTenantDbContext` (or applying the filters yourself). Wi
 the filter and write checks are a second line of defence: a connection string that points at the wrong
 database then shows no rows and rejects writes instead of mixing tenants.
 
+### Pooling with a database per tenant
+
 Do not resolve the connection string in an `AddDbContextPool` or `AddPooledDbContextFactory` callback. It
 runs once, and EF Core keeps a pooled context's connection string between leases, so every pooled context
-would keep the first tenant's database. Use `AddDbContext` (or `AddDbContextFactory`) with a database per
-tenant. Tenantry Pro's `AddTenantDbContextPool` pools per-tenant databases by connecting each lease to the
-current tenant's database.
+would keep the first tenant's database. Use `AddTenantDbContextPool` instead, and configure the provider
+without a connection string:
+
+```csharp
+builder.Services.AddTenantDbContextPool<AppDbContext, string>((sp, options) =>
+    options.UseSqlServer().AddTenantInterceptors(sp));
+```
+
+- It registers a scoped `AppDbContext` and `IDbContextFactory<AppDbContext>` that lease from one pool, and
+  connects every lease to the current tenant's database. Use it instead of `AddDbContext`,
+  `AddDbContextPool` or `AddPooledDbContextFactory` for that context.
+- Leasing without a current tenant throws `TenantNotResolvedException`.
+- Before a pooled context opens a connection, a guard checks that the connection was set for this lease
+  and belongs to the tenant that is current now. A context leased some other way, or kept and used after
+  switching to another tenant, throws `TenantIsolationViolationException` instead of touching the wrong
+  database.
+- The context needs a constructor that takes only its options, as for any pooled context.
+- The scoped context resolves the connection string synchronously, so it needs `GetConnectionString`.
+  With only `GetConnectionStringAsync`, create contexts with `IDbContextFactory<T>.CreateDbContextAsync()`.
+
+It is tested with one pooled instance serving two tenant databases in turn, and with concurrent leases, on
+SQLite, SQL Server, PostgreSQL and MySQL.
 
 The runnable [`DatabasePerTenant` sample](../samples/Tenantry.Samples.DatabasePerTenant) gives each tenant
 its own SQLite file.
@@ -311,7 +332,7 @@ rows an `UPDATE`/`DELETE` *matched* (the stored-tenant predicate turns a forged 
 update that EF Core reports as a concurrency failure). The combinations below run the write-isolation
 suite against a real database: forged updates and deletes, entities loaded under another tenant,
 unchanged-value updates, writes without a tenant, tenant-filtered `ExecuteUpdate`/`ExecuteDelete`, the
-`TenantId` bulk-update guard, and pooled contexts.
+`TenantId` bulk-update guard, pooled contexts, and pooled contexts with a database per tenant.
 
 | Database | EF Core provider | Framework | Status |
 |----------|------------------|-----------|--------|

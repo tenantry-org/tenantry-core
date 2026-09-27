@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- DbContext pooling with a database per tenant. `AddTenantDbContextPool<TContext, TKey>` registers a
+  scoped context and `IDbContextFactory<TContext>` over one pool and connects every lease to the current
+  tenant's database. EF Core keeps a pooled context's connection string between leases, so a guard also
+  rejects a pooled context whose connection was not set for its current lease or belongs to another tenant.
+  `Tenantry.EfCore` now depends on `Microsoft.EntityFrameworkCore.Relational`.
 - Per-tenant connection strings for a database per tenant. `UseConnectionStrings` (or
   `AddTenantConnectionStrings`) takes a synchronous and/or asynchronous delegate, and the singleton
   `ITenantConnectionStringResolver<TKey>` returns the current tenant's connection string or a given

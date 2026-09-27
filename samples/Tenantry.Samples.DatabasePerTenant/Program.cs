@@ -40,7 +40,7 @@ builder.Services.AddTenantryCore<string>(tenant =>
 });
 
 // The options callback runs for every new context, so each one gets the current tenant's database.
-// (Do not resolve here with AddDbContextPool: its callback runs once, for the first tenant only.)
+// To pool contexts, use AddTenantDbContextPool instead: AddDbContextPool's callback runs only once.
 builder.Services.AddDbContext<NotesDbContext>((sp, options) =>
     options.UseSqlite(sp.GetRequiredService<ITenantConnectionStringResolver<string>>().Resolve())
            .AddTenantInterceptors(sp));
