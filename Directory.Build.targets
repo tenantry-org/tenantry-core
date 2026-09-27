@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Packs each project reference as an exact version ([x.y.z]) instead of NuGet's default minimum
+    (>= x.y.z). Tenantry.AspNetCore uses Tenantry.Core internals (InternalsVisibleTo), so the packages
+    work only as a set from the same release, and a consumer must not pair one with a later sibling.
+  -->
+  <Target Name="PinProjectReferenceVersions" AfterTargets="_GetProjectReferenceVersions">
+    <ItemGroup>
+      <_ExactProjectReferenceVersions Include="@(_ProjectReferencesWithVersions)"
+                                      ProjectVersion="[%(_ProjectReferencesWithVersions.ProjectVersion)]" />
+      <_ProjectReferencesWithVersions Remove="@(_ProjectReferencesWithVersions)" />
+      <_ProjectReferencesWithVersions Include="@(_ExactProjectReferenceVersions)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

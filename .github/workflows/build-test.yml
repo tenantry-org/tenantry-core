@@ -96,5 +96,16 @@ jobs:
             exit 1
           }
 
+      - name: Pack
+        # Only src projects are packable; packing the solution warns about every other project
+        run: |
+          for project in src/*/*.csproj; do
+            dotnet pack "$project" -c Release --no-build -o ./artifacts
+          done
+
+      - name: Check package dependency ranges
+        # Fails on a floating or open-ended dependency (see the rules in the script)
+        run: dotnet run scripts/check-package-ranges.cs -- ./artifacts
+
       - name: Verify AOT publish
         run: dotnet publish samples/Tenantry.Samples.Aot -c Release

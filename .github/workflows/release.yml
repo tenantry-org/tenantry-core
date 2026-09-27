@@ -62,6 +62,9 @@ jobs:
           dotnet pack src/Tenantry.AspNetCore    -c Release --no-build -o ./artifacts
           dotnet pack src/Tenantry.EfCore        -c Release --no-build -o ./artifacts
 
+      - name: Check package dependency ranges
+        run: dotnet run scripts/check-package-ranges.cs -- ./artifacts
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:

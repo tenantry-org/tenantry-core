@@ -63,6 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Tenantry.EfCore` and `Tenantry.AspNetCore` depend on exactly the same version of `Tenantry.Core`
+  (`[x.y.z]`) instead of a minimum, because `Tenantry.AspNetCore` uses Core internals. Update the
+  Tenantry packages together.
 - The integration suite runs the write-isolation checks against SQL Server 2022, PostgreSQL 16 and MySQL
   8.4 (Oracle's EF Core provider) on .NET 10; the EF Core guide lists the tested combinations.
 - README, the EF Core guide, troubleshooting and XML docs describe isolation as it is enforced: in EF Core
