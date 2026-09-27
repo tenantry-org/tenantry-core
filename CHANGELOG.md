@@ -63,3 +63,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TenantId` is not a concurrency token (the context did not call `ApplyTenantFilters`).
 - The next EF Core migration you add records the `TenantId` concurrency token in the model snapshot. No
   columns change.
+
+## [0.2.3-alpha] - 2026-06-27
+
+### Changed
+
+- Internal refactoring, code-quality fixes, documentation and dependency updates.
+- Tags `v0.2.0-alpha` to `v0.2.2-alpha` point at the same commit as each other and were not published to
+  NuGet; 0.2.3-alpha is the first 0.2 release on NuGet.
+
+## [0.1.0-alpha] - 2026-06-21
+
+### Added
+
+- First preview of `Tenantry.Core`, `Tenantry.AspNetCore` and `Tenantry.EfCore`: generic tenant keys,
+  tenant resolution and stores, ASP.NET Core middleware and access validation, non-HTTP tenant scopes,
+  and EF Core query filters with a `SaveChanges` isolation interceptor.

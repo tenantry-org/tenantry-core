@@ -56,14 +56,17 @@ builder.Services.AddTenantry<Guid>(tenant =>
 `Tenantry.EfCore` and `Tenantry.AspNetCore` both depend on `Tenantry.Core`. Reference whichever
 combination matches your host:
 
+Tenantry is in preview, so every published version is a prerelease and `dotnet add package` needs
+`--prerelease` (or an explicit `--version`):
+
 ```bash
 # ASP.NET Core app with EF Core isolation (most common)
-dotnet add package Tenantry.AspNetCore
-dotnet add package Tenantry.EfCore
+dotnet add package Tenantry.AspNetCore --prerelease
+dotnet add package Tenantry.EfCore --prerelease
 
 # Console / worker / desktop app with EF Core isolation
-dotnet add package Tenantry.Core
-dotnet add package Tenantry.EfCore
+dotnet add package Tenantry.Core --prerelease
+dotnet add package Tenantry.EfCore --prerelease
 ```
 
 ## Quick start (ASP.NET Core)
@@ -82,8 +85,8 @@ builder.Services.AddTenantry<Guid>(tenant =>
     // 2. Which tenants exist? (swap for a DB/cache-backed store in production)
     tenant.UseInMemoryStore(
     [
-        new TenantDescriptor<Guid> { TenantId = Guid.Parse("…0001"), Name = "Acme" },
-        new TenantDescriptor<Guid> { TenantId = Guid.Parse("…0002"), Name = "Globex" },
+        new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" },
+        new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000002"), Name = "Globex" },
     ]);
 });
 
@@ -99,8 +102,9 @@ app.MapGet("/me", (ITenantContext<Guid> ctx) =>
 app.Run();
 ```
 
-Add EF Core isolation by registering `tenant.AddEfCoreIsolation()` in the lambda above and calling
-`options.AddTenantInterceptors(sp)` in your `AddDbContext` callback. See the
+Add EF Core isolation by registering `tenant.AddEfCoreIsolation()` in the lambda above and either
+deriving your context from `MultiTenantDbContext<Guid>` or calling `options.AddTenantInterceptors(sp)` in
+your `AddDbContext` callback. See the
 [EF Core integration guide](docs/efcore-integration.md) for the full picture.
 
 ## Quick start (console / worker — no ASP.NET Core)
@@ -108,18 +112,24 @@ Add EF Core isolation by registering `tenant.AddEfCoreIsolation()` in the lambda
 There is no request to resolve a tenant from, so you open and close the tenant scope yourself:
 
 ```csharp
+using Microsoft.Extensions.DependencyInjection;
 using Tenantry.Core;
 using Tenantry.Core.Extensions;
+using Tenantry.EfCore.Extensions;
 
 builder.Services.AddTenantryCore<Guid>(tenant =>
 {
     tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
 });
 
-// …later, around a unit of work:
-var scope = sp.GetRequiredService<ITenantScope<Guid>>();
-using (scope.BeginScope(new TenantDescriptor<Guid> { TenantId = tenantId, Name = "Acme" }))
+// …later, around a unit of work (serviceProvider is your host's IServiceProvider):
+var tenants = serviceProvider.GetRequiredService<ITenantScope<Guid>>();
+var acme = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" };
+
+using (tenants.BeginScope(acme))
+await using (var scope = serviceProvider.CreateAsyncScope())
 {
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     // EF Core reads are filtered to this tenant and writes are stamped with it.
     await db.SaveChangesAsync();
 }
