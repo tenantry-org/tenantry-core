@@ -26,9 +26,8 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
         db.Orders.Add(new Order { Description = "no tenant" });
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<TenantNotResolvedException>().WithMessage("*Order*");
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<TenantNotResolvedException>().WithMessage("*Order*");
         CountRows().Should().Be(0);
     }
 
@@ -38,9 +37,8 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
         db.Orders.Add(new Order { Description = "no tenant" });
 
-        var act = () => db.SaveChanges();
-
-        act.Should().Throw<TenantNotResolvedException>();
+        db.Invoking(d => d.SaveChanges())
+            .Should().Throw<TenantNotResolvedException>();
         CountRows().Should().Be(0);
     }
 
@@ -62,9 +60,8 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
             db.Orders.Update(forged);
         }
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<TenantNotResolvedException>();
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<TenantNotResolvedException>();
         ReadRow(acmeOrderId).Should().Be(("acme", "acme order"));
     }
 
@@ -74,9 +71,8 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
         db.NonTenants.Add(new NonTenant { Name = "catalogue entry" });
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().NotThrowAsync();
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().NotThrowAsync();
     }
 
     [Theory]
@@ -102,9 +98,8 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
             _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
         db.Orders.Add(new Order { Description = "unowned" });
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<TenantNotResolvedException>().WithMessage("*TenantId*");
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<TenantNotResolvedException>().WithMessage("*TenantId*");
         CountRows().Should().Be(0);
     }
 
@@ -170,9 +165,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
         db.NonTenants.Add(new NonTenant { Name = "plain" });
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), _tenant);
-
-        act.Should().NotThrow();
+        db.Invoking(d => TenantWriteIsolationApplier.Apply(d.ChangeTracker.Entries(), _tenant)).Should().NotThrow();
     }
 
     private async Task<int> SeedAcmeOrderAsync()

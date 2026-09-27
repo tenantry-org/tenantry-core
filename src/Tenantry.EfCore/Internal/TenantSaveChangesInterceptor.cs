@@ -37,9 +37,6 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
     : SaveChangesInterceptor
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    // Entity types already reported as lacking database-enforced ownership; warned once per process.
-    private static readonly ConcurrentDictionary<Type, byte> UnenforcedOwnershipReported = new();
-
     /// <inheritdoc />
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData,
@@ -128,7 +125,7 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
         },
         entry =>
         {
-            if (UnenforcedOwnershipReported.TryAdd(entry.Metadata.ClrType, 0))
+            if (UnenforcedOwnershipWarnings.FirstFor(entry.Metadata.ClrType))
             {
                 logger.LogWarning(
                     "Entity '{EntityType}' implements ITenantScoped but its TenantId is not a concurrency token, " +
@@ -187,4 +184,15 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
                 "TenantId. Set TenantId explicitly or save it inside a tenant scope.");
         }
     }
+}
+
+/// <summary>
+/// Entity types already reported as lacking database-enforced ownership, so each is warned about once per process
+/// (not once per tenant key type, as a static field in the generic interceptor would be).
+/// </summary>
+internal static class UnenforcedOwnershipWarnings
+{
+    private static readonly ConcurrentDictionary<Type, byte> Reported = new();
+
+    public static bool FirstFor(Type entityType) => Reported.TryAdd(entityType, 0);
 }

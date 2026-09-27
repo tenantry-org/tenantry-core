@@ -43,9 +43,8 @@ public sealed class TenantStoreAccessorTests
         services.AddTenantryCore<string>();
         await using var provider = services.BuildServiceProvider();
 
-        var act = async () => await provider.GetRequiredService<ITenantStoreAccessor<string>>().GetAllTenantsAsync();
-
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseInMemoryStore*UseStore*");
+        await provider.Awaiting(p => p.GetRequiredService<ITenantStoreAccessor<string>>().GetAllTenantsAsync().AsTask())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseInMemoryStore*UseStore*");
     }
 
     private sealed class ScopedStore : ITenantStore<string>, IDisposable

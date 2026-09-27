@@ -34,7 +34,7 @@ public sealed class TenantConnectionStringResolverTests
         using var services = Build(options =>
         {
             options.GetConnectionString = _ => "sync";
-            options.GetConnectionStringAsync = async (t, ct) =>
+            options.GetConnectionStringAsync = async (t, _) =>
             {
                 await Task.Yield();
                 return $"async {t.TenantId}";
@@ -91,11 +91,10 @@ public sealed class TenantConnectionStringResolverTests
     {
         using var services = Build(options => options.GetConnectionString = _ => "x");
 
-        var resolve = () => Resolver(services).Resolve();
-        var resolveAsync = async () => await Resolver(services).ResolveAsync();
-
-        resolve.Should().Throw<TenantNotResolvedException>().WithMessage("*No tenant is current*");
-        await resolveAsync.Should().ThrowAsync<TenantNotResolvedException>();
+        services.Invoking(s => Resolver(s).Resolve())
+            .Should().Throw<TenantNotResolvedException>().WithMessage("*No tenant is current*");
+        await services.Awaiting(s => Resolver(s).ResolveAsync().AsTask())
+            .Should().ThrowAsync<TenantNotResolvedException>();
     }
 
     [Fact]
@@ -103,9 +102,8 @@ public sealed class TenantConnectionStringResolverTests
     {
         using var services = Build(options => options.GetConnectionStringAsync = (_, _) => ValueTask.FromResult("x"));
 
-        var act = () => Resolver(services).Resolve(Acme);
-
-        act.Should().Throw<InvalidOperationException>().WithMessage("*Only GetConnectionStringAsync*ResolveAsync*");
+        services.Invoking(s => Resolver(s).Resolve(Acme))
+            .Should().Throw<InvalidOperationException>().WithMessage("*Only GetConnectionStringAsync*ResolveAsync*");
     }
 
     [Theory]
@@ -120,11 +118,10 @@ public sealed class TenantConnectionStringResolverTests
             options.GetConnectionStringAsync = (_, _) => ValueTask.FromResult(value!);
         });
 
-        var resolve = () => Resolver(services).Resolve(Acme);
-        var resolveAsync = async () => await Resolver(services).ResolveAsync(Acme);
-
-        resolve.Should().Throw<InvalidOperationException>().WithMessage("*empty*'acme'*");
-        await resolveAsync.Should().ThrowAsync<InvalidOperationException>().WithMessage("*empty*'acme'*");
+        services.Invoking(s => Resolver(s).Resolve(Acme))
+            .Should().Throw<InvalidOperationException>().WithMessage("*empty*'acme'*");
+        await services.Awaiting(s => Resolver(s).ResolveAsync(Acme).AsTask())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*empty*'acme'*");
     }
 
     [Fact]
@@ -157,9 +154,7 @@ public sealed class TenantConnectionStringResolverTests
     {
         using var services = Build(options => options.GetConnectionString = _ => "x");
 
-        var act = () => Resolver(services).Resolve(null!);
-
-        act.Should().Throw<ArgumentNullException>();
+        services.Invoking(s => Resolver(s).Resolve(null!)).Should().Throw<ArgumentNullException>();
     }
 
     private static ServiceProvider Build(

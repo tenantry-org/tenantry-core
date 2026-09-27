@@ -47,9 +47,8 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
                 break;
         }
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<DbUpdateConcurrencyException>();
         ReadRow(acmeOrderId).Should().Be(("acme", "acme order"));
     }
 
@@ -64,9 +63,8 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
         order.TenantId = "globex";
         order.Description = "moved";
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>()
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>()
             .WithMessage("*acme*")
             .WithMessage("*globex*");
         ReadRow(acmeOrderId).Should().Be(("acme", "acme order"));
@@ -82,9 +80,8 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
         _tenant.As("globex");
         db.Orders.Remove(order);
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>();
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>();
         ReadRow(acmeOrderId).Should().Be(("acme", "acme order"));
     }
 
@@ -97,9 +94,8 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
 
         order.TenantId = "globex";
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>();
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>();
         ReadRow(acmeOrderId).Should().Be(("acme", "acme order"));
     }
 
@@ -111,9 +107,8 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
 
         db.Orders.Remove(new Order { Id = acmeOrderId, TenantId = null! });
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>();
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>();
         ReadRow(acmeOrderId).Should().NotBeNull();
     }
 
@@ -159,9 +154,8 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
 
         db.Orders.Update(new Order { Id = acmeOrderId, TenantId = "globex", Description = "overwritten" });
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<DbUpdateConcurrencyException>();
         ReadRow(acmeOrderId).Should().Be(("acme", "acme order"));
     }
 
@@ -184,9 +178,8 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
         await using var db = await DbContextFactory.CreateGuidInterceptorContextAsync(tenant.As(globex), connection);
         db.Orders.Update(new GuidOrder { Id = acmeOrderId, TenantId = globex, Description = "overwritten" });
 
-        Func<Task> act = () => db.SaveChangesAsync();
-
-        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<DbUpdateConcurrencyException>();
         tenant.As(acme);
         await using var check = await DbContextFactory.CreateGuidInterceptorContextAsync(tenant, connection);
         (await check.Orders.SingleAsync(o => o.Id == acmeOrderId)).Description.Should().Be("acme order");

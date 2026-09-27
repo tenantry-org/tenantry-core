@@ -3,7 +3,6 @@ using System.Transactions;
 using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Tenantry.Core;
 using Tenantry.Core.Exceptions;
@@ -419,6 +418,8 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : ICl
         }
 
         services.AddTenantDbContextPool<ProviderOrdersContext, string>(
+            // Safe: the provider that holds this callback is declared later, so it is disposed before the data source.
+            // ReSharper disable once AccessToDisposedClosure
             (sp, options) => (mode == "DataSourceInDi" ? options.UseNpgsql() : options.UseNpgsql(shared))
                 .AddTenantInterceptors(sp),
             poolSize: 4);

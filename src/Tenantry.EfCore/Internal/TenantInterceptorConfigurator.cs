@@ -22,7 +22,7 @@ internal sealed class TenantInterceptorConfigurator<TKey> : ITenantInterceptorCo
         // (options.AddTenantInterceptors(sp)) and MultiTenantDbContext.OnConfiguring's self-wiring.
         // EF runs every registered interceptor, so adding ours twice would double-stamp and
         // double-validate on each save. Skip any that are already present.
-        var existing = optionsBuilder.Options.FindExtension<CoreOptionsExtension>()?.Interceptors ?? [];
+        var existing = optionsBuilder.Options.FindExtension<CoreOptionsExtension>()?.Interceptors?.ToList() ?? [];
 
         if (!existing.OfType<TenantSaveChangesInterceptor<TKey>>().Any())
             optionsBuilder.AddInterceptors(serviceProvider.GetRequiredService<TenantSaveChangesInterceptor<TKey>>());

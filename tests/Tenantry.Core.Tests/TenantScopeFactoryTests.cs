@@ -224,8 +224,9 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     {
         using CancellationTokenSource cts = new();
         await cts.CancelAsync();
+        var token = cts.Token;
 
-        var act = () => Scopes.RunInScopeAsync("acme", (_, _) => Task.CompletedTask, cts.Token);
+        var act = () => Scopes.RunInScopeAsync("acme", (_, _) => Task.CompletedTask, token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
         _store.Lookups.Should().Be(0);
@@ -308,10 +309,10 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     [Fact]
     public async Task Scope_DisposedByAChildTaskFirst_IsStillRestoredWhenTheCallerDisposesIt()
     {
-        await using (var scope = Scopes.CreateScope(Tenant("acme")))
-        {
-            await Task.Run(() => scope.DisposeAsync().AsTask());
-        }
+        var scope = Scopes.CreateScope(Tenant("acme"));
+
+        await Task.Run(() => scope.DisposeAsync().AsTask());
+        await scope.DisposeAsync();
 
         Ambient.HasTenant.Should().BeFalse();
     }

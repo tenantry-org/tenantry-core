@@ -143,9 +143,8 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         await using var services = Build();
         await using var scope = services.CreateAsyncScope();
 
-        var act = () => scope.ServiceProvider.GetRequiredService<PooledNotesContext>();
-
-        act.Should().Throw<TenantNotResolvedException>();
+        scope.ServiceProvider.Invoking(sp => sp.GetRequiredService<PooledNotesContext>())
+            .Should().Throw<TenantNotResolvedException>();
     }
 
     [Fact]
@@ -269,8 +268,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
 
             using (ambient.BeginScope(Globex))
             {
-                var act = () => db.SaveChangesAsync();
-                await act.Should().ThrowAsync<TenantIsolationViolationException>();
+                await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
             }
 
             note.TenantId.Should().BeEmpty();
@@ -363,12 +361,12 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
                 db.Database.SetDbConnection(new SqliteConnection(_databases["globex"].ConnectionString), contextOwnsConnection: true);
             }
 
-            var read = () => db.Notes.IgnoreQueryFilters().CountAsync();
             db.Notes.Add(new PooledNote { Text = "acme row in globex's database" });
-            var save = () => db.SaveChangesAsync();
 
-            (await read.Should().ThrowAsync<TenantIsolationViolationException>()).WithMessage("*connection was changed*");
-            (await save.Should().ThrowAsync<TenantIsolationViolationException>()).WithMessage("*connection was changed*");
+            (await db.Awaiting(d => d.Notes.IgnoreQueryFilters().CountAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("*connection was changed*");
+            (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("*connection was changed*");
         }
 
         RowsIn("globex").Should().Equal("globex:globex's own note");
@@ -388,9 +386,8 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
             // As if the context had been leased without the factory: its connection belongs to an earlier lease.
             TenantDatabaseLeases.Record(db, db.ContextId.Lease - 1, "globex");
 
-            var act = () => db.Notes.CountAsync();
-
-            (await act.Should().ThrowAsync<TenantIsolationViolationException>()).WithMessage("*current lease*");
+            (await db.Awaiting(d => d.Notes.CountAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("*current lease*");
         }
     }
 
@@ -422,9 +419,8 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
             options.UseSqlite().AddTenantInterceptors(sp));
         await using var provider = services.BuildServiceProvider();
 
-        var act = () => provider.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
-
-        act.Should().Throw<InvalidOperationException>().WithMessage("*UseConnectionStrings*");
+        provider.Invoking(p => p.GetRequiredService<IDbContextFactory<PooledNotesContext>>())
+            .Should().Throw<InvalidOperationException>().WithMessage("*UseConnectionStrings*");
     }
 
     private ServiceProvider Build(int poolSize = 1024, bool asyncOnly = false)

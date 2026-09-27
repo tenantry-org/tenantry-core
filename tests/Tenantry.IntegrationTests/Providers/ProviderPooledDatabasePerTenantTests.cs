@@ -1,6 +1,5 @@
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Tenantry.Core;
 using Tenantry.Core.Exceptions;
 using Tenantry.Core.Extensions;

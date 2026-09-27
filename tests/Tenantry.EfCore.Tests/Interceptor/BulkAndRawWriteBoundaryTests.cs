@@ -62,11 +62,10 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        Func<Task> act = () => db.Orders.ExecuteUpdateAsync(s => s
+        await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s
             .SetProperty(o => o.Description, "moved")
-            .SetProperty(o => o.TenantId, newTenantId));
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+            .SetProperty(o => o.TenantId, newTenantId)))
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -76,9 +75,8 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        var act = () => db.Orders.ExecuteUpdate(s => s.SetProperty(o => o.TenantId, "globex"));
-
-        act.Should().Throw<TenantIsolationViolationException>();
+        db.Invoking(d => d.Orders.ExecuteUpdate(s => s.SetProperty(o => o.TenantId, "globex")))
+            .Should().Throw<TenantIsolationViolationException>();
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -88,9 +86,8 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        Func<Task> act = () => db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, "TenantId"), "globex"));
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, "TenantId"), "globex")))
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -101,9 +98,8 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
         var column = nameof(Order.TenantId);
 
-        Func<Task> act = () => db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, column), "globex"));
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, column), "globex")))
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -113,9 +109,8 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        Func<Task> act = () => db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => ((ITenantScoped<string>)o).TenantId, "globex"));
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => ((ITenantScoped<string>)o).TenantId, "globex")))
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -125,11 +120,10 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        Func<Task> act = () => db.Orders
+        await db.Awaiting(d => d.Orders
             .Select(o => new { Order = o, o.Description })
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Order.TenantId, "globex"));
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Order.TenantId, "globex")))
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -139,11 +133,10 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        Func<Task> act = () => db.Orders
+        await db.Awaiting(d => d.Orders
             .Select(o => new { Order = o, o.Description })
-            .ExecuteUpdateAsync(s => s.SetProperty(x => EF.Property<string>(x.Order, "TenantId"), "globex"));
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+            .ExecuteUpdateAsync(s => s.SetProperty(x => EF.Property<string>(x.Order, "TenantId"), "globex")))
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -161,27 +154,27 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        Func<Task> act = shape switch
+        Func<TestDbContext, Task> update = shape switch
         {
-            "anonymous" => () => db.Orders.Select(o => new { o.TenantId, o.Description })
+            "anonymous" => d => d.Orders.Select(o => new { o.TenantId, o.Description })
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.TenantId, "moved")),
-            "renamed" => () => db.Orders.Select(o => new { Owner = o.TenantId, o.Id })
+            "renamed" => d => d.Orders.Select(o => new { Owner = o.TenantId, o.Id })
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
-            "nested" => () => db.Orders.Select(o => new { Inner = new { o.TenantId } })
+            "nested" => d => d.Orders.Select(o => new { Inner = new { o.TenantId } })
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Inner.TenantId, "moved")),
-            "then filtered" => () => db.Orders.Select(o => new { Owner = o.TenantId, o.Description })
+            "then filtered" => d => d.Orders.Select(o => new { Owner = o.TenantId, o.Description })
                 .Where(x => x.Description != "")
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
-            "object initializer" => () => db.Orders.Select(o => new OrderView { Owner = o.TenantId })
+            "object initializer" => d => d.Orders.Select(o => new OrderView { Owner = o.TenantId })
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
-            "join" => () => db.Orders.Join(db.Orders, a => a.Id, b => b.Id, (a, b) => new { a, Owner = b.TenantId })
+            "join" => d => d.Orders.Join(d.Orders, a => a.Id, b => b.Id, (a, b) => new { a, Owner = b.TenantId })
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
-            "select many" => () => db.Orders.SelectMany(a => db.Orders.Where(b => b.Id == a.Id), (a, b) => new { a.Id, Owner = b.TenantId })
+            "select many" => d => d.Orders.SelectMany(a => d.Orders.Where(b => b.Id == a.Id), (a, b) => new { a.Id, Owner = b.TenantId })
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
             _ => throw new ArgumentOutOfRangeException(nameof(shape)),
         };
 
-        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+        await db.Awaiting(update).Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -191,10 +184,9 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        Func<Task> act = () => db.Orders.GroupBy(o => o.TenantId).Select(g => new { Owner = g.Key })
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved"));
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*cannot check*");
+        await db.Awaiting(d => d.Orders.GroupBy(o => o.TenantId).Select(g => new { Owner = g.Key })
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")))
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*cannot check*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -239,9 +231,8 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateBaseClassContextAsync(_tenant.As("acme"), _connection);
 
-        Func<Task> act = () => db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.TenantId, "globex"));
-
-        await act.Should().ThrowAsync<TenantIsolationViolationException>();
+        await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.TenantId, "globex")))
+            .Should().ThrowAsync<TenantIsolationViolationException>();
     }
 
     [Fact]

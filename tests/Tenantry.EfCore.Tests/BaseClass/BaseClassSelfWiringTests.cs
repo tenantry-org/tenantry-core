@@ -69,9 +69,8 @@ public sealed class BaseClassSelfWiringTests
         await ctx.Database.EnsureCreatedAsync();
 
         ctx.Orders.Add(new Order { Description = "no sp" });
-        Func<Task> act = async () => await ctx.SaveChangesAsync();
-
-        await act.Should().NotThrowAsync();
+        await ctx.Awaiting(c => c.SaveChangesAsync())
+            .Should().NotThrowAsync();
     }
 
     private static ServiceProvider BuildProvider(TestTenantContext tenant)

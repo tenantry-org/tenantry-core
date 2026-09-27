@@ -202,13 +202,9 @@ public sealed class PooledContextTests : IDisposable
         using (tenants.BeginScope(Tenant("acme")))
         await using (var scope = services.CreateAsyncScope())
         {
-            Func<Task> use = async () =>
-            {
-                var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
-                await db.Database.EnsureCreatedAsync();
-            };
-
-            await use.Should().ThrowAsync<InvalidOperationException>().WithMessage("*OnConfiguring*pooling*");
+            await scope.ServiceProvider
+                .Awaiting(sp => sp.GetRequiredService<PooledOrdersContext>().Database.EnsureCreatedAsync())
+                .Should().ThrowAsync<InvalidOperationException>().WithMessage("*OnConfiguring*pooling*");
         }
     }
 
@@ -218,9 +214,8 @@ public sealed class PooledContextTests : IDisposable
         var options = new DbContextOptionsBuilder<PooledOrdersContext>().UseSqlite(_connectionString).Options;
         using var db = new PooledOrdersContext(options);
 
-        var act = () => db.CurrentTenantId;
-
-        act.Should().Throw<InvalidOperationException>().WithMessage("*ITenantContext*AddTenantry*");
+        db.Invoking(d => d.CurrentTenantId)
+            .Should().Throw<InvalidOperationException>().WithMessage("*ITenantContext*AddTenantry*");
     }
 
     private ServiceProvider BuildServices(bool pooledFactory, bool addTenantInterceptors = true)
