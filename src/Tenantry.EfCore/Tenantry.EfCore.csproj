@@ -33,4 +33,10 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[10.0.0, 11.0.0)" />
   </ItemGroup>
 
+  <!-- The .NET 11 preview lane only (IncludeNet11). The DI abstractions come with the shared framework there. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="[$(Net11PreviewVersion), 12.0.0)" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="[$(Net11PreviewVersion), 12.0.0)" />
+  </ItemGroup>
+
 </Project>

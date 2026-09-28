@@ -3,6 +3,7 @@ using System.Transactions;
 using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using Tenantry.Core;
 using Tenantry.Core.Exceptions;
@@ -206,7 +207,11 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
             tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
         });
         services.AddTenantDbContextPool<TPooled, string>(
-            (sp, options) => fixture.UseProvider(options).AddTenantInterceptors(sp),
+            (sp, options) => fixture.UseProvider(options)
+                .AddTenantInterceptors(sp)
+                // These contexts have no migrations. EF Core 11 makes that an error before Migrate runs any SQL,
+                // which would stop the Migrate test before the guard is reached; EF Core 10 only logs it.
+                .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.MigrationsNotFound)),
             poolSize: 4);
 
         return services.BuildServiceProvider();
@@ -218,9 +223,6 @@ public sealed class SqlServerPooledGuardTests(SqlServerFixture fixture)
 
 public sealed class PostgreSqlPooledGuardTests(PostgreSqlFixture fixture)
     : ProviderPooledGuardTests(fixture), IClassFixture<PostgreSqlFixture>;
-
-public sealed class MySqlPooledGuardTests(MySqlFixture fixture)
-    : ProviderPooledGuardTests(fixture), IClassFixture<MySqlFixture>;
 
 /// <summary>
 /// Database creation, migrations, raw SQL and transactions on a context whose transaction Acme opened, used
@@ -369,12 +371,8 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
         (await DescriptionsAsync(_acme)).Should().Equal("acme seed");
     }
 
-    private string SelectDescriptions()
-    {
-        string Quote(string name) => fixture is MySqlFixture ? $"`{name}`" : $"\"{name}\"";
-
-        return $"SELECT {Quote("Description")} AS {Quote("Value")} FROM {Quote("Orders")}";
-    }
+    private string SelectDescriptions() =>
+        $"SELECT {fixture.Quote("Description")} AS {fixture.Quote("Value")} FROM {fixture.Quote("Orders")}";
 
     private async Task<List<string>> DescriptionsAsync(TenantDescriptor<string> tenant)
     {

@@ -12,11 +12,18 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- CI builds are deterministic: PDBs and SourceLink record /_/ instead of the runner's source path -->
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <!--
+      The .NET 11 preview lane (scripts/test-net11.sh, and the net11-preview CI job) builds with
+      -p:IncludeNet11=true, which adds net11.0 to src and test projects. Packages ship net8.0-net10.0 until
+      .NET 11 is released. The lane's net11.0 package groups use this release candidate.
+    -->
+    <Net11PreviewVersion>11.0.0-rc.1.26425.128</Net11PreviewVersion>
   </PropertyGroup>
 
   <!-- Src projects: net8.0;net9.0;net10.0 + XML docs + MinVer -->
   <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('/src/'))">
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(IncludeNet11)' == 'true'">$(TargetFrameworks);net11.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnableAotAnalyzer>true</EnableAotAnalyzer>
@@ -29,6 +36,7 @@
   <!-- Test projects: net8.0;net9.0;net10.0 — validate all supported TFMs -->
   <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('/tests/'))">
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(IncludeNet11)' == 'true'">$(TargetFrameworks);net11.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>

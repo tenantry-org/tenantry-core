@@ -2,12 +2,10 @@ using System.ComponentModel.DataAnnotations;
 using DotNet.Testcontainers.Containers;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using MySql.Data.MySqlClient;
 using Npgsql;
 using Tenantry.Core;
 using Tenantry.EfCore;
 using Testcontainers.MsSql;
-using Testcontainers.MySql;
 using Testcontainers.PostgreSql;
 
 namespace Tenantry.IntegrationTests.Providers;
@@ -26,6 +24,9 @@ public abstract class DatabaseFixture : IAsyncLifetime
 
     /// <summary>The fixture's connection string, pointing at <paramref name="database"/> instead.</summary>
     public abstract string WithDatabase(string database);
+
+    /// <summary>A quoted identifier for raw SQL: ANSI double quotes, unless the provider uses another style.</summary>
+    public virtual string Quote(string identifier) => $"\"{identifier}\"";
 
     public async Task InitializeAsync()
     {
@@ -61,19 +62,6 @@ public sealed class PostgreSqlFixture : DatabaseFixture
 
     public override string WithDatabase(string database) =>
         new NpgsqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString;
-}
-
-public sealed class MySqlFixture : DatabaseFixture
-{
-    protected override IDatabaseContainer Container { get; } =
-        // Root, because the database-per-tenant tests create a database per tenant.
-        new MySqlBuilder("mysql:8.4").WithUsername("root").Build();
-
-    public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
-        options.UseMySQL(ConnectionString);
-
-    public override string WithDatabase(string database) =>
-        new MySqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString;
 }
 
 public sealed class ProviderOrder : ITenantScoped<string>

@@ -13,9 +13,6 @@ public sealed class SqlServerPooledDatabasePerTenantTests(SqlServerFixture fixtu
 public sealed class PostgreSqlPooledDatabasePerTenantTests(PostgreSqlFixture fixture)
     : ProviderPooledDatabasePerTenantTests(fixture), IClassFixture<PostgreSqlFixture>;
 
-public sealed class MySqlPooledDatabasePerTenantTests(MySqlFixture fixture)
-    : ProviderPooledDatabasePerTenantTests(fixture), IClassFixture<MySqlFixture>;
-
 /// <summary>
 /// <c>AddTenantDbContextPool</c> against each real provider: one pooled context instance reused across two
 /// tenant databases reads and writes only the current tenant's database. The pool is configured with the

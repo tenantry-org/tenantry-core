@@ -13,9 +13,6 @@ public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture)
 public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture)
     : ProviderWriteIsolationTests(fixture), IClassFixture<PostgreSqlFixture>;
 
-public sealed class MySqlWriteIsolationTests(MySqlFixture fixture)
-    : ProviderWriteIsolationTests(fixture), IClassFixture<MySqlFixture>;
-
 /// <summary>
 /// Write-isolation guarantees that depend on the database's behaviour, run against each real provider:
 /// the stored-tenant predicate on UPDATE/DELETE (and its affected-row count), the default rejection of

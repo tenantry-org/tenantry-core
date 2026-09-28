@@ -17,3 +17,30 @@ jobs:
   build-and-test:
     uses: ./.github/workflows/build-test.yml
     secrets: inherit
+
+  # The .NET 11 preview lane (scripts/test-net11.sh): net11.0 builds and tests against the release candidate.
+  # It does not block: a release candidate can break things GA fixes, so a failure here is a warning to
+  # investigate, not a merge gate.
+  net11-preview:
+    name: .NET 11 preview lane
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # MinVer needs full history
+
+      - name: Setup .NET 11 (preview)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
+      - name: Use the .NET 11 SDK
+        # global.json pins the 10.0 SDK band; this lane needs 11.0.
+        run: rm global.json && dotnet --version
+
+      - name: Build and test for net11.0
+        run: bash scripts/test-net11.sh
