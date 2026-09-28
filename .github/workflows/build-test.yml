@@ -108,5 +108,21 @@ jobs:
         # Fails on a floating or open-ended dependency (see the rules in the script)
         run: dotnet run scripts/check-package-ranges.cs -- ./artifacts
 
+      - name: Consumer check
+        # A stand-in application restores these packages from an empty cache with package source mapping,
+        # builds for every target framework and runs, as an application would (see the script)
+        run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'
+
+      - name: Upload packages
+        # The release job publishes exactly these packages: the ones built, tested and checked above
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: |
+            ./artifacts/*.nupkg
+            ./artifacts/*.snupkg
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Verify AOT publish
         run: dotnet publish samples/Tenantry.Samples.Aot -c Release

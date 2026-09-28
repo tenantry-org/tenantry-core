@@ -32,6 +32,13 @@ CI runs the same gates that block a release — make sure these hold locally bef
 4. **SonarCloud quality gate.** Runs on pushes to `master` and internal PRs. (It is skipped on PRs
    from forks because secrets aren't available there — it runs after merge.)
 5. **AOT publish succeeds** for the AOT sample (`dotnet publish samples/Tenantry.Samples.Aot -c Release`).
+6. **The packages pass both package checks**, which CI runs after packing the `src/` projects.
+   `dotnet run scripts/check-package-ranges.cs -- artifacts` checks that every dependency has its
+   intended range, and
+   `scripts/check-package-consumer.sh artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'`
+   has a stand-in application restore them from an empty cache with package source mapping, build for
+   every target framework and run. The release job publishes the packages CI built and checked, not a
+   rebuild.
 
 ## Pull request flow
 
@@ -43,14 +50,15 @@ CI runs the same gates that block a release — make sure these hold locally bef
 
 > **Note:** Workflows on PRs from forks require maintainer approval before they run.
 
-## Commit & tag signing
+## Commit signing
 
-Release tags (`v*`) are signed and protected. If you have signing configured, signed commits are
-appreciated. See GitHub's guide on
+If you have signing configured, signed commits are appreciated. See GitHub's guide on
 [signing commits](https://docs.github.com/authentication/managing-commit-signature-verification/signing-commits).
 
 ## Releases (maintainers)
 
-Releases are cut by pushing a signed `v*` tag. The release workflow re-runs the full CI gate
-against the tagged commit, then **pauses for manual approval** (the `release` environment) before
-publishing to NuGet.org via OIDC trusted publishing.
+Releases are cut by pushing a `v*` tag on a commit that is on `master`; a ruleset lets only the
+maintainer create, move or delete `v*` tags. The release workflow checks that the tag is on `master`,
+reruns the CI gate on the tagged commit (without SonarCloud, which already passed on `master`),
+including both package checks, then **pauses for approval** in the `release` environment (only `v*`
+tags can deploy to it) and publishes those same packages to NuGet.org via OIDC trusted publishing.

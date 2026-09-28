@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A stand-in application for scripts/check-package-consumer.sh, which copies it out of the repository
+    and builds it against freshly packed packages. Not part of the solution.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NuGetAuditMode>all</NuGetAuditMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tenantry.Core" Version="[$(TenantryVersion)]" />
+    <PackageReference Include="Tenantry.EfCore" Version="[$(TenantryVersion)]" />
+    <PackageReference Include="Tenantry.AspNetCore" Version="[$(TenantryVersion)]" />
+  </ItemGroup>
+
+</Project>
