@@ -10,6 +10,8 @@
     <RepositoryUrl>https://github.com/tenantry-org/tenantry-core</RepositoryUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- CI builds are deterministic: PDBs and SourceLink record /_/ instead of the runner's source path -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <!-- Src projects: net8.0;net9.0;net10.0 + XML docs + MinVer -->

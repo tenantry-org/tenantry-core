@@ -61,4 +61,9 @@ Releases are cut by pushing a `v*` tag on a commit that is on `master`; a rulese
 maintainer create, move or delete `v*` tags. The release workflow checks that the tag is on `master`,
 reruns the CI gate on the tagged commit (without SonarCloud, which already passed on `master`),
 including both package checks, then **pauses for approval** in the `release` environment (only `v*`
-tags can deploy to it) and publishes those same packages to NuGet.org via OIDC trusted publishing.
+tags can deploy to it) and publishes those same packages, with their symbol packages, to NuGet.org via
+OIDC trusted publishing. The GitHub release gets generated notes and no attached files.
+
+To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on
+`master`: it runs the same checks and builds the same packages, then lists what a release would
+publish, without publishing anything.
