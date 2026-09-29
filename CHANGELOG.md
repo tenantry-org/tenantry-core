@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
+The first beta release. Tenantry stays on 0.x releases until 1.0; a minor release can change the API, and
+this changelog says how to update. This release includes everything in the 0.3.0-alpha.1 development build.
+
 ### Added
 
 - An API reference, `docs/api`: a page for every public type and its members, generated from the XML

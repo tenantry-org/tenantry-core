@@ -77,18 +77,18 @@ builder.Services.AddTenantry<Guid>(tenant =>
 `Tenantry.EfCore` and `Tenantry.AspNetCore` both depend on `Tenantry.Core`. Reference whichever
 combination matches your host:
 
-Tenantry is in preview, so every published version is a prerelease and `dotnet add package` needs
-`--prerelease` (or an explicit `--version`):
-
 ```bash
 # ASP.NET Core app with EF Core isolation (most common)
-dotnet add package Tenantry.AspNetCore --prerelease
-dotnet add package Tenantry.EfCore --prerelease
+dotnet add package Tenantry.AspNetCore
+dotnet add package Tenantry.EfCore
 
 # Console / worker / desktop app with EF Core isolation
-dotnet add package Tenantry.Core --prerelease
-dotnet add package Tenantry.EfCore --prerelease
+dotnet add package Tenantry.Core
+dotnet add package Tenantry.EfCore
 ```
+
+Tenantry is in beta until 1.0: releases are numbered 0.x, and a minor release (0.4 to 0.5) can change the
+API, with the steps to update in the [changelog](CHANGELOG.md).
 
 ## Quick start (ASP.NET Core)
 
