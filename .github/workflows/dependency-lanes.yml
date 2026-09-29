@@ -1,0 +1,45 @@
+name: Dependency lanes
+
+# The latest lane: every version range restored at the newest release in its major, then the full build and
+# test suite on every target framework and database provider (scripts/test-latest-dependencies.sh). It catches
+# a new release inside a range that breaks us before a consumer updates to it. The lowest end of each range is
+# CI's job (scripts/check-dependency-floors.cs). The resolved versions are kept as an artifact.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"   # Mondays, 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latest:
+    name: Latest in every range
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # MinVer needs full history
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore, build and test at the latest versions
+        run: bash scripts/test-latest-dependencies.sh
+
+      - name: Upload the resolved versions
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: latest-dependencies
+          path: artifacts/latest-dependencies
+          if-no-files-found: ignore

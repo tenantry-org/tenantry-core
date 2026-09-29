@@ -174,8 +174,8 @@
       "tenantry.efcore": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.EntityFrameworkCore": "[10.0.0, 11.0.0)",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.0, 11.0.0)",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, 11.0.0)",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, 11.0.0)",
           "Tenantry.Core": "[1.0.0, )"
         }
       }
