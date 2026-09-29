@@ -5,13 +5,14 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=tenantry-org_tenantry-core&metric=alert_status&token=3a836e3680d4d63886210902f77daf99c80b85be)](https://sonarcloud.io/summary/new_code?id=tenantry-org_tenantry-core)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=tenantry-org_tenantry-core&metric=coverage&token=3a836e3680d4d63886210902f77daf99c80b85be)](https://sonarcloud.io/summary/new_code?id=tenantry-org_tenantry-core)
 [![License](https://img.shields.io/github/license/tenantry-org/tenantry-core)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com)
+[![.NET](https://img.shields.io/badge/.NET-10.0%20LTS%20%7C%208.0%2C%209.0%20legacy-512BD4)](docs/compatibility.md)
 
 A flexible, modern, and unopinionated multi-tenancy library for .NET.
 
-Tenantry isolates each tenant's data in a **shared database**: the entities you choose to make
-tenant-scoped carry a `TenantId` column, and EF Core reads and writes against them are limited to the
-current tenant. It does this without forcing
+Tenantry isolates each tenant's data in a **shared database**, where the entities you choose to make
+tenant-scoped carry a `TenantId` column and EF Core reads and writes against them are limited to the
+current tenant, or gives each tenant **its own database** through per-tenant connection strings. It
+does this without forcing
 a base class on your entities, without a custom `DbContext`, and without taking over your request
 pipeline. You pick the tenant key type, how tenants are resolved, and where they are stored — and
 Tenantry wires the isolation in.
@@ -42,8 +43,28 @@ builder.Services.AddTenantry<Guid>(tenant =>
 - **HTTP and beyond.** `AddTenantry` covers ASP.NET Core (resolution middleware, access validation,
   endpoint metadata). `AddTenantryCore` brings the same isolation to console apps, worker services,
   and desktop UIs with no web stack.
-- **Modern .NET.** Targets .NET 8, 9, and 10. The core and ASP.NET Core packages are trim- and
+- **Modern .NET.** Built for .NET 10, with .NET 11 added when it ships; .NET 8 and 9 are supported as
+  legacy until 10 November 2027 ([compatibility](docs/compatibility.md)). The core and ASP.NET Core packages are trim- and
   Native-AOT-compatible (see [AOT & trimming](#aot--trimming)).
+
+## Tenantry and Tenantry.Pro
+
+**Tenantry** (this open-source library) covers identifying tenants and isolating their data:
+
+- tenant resolution, tenant stores and access control, in ASP.NET Core and in console, worker and desktop hosts;
+- isolation in a **shared database**, with a `TenantId` column that EF Core scopes reads and writes to;
+- a **database per tenant**, with per-tenant connection strings and `DbContext` pooling across tenant databases;
+- worker scopes for running background work as a tenant.
+
+**[Tenantry.Pro](https://tenantry.dev)** (a subscription) adds what running many tenant databases takes:
+
+- a **schema per tenant** (SQL Server, PostgreSQL) and **mixed mode**, choosing a database, a schema or the shared
+  database per tenant;
+- provisioning of tenant databases and schemas on SQL Server, PostgreSQL and MySQL;
+- migration orchestration across every tenant database, and the provision → migrate → seed lifecycle;
+- caching and at-rest encryption of connection strings;
+- tenant context in Hangfire, MassTransit, Quartz.NET and Rebus, health checks, audit logging and per-tenant
+  telemetry.
 
 ## Packages
 
@@ -179,6 +200,7 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 | [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
 | [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantryCore` in console apps, workers, and background jobs |
 | [AOT & trimming](docs/aot-and-trimming.md) | What is supported, per package, and why |
+| [Compatibility](docs/compatibility.md) | Supported .NET and EF Core versions, databases, and dependency ranges |
 | [Troubleshooting](docs/troubleshooting.md) | Common pitfalls and how to diagnose them |
 
 ## Samples
