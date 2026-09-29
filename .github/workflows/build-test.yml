@@ -49,6 +49,10 @@ jobs:
           dotnet tool install --global dotnet-reportgenerator-globaltool
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
+      - name: Check the Dependabot configuration
+        # Its list of banded packages (version ranges, per-framework versions) must match the project files
+        run: dotnet run scripts/check-dependabot.cs
+
       - name: Restore
         # Locked: fails if a test or sample project's packages.lock.json is out of date
         run: dotnet restore Tenantry.slnx --locked-mode
@@ -67,6 +71,10 @@ jobs:
           /d:sonar.coverage.exclusions="samples/**"
           /d:sonar.cpd.exclusions="samples/**"
           /d:sonar.qualitygate.wait=true
+
+      - name: Check every published floor is tested
+        # The minimum dependency lane: each src version range's floor must be what some test's lock file resolves
+        run: dotnet run scripts/check-dependency-floors.cs
 
       - name: Build
         run: dotnet build Tenantry.slnx -c Release --no-restore
@@ -107,6 +115,11 @@ jobs:
       - name: Check package dependency ranges
         # Fails on a floating or open-ended dependency (see the rules in the script)
         run: dotnet run scripts/check-package-ranges.cs -- ./artifacts
+
+      - name: Check the API reference
+        # docs/api is generated from the XML documentation comments; a change to the public API or its comments
+        # must commit the regenerated pages (scripts/generate-api-docs.sh)
+        run: bash scripts/generate-api-docs.sh --check
 
       - name: Consumer check
         # A stand-in application restores these packages from an empty cache with package source mapping,

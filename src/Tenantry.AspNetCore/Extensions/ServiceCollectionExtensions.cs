@@ -17,6 +17,8 @@ public static class ServiceCollectionExtensions
     /// The tenant identifier type (e.g. <see cref="Guid"/>, <see cref="int"/>, <see cref="string"/>).
     /// Must implement <see cref="IEquatable{T}"/> and <see cref="IParsable{T}"/>.
     /// </typeparam>
+    /// <param name="services">The application's service collection.</param>
+    /// <param name="configure">Configures tenant resolution, the tenant store and access validation.</param>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =>

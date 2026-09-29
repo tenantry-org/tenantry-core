@@ -13,6 +13,9 @@ public static class TenantBuilderEfCoreExtensions
     /// Registers EF Core tenant isolation services (the SaveChanges interceptor and the
     /// configured isolation policy). Call this inside your <c>AddTenantry</c> configuration lambda.
     /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="configure">Sets the isolation options, such as what happens to a write without a tenant, or <see langword="null"/> for the defaults.</param>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt;

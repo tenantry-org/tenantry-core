@@ -1,0 +1,21 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "../../src",
+          "files": [
+            "**/*.csproj"
+          ]
+        }
+      ],
+      "properties": {
+        "TargetFramework": "net10.0"
+      },
+      "outputFormat": "mref",
+      "namespaceLayout": "flattened",
+      "memberLayout": "samePage",
+      "enumSortOrder": "declaringOrder"
+    }
+  ]
+}

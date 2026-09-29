@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An API reference, `docs/api`: a page for every public type and its members, generated from the XML
+  documentation comments by `scripts/generate-api-docs.sh` (docfx metadata, then `scripts/api-docs.cs`), and
+  published with the docs. CI fails when the pages do not match the source, or when a public parameter or
+  type parameter has no description; every one now has one.
 - DbContext pooling with a database per tenant. `AddTenantDbContextPool<TContext, TKey>` registers a
   scoped context and `IDbContextFactory<TContext>` over one pool and connects every lease to the current
   tenant's database. EF Core keeps a pooled context's connection string between leases, so a guard also
@@ -63,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Tenantry.EfCore` needs EF Core 8.0.31, 9.0.20 or 10.0.12 or later within that major (previously 8.0.10,
+  9.0.0 and 10.0.0), the oldest versions the tests run against. Microsoft.Extensions dependencies take a
+  minimum only, from the target framework's own major, instead of stopping before the next major: a .NET 8
+  app can use current Azure SDKs, which need Microsoft.Extensions 10.x.
 - `Tenantry.EfCore` and `Tenantry.AspNetCore` depend on exactly the same version of `Tenantry.Core`
   (`[x.y.z]`) instead of a minimum, because `Tenantry.AspNetCore` uses Core internals. Update the
   Tenantry packages together.

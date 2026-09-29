@@ -15,6 +15,9 @@ public static class ServiceCollectionExtensions
     /// <see cref="ITenantScopeFactory{TKey}"/> and <see cref="ITenantStoreAccessor{TKey}"/> singletons used
     /// by background work.
     /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="services">The application's service collection.</param>
+    /// <param name="configure">Configures the tenant store and other Core services, or <see langword="null"/> to register only the defaults.</param>
     /// <remarks>
     /// Use this entry point for worker services, console apps, and other non-HTTP hosts.
     /// For ASP.NET Core applications, use <c>AddTenantry&lt;TKey&gt;()</c> instead,

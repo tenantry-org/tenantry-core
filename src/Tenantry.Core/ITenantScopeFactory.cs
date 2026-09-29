@@ -63,6 +63,7 @@ public interface ITenantScopeFactory<TKey>
         CancellationToken cancellationToken = default);
 
     /// <inheritdoc cref="RunInScopeAsync(TKey, Func{ITenantServiceScope{TKey}, CancellationToken, Task}, CancellationToken)"/>
+    /// <typeparam name="TResult">The type of the work's result.</typeparam>
     /// <returns>The value returned by <paramref name="work"/>.</returns>
     Task<TResult> RunInScopeAsync<TResult>(
         TKey tenantId,

@@ -5,6 +5,7 @@ namespace Tenantry.AspNetCore.Resolution;
 /// <summary>
 /// Resolves the tenant from a query string parameter (e.g. <c>?tenantId=acme</c>).
 /// </summary>
+/// <param name="parameterName">The name of the query string parameter that carries the tenant identifier.</param>
 /// <remarks>
 /// Intended for local development and testing convenience only.
 /// Do not enable in production — query string parameters are logged and may appear

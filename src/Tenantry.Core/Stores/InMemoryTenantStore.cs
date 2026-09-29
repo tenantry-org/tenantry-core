@@ -16,6 +16,7 @@ public sealed class InMemoryTenantStore<TKey> : ITenantStore<TKey>
     /// <summary>
     /// Initialises the store with a pre-populated collection of tenants.
     /// </summary>
+    /// <param name="tenants">The tenants the store holds. The store does not change after it is created.</param>
     public InMemoryTenantStore(IEnumerable<ITenantDescriptor<TKey>> tenants)
     {
         _tenants = tenants.ToDictionary(t => t.TenantId, EqualityComparer<TKey>.Default);

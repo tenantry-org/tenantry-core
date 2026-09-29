@@ -73,6 +73,7 @@ public abstract class MultiTenantDbContext<TKey> : DbContext, ITenantAwareDbCont
     /// Initialises a new instance that resolves the ambient <see cref="ITenantContext{TKey}"/> from the
     /// application service provider on first use. Use this constructor for pooled contexts.
     /// </summary>
+    /// <param name="options">The options for this context.</param>
     protected MultiTenantDbContext(DbContextOptions options)
         : base(options)
     {
@@ -83,6 +84,8 @@ public abstract class MultiTenantDbContext<TKey> : DbContext, ITenantAwareDbCont
     /// Initialises a new instance that uses the given <see cref="ITenantContext{TKey}"/>, for contexts created
     /// outside dependency injection.
     /// </summary>
+    /// <param name="options">The options for this context.</param>
+    /// <param name="tenantContext">Supplies the current tenant.</param>
     protected MultiTenantDbContext(DbContextOptions options, ITenantContext<TKey> tenantContext)
         : base(options)
     {

@@ -19,6 +19,7 @@ public sealed class TenantNotResolvedException : InvalidOperationException
     /// <summary>
     /// Initialises a new instance with a custom message.
     /// </summary>
+    /// <param name="message">The message that describes the error.</param>
     public TenantNotResolvedException(string message) : base(message)
     {
     }
@@ -26,6 +27,8 @@ public sealed class TenantNotResolvedException : InvalidOperationException
     /// <summary>
     /// Initialises a new instance with a custom message and inner exception.
     /// </summary>
+    /// <param name="message">The message that describes the error.</param>
+    /// <param name="innerException">The exception that caused this one.</param>
     public TenantNotResolvedException(string message, Exception innerException)
         : base(message, innerException)
     {

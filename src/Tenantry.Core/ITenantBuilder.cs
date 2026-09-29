@@ -20,11 +20,13 @@ public interface ITenantBuilder<TKey>
     /// <summary>
     /// Registers a pre-populated in-memory tenant store.
     /// </summary>
+    /// <param name="tenants">The tenants the store holds. The store does not change after registration.</param>
     ITenantBuilder<TKey> UseInMemoryStore(IEnumerable<ITenantDescriptor<TKey>> tenants);
 
     /// <summary>
     /// Registers a custom <see cref="ITenantStore{TKey}"/> implementation.
     /// </summary>
+    /// <typeparam name="TStore">The store type, created through dependency injection.</typeparam>
     /// <remarks>
     /// The store is registered with a <strong>scoped</strong> lifetime and is resolved per operation —
     /// Tenantry creates a fresh scope for singleton/background callers — so the implementation may safely
@@ -37,6 +39,7 @@ public interface ITenantBuilder<TKey>
     /// <summary>
     /// Registers a custom <see cref="ITenantStore{TKey}"/> implementation with a factory function.
     /// </summary>
+    /// <param name="factory">Creates the store from the scope's services.</param>
     /// <remarks>
     /// The store is registered with a <strong>scoped</strong> lifetime and is resolved per operation, so
     /// the factory may return an instance that depends on scoped services such as a <c>DbContext</c>.

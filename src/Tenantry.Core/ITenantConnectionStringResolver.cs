@@ -32,11 +32,13 @@ public interface ITenantConnectionStringResolver<TKey>
     string Resolve();
 
     /// <summary>Returns the current tenant's connection string, using the asynchronous delegate if configured.</summary>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <exception cref="Exceptions.TenantNotResolvedException">No tenant is current.</exception>
     /// <exception cref="InvalidOperationException">The delegate returned an empty value.</exception>
     ValueTask<string> ResolveAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Returns <paramref name="tenant"/>'s connection string.</summary>
+    /// <param name="tenant">The tenant whose connection string to return.</param>
     /// <exception cref="InvalidOperationException">
     /// Only <see cref="TenantConnectionStringOptions{TKey}.GetConnectionStringAsync"/> is configured (use
     /// <see cref="ResolveAsync(ITenantDescriptor{TKey}, CancellationToken)"/>), or the delegate returned an
@@ -45,6 +47,8 @@ public interface ITenantConnectionStringResolver<TKey>
     string Resolve(ITenantDescriptor<TKey> tenant);
 
     /// <summary>Returns <paramref name="tenant"/>'s connection string, using the asynchronous delegate if configured.</summary>
+    /// <param name="tenant">The tenant whose connection string to return.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <exception cref="InvalidOperationException">The delegate returned an empty value.</exception>
     ValueTask<string> ResolveAsync(ITenantDescriptor<TKey> tenant, CancellationToken cancellationToken = default);
 }

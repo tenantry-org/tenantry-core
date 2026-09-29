@@ -5,6 +5,7 @@ namespace Tenantry.AspNetCore.Resolution;
 /// <summary>
 /// Resolves the tenant from a claim on the current request principal.
 /// </summary>
+/// <param name="claimType">The type of the claim that carries the tenant identifier.</param>
 public sealed class ClaimTenantResolver(string claimType = "tenant_id") : ITenantResolver
 {
     /// <inheritdoc />

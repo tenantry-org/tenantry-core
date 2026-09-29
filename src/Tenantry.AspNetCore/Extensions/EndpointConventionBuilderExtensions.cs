@@ -8,26 +8,31 @@ namespace Tenantry.AspNetCore.Extensions;
 /// </summary>
 public static class EndpointConventionBuilderExtensions
 {
-    extension<TBuilder>(TBuilder builder) where TBuilder : IEndpointConventionBuilder
+    /// <summary>
+    /// Requires Tenantry to resolve a tenant for the endpoint.
+    /// </summary>
+    /// <typeparam name="TBuilder">The endpoint convention builder type.</typeparam>
+    /// <param name="builder">The endpoint, or group of endpoints, to configure.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    public static TBuilder RequireTenant<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
     {
-        /// <summary>
-        /// Requires Tenantry to resolve a tenant for the endpoint.
-        /// </summary>
-        public TBuilder RequireTenant()
-        {
-            ArgumentNullException.ThrowIfNull(builder);
-            builder.WithMetadata(new RequireTenantAttribute());
-            return builder;
-        }
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.WithMetadata(new RequireTenantAttribute());
+        return builder;
+    }
 
-        /// <summary>
-        /// Allows the endpoint to execute without a resolved tenant, even when tenant resolution is required by default.
-        /// </summary>
-        public TBuilder AllowMissingTenant()
-        {
-            ArgumentNullException.ThrowIfNull(builder);
-            builder.WithMetadata(new AllowMissingTenantAttribute());
-            return builder;
-        }
+    /// <summary>
+    /// Allows the endpoint to execute without a resolved tenant, even when tenant resolution is required by default.
+    /// </summary>
+    /// <typeparam name="TBuilder">The endpoint convention builder type.</typeparam>
+    /// <param name="builder">The endpoint, or group of endpoints, to configure.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    public static TBuilder AllowMissingTenant<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.WithMetadata(new AllowMissingTenantAttribute());
+        return builder;
     }
 }

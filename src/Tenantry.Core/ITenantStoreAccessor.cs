@@ -20,10 +20,13 @@ public interface ITenantStoreAccessor<TKey>
     /// <summary>
     /// Returns the tenant with the given <paramref name="tenantId"/>, or <c>null</c> if the store has none.
     /// </summary>
+    /// <param name="tenantId">The identifier of the tenant to find.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <exception cref="InvalidOperationException">No <see cref="ITenantStore{TKey}"/> is registered.</exception>
     ValueTask<ITenantDescriptor<TKey>?> GetTenantAsync(TKey tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>Returns all tenants in the store.</summary>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <exception cref="InvalidOperationException">No <see cref="ITenantStore{TKey}"/> is registered.</exception>
     ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default);
 }

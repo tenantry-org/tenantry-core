@@ -23,6 +23,11 @@ public static class TenantDbContextPoolExtensions
     /// and connects every lease to the current tenant's database through
     /// <see cref="ITenantConnectionStringResolver{TKey}"/>.
     /// </summary>
+    /// <typeparam name="TContext">The context type. It needs a constructor that takes only its options.</typeparam>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="services">The application's service collection.</param>
+    /// <param name="optionsAction">Configures the context's options, without a connection string: each lease is connected to the current tenant's database.</param>
+    /// <param name="poolSize">The most contexts the pool keeps for reuse.</param>
     /// <remarks>
     /// <para>
     /// A pooled context keeps its connection string when it returns to the pool, so resolving the connection

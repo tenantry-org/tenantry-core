@@ -5,6 +5,7 @@ namespace Tenantry.AspNetCore.Resolution;
 /// <summary>
 /// Resolves the tenant from a request header (e.g. <c>X-Tenant-Id</c>).
 /// </summary>
+/// <param name="headerName">The name of the header that carries the tenant identifier.</param>
 public sealed class HeaderTenantResolver(string headerName) : ITenantResolver
 {
     /// <inheritdoc />

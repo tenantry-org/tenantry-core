@@ -9,6 +9,8 @@ namespace Tenantry.Core;
 /// <typeparam name="TKey">
 /// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.
 /// </typeparam>
+/// <param name="tenantContext">Supplies the current tenant.</param>
+/// <param name="options">The delegates that return a tenant's connection string.</param>
 /// <remarks>
 /// Public so that other resolvers (for example a caching one) can wrap it. <c>UseConnectionStrings</c>
 /// registers it as a singleton, and forwards <see cref="ITenantConnectionStringResolver{TKey}"/> to it.

@@ -18,6 +18,7 @@ public static class ApplicationBuilderExtensions
     /// ensure routing has executed before this middleware. <see cref="WebApplication"/>
     /// handles this automatically for minimal APIs and controllers.
     /// </summary>
+    /// <param name="app">The application's request pipeline.</param>
     public static IApplicationBuilder UseTenantry(this IApplicationBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);

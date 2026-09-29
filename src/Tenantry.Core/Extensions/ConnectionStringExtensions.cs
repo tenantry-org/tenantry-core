@@ -13,6 +13,9 @@ public static class ConnectionStringExtensions
     /// Configures how each tenant's connection string is found and registers
     /// <see cref="ITenantConnectionStringResolver{TKey}"/> as a singleton.
     /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="configure">Sets the delegates that return a tenant's connection string.</param>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;string&gt;(tenant =&gt;
@@ -42,6 +45,9 @@ public static class ConnectionStringExtensions
     /// The <see cref="IServiceCollection"/> form of <see cref="UseConnectionStrings{TKey}"/>, for code that
     /// has no <see cref="ITenantBuilder{TKey}"/>. Also registers the core Tenantry services.
     /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="services">The application's service collection.</param>
+    /// <param name="configure">Sets the delegates that return a tenant's connection string.</param>
     /// <remarks>
     /// Calling it again configures the same options instance, so a later call can replace a delegate.
     /// </remarks>

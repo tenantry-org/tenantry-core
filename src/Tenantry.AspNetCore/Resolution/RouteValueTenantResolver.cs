@@ -6,6 +6,7 @@ namespace Tenantry.AspNetCore.Resolution;
 /// <summary>
 /// Resolves the tenant from a route value (e.g. <c>/api/{tenant}/resource</c>).
 /// </summary>
+/// <param name="routeValueKey">The name of the route value that carries the tenant identifier.</param>
 public sealed class RouteValueTenantResolver(string routeValueKey = "tenant") : ITenantResolver
 {
     /// <inheritdoc />
