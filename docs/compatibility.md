@@ -16,7 +16,7 @@ The packages target **net8.0, net9.0 and net10.0**; net11.0 is added when .NET 1
 
 **Legacy** means the net8.0 and net9.0 builds are still shipped, built and tested, but Microsoft stops
 patching .NET 8 and .NET 9, including EF Core 8 and 9, on 10 November 2026. Move to .NET 10.
-They stay for one more year: the first release after 10 November 2027 drops them.
+They stay through the beta: 1.0 ends it, not before 10 November 2027, and drops them.
 
 ## EF Core
 
