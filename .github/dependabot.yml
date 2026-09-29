@@ -4,39 +4,50 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
-    # These packages are pinned per target framework with floating ranges
-    # (e.g. "[9.0.0, 10.0.0)") so a net9.0 build resolves the latest 9.x at
-    # restore time and never crosses a major boundary. Dependabot does not
-    # understand range syntax: it rewrites the range to the single resolved
-    # version (e.g. "10.0.9"), which both pins the dependency and breaks the
-    # TFM contract. Since restore already floats these to the newest in-range
-    # patch, a Dependabot bump is redundant, so we ignore them. When a new
-    # major TFM is added, add its range manually.
+    # Wait a week after a release before proposing it (security updates are not delayed).
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
     ignore:
+      # Microsoft's majors follow .NET's (EF Core 11 ships with .NET 11). A new major arrives as a new target
+      # framework, added by hand with its own band, never as a routine bump.
+      - dependency-name: "Microsoft.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]
+      # Banded packages are declared with a version range, an MSBuild property, or a different version per
+      # target framework. Their versions are set by hand: a range's floor is the oldest version supported,
+      # and a per-framework version must stay in its framework's band, which Dependabot cannot keep to.
+      # scripts/check-dependabot.cs (run in CI) fails when this list and the project files disagree.
+      # Banded packages: begin
+      - dependency-name: "Microsoft.AspNetCore.Mvc.Testing"
+      - dependency-name: "Microsoft.AspNetCore.TestHost"
       - dependency-name: "Microsoft.EntityFrameworkCore"
+      - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
       - dependency-name: "Microsoft.EntityFrameworkCore.Sqlite"
       - dependency-name: "Microsoft.EntityFrameworkCore.SqlServer"
       - dependency-name: "Microsoft.Extensions.DependencyInjection"
       - dependency-name: "Microsoft.Extensions.DependencyInjection.Abstractions"
-      - dependency-name: "Microsoft.AspNetCore.TestHost"
+      - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
+      - dependency-name: "Tenantry.AspNetCore"
+      - dependency-name: "Tenantry.Core"
+      - dependency-name: "Tenantry.EfCore"
+      # Banded packages: end
     groups:
-      # Ordered: first matching group wins, so test deps land here rather than in "microsoft".
-      test:
+      # Minor and patch updates arrive as one pull request a week; each major update gets its own.
+      minor-and-patch:
         patterns:
-          - "xunit*"
-          - "*Moq*"
-          - "coverlet*"
-          - "Microsoft.NET.Test.Sdk"
-      microsoft:        # EF Core / ASP.NET / Extensions tend to version together
-        patterns:
-          - "Microsoft.*"
-          - "System.*"
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns:

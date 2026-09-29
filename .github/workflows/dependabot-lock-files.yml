@@ -1,0 +1,103 @@
+name: Dependabot lock files
+
+# Dependabot's NuGet updater rewrites each multi-targeted packages.lock.json for one target framework only, so
+# its pull requests fail CI's locked restore (NU1004). This regenerates the lock files for every framework on
+# Dependabot's NuGet branches and commits them. Regenerating runs the pull request's restore, so it gets a
+# read-only token; the job that commits runs nothing from the branch and commits only lock files. A push made
+# with the workflow's token starts no workflow itself, so the commit job then starts CI on the new commit.
+
+on:
+  pull_request:
+    branches: [ master ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-lock-files-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    name: Regenerate lock files
+    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/nuget/')
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.collect.outputs.changed }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # MinVer needs full history
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Regenerate
+        run: dotnet restore Tenantry.slnx --force-evaluate
+
+      - name: Collect changed lock files
+        id: collect
+        run: |
+          git diff --name-only -- '*packages.lock.json' > changed.txt
+          if [ -s changed.txt ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            tar -cf lock-files.tar -T changed.txt
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          cat changed.txt
+
+      - name: Upload lock files
+        if: steps.collect.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: lock-files
+          path: lock-files.tar
+          retention-days: 1
+
+  commit:
+    name: Commit lock files
+    needs: regenerate
+    if: needs.regenerate.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # push the lock files to Dependabot's branch
+      actions: write    # start CI on the new commit
+
+    steps:
+      - name: Checkout the pull request branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Download lock files
+        uses: actions/download-artifact@v8
+        with:
+          name: lock-files
+
+      - name: Commit and push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          # Only lock files, at paths the repository already tracks.
+          tar -tf lock-files.tar | while read -r path; do
+            case "$path" in
+              */packages.lock.json) git ls-files --error-unmatch -- "$path" > /dev/null ;;
+              *) echo "Unexpected file in the artifact: $path"; exit 1 ;;
+            esac
+          done
+          tar -xf lock-files.tar && rm lock-files.tar
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Regenerate lock files for every target framework"
+          git push origin "HEAD:$BRANCH"
+          gh workflow run ci.yml --ref "$BRANCH"

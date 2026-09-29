@@ -5,6 +5,7 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:   # started by dependabot-lock-files.yml after it commits regenerated lock files
 
 permissions:
   contents: read
@@ -17,6 +18,9 @@ jobs:
   build-and-test:
     uses: ./.github/workflows/build-test.yml
     secrets: inherit
+    with:
+      # SonarCloud analyses pushes to master and pull requests; a manual run on a branch is neither.
+      run_sonar: ${{ github.event_name != 'workflow_dispatch' }}
 
   # The .NET 11 preview lane (scripts/test-net11.sh): net11.0 builds and tests against the release candidate.
   # It does not block: a release candidate can break things GA fixes, so a failure here is a warning to
