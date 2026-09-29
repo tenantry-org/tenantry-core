@@ -75,7 +75,7 @@ jobs:
           done
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -93,7 +93,7 @@ jobs:
 
       - name: Create GitHub Release
         # Release notes only: the packages and their symbols are on NuGet.org, so nothing is attached.
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           generate_release_notes: true
 
