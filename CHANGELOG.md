@@ -118,6 +118,13 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 
 ### Fixed
 
+- A tenant could add rows to another tenant's owned collection (`OwnsMany`): attaching a stub of the other tenant's
+  owner, with its own or no `TenantId`, and adding an owned entity saved it, and the owner's tenant then read the
+  row, because EF Core reads owned rows through their owner without a tenant filter and does not write an owner
+  that is only attached. When a save adds an owned entity to such an owner, the owner is now rejected if it was
+  attached as another tenant, and otherwise its `TenantId` is written back with its concurrency token in the same
+  transaction, so a forged one matches no row and nothing is saved. An audit log sees that as an update of the
+  owner.
 - A tenant-scoped inheritance hierarchy failed to build its model, because `ApplyTenantFilters` gave the
   derived types a filter of their own, which EF Core allows only on the root. The root's filter now covers the
   hierarchy, and a tenant-scoped type whose base type is not tenant-scoped throws a Tenantry error. A

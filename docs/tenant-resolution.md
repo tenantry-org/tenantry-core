@@ -138,4 +138,5 @@ Registration order relative to the built-in resolvers is preserved, so you can s
 anywhere in the fallback chain.
 
 Return only a raw identifier — do **not** validate the tenant exists; that is the store's job, and
-returning a value the store does not know yields a clean `404` on an endpoint that requires a tenant.
+returning a value the store does not know yields a clean rejection on an endpoint that requires a tenant (`404`, or
+`403` when access validators are configured).

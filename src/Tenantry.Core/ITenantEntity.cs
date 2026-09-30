@@ -10,7 +10,7 @@ namespace Tenantry;
 /// </typeparam>
 /// <remarks>
 /// Only a getter is required: the EF Core integration sets <c>TenantId</c> through EF Core's own property access,
-/// so the entity may give it a private or init-only setter, or none with a backing field. Derive from
+/// so the entity may give it a private or init-only setter. Derive from
 /// <see cref="TenantEntity{TKey}"/> to get the property with a public setter.
 /// </remarks>
 public interface ITenantEntity<TKey>

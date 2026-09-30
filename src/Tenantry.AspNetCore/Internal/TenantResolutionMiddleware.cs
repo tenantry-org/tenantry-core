@@ -110,8 +110,10 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             return;
         }
 
-        // A default id (Guid.Empty, 0) means "no tenant" to Tenantry, so no tenant can have it.
-        if (!TKey.TryParse(rawTenantId, null, out var tenantId) || EqualityComparer<TKey>.Default.Equals(tenantId, default!))
+        // A default id (Guid.Empty, 0) or an empty string means "no tenant" to Tenantry, so no tenant can have it.
+        if (!TKey.TryParse(rawTenantId, null, out var tenantId)
+            || tenantId is string { Length: 0 }
+            || EqualityComparer<TKey>.Default.Equals(tenantId, default!))
         {
             if (required)
             {

@@ -136,7 +136,9 @@ In an inheritance hierarchy, EF Core filters through the root entity type, so th
 covers the derived types; a tenant-scoped type whose base entity type is not tenant-scoped throws
 `TenantIsolationViolationException`. EF Core reads an owned type's rows only through its owner and does not
 let it have a filter of its own, so a tenant-scoped owned type needs a tenant-scoped owner (otherwise it
-throws); its `TenantId` is still a concurrency token. An entity that implements `ITenantEntity` with a key
+throws); its `TenantId` is still a concurrency token. When a save adds an owned entity to an owner that is only
+attached, not loaded or changed, the owner's `TenantId` is written back with its concurrency token, so the database
+confirms the owner is the current tenant's (an audit log sees an update of the owner). An entity that implements `ITenantEntity` with a key
 type other than the one in use also throws, because nothing would isolate it.
 
 ### Fail-closed behaviour

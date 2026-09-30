@@ -918,6 +918,25 @@ public sealed class MiddlewareTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AnEmptyIdentifierFromACustomResolver_IsInvalid()
+    {
+        // The built-in resolvers never return "", but a custom one can: like Guid.Empty, it cannot be a tenant id.
+        await using var app = await StartAsync<string>(tenant => tenant
+            .UseResolver(new EmptyResolver())
+            .RequireTenantByDefault()
+            .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }]));
+        using var client = app.GetTestClient();
+
+        (await client.GetAsync("/tenant")).StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+    }
+
+    private sealed class EmptyResolver : ITenantResolver
+    {
+        public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<string?>("");
+    }
+
+    [Fact]
     public async Task Rejections_WithProblemDetails_AreProblemDetailsThatNeverRepeatTheIdentifier()
     {
         const string identifier = "<script>alert(1)</script>";
