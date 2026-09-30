@@ -15,7 +15,7 @@ public sealed class InterceptorCrossTenantWriteTests
         // Arrange — seed an "acme" entity
         var ctx = TestTenantContext.For("acme");
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         Order order = new() { Description = "Acme order" };
         db.Orders.Add(order);
@@ -55,7 +55,7 @@ public sealed class InterceptorCrossTenantWriteTests
         // Arrange
         var ctx = TestTenantContext.For("globex");
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         Order foreignOrder = new()
         {
@@ -79,7 +79,7 @@ public sealed class InterceptorCrossTenantWriteTests
         // Arrange — modifying own entity should NOT throw
         var ctx = TestTenantContext.For("acme");
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         Order order = new() { Description = "Acme order" };
         db.Orders.Add(order);

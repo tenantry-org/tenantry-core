@@ -26,7 +26,7 @@ Value: [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md)
 
 ### `CurrentTenantId`
 
-The current tenant's identifier, or `default(TKey)` if no tenant is current: [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for reference-type keys such as [string](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/reference-types), but `Empty` or `0` for value-type keys, because `TKey?` is not nullable for them. Check [`ITenantContext<TKey>.HasTenant`](tenantry-itenantcontext.md) to tell "no tenant" apart; Tenantry never lets a tenant have the default id. Equivalent to `CurrentTenant?.TenantId` but exposed as a single property for use in EF Core global query filter expressions — EF Core evaluates single-step member accesses on the `DbContext` per-query, avoiding intermediate object caching.
+The current tenant's identifier, or `default(TKey)` if no tenant is current: [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for reference-type keys such as [string](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/reference-types), but `Empty` or `0` for value-type keys, because `TKey?` is not nullable for them. Check [`ITenantContext<TKey>.HasTenant`](tenantry-itenantcontext.md) to tell "no tenant" apart; Tenantry never lets a tenant have the default id. Equivalent to `CurrentTenant?.TenantId`.
 
 ```csharp
 TKey? CurrentTenantId { get; }

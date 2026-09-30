@@ -7,7 +7,7 @@ namespace Tenantry.EfCore.Internal;
 /// </summary>
 /// <remarks>
 /// The original <c>TenantId</c> value is the tenant the row is matched on when EF Core issues an
-/// <c>UPDATE</c> or <c>DELETE</c>, because <c>ApplyTenantFilters</c> marks <c>TenantId</c> as a concurrency
+/// <c>UPDATE</c> or <c>DELETE</c>, because <c>UseTenantry()</c> makes <c>TenantId</c> a concurrency
 /// token. For a detached entity passed to <c>Attach</c>, <c>Update</c> or <c>Remove</c>, EF Core copies the
 /// supplied value into the original value, so a forged <c>TenantId</c> passes the in-memory check and is
 /// then rejected by the database predicate, which matches no row.

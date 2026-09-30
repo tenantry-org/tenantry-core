@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Infrastructure;
@@ -18,37 +17,12 @@ public class Order : ITenantEntity<string>
 }
 
 /// <summary>
-/// A plain DbContext (no base class) for testing the interceptor-first path.
-/// Implements <see cref="ITenantAwareDbContext{TKey}"/> so that <see cref="TenantryModelBuilderExtensions.ApplyTenantFilters{TKey,TContext}"/>
-/// can close the query filter over <c>this</c> rather than an external service capture.
-/// EF Core re-evaluates DbContext property accesses per query, which makes the filter
-/// always reflect the current tenant even though the compiled plan is cached.
+/// A plain DbContext (no base class or interface) that uses <c>UseTenantry()</c> through its options.
 /// </summary>
-public class TestDbContext(DbContextOptions<TestDbContext> options, ITenantContext<string> tenantContext)
-    : DbContext(options), ITenantAwareDbContext<string>
+public class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(options)
 {
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<NonTenant> NonTenants => Set<NonTenant>();
-
-    /// <inheritdoc />
-    public string? CurrentTenantId => tenantContext.CurrentTenantId;
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
-        modelBuilder.ApplyTenantFilters<string, TestDbContext>(this);
-    }
-}
-
-/// <summary>
-/// A DbContext that inherits from MultiTenantDbContext for testing the optional base class path.
-/// </summary>
-public class BaseClassTestDbContext(
-    DbContextOptions<BaseClassTestDbContext> options,
-    ITenantContext<string> tenantContext)
-    : MultiTenantDbContext<string>(options, tenantContext)
-{
-    public DbSet<Order> Orders => Set<Order>();
 }
 
 // ── Guid-keyed entities and DbContext ────────────────────────────────────────
@@ -64,23 +38,11 @@ public class GuidOrder : ITenantEntity<Guid>
 }
 
 /// <summary>
-/// A plain DbContext (no base class) for testing the interceptor-first path with <see cref="Guid"/> keys.
+/// A plain DbContext that uses <c>UseTenantry()</c> through its options, with <see cref="Guid"/> keys.
 /// </summary>
-public class GuidTestDbContext(DbContextOptions<GuidTestDbContext> options, ITenantContext<Guid> tenantContext)
-    : DbContext(options), ITenantAwareDbContext<Guid>
+public class GuidTestDbContext(DbContextOptions<GuidTestDbContext> options) : DbContext(options)
 {
     public DbSet<GuidOrder> Orders => Set<GuidOrder>();
-
-    /// <inheritdoc />
-#pragma warning disable CS8766 // Nullability of return type doesn't match implicitly implemented member
-    public Guid CurrentTenantId => tenantContext.CurrentTenantId;
-#pragma warning restore CS8766
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
-        modelBuilder.ApplyTenantFilters<Guid, GuidTestDbContext>(this);
-    }
 }
 
 /// <summary>

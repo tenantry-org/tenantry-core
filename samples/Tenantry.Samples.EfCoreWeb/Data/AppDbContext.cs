@@ -1,24 +1,11 @@
 using Microsoft.EntityFrameworkCore;
-using Tenantry;
-using Tenantry.EfCore;
 using Tenantry.Samples.EfCoreWeb.Entities;
 
 namespace Tenantry.Samples.EfCoreWeb.Data;
 
-public class AppDbContext : DbContext, ITenantAwareDbContext<string>
+// A plain DbContext: UseTenantry() in Program.cs isolates the tenant-owned entities (ITenantEntity<string>).
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    private readonly ITenantContext<string> _tenantContext;
-
-    public AppDbContext(
-        DbContextOptions<AppDbContext> options,
-        ITenantContext<string> tenantContext) : base(options)
-    {
-        _tenantContext = tenantContext;
-    }
-
-    // Required by ITenantAwareDbContext — EF Core re-evaluates this per query
-    public string? CurrentTenantId => _tenantContext.CurrentTenantId;
-
     // Tenanted entities — isolated per tenant
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
@@ -85,8 +72,5 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<string>
             b.Property(c => c.Name).HasMaxLength(100);
             b.Property(c => c.Description).HasMaxLength(500);
         });
-
-        // Last, after all other configuration: applies the tenant query filter to every ITenantEntity type.
-        modelBuilder.ApplyTenantFilters<string, AppDbContext>(this);
     }
 }

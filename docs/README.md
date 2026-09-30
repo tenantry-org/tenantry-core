@@ -32,7 +32,7 @@ Tenantry has three responsibilities, each configured in the `AddTenantry` lambda
 |----------------|---------------------|-----------------|
 | **Resolution** | *Who is the tenant for this request/operation?* | `ResolveFromHeader(...)`, `ResolveFromClaim(...)`, … (ASP.NET Core), or `ITenantScopeFactory` (non-HTTP) |
 | **Storage** | *Which tenants exist, and what are their details?* | `UseInMemoryStore(...)`, `UseStore<T>()` |
-| **Isolation** | *How is each tenant's data kept separate?* | `AddEfCoreIsolation(...)`, plus `UseConnectionStrings(...)` for a database per tenant |
+| **Isolation** | *How is each tenant's data kept separate?* | `options.UseTenantry()` on each `DbContext`, or `UseConnectionStrings(...)` and `AddDbContextPerTenantDatabase<TContext>(...)` for a database per tenant |
 
 The flow on an ASP.NET Core request:
 

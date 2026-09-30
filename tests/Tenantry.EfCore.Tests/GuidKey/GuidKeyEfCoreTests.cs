@@ -22,7 +22,7 @@ public sealed class GuidKeyEfCoreTests
         await using SqliteConnection conn = DbContextFactory.CreateSharedConnection();
 
         ctx.As(acme);
-        await using GuidTestDbContext db = await DbContextFactory.CreateGuidInterceptorContextAsync(ctx, conn);
+        await using GuidTestDbContext db = await DbContextFactory.CreateGuidContextAsync(ctx, conn);
         db.Orders.Add(new GuidOrder { Description = "Acme order 1" });
         db.Orders.Add(new GuidOrder { Description = "Acme order 2" });
         await db.SaveChangesAsync();
@@ -51,7 +51,7 @@ public sealed class GuidKeyEfCoreTests
         Guid tenantId = Guid.NewGuid();
         ctx.As(tenantId);
 
-        (GuidTestDbContext db, SqliteConnection conn) = await DbContextFactory.CreateIsolatedGuidInterceptorContextAsync(ctx);
+        (GuidTestDbContext db, SqliteConnection conn) = await DbContextFactory.CreateIsolatedGuidContextAsync(ctx);
         await using (conn)
         await using (db)
         {
@@ -77,7 +77,7 @@ public sealed class GuidKeyEfCoreTests
         await using SqliteConnection conn = DbContextFactory.CreateSharedConnection();
 
         ctx.As(acme);
-        await using GuidTestDbContext db = await DbContextFactory.CreateGuidInterceptorContextAsync(ctx, conn);
+        await using GuidTestDbContext db = await DbContextFactory.CreateGuidContextAsync(ctx, conn);
         db.Orders.Add(new GuidOrder { Description = "Acme order" });
         await db.SaveChangesAsync();
 
@@ -102,7 +102,7 @@ public sealed class GuidKeyEfCoreTests
         GuidTestTenantContext acmeCtx = new();
         acmeCtx.As(acme);
         (GuidTestDbContext acmeDb, SqliteConnection acmeConn) =
-            await DbContextFactory.CreateIsolatedGuidInterceptorContextAsync(acmeCtx);
+            await DbContextFactory.CreateIsolatedGuidContextAsync(acmeCtx);
 
         acmeDb.Orders.Add(new GuidOrder { Description = "Acme order" });
         await acmeDb.SaveChangesAsync();
@@ -111,7 +111,7 @@ public sealed class GuidKeyEfCoreTests
         GuidTestTenantContext globexCtx = new();
         globexCtx.As(globex);
         (GuidTestDbContext globexDb, SqliteConnection globexConn) =
-            await DbContextFactory.CreateIsolatedGuidInterceptorContextAsync(globexCtx);
+            await DbContextFactory.CreateIsolatedGuidContextAsync(globexCtx);
 
         globexDb.Orders.Add(new GuidOrder { Description = "Globex order" });
         await globexDb.SaveChangesAsync();

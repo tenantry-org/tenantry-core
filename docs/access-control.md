@@ -146,7 +146,6 @@ builder.Services.AddTenantry<Guid>(tenant =>
     tenant.RequireTenantByDefault();             // no anonymous tenant access
     tenant.ValidateTenantAccessByClaim("tenant_id"); // caller must be entitled to the tenant
     tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true }); // and it must be active
-    tenant.AddEfCoreIsolation();
 });
 ```
 

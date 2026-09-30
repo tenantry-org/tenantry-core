@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -13,43 +12,51 @@ namespace Tenantry.EfCore.Internal;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <c>ApplyTenantFilters</c> gives each tenant-scoped entity type the tenant query filter and makes its
-/// <c>TenantId</c> a concurrency token, but configuration that runs after it can undo that: before EF Core 10 a
-/// later <c>HasQueryFilter</c> replaces the entity's only filter, and an entity type added later gets no filter at
-/// all. The tenant's queries would then return every tenant's rows. The query and save interceptors check the model
-/// they are about to use, so such a model fails on its first query or save instead.
+/// <c>UseTenantry()</c>'s model customizer gives each tenant-owned entity type the tenant query filter after all of
+/// the context's own configuration, and makes its <c>TenantId</c> a concurrency token. Something that runs after it
+/// could still undo that: another <c>IModelCustomizer</c> put in its place by a custom internal service provider, a
+/// convention, or a compiled model built without it. The tenant's queries would then return every tenant's rows. The
+/// query and save interceptors check the model they are about to use, so such a model fails on its first query or
+/// save instead.
 /// </para>
 /// <para>
-/// A filter passes when it is the tenant filter or, when <c>ApplyTenantFilters</c> merged it with the entity's own
-/// filter, contains it as one of its <c>&amp;&amp;</c> operands. Entities that implement
-/// <see cref="ITenantEntity{TKey}"/> with another key type fail too: nothing isolates them.
+/// A filter passes when it is the tenant filter or contains it as one of its <c>&amp;&amp;</c> operands, as when it
+/// was merged into the entity's own filter.
 /// </para>
 /// </remarks>
-internal static class TenantModelCheck<TKey>
-    where TKey : IEquatable<TKey>, IParsable<TKey>
+internal static class TenantModelCheck
 {
-    // Models that passed. Weak, so a model the application no longer uses is not kept alive by the check.
-    private static readonly ConditionalWeakTable<IModel, object> Passed = new();
+    // Models that passed, with their isolation. Weak, so a model the application no longer uses is not kept alive.
+    private static readonly ConditionalWeakTable<IModel, Checked> Passed = new();
 
-    /// <summary>Throws when the context's model does not isolate a tenant-scoped entity type.</summary>
-    public static void Verify(DbContext context)
+    /// <summary>
+    /// Throws when the context's model does not isolate a tenant-owned entity type, and otherwise returns the
+    /// isolation for its tenant key type, or <see langword="null"/> when it has no tenant-owned entity types.
+    /// </summary>
+    public static TenantIsolation? Verify(DbContext context)
     {
         var model = context.Model;
 
-        if (Passed.TryGetValue(model, out _))
+        if (Passed.TryGetValue(model, out var passed))
         {
-            return;
+            return passed.Isolation;
         }
 
-        foreach (var entityType in model.GetEntityTypes())
+        var isolation = TenantIsolation.ForModel(model);
+
+        if (isolation is not null)
         {
-            Verify(entityType, context.GetType());
+            foreach (var entityType in model.GetEntityTypes())
+            {
+                Verify(entityType, isolation.KeyType);
+            }
         }
 
-        Passed.AddOrUpdate(model, Passed);
+        Passed.AddOrUpdate(model, new Checked(isolation));
+        return isolation;
     }
 
-    private static void Verify(IEntityType entityType, Type contextType)
+    private static void Verify(IEntityType entityType, Type keyType)
     {
         var clrType = entityType.ClrType;
 
@@ -58,26 +65,21 @@ internal static class TenantModelCheck<TKey>
             return;
         }
 
-        TenantEntityTypes.ThrowIfOtherKeyType<TKey>(clrType);
-
         if (entityType.IsOwned())
         {
             // EF Core reads an owned type's rows only through its owner and does not let it have a filter of its
-            // own. The owner is itself checked as a tenant-scoped entity type of this model.
-            TenantEntityTypes.ThrowIfOwnerIsNotTenantEntity<TKey>(entityType);
+            // own. The owner is itself checked as a tenant-owned entity type of this model.
+            TenantEntityTypes.ThrowIfOwnerIsNotTenantEntity(entityType, keyType);
         }
-        else if (!HasTenantFilter(entityType.GetRootType()))
+        else if (!HasTenantFilter(entityType.GetRootType(), keyType))
         {
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.ModelConfiguration,
                 clrType.Name,
-                $"Tenant-scoped entity '{clrType.Name}' has no tenant query filter that Tenantry recognises, so its " +
-                "queries could return every tenant's rows. Only the filter ApplyTenantFilters adds counts: call " +
-                $"modelBuilder.ApplyTenantFilters<{typeof(TKey).Name}, {contextType.Name}>(this) (or base.OnModelCreating " +
-                "in a MultiTenantDbContext) at the end of OnModelCreating, after your own configuration. An entity type " +
-                "added after it gets no tenant filter, a HasQueryFilter call after it can replace the tenant filter, and " +
-                "a filter written by hand or set by a convention or model customizer after OnModelCreating is not " +
-                "recognised.");
+                $"Tenant-owned entity '{clrType.Name}' has no tenant query filter, so its queries could return every " +
+                "tenant's rows. UseTenantry() adds it after OnModelCreating, so something replaced it later: an " +
+                "IModelCustomizer in a custom internal service provider, a convention, or a compiled model built " +
+                "without it. Let UseTenantry() build the model.");
         }
 
         // Keyless entity types are never updated or deleted.
@@ -86,34 +88,35 @@ internal static class TenantModelCheck<TKey>
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.ModelConfiguration,
                 clrType.Name,
-                $"The TenantId of tenant-scoped entity '{clrType.Name}' is not a concurrency token, so UPDATE and " +
-                "DELETE statements would not check the tenant a row is stored under. ApplyTenantFilters makes it one; " +
-                "do not configure TenantId with IsConcurrencyToken(false).");
+                $"The TenantId of tenant-owned entity '{clrType.Name}' is not a concurrency token, so UPDATE and " +
+                "DELETE statements would not check the tenant a row is stored under. UseTenantry() makes it one; " +
+                "do not configure TenantId with IsConcurrencyToken(false) in a convention or compiled model.");
         }
     }
 
     // Whether UPDATE and DELETE statements match the stored TenantId: it is a concurrency token or part of the key.
     private static bool IsCheckedOnWrite(IEntityType entityType) =>
-        entityType.FindProperty(nameof(ITenantEntity<>.TenantId)) is { } tenantId &&
+        entityType.FindProperty(TenantOwnership.TenantIdProperty) is { } tenantId &&
         (tenantId.IsConcurrencyToken || tenantId.IsPrimaryKey());
 
-    private static bool HasTenantFilter(IEntityType rootType)
+    private static bool HasTenantFilter(IEntityType rootType, Type keyType)
     {
-#if NET10_0_OR_GREATER
-        return rootType.GetDeclaredQueryFilters().Any(filter => filter.Expression is { } lambda && IsTenantFilter(lambda));
+#if EFCORE10_OR_GREATER
+        return rootType.GetDeclaredQueryFilters().Any(filter => filter.Expression is { } lambda && IsTenantFilter(lambda, keyType));
 #else
-        return rootType.GetQueryFilter() is { } lambda && IsTenantFilter(lambda);
+        return rootType.GetQueryFilter() is { } lambda && IsTenantFilter(lambda, keyType);
 #endif
     }
 
-    // ApplyTenantFilters' predicate is `!Equals(context.CurrentTenantId, default) && entity.TenantId.Equals(context.CurrentTenantId)`,
+    // `TenantFilter.HasTenant<TKey>(context) && entity.TenantId.Equals(TenantFilter.CurrentTenantId<TKey>(context))`,
     // either the whole filter or merged into an entity's own filter with &&.
-    private static bool IsTenantFilter(LambdaExpression filter)
+    private static bool IsTenantFilter(LambdaExpression filter, Type keyType)
     {
         List<Expression> operands = [];
         CollectAndOperands(filter.Body, operands);
 
-        return operands.Any(IsHasTenantCheck) && operands.Any(operand => IsTenantMatch(operand, filter.Parameters[0]));
+        return operands.Any(operand => TenantFilter.IsCall(operand, TenantFilter.HasTenantMethod, keyType)) &&
+               operands.Any(operand => IsTenantMatch(operand, filter.Parameters[0], keyType));
     }
 
     private static void CollectAndOperands(Expression expression, List<Expression> operands)
@@ -129,25 +132,13 @@ internal static class TenantModelCheck<TKey>
         }
     }
 
-    // !Equals(context.CurrentTenantId, default)
-    private static bool IsHasTenantCheck(Expression expression) =>
-        expression is UnaryExpression { NodeType: ExpressionType.Not, Operand: MethodCallExpression { Object: null } call } &&
+    // entity.TenantId.Equals(TenantFilter.CurrentTenantId<TKey>(context))
+    private static bool IsTenantMatch(Expression expression, ParameterExpression entity, Type keyType) =>
+        StripConvert(expression) is MethodCallExpression { Object: { } instance, Arguments: [var argument] } call &&
         call.Method.Name == nameof(Equals) &&
-        call.Arguments.Count == 2 &&
-        IsCurrentTenantId(call.Arguments[0]);
-
-    // entity.TenantId.Equals(context.CurrentTenantId)
-    private static bool IsTenantMatch(Expression expression, ParameterExpression entity) =>
-        StripConvert(expression) is MethodCallExpression { Object: { } instance } call &&
-        call.Method.Name == nameof(Equals) &&
-        call.Arguments.Count == 1 &&
-        StripConvert(instance) is MemberExpression { Member.Name: nameof(ITenantEntity<>.TenantId), Expression: { } owner } &&
+        StripConvert(instance) is MemberExpression { Member.Name: TenantOwnership.TenantIdProperty, Expression: { } owner } &&
         StripConvert(owner) == entity &&
-        IsCurrentTenantId(call.Arguments[0]);
-
-    private static bool IsCurrentTenantId(Expression expression) =>
-        StripConvert(expression) is MemberExpression { Member: PropertyInfo { Name: nameof(ITenantAwareDbContext<>.CurrentTenantId) } property } &&
-        typeof(ITenantAwareDbContext<TKey>).IsAssignableFrom(property.DeclaringType);
+        TenantFilter.IsCall(StripConvert(argument), TenantFilter.CurrentTenantIdMethod, keyType);
 
     private static Expression StripConvert(Expression expression)
     {
@@ -158,6 +149,8 @@ internal static class TenantModelCheck<TKey>
 
         return expression;
     }
+
+    private sealed record Checked(TenantIsolation? Isolation);
 }
 
 /// <summary>
@@ -165,33 +158,44 @@ internal static class TenantModelCheck<TKey>
 /// </summary>
 internal static class TenantEntityTypes
 {
-    public static bool IsTenantEntity([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type) => KeyTypes(type).Any();
+    public static bool IsTenantEntity([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type) =>
+        KeyTypes(type).Any();
 
     /// <summary>
-    /// Throws when <paramref name="type"/> implements <see cref="ITenantEntity{TKey}"/> with a key type other than
-    /// <typeparamref name="TKey"/>, the tenant key type in use, because such an entity gets no tenant filter and no
-    /// write isolation.
+    /// The tenant key types <paramref name="type"/> implements <see cref="ITenantEntity{TKey}"/> with, including
+    /// its own when it is that interface.
     /// </summary>
-    public static void ThrowIfOtherKeyType<TKey>([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type)
+    public static IEnumerable<Type> KeyTypes([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type) =>
+        type.GetInterfaces()
+            .Append(type)
+            .Where(candidate => candidate.IsInterface && candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(ITenantEntity<>))
+            .Select(candidate => candidate.GetGenericArguments()[0]);
+
+    /// <summary>
+    /// Throws when the root of <paramref name="entityType"/>'s inheritance hierarchy is not tenant-owned: EF Core
+    /// filters a hierarchy only through its root, so nothing would isolate the tenant-owned derived type.
+    /// </summary>
+    public static void ThrowIfRootIsNotTenantEntity(IReadOnlyEntityType entityType, Type keyType)
     {
-        if (KeyTypes(type).FirstOrDefault(key => key != typeof(TKey)) is { } other)
+        var root = entityType.GetRootType();
+
+        if (!KeyTypes(root.ClrType).Contains(keyType))
         {
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.ModelConfiguration,
-                type.Name,
-                $"Entity '{type.Name}' implements ITenantEntity<{other.Name}>, but the tenant key type here is " +
-                $"{typeof(TKey).Name}, so nothing would isolate it. Use one tenant key type for AddTenantry, " +
-                "ApplyTenantFilters and ITenantEntity.");
+                entityType.ClrType.Name,
+                $"Entity '{entityType.ClrType.Name}' is tenant-owned but its base entity type '{root.ClrType.Name}' is " +
+                "not. EF Core applies query filters to the root of an inheritance hierarchy only, so implement " +
+                $"ITenantEntity<{keyType.Name}> on '{root.ClrType.Name}'.");
         }
     }
 
     /// <summary>
-    /// Throws when the owner of the tenant-scoped owned type <paramref name="owned"/> (its first owner that is not
-    /// itself owned) is not tenant-scoped: EF Core reads owned rows only through their owner and filters only the
+    /// Throws when the owner of the tenant-owned owned type <paramref name="owned"/> (its first owner that is not
+    /// itself owned) is not tenant-owned: EF Core reads owned rows only through their owner and filters only the
     /// owner, so nothing would keep one tenant from reading another's.
     /// </summary>
-    public static void ThrowIfOwnerIsNotTenantEntity<TKey>(IReadOnlyEntityType owned)
-        where TKey : IEquatable<TKey>, IParsable<TKey>
+    public static void ThrowIfOwnerIsNotTenantEntity(IReadOnlyEntityType owned, Type keyType)
     {
         var owner = owned;
 
@@ -202,19 +206,14 @@ internal static class TenantEntityTypes
 
         owner = owner.GetRootType();
 
-        if (!typeof(ITenantEntity<TKey>).IsAssignableFrom(owner.ClrType))
+        if (!KeyTypes(owner.ClrType).Contains(keyType))
         {
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.ModelConfiguration,
                 owned.ClrType.Name,
-                $"Owned entity '{owned.ClrType.Name}' is tenant-scoped but its owner '{owner.ClrType.Name}' is not. " +
+                $"Owned entity '{owned.ClrType.Name}' is tenant-owned but its owner '{owner.ClrType.Name}' is not. " +
                 "EF Core reads owned rows only through their owner and filters only the owner, so implement " +
-                $"ITenantEntity<{typeof(TKey).Name}> on '{owner.ClrType.Name}'.");
+                $"ITenantEntity<{keyType.Name}> on '{owner.ClrType.Name}'.");
         }
     }
-
-    private static IEnumerable<Type> KeyTypes([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type) =>
-        type.GetInterfaces()
-            .Where(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(ITenantEntity<>))
-            .Select(candidate => candidate.GetGenericArguments()[0]);
 }

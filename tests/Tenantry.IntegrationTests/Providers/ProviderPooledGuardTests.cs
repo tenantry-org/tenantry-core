@@ -23,7 +23,7 @@ public sealed class HiLoItem : ITenantEntity<string>
 }
 
 public sealed class PostgreSqlHiLoContext(DbContextOptions<PostgreSqlHiLoContext> options)
-    : MultiTenantDbContext<string>(options)
+    : DbContext(options)
 {
     public DbSet<HiLoItem> Items => Set<HiLoItem>();
 
@@ -35,7 +35,7 @@ public sealed class PostgreSqlHiLoContext(DbContextOptions<PostgreSqlHiLoContext
 }
 
 public sealed class SqlServerHiLoContext(DbContextOptions<SqlServerHiLoContext> options)
-    : MultiTenantDbContext<string>(options)
+    : DbContext(options)
 {
     public DbSet<HiLoItem> Items => Set<HiLoItem>();
 
@@ -202,15 +202,14 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
             tenant.UseInMemoryStore(tenants);
             tenant.UseConnectionStrings(options =>
                 options.GetConnectionString = t => fixture.WithDatabase($"tk_{prefix}_{t.TenantId}_{runId}"));
-            tenant.AddEfCoreIsolation();
+            tenant.AddDbContextPerTenantDatabase<TPooled>(
+                (_, options) => fixture.UseProvider(options)
+                    // These contexts have no migrations. EF Core 11 makes that an error before Migrate runs any SQL,
+                    // which would stop the Migrate test before the guard is reached; EF Core 10 only logs it.
+                    .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.MigrationsNotFound)),
+                pooled: true,
+                poolSize: 4);
         });
-        services.AddTenantDbContextPool<TPooled, string>(
-            (sp, options) => fixture.UseProvider(options)
-                .AddTenantInterceptors(sp)
-                // These contexts have no migrations. EF Core 11 makes that an error before Migrate runs any SQL,
-                // which would stop the Migrate test before the guard is reached; EF Core 10 only logs it.
-                .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.MigrationsNotFound)),
-            poolSize: 4);
 
         return services.BuildServiceProvider();
     }
@@ -405,20 +404,28 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : ICl
             tenant.UseInMemoryStore([_acme, _globex]);
             tenant.UseConnectionStrings(options =>
                 options.GetConnectionString = t => fixture.WithDatabase($"tk_ds_{t.TenantId}_{_runId}"));
-            tenant.AddEfCoreIsolation();
+            tenant.AddDbContextPerTenantDatabase<ProviderOrdersContext>(
+                // Safe: the provider that holds this callback is declared later, so it is disposed before the data source.
+                // ReSharper disable once AccessToDisposedClosure
+                (_, options) =>
+                {
+                    if (mode == "DataSourceInDi")
+                    {
+                        options.UseNpgsql();
+                    }
+                    else
+                    {
+                        options.UseNpgsql(shared);
+                    }
+                },
+                pooled: true,
+                poolSize: 4);
         });
 
         if (mode == "DataSourceInDi")
         {
             services.AddSingleton(shared);
         }
-
-        services.AddTenantDbContextPool<ProviderOrdersContext, string>(
-            // Safe: the provider that holds this callback is declared later, so it is disposed before the data source.
-            // ReSharper disable once AccessToDisposedClosure
-            (sp, options) => (mode == "DataSourceInDi" ? options.UseNpgsql() : options.UseNpgsql(shared))
-                .AddTenantInterceptors(sp),
-            poolSize: 4);
         await using var provider = services.BuildServiceProvider();
         var ambient = provider.GetRequiredService<ITenantContextSetter<string>>();
         var factory = provider.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>();

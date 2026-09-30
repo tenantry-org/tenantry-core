@@ -1,39 +1,20 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Pooling;
 
 /// <summary>A pool-compatible context: its only constructor takes the options.</summary>
-public sealed class PooledOrdersContext(DbContextOptions<PooledOrdersContext> options)
-    : MultiTenantDbContext<string>(options)
+public sealed class PooledOrdersContext(DbContextOptions<PooledOrdersContext> options) : DbContext(options)
 {
     public DbSet<Order> Orders => Set<Order>();
 }
 
 /// <summary>
-/// A pool-compatible context that does not derive from <see cref="MultiTenantDbContext{TKey}"/>: it resolves the
-/// ambient tenant context through <c>GetService</c> instead of its constructor.
-/// </summary>
-public sealed class RawPooledOrdersContext(DbContextOptions<RawPooledOrdersContext> options)
-    : DbContext(options), ITenantAwareDbContext<string>
-{
-    private ITenantContext<string>? _tenantContext;
-
-    public DbSet<Order> Orders => Set<Order>();
-
-    public string? CurrentTenantId => (_tenantContext ??= this.GetService<ITenantContext<string>>()).CurrentTenantId;
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-        modelBuilder.ApplyTenantFilters<string, RawPooledOrdersContext>(this);
-}
-
-/// <summary>
-/// Verifies that pooled <see cref="MultiTenantDbContext{TKey}"/> instances isolate whichever tenant is active
-/// each time they are used, through <c>AddDbContextPool</c> and <c>AddPooledDbContextFactory</c>.
+/// Verifies that pooled contexts using <c>UseTenantry()</c> isolate whichever tenant is active each time they are
+/// used, through <c>AddDbContextPool</c> and <c>AddPooledDbContextFactory</c>.
 /// </summary>
 public sealed class PooledContextTests : IDisposable
 {
@@ -164,81 +145,49 @@ public sealed class PooledContextTests : IDisposable
     }
 
     [Fact]
-    public async Task RawPooledContext_ResolvingTenantContextThroughGetService_IsolatesEachTenant()
+    public async Task ContextWithoutAnApplicationServiceProvider_BuildsItsModel_ButExplainsWhyItCannotQuery()
+    {
+        var options = new DbContextOptionsBuilder<PooledOrdersContext>().UseSqlite(_connectionString).UseTenantry().Options;
+        await using var db = new PooledOrdersContext(options);
+
+        // Design-time tools build the model without the application's services.
+        db.Model.FindEntityType(typeof(Order))!.FindProperty(nameof(Order.TenantId))!.IsConcurrencyToken.Should().BeTrue();
+        await db.Awaiting(d => d.Orders.ToListAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*no application service provider*AddDbContext*UseApplicationServiceProvider*");
+    }
+
+    [Fact]
+    public async Task ContextWithoutTenantry_ExplainsHowToRegisterIt()
     {
         ServiceCollection collection = new();
-        collection.AddLogging();
-        collection.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
-        collection.AddDbContextPool<RawPooledOrdersContext>((sp, options) =>
-            options.UseSqlite(_connectionString).AddTenantInterceptors(sp));
+        collection.AddDbContext<PooledOrdersContext>(options => options.UseSqlite(_connectionString).UseTenantry());
         await using var services = collection.BuildServiceProvider();
-        var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
+        await using var scope = services.CreateAsyncScope();
 
-        foreach (var tenantId in new[] { "acme", "globex" })
-        {
-            using (tenants.Use(Tenant(tenantId)))
-            await using (var scope = services.CreateAsyncScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<RawPooledOrdersContext>();
-                await db.Database.EnsureCreatedAsync();
-                db.Orders.Add(new Order { Description = $"{tenantId} order" });
-                await db.SaveChangesAsync();
+        var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
 
-                (await db.Orders.Select(o => o.TenantId).ToListAsync()).Should().Equal(tenantId);
-            }
-        }
-
-        Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
+        // Building the model throws, and so does every query and save, as EF Core may already have this context
+        // type's model from another application in the process (another test here).
+        await db.Awaiting(context => context.Orders.ToListAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*ITenantEntity<String>*not registered*AddTenantry<String>*");
+        db.Orders.Add(new Order { Description = "unisolated" });
+        await db.Awaiting(context => context.SaveChangesAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*ITenantEntity<String>*not registered*AddTenantry<String>*");
     }
 
-    [Fact]
-    public async Task PooledContext_WithoutTenantInterceptors_FailsInsteadOfSavingUnisolated()
-    {
-        await using var services = BuildServices(pooledFactory: false, addTenantInterceptors: false);
-        var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
-
-        using (tenants.Use(Tenant("acme")))
-        await using (var scope = services.CreateAsyncScope())
-        {
-            await scope.ServiceProvider
-                .Awaiting(sp => sp.GetRequiredService<PooledOrdersContext>().Database.EnsureCreatedAsync())
-                .Should().ThrowAsync<InvalidOperationException>().WithMessage("*OnConfiguring*pooling*");
-        }
-    }
-
-    [Fact]
-    public void ContextWithoutTenantContext_ExplainsHowToRegisterTenantry()
-    {
-        var options = new DbContextOptionsBuilder<PooledOrdersContext>().UseSqlite(_connectionString).Options;
-        using var db = new PooledOrdersContext(options);
-
-        db.Invoking(d => d.CurrentTenantId)
-            .Should().Throw<InvalidOperationException>().WithMessage("*ITenantContext*AddTenantry*");
-    }
-
-    private ServiceProvider BuildServices(bool pooledFactory, bool addTenantInterceptors = true)
+    private ServiceProvider BuildServices(bool pooledFactory)
     {
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
-
-        void Configure(IServiceProvider sp, DbContextOptionsBuilder options)
-        {
-            options.UseSqlite(_connectionString);
-
-            if (addTenantInterceptors)
-            {
-                options.AddTenantInterceptors(sp);
-            }
-        }
+        services.AddTenantry<string>();
 
         if (pooledFactory)
         {
-            services.AddPooledDbContextFactory<PooledOrdersContext>(Configure);
+            services.AddPooledDbContextFactory<PooledOrdersContext>(options => options.UseSqlite(_connectionString).UseTenantry());
         }
         else
         {
-            services.AddDbContextPool<PooledOrdersContext>(Configure);
+            services.AddDbContextPool<PooledOrdersContext>(options => options.UseSqlite(_connectionString).UseTenantry());
         }
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

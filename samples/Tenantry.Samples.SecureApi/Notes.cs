@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using Tenantry;
-using Tenantry.EfCore;
 
 namespace Tenantry.Samples.SecureApi;
 
@@ -16,18 +15,14 @@ public sealed class Note : ITenantEntity<string>
     public string Text { get; set; } = string.Empty;
 }
 
-public sealed class NotesDbContext(DbContextOptions<NotesDbContext> options) : MultiTenantDbContext<string>(options)
+// A plain DbContext: UseTenantry() in Program.cs isolates its tenant-owned entities.
+public sealed class NotesDbContext(DbContextOptions<NotesDbContext> options) : DbContext(options)
 {
     public DbSet<Note> Notes => Set<Note>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        // Every query is filtered by TenantId, so lead indexes with it.
+    // Every query is filtered by TenantId, so lead indexes with it.
+    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.Entity<Note>().HasIndex(note => new { note.TenantId, note.Id });
-
-        // Last, after your own configuration: applies the tenant query filters.
-        base.OnModelCreating(modelBuilder);
-    }
 }
 
 public sealed record CreateNote(string Text);

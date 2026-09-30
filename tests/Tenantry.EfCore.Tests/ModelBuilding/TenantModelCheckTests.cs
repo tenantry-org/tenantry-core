@@ -2,14 +2,17 @@ using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
+using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
 
 /// <summary>
-/// A context with Tenantry's interceptors checks its model on the first query and save: every tenant-scoped entity
-/// type must keep the tenant filter and concurrency token, whichever order the model was configured in.
+/// The model <c>UseTenantry()</c> builds isolates every tenant-owned entity type, whatever the context configures;
+/// configuration that cannot be isolated fails the model build; and a model that lost its isolation after
+/// <c>UseTenantry()</c> built it fails on its first query or save.
 /// </summary>
 public sealed class TenantModelCheckTests : IDisposable
 {
@@ -19,132 +22,138 @@ public sealed class TenantModelCheckTests : IDisposable
     public void Dispose() => _connection.Dispose();
 
     [Fact]
-    public async Task OwnFilterBeforeTenantFilter_BothApply()
+    public async Task EntityTypeConfiguredAnywhereInOnModelCreating_IsFiltered()
     {
-        await using var db = await CreateAsync<FilterBeforeContext>();
-        await SeedAsync(db);
+        await using var db = await CreateAsync<EntityAddedLastContext>();
+        db.Set<LateItem>().Add(new LateItem());
+        await db.SaveChangesAsync();
+        _tenant.As("globex");
 
-        (await db.Items.Select(item => item.Name).ToListAsync()).Should().Equal("acme active");
+        (await db.Set<LateItem>().CountAsync()).Should().Be(0);
     }
 
     [Fact]
-    public async Task UnnamedOwnFilterAfterTenantFilter_FailsInsteadOfReadingEveryTenant()
+    public async Task SharedTypeEntityTypes_AreEachFiltered()
     {
-        await using var db = new FilterAfterContext(DbContextFactory.InterceptorOptions<FilterAfterContext>(_tenant, _connection), _tenant);
+        await using var db = await CreateAsync<SharedTypeContext>();
+        db.Set<LateItem>("CurrentItems").Add(new LateItem());
+        db.Set<LateItem>("ArchivedItems").Add(new LateItem());
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
 
-#if NET10_0_OR_GREATER
-        // EF Core 10 does not combine an unnamed filter with the named tenant filter.
-        db.Invoking(context => context.Model).Should().Throw<InvalidOperationException>();
-#else
-        // The unnamed filter replaced the tenant filter.
+        (await db.Set<LateItem>("ArchivedItems").CountAsync()).Should().Be(1);
+        _tenant.As("globex");
+        (await db.Set<LateItem>("CurrentItems").CountAsync()).Should().Be(0);
+        (await db.Set<LateItem>("ArchivedItems").CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task KeylessTenantOwnedType_IsFiltered()
+    {
+        await using var db = await CreateAsync<KeylessContext>();
+        db.Items.Add(new Item { Name = "acme item" });
+        await db.SaveChangesAsync();
+        _tenant.As("globex");
+        db.Items.Add(new Item { Name = "globex item" });
+        await db.SaveChangesAsync();
+
+        (await db.ItemNames.Select(view => view.Name).ToListAsync()).Should().Equal("globex item");
+        db.Model.FindEntityType(typeof(ItemName))!.FindProperty(nameof(ItemName.TenantId))!.IsConcurrencyToken.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task IntTenantKeys_AreStampedAndFiltered_ThroughTheAmbientTenant()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<int>();
+        services.AddDbContext<IntKeyContext>(options => options.UseSqlite(_connection).UseTenantry());
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        var tenants = provider.GetRequiredService<ITenantContextSetter<int>>();
+        await using var scope = provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IntKeyContext>();
         await db.Database.EnsureCreatedAsync();
-        await db.Awaiting(context => context.Items.ToListAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*");
-#endif
-    }
 
-#if NET10_0_OR_GREATER
-    [Fact]
-    public async Task NamedOwnFilterAfterTenantFilter_BothApply()
-    {
-        await using var db = await CreateAsync<NamedFilterAfterContext>();
-        await SeedAsync(db);
+        using (tenants.Use(new TenantDescriptor<int> { TenantId = 1, Name = "one" }))
+        {
+            db.Items.Add(new IntItem());
+            await db.SaveChangesAsync();
+        }
 
-        (await db.Items.Select(item => item.Name).ToListAsync()).Should().Equal("acme active");
-    }
-#endif
+        using (tenants.Use(new TenantDescriptor<int> { TenantId = 2, Name = "two" }))
+        {
+            (await db.Items.CountAsync()).Should().Be(0);
+        }
 
-    [Fact]
-    public async Task MultiTenantDbContext_OwnFilterBeforeBase_BothApply()
-    {
-        await using var db = await CreateAsync<BaseLastContext>();
-        await SeedAsync(db);
-
-        (await db.Items.Select(item => item.Name).ToListAsync()).Should().Equal("acme active");
+        (await db.Items.CountAsync()).Should().Be(0, "no tenant is current");
+        (await db.Items.IgnoreQueryFilters().SingleAsync()).TenantId.Should().Be(1);
     }
 
     [Fact]
-    public async Task MultiTenantDbContext_UnnamedOwnFilterAfterBase_FailsInsteadOfReadingEveryTenant()
+    public async Task ConcurrencyTokenTurnedOffInOnModelCreating_IsTurnedBackOn()
     {
-        await using var db = new BaseFirstContext(DbContextFactory.InterceptorOptions<BaseFirstContext>(_tenant, _connection), _tenant);
+        await using var db = await CreateAsync<TokenResetContext>();
 
-#if NET10_0_OR_GREATER
-        db.Invoking(context => context.Model).Should().Throw<InvalidOperationException>();
-#else
+        db.Model.FindEntityType(typeof(Item))!.FindProperty(nameof(Item.TenantId))!.IsConcurrencyToken.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ModelContributor_RunsAfterOnModelCreating_AndItsEntityTypesAreFiltered()
+    {
+        await using var db = new ContributedContext(Options<ContributedContext>(services =>
+            services.AddSingleton<ITenantModelContributor, LateItemContributor>()));
         await db.Database.EnsureCreatedAsync();
-        await db.Awaiting(context => context.Items.ToListAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*");
-#endif
+        db.Set<LateItem>().Add(new LateItem());
+        await db.SaveChangesAsync();
+
+        db.Model.FindEntityType(typeof(LateItem))!.GetTableName().Should().Be("ContributedItems");
+        (await db.Set<LateItem>().CountAsync()).Should().Be(1);
+        _tenant.As("globex");
+        (await db.Set<LateItem>().CountAsync()).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ReplacedModelCustomizer_FailsWithAnExplanation(bool replacedFirst)
+    {
+        var builder = new DbContextOptionsBuilder<ItemsOnlyContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant));
+
+        if (replacedFirst)
+        {
+            builder.ReplaceService<IModelCustomizer, OtherModelCustomizer>().UseTenantry();
+        }
+        else
+        {
+            builder.UseTenantry().ReplaceService<IModelCustomizer, OtherModelCustomizer>();
+        }
+
+        // EF Core validates the options when the context is created.
+        FluentActions.Invoking(() => new ItemsOnlyContext(builder.Options))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*replaces EF Core's IModelCustomizer with 'OtherModelCustomizer'*ITenantModelContributor*");
     }
 
     [Fact]
-    public async Task OwnFilterBeforeAndAnotherAfterTenantFilter_FailsInsteadOfReadingEveryTenant()
+    public void EntitiesWithTwoTenantKeyTypes_FailToBuildTheModel()
     {
-        // ApplyTenantFilters merges the tenant filter into the unnamed own filter; an unnamed filter after it
-        // replaces the merged one, on EF Core 10 too.
-        await using var db = await CreateAsync<FilterBeforeAndAfterContext>();
-
-        await db.Awaiting(context => context.Items.ToListAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*")
-            .Where(e => e.Kind == TenantIsolationViolationKind.ModelConfiguration && e.TypeName == "Item");
-    }
-
-    [Fact]
-    public async Task EntityTypeAddedAfterTenantFilter_FailsOnFirstQuery()
-    {
-        await using var db = await CreateAsync<EntityAddedAfterContext>();
-
-        await db.Awaiting(context => context.Set<LateItem>().ToListAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'LateItem' has no tenant query filter*");
-    }
-
-    [Fact]
-    public async Task NoTenantFilters_FailOnFirstQuery()
-    {
-        await using var db = await CreateAsync<NoFiltersContext>();
-
-        await db.Awaiting(context => context.Items.ToListAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*");
-    }
-
-    [Fact]
-    public async Task NoTenantFilters_FailOnFirstSave_WithoutWriting()
-    {
-        await using var db = await CreateAsync<NoFiltersContext>();
-        db.Items.Add(new Item { Name = "acme active" });
-
-        await db.Awaiting(context => context.SaveChangesAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*");
-        CountRows("Items").Should().Be(0);
-    }
-
-    [Fact]
-    public async Task EntityWithAnotherKeyType_ApplyTenantFiltersThrows()
-    {
-        await using var db = new OtherKeyContext(DbContextFactory.InterceptorOptions<OtherKeyContext>(_tenant, _connection), _tenant);
+        var db = new TwoKeyTypesContext(DbContextFactory.Options<TwoKeyTypesContext>(_tenant, _connection));
 
         db.Invoking(context => context.Model)
             .Should().Throw<TenantIsolationViolationException>()
-            .WithMessage("Entity 'GuidItem' implements ITenantEntity<Guid>, but the tenant key type here is String*");
+            .WithMessage("*implements ITenantEntity<*, but '*' implements ITenantEntity<*one tenant key type*")
+            .Where(e => e.Kind == TenantIsolationViolationKind.ModelConfiguration);
     }
 
     [Fact]
-    public async Task EntityWithAnotherKeyType_WithoutTenantFilters_FailsOnFirstQuery()
+    public void EntitiesOfAKeyTypeTenantryIsNotRegisteredFor_FailToBuildTheModel()
     {
-        await using var db = await CreateAsync<OtherKeyNoFiltersContext>();
+        var db = new GuidItemsContext(DbContextFactory.Options<GuidItemsContext>(_tenant, _connection));
 
-        await db.Awaiting(context => context.Items.ToListAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*implements ITenantEntity<Guid>*");
-    }
-
-    [Fact]
-    public async Task TenantIdNotAConcurrencyToken_FailsOnFirstSave()
-    {
-        await using var db = await CreateAsync<TokenResetContext>();
-        db.Items.Add(new Item { Name = "acme active" });
-
-        await db.Awaiting(context => context.SaveChangesAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' is not a concurrency token*");
+        db.Invoking(context => context.Model)
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*ITenantEntity<Guid>, but Tenantry is not registered for 'Guid' tenant keys*AddTenantry<Guid>*");
     }
 
     [Fact]
@@ -163,17 +172,17 @@ public sealed class TenantModelCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task TenantScopedTypeDerivedFromAnUnscopedType_ApplyTenantFiltersThrows()
+    public void TenantOwnedTypeDerivedFromAnUnownedType_FailsToBuildTheModel()
     {
-        await using var db = new UnscopedBaseContext(DbContextFactory.InterceptorOptions<UnscopedBaseContext>(_tenant, _connection), _tenant);
+        var db = new UnownedBaseContext(DbContextFactory.Options<UnownedBaseContext>(_tenant, _connection));
 
         db.Invoking(context => context.Model)
             .Should().Throw<TenantIsolationViolationException>()
-            .WithMessage("Entity 'Car' is tenant-scoped but its base entity type 'Vehicle' is not*");
+            .WithMessage("Entity 'Car' is tenant-owned but its base entity type 'Vehicle' is not*");
     }
 
     [Fact]
-    public async Task OwnedTenantScopedType_IsStampedAndIsolatedThroughItsOwner()
+    public async Task OwnedTenantOwnedType_IsStampedAndIsolatedThroughItsOwner()
     {
         await using var db = await CreateAsync<OwnedContext>();
         await SeedCustomerAsync(db);
@@ -187,7 +196,7 @@ public sealed class TenantModelCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task OwnedTenantScopedType_ForgedWriteToAnotherTenantsRow_MatchesNoRow()
+    public async Task OwnedTenantOwnedType_ForgedWriteToAnotherTenantsRow_MatchesNoRow()
     {
         await using var db = await CreateAsync<OwnedContext>();
         var (customerId, addressId) = await SeedCustomerAsync(db);
@@ -206,23 +215,58 @@ public sealed class TenantModelCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task OwnedTenantScopedTypeOfAnUnscopedOwner_ApplyTenantFiltersThrows()
+    public void OwnedTenantOwnedTypeOfAnUnownedOwner_FailsToBuildTheModel()
     {
-        await using var db = new UnscopedOwnerContext(DbContextFactory.InterceptorOptions<UnscopedOwnerContext>(_tenant, _connection), _tenant);
+        var db = new UnownedOwnerContext(DbContextFactory.Options<UnownedOwnerContext>(_tenant, _connection));
 
         db.Invoking(context => context.Model)
             .Should().Throw<TenantIsolationViolationException>()
-            .WithMessage("Owned entity 'Price' is tenant-scoped but its owner 'Catalog' is not*");
+            .WithMessage("Owned entity 'Price' is tenant-owned but its owner 'Catalog' is not*");
+    }
+
+    // ── Models that lost their isolation after UseTenantry() built them ─────────────────────────────────────
+    // Simulated with Tenantry's interceptors on a context whose model Tenantry's customizer did not build. Each of
+    // these context types is used only without UseTenantry(), so its cached model is never one Tenantry built.
+
+    [Fact]
+    public async Task ModelWithoutTheTenantFilter_FailsOnFirstQuery()
+    {
+        await using var db = await CreateWithoutCustomizerAsync<NoCustomizerContext>();
+
+        await db.Awaiting(context => context.Items.ToListAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*")
+            .Where(e => e.Kind == TenantIsolationViolationKind.ModelConfiguration && e.TypeName == "Item");
     }
 
     [Fact]
-    public async Task OwnedTenantScopedTypeOfAnUnscopedOwner_WithoutTenantFilters_FailsOnFirstQuery()
+    public async Task ModelWithoutTheTenantFilter_FailsOnFirstSave_WithoutWriting()
     {
-        await using var db = await CreateAsync<UnscopedOwnerNoFiltersContext>();
+        await using var db = await CreateWithoutCustomizerAsync<NoCustomizerContext>();
+        db.Items.Add(new Item { Name = "acme active" });
+
+        await db.Awaiting(context => context.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*");
+        CountRows("Items").Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ModelWhoseTenantIdIsNotAConcurrencyToken_FailsOnFirstSave()
+    {
+        await using var db = await CreateWithoutCustomizerAsync<TokenResetAfterTenantryContext>();
+        db.Items.Add(new Item { Name = "acme active" });
+
+        await db.Awaiting(context => context.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' is not a concurrency token*");
+    }
+
+    [Fact]
+    public async Task ModelWithAnOwnedTypeOfAnUnownedOwner_FailsOnFirstQuery()
+    {
+        await using var db = await CreateWithoutCustomizerAsync<NoCustomizerOwnerContext>();
 
         await db.Awaiting(context => context.Catalogs.ToListAsync())
             .Should().ThrowAsync<TenantIsolationViolationException>()
-            .WithMessage("Owned entity 'Price' is tenant-scoped but its owner 'Catalog' is not*");
+            .WithMessage("Owned entity 'Price' is tenant-owned but its owner 'Catalog' is not*");
     }
 
     private static async Task<(int CustomerId, int AddressId)> SeedCustomerAsync(OwnedContext db)
@@ -234,24 +278,33 @@ public sealed class TenantModelCheckTests : IDisposable
         return (customer.Id, customer.Addresses[0].Id);
     }
 
+    private DbContextOptions<TContext> Options<TContext>(Action<IServiceCollection> configure)
+        where TContext : DbContext =>
+        new DbContextOptionsBuilder<TContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant, configure: configure))
+            .UseTenantry()
+            .Options;
+
     private async Task<TContext> CreateAsync<TContext>()
         where TContext : DbContext
     {
-        var db = (TContext)Activator.CreateInstance(typeof(TContext), DbContextFactory.InterceptorOptions<TContext>(_tenant, _connection), _tenant)!;
+        var db = (TContext)Activator.CreateInstance(typeof(TContext), DbContextFactory.Options<TContext>(_tenant, _connection))!;
         await db.Database.EnsureCreatedAsync();
         return db;
     }
 
-    private async Task SeedAsync(IItems db)
+    private async Task<TContext> CreateWithoutCustomizerAsync<TContext>()
+        where TContext : DbContext
     {
-        db.Items.Add(new Item { Name = "acme active" });
-        db.Items.Add(new Item { Name = "acme deleted", IsDeleted = true });
-        await ((DbContext)db).SaveChangesAsync();
-        _tenant.As("globex");
-        db.Items.Add(new Item { Name = "globex active" });
-        await ((DbContext)db).SaveChangesAsync();
-        _tenant.As("acme");
-        ((DbContext)db).ChangeTracker.Clear();
+        var options = new DbContextOptionsBuilder<TContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant))
+            .AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantBulkUpdateGuard.Instance)
+            .Options;
+        var db = (TContext)Activator.CreateInstance(typeof(TContext), options)!;
+        await db.Database.EnsureCreatedAsync();
+        return db;
     }
 
     private long CountRows(string table)
@@ -272,8 +325,6 @@ public sealed class TenantModelCheckTests : IDisposable
 
         [MaxLength(64)]
         public string Name { get; set; } = string.Empty;
-
-        public bool IsDeleted { get; set; }
     }
 
     public sealed class LateItem : ITenantEntity<string>
@@ -282,6 +333,20 @@ public sealed class TenantModelCheckTests : IDisposable
 
         [MaxLength(64)]
         public string TenantId { get; set; } = string.Empty;
+    }
+
+    public sealed class ItemName : ITenantEntity<string>
+    {
+        public string TenantId { get; set; } = string.Empty;
+
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public sealed class IntItem : ITenantEntity<int>
+    {
+        public int Id { get; set; }
+
+        public int TenantId { get; set; }
     }
 
     public sealed class GuidItem : ITenantEntity<Guid>
@@ -358,188 +423,139 @@ public sealed class TenantModelCheckTests : IDisposable
 
     // ── Contexts (one type per model, because EF Core caches the model per context type) ──
 
-    private interface IItems
-    {
-        DbSet<Item> Items { get; }
-    }
-
-    private abstract class ItemsContext(DbContextOptions options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>, IItems
+    public sealed class ItemsOnlyContext(DbContextOptions<ItemsOnlyContext> options) : DbContext(options)
     {
         public DbSet<Item> Items => Set<Item>();
-
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
     }
 
-    private sealed class FilterBeforeContext(DbContextOptions<FilterBeforeContext> options, ITenantContext<string> tenantContext)
-        : ItemsContext(options, tenantContext)
-    {
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Item>().HasQueryFilter(item => !item.IsDeleted);
-            modelBuilder.ApplyTenantFilters<string, FilterBeforeContext>(this);
-        }
-    }
-
-    private sealed class FilterAfterContext(DbContextOptions<FilterAfterContext> options, ITenantContext<string> tenantContext)
-        : ItemsContext(options, tenantContext)
-    {
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.ApplyTenantFilters<string, FilterAfterContext>(this);
-            modelBuilder.Entity<Item>().HasQueryFilter(item => !item.IsDeleted);
-        }
-    }
-
-#if NET10_0_OR_GREATER
-    private sealed class NamedFilterAfterContext(DbContextOptions<NamedFilterAfterContext> options, ITenantContext<string> tenantContext)
-        : ItemsContext(options, tenantContext)
-    {
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.ApplyTenantFilters<string, NamedFilterAfterContext>(this);
-            modelBuilder.Entity<Item>().HasQueryFilter("SoftDelete", item => !item.IsDeleted);
-        }
-    }
-#endif
-
-    private sealed class BaseLastContext(DbContextOptions<BaseLastContext> options, ITenantContext<string> tenantContext)
-        : MultiTenantDbContext<string>(options, tenantContext), IItems
+    private sealed class ContributedContext(DbContextOptions<ContributedContext> options) : DbContext(options)
     {
         public DbSet<Item> Items => Set<Item>();
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Item>().HasQueryFilter(item => !item.IsDeleted);
-            base.OnModelCreating(modelBuilder);
-        }
     }
 
-    private sealed class BaseFirstContext(DbContextOptions<BaseFirstContext> options, ITenantContext<string> tenantContext)
-        : MultiTenantDbContext<string>(options, tenantContext), IItems
+    private sealed class EntityAddedLastContext(DbContextOptions<EntityAddedLastContext> options) : DbContext(options)
     {
         public DbSet<Item> Items => Set<Item>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            modelBuilder.Entity<Item>().HasQueryFilter(item => !item.IsDeleted);
-        }
-    }
-
-    private sealed class FilterBeforeAndAfterContext(DbContextOptions<FilterBeforeAndAfterContext> options, ITenantContext<string> tenantContext)
-        : ItemsContext(options, tenantContext)
-    {
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Item>().HasQueryFilter(item => !item.IsDeleted);
-            modelBuilder.ApplyTenantFilters<string, FilterBeforeAndAfterContext>(this);
-            modelBuilder.Entity<Item>().HasQueryFilter(item => item.Name != "");
-        }
-    }
-
-    private sealed class EntityAddedAfterContext(DbContextOptions<EntityAddedAfterContext> options, ITenantContext<string> tenantContext)
-        : ItemsContext(options, tenantContext)
-    {
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.ApplyTenantFilters<string, EntityAddedAfterContext>(this);
+            modelBuilder.Entity<Item>().HasQueryFilter(item => item.Name != "hidden");
             modelBuilder.Entity<LateItem>();
         }
     }
 
-    private sealed class NoFiltersContext(DbContextOptions<NoFiltersContext> options, ITenantContext<string> tenantContext)
-        : ItemsContext(options, tenantContext);
-
-    private sealed class OtherKeyContext(DbContextOptions<OtherKeyContext> options, ITenantContext<string> tenantContext)
-        : ItemsContext(options, tenantContext)
+    private sealed class KeylessContext(DbContextOptions<KeylessContext> options) : DbContext(options)
     {
-        public DbSet<GuidItem> GuidItems => Set<GuidItem>();
+        public DbSet<Item> Items => Set<Item>();
+
+        public DbSet<ItemName> ItemNames => Set<ItemName>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-            modelBuilder.ApplyTenantFilters<string, OtherKeyContext>(this);
+            modelBuilder.Entity<ItemName>().HasNoKey().ToSqlQuery("SELECT TenantId, Name FROM Items");
     }
 
-    private sealed class OtherKeyNoFiltersContext(DbContextOptions<OtherKeyNoFiltersContext> options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>
+    private sealed class IntKeyContext(DbContextOptions<IntKeyContext> options) : DbContext(options)
     {
-        public DbSet<GuidItem> Items => Set<GuidItem>();
-
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
+        public DbSet<IntItem> Items => Set<IntItem>();
     }
 
-    private sealed class TokenResetContext(DbContextOptions<TokenResetContext> options, ITenantContext<string> tenantContext)
-        : ItemsContext(options, tenantContext)
+    private sealed class SharedTypeContext(DbContextOptions<SharedTypeContext> options) : DbContext(options)
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.ApplyTenantFilters<string, TokenResetContext>(this);
-            modelBuilder.Entity<Item>().Property(item => item.TenantId).IsConcurrencyToken(false);
+            modelBuilder.SharedTypeEntity<LateItem>("CurrentItems");
+            modelBuilder.SharedTypeEntity<LateItem>("ArchivedItems");
         }
     }
 
-    private sealed class HierarchyContext(DbContextOptions<HierarchyContext> options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>
+    private sealed class TokenResetContext(DbContextOptions<TokenResetContext> options) : DbContext(options)
+    {
+        public DbSet<Item> Items => Set<Item>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<Item>().Property(item => item.TenantId).IsConcurrencyToken(false);
+    }
+
+    private sealed class TwoKeyTypesContext(DbContextOptions<TwoKeyTypesContext> options) : DbContext(options)
+    {
+        public DbSet<Item> Items => Set<Item>();
+
+        public DbSet<GuidItem> GuidItems => Set<GuidItem>();
+    }
+
+    private sealed class GuidItemsContext(DbContextOptions<GuidItemsContext> options) : DbContext(options)
+    {
+        public DbSet<GuidItem> Items => Set<GuidItem>();
+    }
+
+    private sealed class HierarchyContext(DbContextOptions<HierarchyContext> options) : DbContext(options)
     {
         public DbSet<Animal> Animals => Set<Animal>();
 
         public DbSet<Dog> Dogs => Set<Dog>();
-
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-            modelBuilder.ApplyTenantFilters<string, HierarchyContext>(this);
     }
 
-    private sealed class UnscopedBaseContext(DbContextOptions<UnscopedBaseContext> options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>
+    private sealed class UnownedBaseContext(DbContextOptions<UnownedBaseContext> options) : DbContext(options)
     {
         public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
         public DbSet<Car> Cars => Set<Car>();
-
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-            modelBuilder.ApplyTenantFilters<string, UnscopedBaseContext>(this);
     }
 
-    private sealed class OwnedContext(DbContextOptions<OwnedContext> options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>
+    private sealed class OwnedContext(DbContextOptions<OwnedContext> options) : DbContext(options)
     {
         public DbSet<Customer> Customers => Set<Customer>();
 
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
             modelBuilder.Entity<Customer>().OwnsMany(customer => customer.Addresses, address => address.HasKey(a => a.Id));
-            modelBuilder.ApplyTenantFilters<string, OwnedContext>(this);
-        }
     }
 
-    private sealed class UnscopedOwnerContext(DbContextOptions<UnscopedOwnerContext> options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>
+    private sealed class UnownedOwnerContext(DbContextOptions<UnownedOwnerContext> options) : DbContext(options)
     {
         public DbSet<Catalog> Catalogs => Set<Catalog>();
-
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Catalog>().OwnsMany(catalog => catalog.Prices, price => price.HasKey(p => p.Id));
-            modelBuilder.ApplyTenantFilters<string, UnscopedOwnerContext>(this);
-        }
-    }
-
-    private sealed class UnscopedOwnerNoFiltersContext(DbContextOptions<UnscopedOwnerNoFiltersContext> options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>
-    {
-        public DbSet<Catalog> Catalogs => Set<Catalog>();
-
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
             modelBuilder.Entity<Catalog>().OwnsMany(catalog => catalog.Prices, price => price.HasKey(p => p.Id));
     }
+
+    // Used only without UseTenantry().
+    private sealed class NoCustomizerContext(DbContextOptions<NoCustomizerContext> options) : DbContext(options)
+    {
+        public DbSet<Item> Items => Set<Item>();
+    }
+
+    // Used only without UseTenantry().
+    private sealed class NoCustomizerOwnerContext(DbContextOptions<NoCustomizerOwnerContext> options) : DbContext(options)
+    {
+        public DbSet<Catalog> Catalogs => Set<Catalog>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<Catalog>().OwnsMany(catalog => catalog.Prices, price => price.HasKey(p => p.Id));
+    }
+
+    // Used only without UseTenantry(): what its customizer does, followed by configuration that undoes part of it.
+    private sealed class TokenResetAfterTenantryContext(DbContextOptions<TokenResetAfterTenantryContext> options) : DbContext(options)
+    {
+        public DbSet<Item> Items => Set<Item>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Item>();
+            TenantIsolation.ForModel(modelBuilder.Model)!.ConfigureModel(modelBuilder, this, services: null);
+            modelBuilder.Entity<Item>().Property(item => item.TenantId).IsConcurrencyToken(false);
+        }
+    }
+
+    private sealed class LateItemContributor : ITenantModelContributor
+    {
+        public void Configure(ModelBuilder modelBuilder, DbContext context)
+        {
+            // OnModelCreating has run: its entity types are in the model.
+            modelBuilder.Model.FindEntityType(typeof(Item)).Should().NotBeNull();
+            modelBuilder.Entity<LateItem>().ToTable("ContributedItems");
+        }
+    }
+
+    private sealed class OtherModelCustomizer(ModelCustomizerDependencies dependencies) : RelationalModelCustomizer(dependencies);
 }

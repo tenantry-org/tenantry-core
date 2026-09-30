@@ -17,13 +17,12 @@ using Microsoft.EntityFrameworkCore;
 
 builder.Services.AddTenantry<Guid>(tenant => tenant
     // Where tenants are listed and looked up by id (e.g. a queue message carries only the tenant id).
-    .UseInMemoryStore(tenants)
-    // Same EF Core isolation as the web — strongly recommended in background work.
-    .AddEfCoreIsolation());
+    .UseInMemoryStore(tenants));
 
-builder.Services.AddDbContext<AppDbContext>((sp, options) =>
-    options.UseSqlite(connectionString)
-           .AddTenantInterceptors(sp));
+// Same EF Core isolation as the web — strongly recommended in background work.
+builder.Services.AddDbContext<AppDbContext>(options => options
+    .UseSqlite(connectionString)
+    .UseTenantry());
 ```
 
 `AddTenantry` registers `ITenantContext<TKey>` and `ITenantContextSetter<TKey>` (the same `AsyncLocal`
@@ -150,7 +149,7 @@ valid for the duration of the scope, within the async flow that opened it.
 ## Runnable sample
 
 [`Tenantry.Samples.EfCoreConsole`](../samples/Tenantry.Samples.EfCoreConsole) is a complete, runnable
-demonstration using `Host.CreateApplicationBuilder`, SQLite, and `MultiTenantDbContext<Guid>`. It
+demonstration using `Host.CreateApplicationBuilder`, SQLite, and a plain `DbContext` with `UseTenantry()`. It
 shows automatic stamping, read isolation, nested tenants, a cross-tenant write rejected,
 fail-closed reads with no tenant, `IgnoreQueryFilters()` for admin access, and a sweep over every tenant
 with `ITenantScopeFactory`:

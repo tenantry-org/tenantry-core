@@ -8,8 +8,8 @@ using Microsoft.EntityFrameworkCore.Query;
 namespace Tenantry.EfCore.Internal;
 
 /// <summary>
-/// Rejects <c>ExecuteUpdate</c> queries that set <c>TenantId</c> on a tenant-scoped entity, and queries against a
-/// model that does not isolate every tenant-scoped entity type (<see cref="TenantModelCheck{TKey}"/>).
+/// Rejects <c>ExecuteUpdate</c> queries that set <c>TenantId</c> on a tenant-owned entity, and queries against a
+/// model that does not isolate every tenant-owned entity type (<see cref="TenantModelCheck"/>).
 /// </summary>
 /// <remarks>
 /// The tenant query filter limits which rows a bulk update touches, but not the values it writes, and bulk
@@ -34,12 +34,11 @@ namespace Tenantry.EfCore.Internal;
 /// and always used through the single <see cref="Instance"/>.
 /// </para>
 /// </remarks>
-internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
-    where TKey : IEquatable<TKey>, IParsable<TKey>
+internal sealed class TenantBulkUpdateGuard : IQueryExpressionInterceptor
 {
-    private const string TenantIdProperty = nameof(ITenantEntity<>.TenantId);
+    private const string TenantIdProperty = TenantOwnership.TenantIdProperty;
 
-    public static readonly TenantBulkUpdateGuard<TKey> Instance = new();
+    public static readonly TenantBulkUpdateGuard Instance = new();
 
     private TenantBulkUpdateGuard()
     {
@@ -49,25 +48,22 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
     public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
     {
         // Every query is compiled for its model before it first runs, so a model that lost a tenant filter fails
-        // here, before it can return another tenant's rows.
-        if (eventData.Context is { } context)
+        // here, before it can return another tenant's rows. A model without tenant-owned entity types has nothing
+        // for a bulk update to move between tenants.
+        if (eventData.Context is { } context && TenantModelCheck.Verify(context) is { } isolation)
         {
-            TenantModelCheck<TKey>.Verify(context);
+            CheckExecuteUpdates(queryExpression, context.Model, isolation);
         }
 
-        CheckExecuteUpdates(queryExpression, eventData.Context?.Model);
         return queryExpression;
     }
 
     /// <summary>
     /// Throws <see cref="TenantIsolationViolationException"/> when an <c>ExecuteUpdate</c> in the query sets
-    /// <c>TenantId</c> on a tenant-scoped entity, or has setters the guard cannot read.
+    /// <c>TenantId</c> on a tenant-owned entity, or has setters the guard cannot read.
     /// </summary>
-    internal static void CheckExecuteUpdates(Expression queryExpression, IModel? model) =>
-        new ExecuteUpdateVisitor(model).Visit(queryExpression);
-
-    private static bool IsTenantEntity(Type? type) =>
-        type is not null && typeof(ITenantEntity<TKey>).IsAssignableFrom(type);
+    internal static void CheckExecuteUpdates(Expression queryExpression, IModel? model, TenantIsolation isolation) =>
+        new ExecuteUpdateVisitor(model, isolation).Visit(queryExpression);
 
     private static bool IsEfProperty(MethodCallExpression call) =>
         call.Method is { Name: nameof(EF.Property), IsGenericMethod: true } && call.Method.DeclaringType == typeof(EF);
@@ -91,8 +87,10 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
     // The tenant-scoped entity type a setter's instance expression refers to, looking through casts (which
     // matter for inheritance: ((TenantScopedDerived)baseEntity).TenantId) and falling back to the member's
     // declaring type. Prefers the innermost concrete type, so an interface cast still names the entity.
-    private static Type? TenantEntityType(Expression instance, MemberInfo? member)
+    private static Type? TenantEntityType(Expression instance, MemberInfo? member, TenantIsolation isolation)
     {
+        bool IsTenantEntity(Type? type) => type is not null && isolation.IsTenantEntity(type);
+
         Type? found = null;
 
         for (Expression? current = instance; current is not null; current = CastOperand(current))
@@ -139,7 +137,7 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
             : null;
     }
 
-    private sealed class ExecuteUpdateVisitor(IModel? model) : ExpressionVisitor
+    private sealed class ExecuteUpdateVisitor(IModel? model, TenantIsolation isolation) : ExpressionVisitor
     {
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
@@ -184,7 +182,7 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
                 return;
             }
 
-            if (TenantEntityType(instance, member) is { } entityType)
+            if (TenantEntityType(instance, member, isolation) is { } entityType)
             {
                 if (name is null)
                 {

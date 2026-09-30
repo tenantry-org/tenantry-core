@@ -62,7 +62,7 @@ public sealed class NonPublicTenantIdSetterTests : IDisposable
 
     private async Task<SetterContext> CreateAsync(TestTenantContext tenant)
     {
-        SetterContext db = new(DbContextFactory.InterceptorOptions<SetterContext>(tenant, _connection), tenant);
+        SetterContext db = new(DbContextFactory.Options<SetterContext>(tenant, _connection));
         await db.Database.EnsureCreatedAsync();
         return db;
     }
@@ -89,16 +89,11 @@ public sealed class NonPublicTenantIdSetterTests : IDisposable
         public string Text { get; init; } = string.Empty;
     }
 
-    private sealed class SetterContext(DbContextOptions<SetterContext> options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>
+    private sealed class SetterContext(DbContextOptions<SetterContext> options)
+        : DbContext(options)
     {
         public DbSet<PrivateSetterNote> Private => Set<PrivateSetterNote>();
 
         public DbSet<InitOnlyNote> InitOnly => Set<InitOnlyNote>();
-
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-            modelBuilder.ApplyTenantFilters<string, SetterContext>(this);
     }
 }

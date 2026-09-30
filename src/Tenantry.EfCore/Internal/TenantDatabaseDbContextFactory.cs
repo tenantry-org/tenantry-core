@@ -1,38 +1,75 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.EfCore.Internal;
 
 /// <summary>
-/// Leases contexts from EF Core's pool and connects each lease to the current tenant's database.
+/// Creates the contexts <c>AddDbContextPerTenantDatabase</c> registers, pooled or not, and connects each one to the
+/// current tenant's database.
 /// </summary>
-internal sealed class TenantDatabaseDbContextFactory<
-    [DynamicallyAccessedMembers(TenantryDbContextPoolServiceCollectionExtensions.ContextMembers)] TContext, TKey>(
-    IDbContextFactory<TContext> pool,
-    ITenantConnectionStringProvider<TKey> connectionStrings,
-    ITenantContext<TKey> tenantContext)
-    : IDbContextFactory<TContext>
+internal sealed class TenantDatabaseContexts<
+    [DynamicallyAccessedMembers(TenantryEfCoreTenantBuilderExtensions.ContextMembers)] TContext, TKey>
     where TContext : DbContext
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public TContext CreateDbContext()
+    private readonly ITenantConnectionStringProvider<TKey> _connectionStrings;
+    private readonly ITenantContext<TKey> _tenantContext;
+    private readonly DbContextOptions<TContext> _options;
+    private readonly PooledDbContextFactory<TContext>? _pool;
+    private readonly ObjectFactory<TContext>? _activator;
+
+    public TenantDatabaseContexts(
+        IServiceProvider services,
+        Action<IServiceProvider, DbContextOptionsBuilder> configure,
+        bool pooled,
+        int poolSize)
     {
-        // The connection string first: without a tenant this throws before a context is leased.
-        var tenant = CurrentTenant();
-        var connectionString = connectionStrings.Get(tenant);
-        return Connect(pool.CreateDbContext(), tenant, connectionString);
+        _connectionStrings = services.GetRequiredService<ITenantConnectionStringProvider<TKey>>();
+        _tenantContext = services.GetRequiredService<ITenantContext<TKey>>();
+
+        DbContextOptionsBuilder<TContext> builder = new();
+        builder.UseApplicationServiceProvider(services);
+
+        // The guard goes first, so a context used under the wrong tenant is rejected before any other interceptor
+        // acts on it (for example, stamping pending inserts with the current tenant).
+        builder.AddInterceptors(new TenantDatabaseGuard<TKey>(_tenantContext));
+        configure(services, builder);
+        builder.UseTenantry();
+        _options = builder.Options;
+
+        if (pooled)
+        {
+            _pool = new PooledDbContextFactory<TContext>(_options, poolSize);
+        }
+        else
+        {
+            _activator = ActivatorUtilities.CreateFactory<TContext>([typeof(DbContextOptions<TContext>)]);
+        }
     }
 
-    public async Task<TContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
+    /// <summary>A context connected to the current tenant's database.</summary>
+    /// <param name="services">Provides the services a context that is not pooled takes in its constructor.</param>
+    public TContext Create(IServiceProvider services)
+    {
+        // The connection string first: without a tenant this throws before a context is created.
+        var tenant = CurrentTenant();
+        var connectionString = _connectionStrings.Get(tenant);
+        return Connect(_pool?.CreateDbContext() ?? _activator!(services, [_options]), tenant, connectionString);
+    }
+
+    /// <inheritdoc cref="Create"/>
+    public async Task<TContext> CreateAsync(IServiceProvider services, CancellationToken cancellationToken)
     {
         var tenant = CurrentTenant();
-        var connectionString = await connectionStrings.GetAsync(tenant, cancellationToken);
-        return Connect(await pool.CreateDbContextAsync(cancellationToken), tenant, connectionString);
+        var connectionString = await _connectionStrings.GetAsync(tenant, cancellationToken);
+        var context = _pool is null ? _activator!(services, [_options]) : await _pool.CreateDbContextAsync(cancellationToken);
+        return Connect(context, tenant, connectionString);
     }
 
     private ITenantDescriptor<TKey> CurrentTenant() =>
-        tenantContext.CurrentTenant
+        _tenantContext.CurrentTenant
         ?? throw new TenantNotResolvedException(
             $"No tenant is current, so there is no tenant database to connect this '{typeof(TContext).Name}' to. " +
             "Create it during a request (after app.UseTenantry()) or inside a scope from ITenantScopeFactory.");
@@ -51,4 +88,22 @@ internal sealed class TenantDatabaseDbContextFactory<
             throw;
         }
     }
+}
+
+/// <summary>
+/// The <see cref="IDbContextFactory{TContext}"/> <c>AddDbContextPerTenantDatabase</c> registers: it creates contexts
+/// connected to the current tenant's database.
+/// </summary>
+internal sealed class TenantDatabaseDbContextFactory<
+    [DynamicallyAccessedMembers(TenantryEfCoreTenantBuilderExtensions.ContextMembers)] TContext, TKey>(
+    TenantDatabaseContexts<TContext, TKey> contexts,
+    IServiceProvider services)
+    : IDbContextFactory<TContext>
+    where TContext : DbContext
+    where TKey : IEquatable<TKey>, IParsable<TKey>
+{
+    public TContext CreateDbContext() => contexts.Create(services);
+
+    public Task<TContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
+        contexts.CreateAsync(services, cancellationToken);
 }

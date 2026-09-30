@@ -11,14 +11,13 @@ namespace Tenantry;
 /// <param name="connectionStrings">Returns a tenant's connection string.</param>
 /// <remarks>
 /// <para>
-/// Registered as a singleton by <c>UseConnectionStrings</c>. With a regular <c>AddDbContext</c>, read it in the
-/// options callback, which runs for every new context:
-/// <c>options.UseSqlServer(sp.GetRequiredService&lt;CurrentTenantConnectionString&lt;Guid&gt;&gt;().Get())</c>.
+/// Registered as a singleton by <c>UseConnectionStrings</c>, for code that opens its own connections. For EF Core,
+/// Tenantry.EfCore's <c>AddDbContextPerTenantDatabase</c> connects each context to its tenant's database, pooled or
+/// not.
 /// </para>
 /// <para>
-/// Do not do this with <c>AddDbContextPool</c> or <c>AddPooledDbContextFactory</c>: their options callback
-/// runs once, so every pooled context would keep the first tenant's connection string. Use
-/// <c>AddTenantDbContextPool</c> for a pooled database per tenant.
+/// Do not read it in the options callback of <c>AddDbContextPool</c> or <c>AddPooledDbContextFactory</c>: that
+/// callback runs once, so every pooled context would keep the first tenant's connection string.
 /// </para>
 /// </remarks>
 public sealed class CurrentTenantConnectionString<TKey>(

@@ -49,17 +49,15 @@ builder.Services.AddTenantry<string>(tenant =>
 
     // The store returns inactive tenants too; refuse them here (403) before any scope opens.
     tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true });
-
-    tenant.AddEfCoreIsolation();
 });
 
-// ── 2. Register EF Core with tenant interceptors ─────────────────────────────────
-builder.Services.AddDbContext<AppDbContext>((sp, options) =>
+// ── 2. Register EF Core, isolated by tenant with UseTenantry() ───────────────────
+builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseSqlite("DataSource=efcore-sample.db");
     options.UseSeeding((db, _) => DataSeeder.Seed(db));
     options.UseAsyncSeeding((db, _, _) => DataSeeder.SeedAsync(db));
-    options.AddTenantInterceptors(sp);
+    options.UseTenantry();
 });
 
 var app = builder.Build();

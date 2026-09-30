@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using Tenantry;
-using Tenantry.EfCore;
 
 namespace Tenantry.Samples.DatabasePerTenant;
 
@@ -16,8 +15,8 @@ public sealed class Note : ITenantEntity<string>
     public string Text { get; set; } = string.Empty;
 }
 
-public sealed class NotesDbContext(DbContextOptions<NotesDbContext> options, ITenantContext<string> tenantContext)
-    : MultiTenantDbContext<string>(options, tenantContext)
+// Pooled, so its only constructor takes the options.
+public sealed class NotesDbContext(DbContextOptions<NotesDbContext> options) : DbContext(options)
 {
     public DbSet<Note> Notes => Set<Note>();
 }

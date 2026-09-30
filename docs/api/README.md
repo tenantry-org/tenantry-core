@@ -74,22 +74,21 @@ the pieces fit together; this reference is for the details of each type and memb
 | Type | Kind | Summary |
 |------|------|---------|
 | [`TenantryDbContextOptionsBuilderExtensions`](microsoft-entityframeworkcore-tenantrydbcontextoptionsbuilderextensions.md) | class | Extension methods for wiring Tenantry into `DbContextOptionsBuilder`. |
-| [`TenantryModelBuilderExtensions`](microsoft-entityframeworkcore-tenantrymodelbuilderextensions.md) | class | Extension methods for `ModelBuilder` that apply tenant isolation to all entities implementing [`ITenantEntity<TKey>`](tenantry-itenantentity.md). |
 
 ### `Microsoft.Extensions.DependencyInjection`
 
 | Type | Kind | Summary |
 |------|------|---------|
-| [`TenantryDbContextPoolServiceCollectionExtensions`](microsoft-extensions-dependencyinjection-tenantrydbcontextpoolservicecollectionextensions.md) | class | DbContext pooling for applications that give each tenant its own database. |
 | [`TenantryEfCoreTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryefcoretenantbuilderextensions.md) | class | Extension methods for configuring EF Core tenant isolation on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md). |
 
 ### `Tenantry.EfCore`
 
 | Type | Kind | Summary |
 |------|------|---------|
-| [`EfCoreIsolationOptions`](tenantry-efcore-efcoreisolationoptions.md) | class | Options for configuring EF Core tenant isolation registration. Passed to `builder.AddEfCoreIsolation(options => ...)`. |
-| [`ITenantAwareDbContext<TKey>`](tenantry-efcore-itenantawaredbcontext.md) | interface | Marks a `DbContext` as tenant-aware, exposing the current tenant identifier for use in EF Core global query filters. |
+| [`EfCoreIsolationOptions`](tenantry-efcore-efcoreisolationoptions.md) | class | Options for EF Core tenant isolation, set with `tenant.ConfigureEfCoreIsolation(options => …)`. Every context that uses `UseTenantry()` follows them. |
+| [`ITenantDbContextOptionsContributor`](tenantry-efcore-itenantdbcontextoptionscontributor.md) | interface | Adds to the options of every `DbContext` that uses `UseTenantry()`. Register implementations in the application's service collection, as singletons; `UseTenantry()` applies each of them. |
+| [`ITenantModelContributor`](tenantry-efcore-itenantmodelcontributor.md) | interface | Adds to the model of every `DbContext` that uses `UseTenantry()`. |
 | [`MissingTenantBehavior`](tenantry-efcore-missingtenantbehavior.md) | enum | What `SaveChanges` does when it writes tenant-owned entities and no tenant is current. Set with [`EfCoreIsolationOptions.OnMissingTenant`](tenantry-efcore-efcoreisolationoptions.md). |
-| [`MultiTenantDbContext<TKey>`](tenantry-efcore-multitenantdbcontext.md) | class | Optional base `DbContext` that automatically applies tenant query filters in `OnModelCreating`. |
 | [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) | class | Thrown when EF Core would read or write across tenants: before `SaveChanges` writes another tenant's entity, before an `ExecuteUpdate` that could move rows between tenants, before a pooled database-per-tenant context uses another tenant's database, or on the first use of a model that does not isolate a tenant-owned entity type. Nothing has been written when it is thrown. [`TenantIsolationViolationException.Kind`](tenantry-efcore-tenantisolationviolationexception.md) says which. |
 | [`TenantIsolationViolationKind`](tenantry-efcore-tenantisolationviolationkind.md) | enum | Which isolation check threw a [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md). |
+| [`TenantryQueryFilters`](tenantry-efcore-tenantryqueryfilters.md) | class | The names of the query filters Tenantry adds. |

@@ -19,6 +19,7 @@ namespace Tenantry.EfCore.Tests.Interceptor;
 public sealed class ExecuteUpdateShapeTests : IDisposable
 {
     private readonly SqliteConnection _connection = DbContextFactory.CreateSharedConnection();
+    private readonly Capture _capture = new();
 
     public void Dispose() => _connection.Dispose();
 
@@ -30,7 +31,7 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
             .SetProperty(o => EF.Property<string>(o, nameof(Order.Description)), o => o.Description + "!")));
 
         ExecuteUpdateSetterReader.IsExecuteUpdate(call).Should().BeTrue();
-#if NET10_0_OR_GREATER
+#if EFCORE10_OR_GREATER
         call.Method.DeclaringType.Should().Be(typeof(EntityFrameworkQueryableExtensions));
         var setters = call.Arguments[1].Should().BeAssignableTo<NewArrayExpression>().Subject;
         setters.Type.Should().Be(typeof(ITuple[]));
@@ -67,7 +68,7 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
     {
         var call = await CaptureExecuteUpdateAsync(orders => orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "fixed")));
 
-#if NET10_0_OR_GREATER
+#if EFCORE10_OR_GREATER
         var unknown = Expression.Call(call.Method, call.Arguments[0], Expression.Constant(Array.Empty<ITuple>(), typeof(IReadOnlyList<ITuple>)));
 #else
         var calls = Expression.Parameter(typeof(SetPropertyCalls<Order>), "s");
@@ -75,17 +76,17 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
 #endif
 
         ExecuteUpdateSetterReader.ReadSelectors(unknown).Should().BeEmpty();
-        FluentActions.Invoking(() => TenantBulkUpdateGuard<string>.CheckExecuteUpdates(unknown, model: null))
+        FluentActions.Invoking(() => TenantBulkUpdateGuard.CheckExecuteUpdates(unknown, model: null, TenantIsolation.ForModel(_capture.Model!)!))
             .Should().Throw<TenantIsolationViolationException>()
             .WithMessage("Tenantry cannot read the setters of this ExecuteUpdate on EF Core *");
     }
 
-#if !NET10_0_OR_GREATER
+#if !EFCORE10_OR_GREATER
     [Fact]
     public async Task SettersComposedWithInvoke_AreReadAndChecked()
     {
         // EF Core 8 and 9 accept a setter lambda that invokes another; the guard reads through the invocation.
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(TestTenantContext.For("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(TestTenantContext.For("acme"), _connection);
 
         (await db.Orders.ExecuteUpdateAsync(Invoking(s => s.SetProperty(o => o.Description, "fixed")))).Should().Be(0);
         await db.Awaiting(context => context.Orders.ExecuteUpdateAsync(Invoking(s => s.SetProperty(o => o.TenantId, "other"))))
@@ -104,21 +105,25 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
     // Runs the query on a context without Tenantry's guard and returns the ExecuteUpdate call EF Core compiled.
     private async Task<MethodCallExpression> CaptureExecuteUpdateAsync(Func<IQueryable<Order>, Task> run)
     {
-        Capture capture = new();
-        var options = new DbContextOptionsBuilder<TestDbContext>().UseSqlite(_connection).AddInterceptors(capture).Options;
-        await using TestDbContext db = new(options, TestTenantContext.For("acme"));
+        var options = new DbContextOptionsBuilder<TestDbContext>().UseSqlite(_connection).AddInterceptors(_capture).Options;
+        await using TestDbContext db = new(options);
         await db.Database.EnsureCreatedAsync();
 
         await run(db.Orders);
 
-        return capture.Query.Should().BeAssignableTo<MethodCallExpression>().Subject;
+        return _capture.Query.Should().BeAssignableTo<MethodCallExpression>().Subject;
     }
 
     private sealed class Capture : IQueryExpressionInterceptor
     {
         public Expression? Query { get; private set; }
 
-        public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData) =>
-            Query = queryExpression;
+        public Microsoft.EntityFrameworkCore.Metadata.IModel? Model { get; private set; }
+
+        public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
+        {
+            Model = eventData.Context?.Model;
+            return Query = queryExpression;
+        }
     }
 }

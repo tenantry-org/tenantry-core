@@ -20,8 +20,11 @@ Tenantry wires the isolation in.
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")   // where the tenant comes from
-    .UseInMemoryStore(tenants)          // where tenants are defined
-    .AddEfCoreIsolation());             // how data is isolated
+    .UseInMemoryStore(tenants));        // where tenants are defined
+
+builder.Services.AddDbContext<AppDbContext>(options => options
+    .UseSqlServer(connectionString)
+    .UseTenantry());                    // how data is isolated
 ```
 
 ## Why Tenantry?
@@ -29,9 +32,8 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 - **Unopinionated.** Your tenant key can be a `Guid`, `int`, `string`, or any type that is
   `IEquatable<T>` and `IParsable<T>`. Resolve tenants from a header, subdomain, route, claim, query
   string, or your own resolver. Store them in memory, a database, or anywhere behind an interface.
-- **Interceptor-first isolation.** Tenant stamping and cross-tenant write protection work on **any**
-  `DbContext` via EF Core interceptors and `ApplyTenantFilters` — no base class required. An optional
-  `MultiTenantDbContext<TKey>` base class is provided for greenfield convenience.
+- **One call per `DbContext`.** `options.UseTenantry()` isolates **any** `DbContext`, pooled or not: no base
+  class, no interface, and your own model configuration in any order.
 - **Fails closed.** When no tenant is resolved, query filters match nothing rather than leaking every
   tenant's rows. New rows that name another tenant, and updates and deletes of another tenant's rows, are
   rejected before saving, and the stored tenant is also part of every `UPDATE`/`DELETE` statement, so a forged
@@ -125,26 +127,21 @@ app.MapGet("/me", (ITenantContext<Guid> ctx) =>
 app.Run();
 ```
 
-Add EF Core isolation by registering `tenant.AddEfCoreIsolation()` in the lambda above, then give your
-context both halves: the query filters and the interceptor. Deriving from `MultiTenantDbContext<Guid>` gives
-you both (it attaches the interceptor itself unless the context is pooled). Otherwise implement
-`ITenantAwareDbContext<Guid>`, call `ApplyTenantFilters` at the end of `OnModelCreating`, and add
-`options.AddTenantInterceptors(sp)` in your `AddDbContext` callback. The interceptor needs the filters: a
-context with the interceptor but no tenant filter on a tenant-scoped entity throws on its first query or save,
-rather than read every tenant's rows. See the [EF Core integration guide](docs/efcore-integration.md) for the
-full picture.
+Add EF Core isolation where you register your context, with `options.UseTenantry()`: queries are filtered to
+the current tenant, and saves are stamped and checked. The context stays a plain `DbContext`. See the
+[EF Core integration guide](docs/efcore-integration.md) for the full picture.
 
 ## Quick start (console / worker — no ASP.NET Core)
 
 There is no request to resolve a tenant from, so you open a tenant scope around each unit of work:
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 
-builder.Services.AddTenantry<Guid>(tenant => tenant
-    .UseStore<EfCoreTenantStore>()
-    .AddEfCoreIsolation());
+builder.Services.AddTenantry<Guid>(tenant => tenant.UseStore<EfCoreTenantStore>());
+builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString).UseTenantry());
 
 // …later, in a hosted service (inject ITenantScopeFactory<Guid> scopes):
 var acme = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" };
@@ -177,12 +174,10 @@ differs by package because EF Core's query-filter mechanism requires runtime cod
 - **`Tenantry.Core` and `Tenantry.AspNetCore`** are marked `IsAotCompatible` and `IsTrimmable` and
   carry no trim/AOT warnings. The [`Tenantry.Samples.Aot`](samples/Tenantry.Samples.Aot) project
   publishes with `PublishAot=true` against a slim host and source-generated JSON.
-- **`Tenantry.EfCore`** is `IsTrimmable` but **not** AOT-compatible. The read-side query filters
-  (`ApplyTenantFilters` and the `MultiTenantDbContext<TKey>` base class) build LINQ expression trees
-  by reflecting over the EF Core model, so they are annotated `[RequiresDynamicCode]` and
-  `[RequiresUnreferencedCode]`. This mirrors EF Core itself, which does not support Native AOT. The
-  write-side interceptor does not generate code, but the integration as a whole should be treated as
-  non-AOT.
+- **`Tenantry.EfCore`** is `IsTrimmable` but **not** AOT-compatible. `UseTenantry()` builds the tenant query
+  filters as LINQ expression trees while EF Core builds the model at run time, as EF Core itself does: EF Core's
+  `DbContext` is annotated `[RequiresDynamicCode]` and `[RequiresUnreferencedCode]`, and does not support
+  Native AOT with a model built at run time.
 
 Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 
@@ -210,7 +205,7 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 | [`Quickstart`](samples/Tenantry.Samples.Quickstart) | Minimal ASP.NET Core setup, resolvers, access validators, endpoint metadata |
 | [`EfCoreWeb`](samples/Tenantry.Samples.EfCoreWeb) | Realistic EF Core app: migrations, DB-backed store, mixed tenanted/global entities, admin queries |
 | [`EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantry` and manual scopes |
-| [`DatabasePerTenant`](samples/Tenantry.Samples.DatabasePerTenant) | A database per tenant with `UseConnectionStrings` and `CurrentTenantConnectionString`, plus worker scopes |
+| [`DatabasePerTenant`](samples/Tenantry.Samples.DatabasePerTenant) | A database per tenant with `UseConnectionStrings` and a pooled `AddDbContextPerTenantDatabase`, plus worker scopes |
 | [`Aot`](samples/Tenantry.Samples.Aot) | Native-AOT-published ASP.NET Core app: header, subdomain and custom resolvers, problem details |
 
 ## License

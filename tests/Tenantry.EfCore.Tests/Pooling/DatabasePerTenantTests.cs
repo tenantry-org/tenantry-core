@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 using Tenantry.EfCore.Internal;
@@ -20,21 +21,57 @@ public sealed class PooledNote : ITenantEntity<string>
 }
 
 /// <summary>A pool-compatible context: its only constructor takes the options.</summary>
-public sealed class PooledNotesContext(DbContextOptions<PooledNotesContext> options)
-    : MultiTenantDbContext<string>(options)
+public sealed class PooledNotesContext(DbContextOptions<PooledNotesContext> options) : DbContext(options)
 {
     public DbSet<PooledNote> Notes => Set<PooledNote>();
 }
 
 /// <summary>
-///     A pooled context reused across two tenant databases must only ever read and write the database of the
-///     tenant that is current. EF Core keeps a pooled context's connection string between leases, so these
-///     tests fail if any lease reuses the previous tenant's connection.
+///     <c>AddDbContextPerTenantDatabase</c> with a pool: a context reused across two tenant databases must only ever
+///     read and write the database of the tenant that is current. EF Core keeps a pooled context's connection string
+///     between leases, so these tests fail if any lease reuses the previous tenant's connection.
 /// </summary>
-public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
+public sealed class PooledDatabasePerTenantTests() : DatabasePerTenantTests(pooled: true);
+
+/// <summary>
+///     <c>AddDbContextPerTenantDatabase</c> without a pool: every context is new, and must still use only the
+///     database of the tenant it was created for.
+/// </summary>
+public sealed class NonPooledDatabasePerTenantTests() : DatabasePerTenantTests(pooled: false)
 {
-    private static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme" };
-    private static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex" };
+    [Fact]
+    public async Task Context_TakesOtherServicesInItsConstructor_FromItsScope()
+    {
+        await using var services = Build(configure: collection => collection.AddScoped<NotesSession>(), context: false);
+        var scopes = services.GetRequiredService<ITenantScopeFactory<string>>();
+
+        await using var scope = scopes.CreateScope(Acme);
+        var db = scope.ServiceProvider.GetRequiredService<SessionNotesContext>();
+
+        db.Session.Should().BeSameAs(scope.ServiceProvider.GetRequiredService<NotesSession>());
+        (await db.Notes.CountAsync()).Should().Be(0);
+    }
+
+    public sealed class NotesSession;
+
+    public sealed class SessionNotesContext(DbContextOptions<SessionNotesContext> options, NotesSession session) : DbContext(options)
+    {
+        public NotesSession Session { get; } = session;
+
+        public DbSet<PooledNote> Notes => Set<PooledNote>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<PooledNote>().ToTable("Notes");
+    }
+}
+
+/// <summary>
+///     A context registered with <c>AddDbContextPerTenantDatabase</c> must only ever read and write the database of
+///     the tenant that is current.
+/// </summary>
+public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
+{
+    protected static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme" };
+    protected static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex" };
 
     private readonly Dictionary<string, SqliteConnection> _databases = new()
     {
@@ -87,14 +124,14 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
             seen.Add($"{tenant.TenantId}:{await db.Notes.CountAsync()}");
         }
 
-        instances.Should().ContainSingle("the one pooled instance serves every lease");
+        instances.Should().HaveCount(pooled ? 1 : 3, pooled ? "the one pooled instance serves every lease" : "every scope has its own");
         seen.Should().Equal("acme:1", "globex:1", "acme:2");
         RowsIn("acme").Should().Equal("acme:acme note", "acme:acme note");
         RowsIn("globex").Should().Equal("globex:globex note");
     }
 
     [Fact]
-    public async Task Factory_ConnectsEachLeaseToTheCurrentTenantsDatabase()
+    public async Task Factory_ConnectsEachContextToTheCurrentTenantsDatabase()
     {
         await using var services = Build();
         var factory = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
@@ -139,7 +176,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Leasing_WithoutACurrentTenant_Throws()
+    public async Task CreatingAContext_WithoutACurrentTenant_Throws()
     {
         await using var services = Build();
         await using var scope = services.CreateAsyncScope();
@@ -418,23 +455,56 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WithoutConnectionStrings_FailsWithGuidance()
+    public void WithoutConnectionStrings_FailsAtRegistration_WithGuidance()
     {
         ServiceCollection services = new();
-        services.AddLogging();
-        services.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
-        services.AddTenantDbContextPool<PooledNotesContext, string>((sp, options) =>
-            options.UseSqlite().AddTenantInterceptors(sp));
-        await using var provider = services.BuildServiceProvider();
 
-        provider.Invoking(p => p.GetRequiredService<IDbContextFactory<PooledNotesContext>>())
-            .Should().Throw<InvalidOperationException>().WithMessage("*UseConnectionStrings*");
+        services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
+                .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)))
+            .Should().Throw<InvalidOperationException>().WithMessage("*PooledNotesContext*call UseConnectionStrings before it*");
     }
 
-    private ServiceProvider Build(int poolSize = 1024, bool asyncOnly = false)
+    [Fact]
+    public void SameContextTwice_FailsAtRegistration()
+    {
+        ServiceCollection services = new();
+
+        services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
+                .UseConnectionStrings(options => options.GetConnectionString = t => t.TenantId)
+                .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)
+                .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)))
+            .Should().Throw<InvalidOperationException>().WithMessage("*already called*");
+    }
+
+    [Fact]
+    public async Task ContextWhoseOptionsAlsoUseTenantry_IsWiredOnce()
+    {
+        await using var services = Build(useTenantryToo: true);
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
+
+        using (ambient.Use(Acme))
+        {
+            await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
+            db.Notes.Add(new PooledNote { Text = "once" });
+            await db.SaveChangesAsync();
+
+            db.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()!.Interceptors!
+                .Should().HaveCount(3, "the database guard, and Tenantry's save interceptor and bulk guard");
+        }
+
+        RowsIn("acme").Should().Equal("acme:once");
+    }
+
+    protected ServiceProvider Build(
+        int poolSize = 1024,
+        bool asyncOnly = false,
+        bool useTenantryToo = false,
+        Action<IServiceCollection>? configure = null,
+        bool context = true)
     {
         ServiceCollection services = new();
         services.AddLogging();
+        configure?.Invoke(services);
         services.AddTenantry<string>(tenant =>
         {
             tenant.UseInMemoryStore([Acme, Globex]);
@@ -449,11 +519,28 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
                     options.GetConnectionString = t => _databases[t.TenantId].ConnectionString;
                 }
             });
-            tenant.AddEfCoreIsolation();
+
+            if (context)
+            {
+                tenant.AddDbContextPerTenantDatabase<PooledNotesContext>(
+                    (_, options) =>
+                    {
+                        options.UseSqlite();
+
+                        if (useTenantryToo)
+                        {
+                            options.UseTenantry();
+                        }
+                    },
+                    pooled,
+                    poolSize);
+            }
+            else
+            {
+                tenant.AddDbContextPerTenantDatabase<NonPooledDatabasePerTenantTests.SessionNotesContext>(
+                    (_, options) => options.UseSqlite());
+            }
         });
-        services.AddTenantDbContextPool<PooledNotesContext, string>(
-            (sp, options) => options.UseSqlite().AddTenantInterceptors(sp),
-            poolSize);
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }

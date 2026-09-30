@@ -26,10 +26,8 @@ public interface ITenantContext<out TKey>
     /// The current tenant's identifier, or <c>default(TKey)</c> if no tenant is current: <see langword="null"/>
     /// for reference-type keys such as <see langword="string"/>, but <see cref="Guid.Empty"/> or <c>0</c> for
     /// value-type keys, because <c>TKey?</c> is not nullable for them. Check <see cref="HasTenant"/> to tell "no
-    /// tenant" apart; Tenantry never lets a tenant have the default id.
-    /// Equivalent to <c>CurrentTenant?.TenantId</c> but exposed as a single property for
-    /// use in EF Core global query filter expressions — EF Core evaluates single-step
-    /// member accesses on the <c>DbContext</c> per-query, avoiding intermediate object caching.
+    /// tenant" apart; Tenantry never lets a tenant have the default id. Equivalent to
+    /// <c>CurrentTenant?.TenantId</c>.
     /// </summary>
     TKey? CurrentTenantId { get; }
 }

@@ -31,8 +31,8 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
-        services.AddDbContext<ProviderOrdersContext>(options => fixture.UseProvider(options));
+        services.AddTenantry<string>();
+        services.AddDbContext<ProviderOrdersContext>(options => fixture.UseProvider(options).UseTenantry());
         _services = services.BuildServiceProvider();
         _tenants = _services.GetRequiredService<ITenantContextSetter<string>>();
     }
@@ -167,9 +167,8 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     {
         ServiceCollection collection = new();
         collection.AddLogging();
-        collection.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
-        collection.AddPooledDbContextFactory<ProviderOrdersContext>((sp, options) =>
-            _fixture.UseProvider(options).AddTenantInterceptors(sp));
+        collection.AddTenantry<string>();
+        collection.AddPooledDbContextFactory<ProviderOrdersContext>(options => _fixture.UseProvider(options).UseTenantry());
         await using var services = collection.BuildServiceProvider();
         var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
         var factory = services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>();

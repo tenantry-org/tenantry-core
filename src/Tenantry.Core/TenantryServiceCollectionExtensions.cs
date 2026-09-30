@@ -40,8 +40,7 @@ public static class TenantryServiceCollectionExtensions
     /// <code>
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
     ///     .ResolveFromHeader("X-Tenant-Id")
-    ///     .UseStore&lt;AppTenantStore&gt;()
-    ///     .AddEfCoreIsolation());
+    ///     .UseStore&lt;AppTenantStore&gt;());
     /// </code>
     /// </example>
     public static IServiceCollection AddTenantry<TKey>(

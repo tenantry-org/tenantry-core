@@ -13,7 +13,7 @@ public sealed class InterceptorStampingTests
         // Arrange
         var ctx = TestTenantContext.For("acme");
         await using var conn = DbContextFactory.CreateSharedConnection();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        await using var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         Order order = new() { Description = "Test order" };
         db.Orders.Add(order);
@@ -32,7 +32,7 @@ public sealed class InterceptorStampingTests
         // than silently moved to the current tenant.
         var ctx = TestTenantContext.For("acme");
         await using var conn = DbContextFactory.CreateSharedConnection();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        await using var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         db.Orders.Add(new Order { Description = "Test order", TenantId = "attacker" });
 
@@ -49,7 +49,7 @@ public sealed class InterceptorStampingTests
         // Arrange
         var ctx = TestTenantContext.For("globex");
         await using var conn = DbContextFactory.CreateSharedConnection();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        await using var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         Order[] orders =
         [

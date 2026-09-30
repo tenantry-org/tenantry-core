@@ -1,0 +1,25 @@
+# `ITenantDbContextOptionsContributor` interface
+
+Namespace: `Tenantry.EfCore` · Package: `Tenantry.EfCore` · [API reference](README.md)
+
+Adds to the options of every `DbContext` that uses `UseTenantry()`. Register implementations in the application's service collection, as singletons; `UseTenantry()` applies each of them.
+
+Packages that build on Tenantry use this to configure contexts without asking the application to add another call to each one, for example to add an interceptor. Contributors run when `UseTenantry()` is called with the application service provider in place, as it is inside `AddDbContext`, `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbContextFactory`. A pooled context's options are built once, so a contributor must not depend on the current tenant.
+
+```csharp
+public interface ITenantDbContextOptionsContributor
+```
+
+## Methods
+
+### `Configure(DbContextOptionsBuilder)`
+
+Configures a context's options. `optionsBuilder.Options.ContextType` is the context being configured.
+
+```csharp
+void Configure(DbContextOptionsBuilder optionsBuilder)
+```
+
+Parameters:
+
+- `optionsBuilder` `DbContextOptionsBuilder`: The options builder `UseTenantry()` was called on.

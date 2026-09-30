@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry.EfCore` · Package: `Tenantry.EfCore` · [API reference](README.md)
 
-Options for configuring EF Core tenant isolation registration. Passed to `builder.AddEfCoreIsolation(options => ...)`.
+Options for EF Core tenant isolation, set with `tenant.ConfigureEfCoreIsolation(options => …)`. Every context that uses `UseTenantry()` follows them.
 
 These protections are **always** on, independent of these options: reads fail closed (query filters match nothing when no tenant is resolved); a new entity that names another tenant is rejected; `Modified`/`Deleted` entities must belong to the current tenant, checked before saving and again by the stored tenant in each `UPDATE`/`DELETE`; and `ExecuteUpdate` cannot set `TenantId`. These options govern writes without a tenant. Raw SQL and `IgnoreQueryFilters()` are outside Tenantry's isolation.
 

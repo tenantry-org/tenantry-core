@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-#if !NET10_0_OR_GREATER
+#if !EFCORE10_OR_GREATER
 using Microsoft.EntityFrameworkCore.Query;
 #endif
 
@@ -12,7 +12,7 @@ namespace Tenantry.EfCore.Internal;
 /// <remarks>
 /// EF Core does not document these shapes, and they changed in EF Core 10. <c>ExecuteUpdateShapeTests</c> pins the
 /// shape of each supported version, so a new EF Core version that changes it fails a focused test. Until this reader
-/// handles the new shape it returns no selectors, and <see cref="TenantBulkUpdateGuard{TKey}"/> rejects the query
+/// handles the new shape it returns no selectors, and <see cref="TenantBulkUpdateGuard"/> rejects the query
 /// rather than let a setter through unchecked.
 /// </remarks>
 internal static class ExecuteUpdateSetterReader
@@ -30,7 +30,7 @@ internal static class ExecuteUpdateSetterReader
     {
         List<LambdaExpression> selectors = [];
 
-#if NET10_0_OR_GREATER
+#if EFCORE10_OR_GREATER
         // EF Core 10: ExecuteUpdate(source, IReadOnlyList<ITuple>), the list being
         // new ITuple[] { new Tuple<Delegate, object>(selector, value), … }.
         if (executeUpdate.Arguments is not [_, NewArrayExpression { NodeType: ExpressionType.NewArrayInit } setters])
@@ -99,7 +99,7 @@ internal static class ExecuteUpdateSetterReader
         ConstantExpression { Value: LambdaExpression constant } => constant,
         _ => null,
     };
-#if !NET10_0_OR_GREATER
+#if !EFCORE10_OR_GREATER
 
     private sealed class ParameterReplacer(ParameterExpression parameter, Expression replacement) : ExpressionVisitor
     {

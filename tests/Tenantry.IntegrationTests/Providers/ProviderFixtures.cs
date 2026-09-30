@@ -76,7 +76,7 @@ public sealed class ProviderOrder : ITenantEntity<string>
 }
 
 public sealed class ProviderOrdersContext(DbContextOptions<ProviderOrdersContext> options)
-    : MultiTenantDbContext<string>(options)
+    : DbContext(options)
 {
     public DbSet<ProviderOrder> Orders => Set<ProviderOrder>();
 }

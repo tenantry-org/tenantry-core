@@ -45,30 +45,14 @@ dotnet publish samples/Tenantry.Samples.Aot -c Release
 
 ## `Tenantry.EfCore` — trim-compatible, not AOT-compatible
 
-`Tenantry.EfCore` is marked `IsTrimmable` but **not** `IsAotCompatible`, and the read-side query-filter
-APIs are explicitly annotated:
+`Tenantry.EfCore` is marked `IsTrimmable` but **not** `IsAotCompatible`. `UseTenantry()` builds its tenant query
+filters as LINQ expression trees while EF Core builds the model at run time, for entity types it only knows then.
+Expression-tree construction for runtime types is what Native AOT cannot do.
 
-```csharp no-compile
-[RequiresDynamicCode("Expression tree construction requires dynamic code generation.")]
-[RequiresUnreferencedCode("Iterates model entity types and accesses members by name.")]
-public static void ApplyTenantFilters<TKey, TContext>(this ModelBuilder modelBuilder, TContext context)
-```
-
-`MultiTenantDbContext<TKey>` carries the same annotations. The reason:
-
-- `ApplyTenantFilters` reflects over the EF Core model and **builds LINQ expression trees** at runtime
-  to compose the per-entity filter. Expression-tree compilation is exactly what Native AOT cannot do,
-  hence `[RequiresDynamicCode]`.
-- It also accesses entity members by name, which the trimmer cannot statically prove are kept, hence
-  `[RequiresUnreferencedCode]`.
-
-This is consistent with **EF Core itself**, which does not support Native AOT. So the practical rule
-is: *if you use the EF Core integration, you are not in an AOT scenario.*
-
-The write-side interceptor does not generate code or use reflective member access, but because it is
-only useful alongside EF Core (which is non-AOT), the package as a whole should be treated as non-AOT.
-If you call the annotated APIs from your own code, you will get the corresponding analyzer warnings —
-that is expected; suppress them only in a non-AOT, non-trimmed deployment.
+This is consistent with **EF Core itself**, which does not support Native AOT with a model built at run time: EF
+Core's `DbContext` constructors are annotated `[RequiresDynamicCode]` and `[RequiresUnreferencedCode]`, so your
+own context already carries those warnings. So the practical rule is: *if you use the EF Core integration, you are
+not in an AOT scenario.* Tenantry adds no annotations of its own on top of EF Core's.
 
 ## Recommendations
 

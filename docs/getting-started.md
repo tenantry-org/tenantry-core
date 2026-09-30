@@ -55,14 +55,11 @@ builder.Services.AddTenantry<Guid>(tenant =>
         new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" },
         new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000002"), Name = "Globex" },
     ]);
-
-    // (c) Isolation — turn on EF Core write protection.
-    tenant.AddEfCoreIsolation();
 });
 ```
 
 Every builder method returns the builder, so the same registration can be written as one chain:
-`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants).AddEfCoreIsolation()`.
+`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`.
 
 > **Startup validation.** `app.UseTenantry()` (step 7) checks the registration when the pipeline is built and
 > throws a clear `InvalidOperationException` if no resolver or no store is registered, rather than letting the
@@ -89,50 +86,36 @@ catalogues, reference tables) and are never filtered or stamped. You never set `
 Tenantry stamps it on insert, and rejects a new entity that already names another tenant. The interface needs
 only a getter, so an entity can implement it with a private or init-only setter.
 
-## 5. Make your DbContext tenant-aware
+## 5. Keep your DbContext as it is
 
-Your `DbContext` must expose the current tenant id so the query filters can read it. Implement
-`ITenantAwareDbContext<TKey>` and call `ApplyTenantFilters` in `OnModelCreating`:
+Your `DbContext` needs no base class, no interface and no Tenantry calls. Configure it as you normally would,
+in any order, including your own query filters:
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
-using Tenantry;
-using Tenantry.EfCore;
 
-public class AppDbContext : DbContext, ITenantAwareDbContext<Guid>
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    private readonly ITenantContext<Guid> _tenantContext;
-
-    public AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext<Guid> tenantContext)
-        : base(options) => _tenantContext = tenantContext;
-
     public DbSet<Order> Orders => Set<Order>();
-
-    // EF Core re-reads this per query because it is a DbContext member — see Core concepts.
-    public Guid CurrentTenantId => _tenantContext.CurrentTenantId;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
-        // Your own entity configuration goes here, before ApplyTenantFilters.
-        modelBuilder.ApplyTenantFilters<Guid, AppDbContext>(this); // filters every ITenantEntity<Guid> entity
+        // Every query filters on TenantId, so lead your indexes with it.
+        modelBuilder.Entity<Order>().HasIndex(o => new { o.TenantId, o.Id });
     }
 }
 ```
 
-Prefer to start from a base class? Derive from `MultiTenantDbContext<Guid>` instead and the
-`ITenantAwareDbContext` implementation plus `ApplyTenantFilters` call are done for you. See
-[EF Core integration](efcore-integration.md#choosing-how-to-wire-the-dbcontext).
+## 6. Register the DbContext with `UseTenantry()`
 
-## 6. Register the DbContext with the interceptor
-
-The interceptor is what stamps and validates `TenantId` on `SaveChanges`. Attach it from the
-`AddDbContext` callback:
+`UseTenantry()` isolates the context: it adds the tenant query filter to every `ITenantEntity<Guid>` entity after
+`OnModelCreating`, and attaches the interceptor that stamps and checks `TenantId` on `SaveChanges`. It works the
+same with `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbContextFactory`.
 
 ```csharp
-builder.Services.AddDbContext<AppDbContext>((sp, options) =>
-    options.UseSqlServer(connectionString)
-           .AddTenantInterceptors(sp));   // requires AddEfCoreIsolation() above
+builder.Services.AddDbContext<AppDbContext>(options => options
+    .UseSqlServer(connectionString)
+    .UseTenantry());
 ```
 
 ## 7. Add the middleware

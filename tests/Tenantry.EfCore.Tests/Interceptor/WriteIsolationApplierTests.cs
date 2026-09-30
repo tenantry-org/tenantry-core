@@ -15,7 +15,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.Empty();
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         db.Orders.Add(new Order { TenantId = "acme", Description = "test" });
 
         var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
@@ -30,7 +30,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         // TenantId = null (the actual default for string) — it is stamped
         Order order = new() { TenantId = null!, Description = "unstamped" };
         db.Orders.Add(order);
@@ -47,7 +47,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         // string.Empty is treated as unstamped (devs often init strings to "" rather than
         // null), so it is stamped just like null.
         Order order = new() { TenantId = string.Empty, Description = "unstamped" };
@@ -65,7 +65,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         db.Orders.Add(new Order { TenantId = "acme", Description = "matching" });
 
         var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
@@ -80,7 +80,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         db.Orders.Add(new Order { TenantId = "globex", Description = "wrong tenant" });
 
         var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
@@ -95,7 +95,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         // Save first so the entity exists in the database
         db.Orders.Add(new Order { TenantId = "acme", Description = "original" });
@@ -117,7 +117,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         // Save an acme order
         db.Orders.Add(new Order { TenantId = "acme", Description = "original" });
@@ -139,7 +139,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         db.Orders.Add(new Order { TenantId = "acme", Description = "to delete" });
         await db.SaveChangesAsync();
@@ -160,7 +160,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        await using var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         db.Orders.Add(new Order { TenantId = "attacker", Description = "cross-tenant" });
 
         var ex = Assert.Throws<TenantIsolationViolationException>(
@@ -179,7 +179,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         // Save an acme order so it exists in the DB and is tracked
         db.Orders.Add(new Order { TenantId = "acme", Description = "original" });
@@ -211,7 +211,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = new GuidTestTenantContext().As(tenantId);
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateGuidInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateGuidContextAsync(ctx, conn);
         db.Orders.Add(new GuidOrder { TenantId = tenantId, Description = "matching" });
 
         var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
@@ -226,7 +226,7 @@ public sealed class WriteIsolationApplierTests
         var ctx = TestTenantContext.For("acme");
 
         await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         // Add a mapped entity that does not implement ITenantEntity — it is skipped
         db.NonTenants.Add(new NonTenant { Name = "plain" });

@@ -22,8 +22,7 @@ An application has one store and one tenant key type. Remove the second `UseStor
 
 ## Queries return **no** rows for a valid tenant
 
-The query filter is fail-closed: when `CurrentTenantId` is the default value it matches nothing. Check,
-in order:
+The query filter is fail-closed: when no tenant is current it matches nothing. Check, in order:
 
 1. **Is a tenant actually in scope?** Inject `ITenantContext<TKey>` and confirm `HasTenant` is true at
    the point of the query. On the web, `UseTenantry()` must have run and resolved a tenant. In a
@@ -41,15 +40,12 @@ in order:
 - You probably called `IgnoreQueryFilters()` somewhere (directly, or via a shared queryable helper).
 - The entity does not implement `ITenantEntity<TKey>`, so it is treated as global. If it should be
   isolated, implement the interface (or derive from `TenantEntity<TKey>`).
-- The context has no tenant interceptors (`.AddTenantInterceptors(sp)`, or a non-pooled
-  `MultiTenantDbContext`), and `ApplyTenantFilters` was not called or ran before configuration that
-  replaced its filter. With the interceptors attached, such a model throws on its first query instead (see
-  below).
+- The context's options do not call `UseTenantry()`, so it has no isolation at all. Add it where the context is
+  registered (`AddDbContext`, `AddDbContextPool`, `AddDbContextFactory`, `AddPooledDbContextFactory`).
 
 ## `TenantId` is not being stamped on insert
 
-- The interceptor is not attached: ensure `.AddTenantInterceptors(sp)` is in the `AddDbContext`
-  callback for that context, and that `AddEfCoreIsolation()` was called in the registration lambda.
+- The context's options do not call `UseTenantry()`, which attaches the interceptor.
 - No tenant is in scope at `SaveChanges`. By default (`MissingTenantBehavior.Reject`) a save that writes
   tenant-scoped entities throws `TenantNotResolvedException` and nothing is written. `Warn` (which logs) and
   `Allow` let updates and deletes through unchecked, but a new entity must still carry its `TenantId`: without
@@ -72,28 +68,40 @@ to a different tenant than the current one. The exception's `Kind` is `EntityWri
 ## `TenantIsolationViolationException`: "has no tenant query filter" or "is not a concurrency token"
 
 The model check found a tenant-scoped entity type that would not be isolated, and stopped the query or save
-before it ran.
+before it ran. `UseTenantry()` adds the tenant filter and the concurrency token after `OnModelCreating`, so your
+own configuration cannot remove them; something that runs after it did: an `IModelCustomizer` put in place
+through a custom internal service provider (`UseInternalServiceProvider`), a model-building convention, or a
+compiled model (`dotnet ef dbcontext optimize`) built without them. Let `UseTenantry()` build the model.
 
-- **No tenant query filter:** call `ApplyTenantFilters` (or `base.OnModelCreating` in a
-  `MultiTenantDbContext`) at the **end** of `OnModelCreating`. An entity type configured after it gets no
-  filter, and a `HasQueryFilter` after it can replace the tenant filter. Only the filter `ApplyTenantFilters`
-  adds counts, not one written by hand or set by a convention or model customizer.
-- **Not a concurrency token:** something after `ApplyTenantFilters` configured `TenantId` with
-  `IsConcurrencyToken(false)`. Remove it: updates and deletes rely on it to match the stored tenant.
-- **"implements ITenantEntity&lt;X&gt;, but the tenant key type here is Y":** the entity uses a different key
-  type from `AddTenantry<Y>` or `ApplyTenantFilters<Y, …>`. Use the same key type everywhere.
-- **"Owned entity … is tenant-scoped but its owner … is not":** EF Core filters owned rows only through their
-  owner, so make the owner tenant-scoped too.
+## The model fails to build with `TenantIsolationViolationException` or "Tenantry is not registered"
+
+`UseTenantry()` refuses a model it cannot isolate, when EF Core builds it (usually on the first query):
+
+- **"implements ITenantEntity&lt;X&gt;, but '…' implements ITenantEntity&lt;Y&gt;":** use one tenant key type for
+  every tenant-owned entity, the one you register with `AddTenantry`.
+- **"Tenantry is not registered for 'X' tenant keys":** the context's application service provider has no
+  `AddTenantry<X>`. Register Tenantry with your entities' key type, in the same service collection as the
+  context.
+- **"Entity … is tenant-owned but its base entity type … is not":** EF Core filters a hierarchy only through its
+  root, so make the root tenant-owned too.
+- **"Owned entity … is tenant-owned but its owner … is not":** EF Core filters owned rows only through their
+  owner, so make the owner tenant-owned too.
+- **"This context replaces EF Core's IModelCustomizer":** the options also call
+  `ReplaceService<IModelCustomizer, …>()`. Move that configuration into `OnModelCreating` or an
+  `ITenantModelContributor`.
+
+## "has no application service provider"
+
+The context was built by hand, without the application's services, so Tenantry cannot find the current tenant.
+Register it with `AddDbContext` (or a pool or factory), or call `UseApplicationServiceProvider` on its options.
+Building the model works without them, for design-time tools.
 
 ## Filter uses a stale tenant / leaks across requests
 
-Almost always a `DbContext` wiring mistake. The filter must read the tenant from the **`DbContext`**,
-not a captured service:
-
-- Implement `ITenantAwareDbContext<TKey>` and expose `CurrentTenantId => _tenantContext.CurrentTenantId`,
-  then `ApplyTenantFilters<TKey, TContext>(this)`. Passing `this` is what lets EF Core re-evaluate the
-  tenant per query. See [EF Core integration](efcore-integration.md#how-the-query-filter-stays-correct).
-- Inject `ITenantContext<TKey>` (read-only) into the context, not `ITenantContextSetter<TKey>`.
+`UseTenantry()`'s filter reads the tenant through the context that runs each query, so it cannot go stale (see
+[EF Core integration](efcore-integration.md#how-the-query-filter-stays-correct)). A filter of your own that
+captures a tenant id, or an `ITenantContext<TKey>` instance, in `OnModelCreating` is evaluated once and reused
+for every query: read the tenant through the context instead, or leave the tenant to `UseTenantry()`.
 
 ## Claim-based resolution or validation never matches
 
@@ -127,7 +135,7 @@ changes to an `AsyncLocal` are undone when it returns. Open the scope in the met
 
 ## AOT/trim warnings from the EF Core integration
 
-Expected. `ApplyTenantFilters` and `MultiTenantDbContext<TKey>` are annotated `[RequiresDynamicCode]`
-and `[RequiresUnreferencedCode]` because query filters build expression trees. EF Core is not
+Expected. EF Core's `DbContext` is annotated `[RequiresDynamicCode]` and `[RequiresUnreferencedCode]`, and
+`UseTenantry()` builds its query filters as expression trees while EF Core builds the model. EF Core is not
 AOT-compatible; do not publish an EF-Core-backed app with Native AOT. See
 [AOT & trimming](aot-and-trimming.md).

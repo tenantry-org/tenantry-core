@@ -6,7 +6,7 @@
 // with ITenantContextSetter<TKey>.Use(...) around the work that should run as a tenant.
 //
 // It demonstrates:
-//   1. Registering core + EF Core isolation with AddTenantry (no AspNetCore package).
+//   1. Registering Tenantry with AddTenantry (no AspNetCore package) and isolating a DbContext with UseTenantry().
 //   2. Stamping TenantId automatically on insert.
 //   3. Reads being transparently filtered to the active tenant.
 //   4. Nested scopes (an inner tenant shadows the outer one, restored on dispose).
@@ -45,16 +45,14 @@ builder.Services.AddTenantry<Guid>(tenant =>
     // request like the ASP.NET middleware does), but registering one lets you look tenants
     // up by id from anywhere — e.g. when a queued message only carries the tenant id.
     tenant.UseInMemoryStore([acme, globex]);
-
-    // Turn on EF Core write isolation: cross-tenant writes are rejected, including a new entity
-    // pre-stamped with another tenant's id.
-    tenant.AddEfCoreIsolation();
 });
 
-// ── 2. Register the DbContext and attach the tenant interceptors ──────────────────────────
-builder.Services.AddDbContext<SampleDbContext>((sp, options) =>
+// ── 2. Register the DbContext, isolated by tenant ──────────────────────────────────────────
+// UseTenantry() filters every query to the current tenant and checks every write: cross-tenant
+// writes are rejected, including a new entity pre-stamped with another tenant's id.
+builder.Services.AddDbContext<SampleDbContext>(options =>
     options.UseSqlite("Data Source=tenantry-console-sample.db")
-           .AddTenantInterceptors(sp));
+           .UseTenantry());
 
 using var host = builder.Build();
 

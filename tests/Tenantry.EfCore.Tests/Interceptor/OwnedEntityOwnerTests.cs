@@ -105,7 +105,7 @@ public sealed class OwnedEntityOwnerTests : IDisposable
 
     private async Task<OwnedContext> CreateAsync(TestTenantContext tenant)
     {
-        OwnedContext db = new(DbContextFactory.InterceptorOptions<OwnedContext>(tenant, _connection), tenant);
+        OwnedContext db = new(DbContextFactory.Options<OwnedContext>(tenant, _connection));
         await db.Database.EnsureCreatedAsync();
         return db;
     }
@@ -142,12 +142,10 @@ public sealed class OwnedEntityOwnerTests : IDisposable
         public string City { get; set; } = string.Empty;
     }
 
-    private sealed class OwnedContext(DbContextOptions<OwnedContext> options, ITenantContext<string> tenantContext)
-        : DbContext(options), ITenantAwareDbContext<string>
+    private sealed class OwnedContext(DbContextOptions<OwnedContext> options)
+        : DbContext(options)
     {
         public DbSet<Customer> Customers => Set<Customer>();
-
-        public string? CurrentTenantId => tenantContext.CurrentTenantId;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -157,7 +155,6 @@ public sealed class OwnedEntityOwnerTests : IDisposable
                 customer.OwnsMany(c => c.Phones, phone => phone.HasKey(p => p.Id));
                 customer.OwnsOne(c => c.Address);
             });
-            modelBuilder.ApplyTenantFilters<string, OwnedContext>(this);
         }
     }
 }

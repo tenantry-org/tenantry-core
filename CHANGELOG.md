@@ -28,6 +28,11 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 | `Tenantry.Core.MissingTenantBehavior` (`Allow`, `Warn`, `Reject`, `Skip`) | `Tenantry.EfCore.MissingTenantBehavior` (`Reject`, `Warn`, `Allow`) |
 | `EfCoreIsolationOptions.DetectSpoofedWrites` | removed: a new entity that names another tenant is always rejected |
 | `Tenantry.Core.Exceptions.TenantIsolationViolationException.EntityTypeName` | `Tenantry.EfCore.TenantIsolationViolationException.TypeName`, plus `Kind` |
+| `MultiTenantDbContext<TKey>`, or `ITenantAwareDbContext<TKey>` with `modelBuilder.ApplyTenantFilters<TKey, TContext>(this)`, and `options.AddTenantInterceptors(sp)` | `options.UseTenantry()` on a plain `DbContext` |
+| `tenant.AddEfCoreIsolation(o => …)` | optional: `tenant.ConfigureEfCoreIsolation(o => …)` |
+| `services.AddTenantDbContextPool<TContext, TKey>((sp, o) => o.UseSqlServer().AddTenantInterceptors(sp))` | `tenant.AddDbContextPerTenantDatabase<TContext>((sp, o) => o.UseSqlServer(), pooled: true)` |
+| `AddDbContext` reading the current tenant's connection string in its options callback | `tenant.AddDbContextPerTenantDatabase<TContext>((sp, o) => o.UseSqlServer())` |
+| the EF Core 10 tenant filter named `__TenantryFilter__` | named `TenantryQueryFilters.Tenant` (`"Tenantry.Tenant"`) |
 
 ### Added
 
@@ -36,11 +41,24 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   not meant to compile is marked ```csharp no-compile. CI also starts every sample in Development, where the
   host validates its registrations, and sends a tenant request to the web ones (`scripts/smoke-samples.sh`).
 - An `.editorconfig`, checked in CI with `dotnet format --verify-no-changes`.
-- The tenant interceptors check each model on its first query and first save, and throw
+- `options.UseTenantry()`, one call that isolates any `DbContext`, pooled or not, with no base class or
+  interface: it adds the tenant query filters while EF Core builds the model, after `OnModelCreating` (so the
+  order of your own configuration no longer matters), and the save interceptor and bulk-update guard. It reads
+  the tenant through the context's application service provider, and a Tenantry error names the missing
+  `AddTenantry<TKey>` on the first query or save.
+- `tenant.AddDbContextPerTenantDatabase<TContext>(…, pooled)` registers a context for a database per tenant,
+  pooled or not, connecting each one to the current tenant's database, and checks at registration that
+  `UseConnectionStrings` was called. It replaces `AddTenantDbContextPool` and the hand-written non-pooled recipe;
+  the pooled variant uses EF Core's public `PooledDbContextFactory` instead of rebuilding EF Core's registration.
+- On EF Core 10 the tenant filter is named `TenantryQueryFilters.Tenant`, so
+  `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes it alone. An entity with an unnamed filter of its
+  own gets the tenant filter merged into it instead, and Tenantry logs this once per model.
+- `ITenantDbContextOptionsContributor` and `ITenantModelContributor`, so packages that build on Tenantry can add
+  to the options and model of every context that uses `UseTenantry()`.
+- Contexts that use `UseTenantry()` check each model on their first query and first save, and throw
   `TenantIsolationViolationException` instead of running either when a tenant-scoped entity type has lost its
-  tenant query filter or its `TenantId` concurrency token. This catches configuration that ran after
-  `ApplyTenantFilters`: on EF Core 8 and 9, a `HasQueryFilter` call after it replaced the tenant filter, so the
-  tenant's queries returned every tenant's rows, and an entity type added after it got no filter at all.
+  tenant query filter or its `TenantId` concurrency token after Tenantry built the model (a convention, a model
+  customizer in a custom internal service provider, a compiled model).
 - Conformance tests for each package: a host that registers the package's features through its public
   methods, with a scoped store, validates scopes and every registration on build, resolves every Tenantry
   service and starts.
@@ -66,15 +84,14 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 ### Changed
 
 - **Breaking:** the API reshape in [Upgrading from 0.4](#upgrading-from-04). There is one entry point and one
-  builder, so every builder method chains (`tenant => tenant.ResolveFromHeader(…).UseStore<T>().AddEfCoreIsolation()`),
+  builder, so every builder method chains (`tenant => tenant.ResolveFromHeader(…).UseStore<T>().UseConnectionStrings(…)`),
   and `UseResolver<TResolver>()` returns the builder without its key type (call it last).
 - **Breaking:** an application registers one store and one tenant key type. A second `UseStore`/`UseInMemoryStore`
   (or an `ITenantStore<TKey>` registered directly), and `AddTenantry` with another key type, throw.
 - **Breaking:** `app.UseTenantry()` checks the registration when the pipeline is built (a resolver and a store,
   and a Tenantry-worded error when `AddTenantry` registered no request resolution), in place of the hosted service
   that checked at startup. Creating `ITenantStoreAccessor` without a store throws, so a worker's hosted service that
-  depends on it fails as the host starts. `AddTenantInterceptors` without `AddEfCoreIsolation` throws a
-  Tenantry error instead of DI's error about an internal type.
+  depends on it fails as the host starts.
 - **Breaking:** the resolution middleware no longer echoes the request's identifier, and a rejection's body is
   empty (or problem details, above) instead of plain text. An endpoint that does not require a tenant is never
   rejected: a request whose identifier is invalid, names no tenant, or names one an access validator refuses
@@ -91,18 +108,16 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 - The packages depend on each other from this release up to the next minor (`[0.5.0, 0.6.0)`) instead of exactly:
   they no longer share internals, so one can be updated within the minor without the others.
 
-- **Breaking:** a context with the tenant interceptors (`AddTenantInterceptors`, or a non-pooled
-  `MultiTenantDbContext`) must apply the tenant filters to every tenant-scoped entity type. A context that
-  attached the interceptors but left the filters out, for example to read across tenants, used to save with a
-  warning and read every tenant's rows; it now throws on its first query or save. Apply the filters and use
-  `IgnoreQueryFilters()` for deliberate cross-tenant reads. Only the filter `ApplyTenantFilters` adds is
-  recognised, not a tenant filter written by hand.
-- Call `ApplyTenantFilters`, or `base.OnModelCreating` in a `MultiTenantDbContext`, at the **end** of
-  `OnModelCreating`, after your own configuration. The docs said to call the base first, which is the order
-  that lost the tenant filter (see Added); the guides, samples and XML documentation now show it last.
-- `ApplyTenantFilters` throws `TenantIsolationViolationException` for an entity that implements
-  `ITenantEntity` (then `ITenantScoped`) with a key type other than its own `TKey`, which it used to skip silently, leaving the
-  entity with no isolation at all. The model check rejects such an entity too.
+- **Breaking:** EF Core isolation is `options.UseTenantry()` (see Upgrading), which always applies the query
+  filters and the interceptors together. A context that attached the interceptors but left the filters out, for
+  example to read across tenants, used to save with a warning and read every tenant's rows; use
+  `IgnoreQueryFilters()` for deliberate cross-tenant reads.
+- **Breaking:** a model that Tenantry cannot isolate fails to build, instead of being left unisolated: entities
+  that implement `ITenantEntity` with a key type other than the registered one (0.4 skipped them silently), with
+  more than one key type, or a tenant-scoped type whose base type or owner is not tenant-scoped. So does a
+  context that also replaces `IModelCustomizer`, which Tenantry's own customizer would otherwise override.
+- `Tenantry.EfCore` depends on `Microsoft.EntityFrameworkCore.Relational` only (it brings
+  `Microsoft.EntityFrameworkCore`), and has no API annotated for dynamic code of its own.
 - `ExecuteUpdate` fails closed on setters the guard cannot read. Their expression shape is undocumented and
   changes between EF Core versions, so a version whose shape Tenantry does not know is now rejected instead of
   its setters going unchecked. Tests pin the shape of each supported version (8, 9, 10, and the 11 release
@@ -125,14 +140,19 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   attached as another tenant, and otherwise its `TenantId` is written back with its concurrency token in the same
   transaction, so a forged one matches no row and nothing is saved. An audit log sees that as an update of the
   owner.
-- A tenant-scoped inheritance hierarchy failed to build its model, because `ApplyTenantFilters` gave the
-  derived types a filter of their own, which EF Core allows only on the root. The root's filter now covers the
+- The documented order, `base.OnModelCreating` (and so `ApplyTenantFilters`) first, lost the tenant filter: on
+  EF Core 8 and 9 a later `HasQueryFilter` replaced it, so the tenant's queries returned every tenant's rows,
+  and an entity type configured later got no filter; on EF Core 10 the model failed to build. `UseTenantry()`
+  adds the tenant filter after `OnModelCreating`.
+- A tenant-scoped inheritance hierarchy failed to build its model, because Tenantry gave the derived types a
+  filter of their own, which EF Core allows only on the root. The root's filter now covers the
   hierarchy, and a tenant-scoped type whose base type is not tenant-scoped throws a Tenantry error. A
   tenant-scoped owned type, which also failed to build, gets its `TenantId` concurrency token and is filtered
   through its owner, which must be tenant-scoped too (otherwise it throws).
 - Calling `AddTenantry` twice registered a second set of resolution options, so the first call's access
-  validators and `RequireTenantByDefault` were silently dropped. Calling `AddEfCoreIsolation` twice ignored the
-  second call's options. Both now configure the options already registered.
+  validators and `RequireTenantByDefault` were silently dropped. Calling `AddEfCoreIsolation` (now
+  `ConfigureEfCoreIsolation`) twice ignored the second call's options. Both now configure the options already
+  registered.
 - `MissingTenantBehavior.Allow` said EF Core saves writes without a stamped `TenantId`, and troubleshooting
   said the same of `Warn`; both let updates and deletes through, but a new entity without a `TenantId` still
   throws.

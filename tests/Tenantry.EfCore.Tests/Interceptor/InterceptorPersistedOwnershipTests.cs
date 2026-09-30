@@ -22,7 +22,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     public async Task ForgedTenantIdOnAnotherTenantsKey_MatchesNoRow_AndLeavesTheRowUnchanged(string write)
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("globex"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
         // The caller knows acme's primary key and claims the row is its own.
         Order forged = new() { Id = acmeOrderId, TenantId = "globex", Description = "overwritten" };
@@ -50,7 +50,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     public async Task EntityLoadedUnderAnotherTenant_ModifiedAfterScopeSwitch_ThrowsIsolationViolation()
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
         var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId);
 
         _tenant.As("globex");
@@ -68,7 +68,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     public async Task EntityLoadedUnderAnotherTenant_RemovedAfterScopeSwitch_ThrowsIsolationViolation()
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
         var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId);
 
         _tenant.As("globex");
@@ -83,7 +83,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     public async Task ChangingTenantIdOfOwnEntity_ThrowsIsolationViolation()
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
         var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId);
 
         order.TenantId = "globex";
@@ -97,7 +97,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     public async Task RemovingEntityWithNullTenantId_ThrowsIsolationViolation()
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         db.Orders.Remove(new Order { Id = acmeOrderId, TenantId = null! });
 
@@ -110,7 +110,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     public async Task DetachedUpdateOfOwnRow_Succeeds()
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         db.Orders.Update(new Order { Id = acmeOrderId, TenantId = "acme", Description = "updated" });
         await db.SaveChangesAsync();
@@ -122,7 +122,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     public async Task DetachedRemoveOfOwnRow_Succeeds()
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         db.Orders.Remove(new Order { Id = acmeOrderId, TenantId = "acme" });
         await db.SaveChangesAsync();
@@ -131,26 +131,13 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     }
 
     [Fact]
-    public async Task ApplyTenantFilters_MarksTenantIdAsConcurrencyToken()
+    public async Task UseTenantry_MarksTenantIdAsConcurrencyToken()
     {
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         var tenantId = db.Model.FindEntityType(typeof(Order))!.FindProperty(nameof(Order.TenantId))!;
 
         tenantId.IsConcurrencyToken.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task BaseClassContext_ForgedTenantIdOnAnotherTenantsKey_MatchesNoRow()
-    {
-        var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateBaseClassContextAsync(_tenant.As("globex"), _connection);
-
-        db.Orders.Update(new Order { Id = acmeOrderId, TenantId = "globex", Description = "overwritten" });
-
-        await db.Awaiting(d => d.SaveChangesAsync())
-            .Should().ThrowAsync<DbUpdateConcurrencyException>();
-        ReadRow(acmeOrderId).Should().Be(("acme", "acme order"));
     }
 
     [Fact]
@@ -161,7 +148,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
         await using var connection = DbContextFactory.CreateSharedConnection();
 
         int acmeOrderId;
-        await using (var seed = await DbContextFactory.CreateGuidInterceptorContextAsync(tenant.As(acme), connection))
+        await using (var seed = await DbContextFactory.CreateGuidContextAsync(tenant.As(acme), connection))
         {
             GuidOrder order = new() { Description = "acme order" };
             seed.Orders.Add(order);
@@ -169,19 +156,19 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
             acmeOrderId = order.Id;
         }
 
-        await using var db = await DbContextFactory.CreateGuidInterceptorContextAsync(tenant.As(globex), connection);
+        await using var db = await DbContextFactory.CreateGuidContextAsync(tenant.As(globex), connection);
         db.Orders.Update(new GuidOrder { Id = acmeOrderId, TenantId = globex, Description = "overwritten" });
 
         await db.Awaiting(d => d.SaveChangesAsync())
             .Should().ThrowAsync<DbUpdateConcurrencyException>();
         tenant.As(acme);
-        await using var check = await DbContextFactory.CreateGuidInterceptorContextAsync(tenant, connection);
+        await using var check = await DbContextFactory.CreateGuidContextAsync(tenant, connection);
         (await check.Orders.SingleAsync(o => o.Id == acmeOrderId)).Description.Should().Be("acme order");
     }
 
     private async Task<int> SeedAcmeOrderAsync()
     {
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
         Order order = new() { Description = "acme order" };
         db.Orders.Add(order);
         await db.SaveChangesAsync();

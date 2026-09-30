@@ -1,13 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 
 namespace Tenantry.EfCore.Tests;
 
 // Non-tenanted entity — intentionally does NOT implement ITenantEntity<string>.
-// ApplyTenantFilters must skip it; all rows remain visible regardless of tenant.
+// UseTenantry() must skip it; all rows remain visible regardless of tenant.
 internal sealed class NonTenantedProduct
 {
     public int Id { get; set; }
@@ -17,21 +16,11 @@ internal sealed class NonTenantedProduct
 }
 
 internal sealed class MixedDbContext(
-    DbContextOptions<MixedDbContext> options,
-    ITenantContext<string> tenantContext)
-    : DbContext(options), ITenantAwareDbContext<string>
+    DbContextOptions<MixedDbContext> options)
+    : DbContext(options)
 {
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<NonTenantedProduct> Products => Set<NonTenantedProduct>();
-
-    public string? CurrentTenantId => tenantContext.CurrentTenantId;
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
-        // Only Order gets a filter; NonTenantedProduct is skipped
-        modelBuilder.ApplyTenantFilters<string, MixedDbContext>(this);
-    }
 }
 
 /// <summary>
@@ -46,12 +35,7 @@ public sealed class ModelBuilderTests
         TestTenantContext ctx = new();
         await using var conn = DbContextFactory.CreateSharedConnection();
 
-        var options =
-            new DbContextOptionsBuilder<MixedDbContext>()
-                .UseSqlite(conn)
-                .Options;
-
-        await using MixedDbContext db = new(options, ctx);
+        await using MixedDbContext db = new(DbContextFactory.Options<MixedDbContext>(ctx, conn));
         await db.Database.EnsureCreatedAsync();
 
         // Seed products (no tenant scope needed)
@@ -79,22 +63,18 @@ public sealed class ModelBuilderTests
         TestTenantContext ctx = new();
         await using var conn = DbContextFactory.CreateSharedConnection();
 
-        var options =
-            new DbContextOptionsBuilder<MixedDbContext>()
-                .UseSqlite(conn)
-                .Options;
-
-        await using MixedDbContext db = new(options, ctx);
+        await using MixedDbContext db = new(DbContextFactory.Options<MixedDbContext>(ctx, conn));
         await db.Database.EnsureCreatedAsync();
 
-        // Seed orders under acme (manually set TenantId since we're not using the interceptor)
         ctx.As("acme");
-        db.Orders.Add(new Order { TenantId = "acme", Description = "Acme order" });
+        db.Orders.Add(new Order { Description = "Acme order" });
         await db.SaveChangesAsync();
 
         ctx.As("globex");
         var globexOrders = await db.Orders.AsNoTracking().ToListAsync();
 
         globexOrders.Should().BeEmpty(); // filter applied, globex sees nothing
+        ctx.As("acme");
+        (await db.Orders.AsNoTracking().ToListAsync()).Should().ContainSingle();
     }
 }

@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.Logging.Abstractions;
 using Tenantry;
 using Tenantry.EfCore.Internal;
 
@@ -22,7 +21,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     [Fact]
     public async Task Default_AddingScopedEntityWithoutTenant_ThrowsAndPersistsNothing()
     {
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.AsNone(), _connection);
         db.Orders.Add(new Order { Description = "no tenant" });
 
         await db.Awaiting(d => d.SaveChangesAsync())
@@ -33,7 +32,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     [Fact]
     public async Task Default_SyncSaveWithoutTenant_Throws()
     {
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.AsNone(), _connection);
         db.Orders.Add(new Order { Description = "no tenant" });
 
         db.Invoking(d => d.SaveChanges())
@@ -47,7 +46,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     public async Task Default_UpdatingOrRemovingExistingRowWithoutTenant_ThrowsAndLeavesRowUnchanged(bool remove)
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.AsNone(), _connection);
         Order forged = new() { Id = acmeOrderId, TenantId = "globex", Description = "overwritten" };
 
         if (remove)
@@ -67,7 +66,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     [Fact]
     public async Task Default_WritingOnlyNonTenantEntitiesWithoutTenant_Succeeds()
     {
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.AsNone(), _connection);
         db.NonTenants.Add(new NonTenant { Name = "catalogue entry" });
 
         await db.Awaiting(d => d.SaveChangesAsync())
@@ -79,7 +78,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     [InlineData(MissingTenantBehavior.Warn)]
     public async Task OptIn_AddingScopedEntityWithExplicitTenantId_Succeeds(MissingTenantBehavior behavior)
     {
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(
+        await using var db = await DbContextFactory.CreateContextAsync(
             _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
         db.Orders.Add(new Order { TenantId = "acme", Description = "seeded" });
 
@@ -93,7 +92,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     [InlineData(MissingTenantBehavior.Warn)]
     public async Task OptIn_AddingScopedEntityWithoutTenantId_ThrowsAndPersistsNothing(MissingTenantBehavior behavior)
     {
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(
+        await using var db = await DbContextFactory.CreateContextAsync(
             _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
         db.Orders.Add(new Order { Description = "unowned" });
 
@@ -108,7 +107,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     public async Task OptIn_UpdatingExistingRowWithoutTenant_Succeeds(MissingTenantBehavior behavior)
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(
+        await using var db = await DbContextFactory.CreateContextAsync(
             _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
 
         db.Orders.Update(new Order { Id = acmeOrderId, TenantId = "acme", Description = "maintenance" });
@@ -133,12 +132,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     {
         // DbContextEventData.Context is DbContext? — null is a valid (if rare) input.
         // Exercises the null-context guard in ApplyTenantIsolation.
-        TenantSaveChangesInterceptor<string> interceptor = new(
-            _tenant.As("acme"),
-            new EfCoreIsolationOptions(),
-            NullLogger<TenantSaveChangesInterceptor<string>>.Instance);
-
-        var act = () => interceptor.SavingChanges(new NullContextEventData(), default);
+        var act = () => TenantSaveChangesInterceptor.Instance.SavingChanges(new NullContextEventData(), default);
 
         act.Should().NotThrow();
     }
@@ -147,7 +141,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     public async Task Apply_SkipsNonTenantScopedEntities()
     {
         // Verifies the branch where an entry.Entity is not ITenantEntity — the applier should skip it.
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
         db.NonTenants.Add(new NonTenant { Name = "plain" });
 
         db.Invoking(d => TenantWriteIsolationApplier.Apply(d.ChangeTracker.Entries(), _tenant)).Should().NotThrow();
@@ -155,7 +149,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
 
     private async Task<int> SeedAcmeOrderAsync()
     {
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
         Order order = new() { Description = "acme order" };
         db.Orders.Add(order);
         await db.SaveChangesAsync();

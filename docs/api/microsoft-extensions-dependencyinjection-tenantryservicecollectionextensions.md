@@ -40,6 +40,5 @@ Calling it again adds to the same registration, so a library can call it to make
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
-    .UseStore<AppTenantStore>()
-    .AddEfCoreIsolation());
+    .UseStore<AppTenantStore>());
 ```

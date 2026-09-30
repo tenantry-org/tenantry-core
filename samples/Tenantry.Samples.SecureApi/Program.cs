@@ -63,11 +63,11 @@ builder.Services.AddTenantry<string>(tenant =>
     tenant.ValidateTenantAccessByClaim(AuthSettings.TenantClaim); // 403 unless the token lists the tenant
     tenant.RequireTenantByDefault();                               // 400 when no tenant is selected
     tenant.UseInMemoryStore(tenants);                              // use a database-backed store in production
-    tenant.AddEfCoreIsolation();
 });
 
-builder.Services.AddDbContext<NotesDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("Notes")));
+builder.Services.AddDbContext<NotesDbContext>(options => options
+    .UseSqlite(builder.Configuration.GetConnectionString("Notes"))
+    .UseTenantry()); // filters queries and checks writes by the current tenant
 
 var app = builder.Build();
 

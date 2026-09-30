@@ -1,8 +1,8 @@
 namespace Tenantry.EfCore;
 
 /// <summary>
-/// Options for configuring EF Core tenant isolation registration.
-/// Passed to <c>builder.AddEfCoreIsolation(options => ...)</c>.
+/// Options for EF Core tenant isolation, set with <c>tenant.ConfigureEfCoreIsolation(options =&gt; …)</c>. Every
+/// context that uses <c>UseTenantry()</c> follows them.
 /// </summary>
 /// <remarks>
 /// These protections are <strong>always</strong> on, independent of these options: reads fail closed

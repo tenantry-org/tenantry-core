@@ -3,7 +3,7 @@ using Tenantry;
 
 namespace Tenantry.EfCore.Tests;
 
-/// <summary>A concrete entity using the TenantScoped base class.</summary>
+/// <summary>A concrete entity using the TenantEntity base class.</summary>
 internal sealed class Invoice : TenantEntity<string>
 {
     public int Id { get; set; }
@@ -31,21 +31,24 @@ public sealed class TenantEntityBaseClassTests
     }
 
     [Fact]
-    public async Task TenantEntity_WorksWithInterceptorStamping()
+    public async Task TenantEntity_IsStampedAndFiltered()
     {
-        var ctx = TestTenantContext.For("acme");
-        await using var conn = DbContextFactory.CreateSharedConnection();
+        var tenant = TestTenantContext.For("acme");
+        await using var connection = DbContextFactory.CreateSharedConnection();
+        await using InvoicesContext db = new(DbContextFactory.Options<InvoicesContext>(tenant, connection));
+        await db.Database.EnsureCreatedAsync();
 
-        // Use the base-class DbContext path which also inherits MultiTenantDbContext
-        await using var db = await DbContextFactory.CreateBaseClassContextAsync(ctx, conn);
+        db.Invoices.Add(new Invoice { Description = "test" });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
 
-        // BaseClassTestDbContext uses Order (which implements ITenantEntity<string> directly),
-        // but we need a DbContext that has Invoice. Use a minimal inline context instead.
-        // Test the property round-trip via the base class directly.
-        Invoice invoice = new() { Description = "test" };
-        invoice.TenantId = "acme";
+        (await db.Invoices.SingleAsync()).TenantId.Should().Be("acme");
+        tenant.As("globex");
+        (await db.Invoices.CountAsync()).Should().Be(0);
+    }
 
-        invoice.TenantId.Should().Be("acme");
-        invoice.Description.Should().Be("test");
+    private sealed class InvoicesContext(DbContextOptions<InvoicesContext> options) : DbContext(options)
+    {
+        public DbSet<Invoice> Invoices => Set<Invoice>();
     }
 }

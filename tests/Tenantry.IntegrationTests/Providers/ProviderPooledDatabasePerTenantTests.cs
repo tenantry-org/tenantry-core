@@ -13,7 +13,7 @@ public sealed class PostgreSqlPooledDatabasePerTenantTests(PostgreSqlFixture fix
     : ProviderPooledDatabasePerTenantTests(fixture), IClassFixture<PostgreSqlFixture>;
 
 /// <summary>
-/// <c>AddTenantDbContextPool</c> against each real provider: one pooled context instance reused across two
+/// <c>AddDbContextPerTenantDatabase</c> with a pool against each real provider: one pooled context instance reused across two
 /// tenant databases reads and writes only the current tenant's database. The pool is configured with the
 /// fixture's shared connection string, so every lease must override it.
 /// </summary>
@@ -143,11 +143,8 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
             tenant.UseInMemoryStore([_acme, _globex]);
             tenant.UseConnectionStrings(options =>
                 options.GetConnectionString = t => _fixture.WithDatabase($"tk_pool_{t.TenantId}_{_runId}"));
-            tenant.AddEfCoreIsolation();
+            tenant.AddDbContextPerTenantDatabase<ProviderOrdersContext>((_, options) => _fixture.UseProvider(options), pooled: true, poolSize);
         });
-        services.AddTenantDbContextPool<ProviderOrdersContext, string>(
-            (sp, options) => _fixture.UseProvider(options).AddTenantInterceptors(sp),
-            poolSize);
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }

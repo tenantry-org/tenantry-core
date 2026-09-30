@@ -1,14 +1,17 @@
 // Registers Tenantry the way an application does and runs work in a tenant scope, then loads every
 // Tenantry assembly the packages delivered (see PackageLoadCheck).
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
+using Tenantry.EfCore;
 
 var services = new ServiceCollection();
 services.AddLogging();
 services.AddTenantry<string>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }])
-    .AddEfCoreIsolation());
+    .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Reject));
+_ = new DbContextOptionsBuilder().UseTenantry();
 
 await using var provider = services.BuildServiceProvider();
 await provider.GetRequiredService<ITenantScopeFactory<string>>().RunInScopeAsync("acme", (scope, _) =>

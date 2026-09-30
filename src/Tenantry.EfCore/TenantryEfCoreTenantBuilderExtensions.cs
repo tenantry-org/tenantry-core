@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Tenantry;
 using Tenantry.EfCore;
@@ -12,13 +14,19 @@ namespace Microsoft.Extensions.DependencyInjection;
 /// </summary>
 public static class TenantryEfCoreTenantBuilderExtensions
 {
+    // What EF Core requires of a context type it creates (matches its own annotations).
+    internal const DynamicallyAccessedMemberTypes ContextMembers =
+        DynamicallyAccessedMemberTypes.PublicConstructors |
+        DynamicallyAccessedMemberTypes.NonPublicConstructors |
+        DynamicallyAccessedMemberTypes.PublicProperties;
+
     /// <summary>
-    /// Registers EF Core tenant isolation services (the SaveChanges interceptor and the
-    /// configured isolation policy). Call this inside your <c>AddTenantry</c> configuration lambda.
+    /// Sets the EF Core isolation options, such as what happens to a write without a tenant. Optional: without it,
+    /// the defaults apply, which are the strictest.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="configure">Sets the isolation options, such as what happens to a write without a tenant, or <see langword="null"/> for the defaults.</param>
+    /// <param name="configure">Sets the options.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>Calling it again configures the same options instance.</remarks>
     /// <example>
@@ -26,15 +34,16 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
     ///     .ResolveFromHeader("X-Tenant-Id")
     ///     .UseInMemoryStore(tenants)
-    ///     .AddEfCoreIsolation(options =&gt; options.OnMissingTenant = MissingTenantBehavior.Warn));
+    ///     .ConfigureEfCoreIsolation(options =&gt; options.OnMissingTenant = MissingTenantBehavior.Warn));
     /// </code>
     /// </example>
-    public static ITenantBuilder<TKey> AddEfCoreIsolation<TKey>(
+    public static ITenantBuilder<TKey> ConfigureEfCoreIsolation<TKey>(
         this ITenantBuilder<TKey> builder,
-        Action<EfCoreIsolationOptions>? configure = null)
+        Action<EfCoreIsolationOptions> configure)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
 
         // The interceptor reads the options at SaveChanges time, so register one instance and configure it in
         // place: calling this again changes the same options rather than being ignored.
@@ -48,11 +57,107 @@ public static class TenantryEfCoreTenantBuilderExtensions
             builder.Services.TryAddSingleton(options);
         }
 
-        configure?.Invoke(options);
-
-        builder.Services.TryAddSingleton<TenantSaveChangesInterceptor<TKey>>();
-        builder.Services.TryAddSingleton<ITenantInterceptorConfigurator>(new TenantInterceptorConfigurator<TKey>());
+        configure(options);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Registers <typeparamref name="TContext"/> for a database per tenant: each context is connected to the current
+    /// tenant's database, through <see cref="ITenantConnectionStringProvider{TKey}"/>, and uses
+    /// <c>UseTenantry()</c>. Registers a scoped <typeparamref name="TContext"/> and a singleton
+    /// <see cref="IDbContextFactory{TContext}"/>.
+    /// </summary>
+    /// <typeparam name="TContext">The context type.</typeparam>
+    /// <param name="builder">The tenant builder, after <c>UseConnectionStrings</c> (or another registration of <see cref="ITenantConnectionStringProvider{TKey}"/>).</param>
+    /// <param name="configure">
+    /// Configures the context's options, <em>without</em> a connection string: for example
+    /// <c>(sp, options) =&gt; options.UseSqlServer()</c>.
+    /// </param>
+    /// <param name="pooled">
+    /// Whether to reuse context instances from a pool, as <c>AddDbContextPool</c> does. A pooled context needs a
+    /// constructor that takes only its options.
+    /// </param>
+    /// <param name="poolSize">The most contexts the pool keeps for reuse, when <paramref name="pooled"/>.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// A context that is not pooled is created with its options and any other services its constructor needs: the
+    /// scoped <typeparamref name="TContext"/> from its scope, and one from the factory from the root provider, as
+    /// EF Core's <c>AddDbContextFactory</c> does. Creating a context without a current tenant throws
+    /// <see cref="TenantNotResolvedException"/>.
+    /// </para>
+    /// <para>
+    /// The scoped <typeparamref name="TContext"/> reads the connection string synchronously, so it needs
+    /// <see cref="TenantConnectionStringOptions{TKey}.GetConnectionString"/>. With only an asynchronous delegate,
+    /// use <c>IDbContextFactory&lt;TContext&gt;.CreateDbContextAsync</c>.
+    /// </para>
+    /// <para>
+    /// A guard checks each context before it opens a connection and before every command it runs, including on a
+    /// connection that is already open: the connection must have been set for the context (and, pooled, for its
+    /// current lease) and for the tenant that is current now. Otherwise it throws
+    /// <see cref="TenantIsolationViolationException"/> rather than use another tenant's database.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// No <see cref="ITenantConnectionStringProvider{TKey}"/> is registered yet, or <typeparamref name="TContext"/>
+    /// is already registered this way.
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
+    ///     .ResolveFromHeader("X-Tenant-Id")
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .UseConnectionStrings(options =&gt;
+    ///         options.GetConnectionString = t =&gt; $"Server=db;Database=app_{t.TenantId};Integrated Security=true")
+    ///     .AddDbContextPerTenantDatabase&lt;AppDbContext&gt;((sp, options) =&gt; options.UseSqlServer(), pooled: true));
+    /// </code>
+    /// </example>
+    public static ITenantBuilder AddDbContextPerTenantDatabase<[DynamicallyAccessedMembers(ContextMembers)] TContext>(
+        this ITenantBuilder builder,
+        Action<IServiceProvider, DbContextOptionsBuilder> configure,
+        bool pooled = false,
+        int poolSize = 1024)
+        where TContext : DbContext
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(poolSize);
+
+        builder.Add(new TenantDatabaseRegistration<TContext>(configure, pooled, poolSize));
+        return builder;
+    }
+
+    private sealed class TenantDatabaseRegistration<[DynamicallyAccessedMembers(ContextMembers)] TContext>(
+        Action<IServiceProvider, DbContextOptionsBuilder> configure,
+        bool pooled,
+        int poolSize)
+        : ITenantRegistration
+        where TContext : DbContext
+    {
+        public void Apply<TKey>(ITenantBuilder<TKey> tenant)
+            where TKey : IEquatable<TKey>, IParsable<TKey>
+        {
+            var services = tenant.Services;
+
+            if (!services.Any(d => d.ServiceType == typeof(ITenantConnectionStringProvider<TKey>)))
+            {
+                throw new InvalidOperationException(
+                    $"AddDbContextPerTenantDatabase<{typeof(TContext).Name}> connects each context to its tenant's " +
+                    "database, so it needs the tenants' connection strings: call UseConnectionStrings before it, in " +
+                    "the same AddTenantry.");
+            }
+
+            if (services.Any(d => d.ServiceType == typeof(TenantDatabaseContexts<TContext, TKey>)))
+            {
+                throw new InvalidOperationException(
+                    $"AddDbContextPerTenantDatabase<{typeof(TContext).Name}> was already called. Register each context type once.");
+            }
+
+            services.AddSingleton(sp => new TenantDatabaseContexts<TContext, TKey>(sp, configure, pooled, poolSize));
+            services.AddSingleton<IDbContextFactory<TContext>>(sp =>
+                new TenantDatabaseDbContextFactory<TContext, TKey>(sp.GetRequiredService<TenantDatabaseContexts<TContext, TKey>>(), sp));
+            services.AddScoped(sp => sp.GetRequiredService<TenantDatabaseContexts<TContext, TKey>>().Create(sp));
+        }
     }
 }

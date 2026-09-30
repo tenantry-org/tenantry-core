@@ -48,14 +48,11 @@ public sealed class FullPipelineTests : IAsyncLifetime
                 new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
                 new TenantDescriptor<string> { TenantId = "globex", Name = "Globex LLC" },
             ]);
-            t.AddEfCoreIsolation();
         });
 
-        builder.Services.AddDbContext<IntegrationOrderDbContext>((sp, options) =>
-        {
-            options.UseSqlServer(_sqlServer.GetConnectionString());
-            options.AddTenantInterceptors(sp);
-        });
+        builder.Services.AddDbContext<IntegrationOrderDbContext>(options => options
+            .UseSqlServer(_sqlServer.GetConnectionString())
+            .UseTenantry());
 
         _app = builder.Build();
         _app.UseTenantry();
@@ -312,14 +309,11 @@ public sealed class FullPipelineTests : IAsyncLifetime
             [
                 new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
             ]);
-            t.AddEfCoreIsolation();
         });
 
-        builder.Services.AddDbContext<IntegrationOrderDbContext>((sp, options) =>
-        {
-            options.UseSqlServer(_sqlServer.GetConnectionString());
-            options.AddTenantInterceptors(sp);
-        });
+        builder.Services.AddDbContext<IntegrationOrderDbContext>(options => options
+            .UseSqlServer(_sqlServer.GetConnectionString())
+            .UseTenantry());
 
         await using var app = builder.Build();
         app.UseTenantry();
@@ -367,21 +361,11 @@ internal sealed class IntegrationLabel
     public string Text { get; set; } = string.Empty;
 }
 
-internal sealed class IntegrationOrderDbContext(
-    DbContextOptions<IntegrationOrderDbContext> options,
-    ITenantContext<string> tenantContext)
-    : DbContext(options), ITenantAwareDbContext<string>
+// A plain context: UseTenantry() in its options filters only ITenantEntity<string> types, so IntegrationLabel is not.
+internal sealed class IntegrationOrderDbContext(DbContextOptions<IntegrationOrderDbContext> options) : DbContext(options)
 {
     public DbSet<IntegrationOrder> Orders => Set<IntegrationOrder>();
     public DbSet<IntegrationLabel> Labels => Set<IntegrationLabel>();
-    public string? CurrentTenantId => tenantContext.CurrentTenantId;
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
-        // Only ITenantEntity<string> types get a query filter — IntegrationLabel is excluded.
-        modelBuilder.ApplyTenantFilters<string, IntegrationOrderDbContext>(this);
-    }
 }
 
 internal record IntegrationOrderResponse(int Id, string TenantId, string Description);

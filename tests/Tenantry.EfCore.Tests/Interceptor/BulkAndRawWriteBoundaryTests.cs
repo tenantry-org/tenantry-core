@@ -25,7 +25,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_OnlyUpdatesTheCurrentTenantsRows()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("globex"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
         var updated = await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "bulk"));
 
@@ -37,7 +37,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteDelete_OnlyDeletesTheCurrentTenantsRows()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("globex"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
         var deleted = await db.Orders.ExecuteDeleteAsync();
 
@@ -49,7 +49,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdateAndDelete_WithoutTenant_AffectNoRows()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.AsNone(), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.AsNone(), _connection);
 
         var updated = await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "bulk"));
         var deleted = await db.Orders.ExecuteDeleteAsync();
@@ -64,7 +64,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingTenantId_ThrowsAndChangesNothing(string newTenantId)
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s
             .SetProperty(o => o.Description, "moved")
@@ -78,7 +78,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingTenantIdSynchronously_Throws()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         db.Invoking(d => d.Orders.ExecuteUpdate(s => s.SetProperty(o => o.TenantId, "globex")))
             .Should().Throw<TenantIsolationViolationException>();
@@ -89,7 +89,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingTenantIdWithEfProperty_Throws()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, "TenantId"), "globex")))
             .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
@@ -100,7 +100,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingTenantIdWithEfPropertyAndACapturedName_Throws()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
         var column = nameof(Order.TenantId);
 
         await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, column), "globex")))
@@ -112,7 +112,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingTenantIdThroughTheInterface_Throws()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => ((ITenantEntity<string>)o).TenantId, "globex")))
             .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
@@ -123,7 +123,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingTenantIdOnAProjectedEntity_Throws()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         await db.Awaiting(d => d.Orders
             .Select(o => new { Order = o, o.Description })
@@ -136,7 +136,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingTenantIdOnAProjectedEntityWithEfProperty_Throws()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         await db.Awaiting(d => d.Orders
             .Select(o => new { Order = o, o.Description })
@@ -157,7 +157,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingTenantIdThroughAProjectedMember_Throws(string shape)
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         Func<TestDbContext, Task> update = shape switch
         {
@@ -187,7 +187,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_ThroughAProjectionTheGuardCannotResolve_FailsClosed()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         await db.Awaiting(d => d.Orders.GroupBy(o => o.TenantId).Select(g => new { Owner = g.Key })
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")))
@@ -199,7 +199,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_SettingOtherPropertiesWithEfPropertyOrOnAProjection_IsAllowed()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, "Description"), "by name"));
         Rows().Should().BeEquivalentTo([("acme", "by name"), ("globex", "globex order")]);
@@ -223,7 +223,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     public async Task ExecuteUpdate_ReadingTenantIdAsAValue_IsAllowed()
     {
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, o => o.TenantId));
 
@@ -231,21 +231,11 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     }
 
     [Fact]
-    public async Task ExecuteUpdate_SettingTenantIdThroughTheBaseClassContext_Throws()
-    {
-        await SeedAsync();
-        await using var db = await DbContextFactory.CreateBaseClassContextAsync(_tenant.As("acme"), _connection);
-
-        await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.TenantId, "globex")))
-            .Should().ThrowAsync<TenantIsolationViolationException>();
-    }
-
-    [Fact]
     public async Task IgnoreQueryFilters_ExecuteDelete_AffectsEveryTenant()
     {
         // Privileged by design: IgnoreQueryFilters removes the tenant filter, so the bulk delete is unscoped.
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("globex"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
         var deleted = await db.Orders.IgnoreQueryFilters().ExecuteDeleteAsync();
 
@@ -258,7 +248,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     {
         // Raw SQL is outside EF Core's query pipeline: neither the filter nor the interceptors apply.
         await SeedAsync();
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("globex"), _connection);
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
         var deleted = await db.Database.ExecuteSqlRawAsync("DELETE FROM Orders WHERE TenantId = 'acme'");
 
@@ -275,7 +265,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     {
         foreach (var tenant in new[] { "acme", "globex" })
         {
-            await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As(tenant), _connection);
+            await using var db = await DbContextFactory.CreateContextAsync(_tenant.As(tenant), _connection);
             db.Orders.Add(new Order { Description = $"{tenant} order" });
             await db.SaveChangesAsync();
         }

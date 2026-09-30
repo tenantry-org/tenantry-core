@@ -4,9 +4,9 @@ Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
 Returns the current tenant's connection string, through the registered [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md).
 
-Registered as a singleton by `UseConnectionStrings`. With a regular `AddDbContext`, read it in the options callback, which runs for every new context: `options.UseSqlServer(sp.GetRequiredService<CurrentTenantConnectionString<Guid>>().Get())`.
+Registered as a singleton by `UseConnectionStrings`, for code that opens its own connections. For EF Core, Tenantry.EfCore's `AddDbContextPerTenantDatabase` connects each context to its tenant's database, pooled or not.
 
-Do not do this with `AddDbContextPool` or `AddPooledDbContextFactory`: their options callback runs once, so every pooled context would keep the first tenant's connection string. Use `AddTenantDbContextPool` for a pooled database per tenant.
+Do not read it in the options callback of `AddDbContextPool` or `AddPooledDbContextFactory`: that callback runs once, so every pooled context would keep the first tenant's connection string.
 
 ```csharp
 public sealed class CurrentTenantConnectionString<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -31,9 +31,9 @@ Parameters:
 - `tenantContext` [`ITenantContext<TKey>`](tenantry-itenantcontext.md): Supplies the current tenant.
 - `connectionStrings` [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md): Returns a tenant's connection string.
 
-Registered as a singleton by `UseConnectionStrings`. With a regular `AddDbContext`, read it in the options callback, which runs for every new context: `options.UseSqlServer(sp.GetRequiredService<CurrentTenantConnectionString<Guid>>().Get())`.
+Registered as a singleton by `UseConnectionStrings`, for code that opens its own connections. For EF Core, Tenantry.EfCore's `AddDbContextPerTenantDatabase` connects each context to its tenant's database, pooled or not.
 
-Do not do this with `AddDbContextPool` or `AddPooledDbContextFactory`: their options callback runs once, so every pooled context would keep the first tenant's connection string. Use `AddTenantDbContextPool` for a pooled database per tenant.
+Do not read it in the options callback of `AddDbContextPool` or `AddPooledDbContextFactory`: that callback runs once, so every pooled context would keep the first tenant's connection string.
 
 ## Methods
 

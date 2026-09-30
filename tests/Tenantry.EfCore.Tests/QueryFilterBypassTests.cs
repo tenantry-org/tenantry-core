@@ -14,7 +14,7 @@ public sealed class QueryFilterBypassTests
         var conn = DbContextFactory.CreateSharedConnection();
 
         ctx.As("acme");
-        var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         db.Orders.AddRange(
             new Order { Description = "Acme A" },

@@ -17,7 +17,6 @@ using Tenantry;
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")          // resolution (at least one required)
     .UseInMemoryStore(tenants)                 // storage (exactly one required)
-    .AddEfCoreIsolation()                      // isolation (optional; needs Tenantry.EfCore)
     .RequireTenantByDefault()                  // policy (optional)
     .ValidateTenantAccessByClaim("tenant_id")); // access control (optional)
 ```

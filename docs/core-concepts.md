@@ -83,8 +83,8 @@ public interface ITenantContext<out TKey>
 }
 ```
 
-`CurrentTenantId` exists as a separate single-step property specifically for EF Core query filters
-(see [below](#why-currenttenantid-is-its-own-property)). Without a tenant it is `default(TKey)`: `null` for
+`CurrentTenantId` is the current tenant's id, the same as `CurrentTenant?.TenantId` (see
+[below](#how-ef-core-queries-see-the-current-tenant) for how EF Core reads it). Without a tenant it is `default(TKey)`: `null` for
 `string` keys, but `Guid.Empty` or `0` for value-type keys, because `TKey?` on an unconstrained generic is not
 nullable for them. Check `HasTenant` to tell "no tenant" apart.
 
@@ -152,12 +152,11 @@ single `AsyncLocal` holding the innermost open scope. The implication matters:
   inherited, the caller keeps that tenant until it disposes the handle as well, which then restores the
   caller's previous tenant. Further disposals change nothing.
 
-### Why `CurrentTenantId` is its own property
+### How EF Core queries see the current tenant
 
-EF Core compiles a global query filter **once** and caches the plan, but it re-evaluates property
-accesses **on the `DbContext`** every time a query runs. Tenantry's filter therefore closes over the
-`DbContext` and reads `CurrentTenantId` from it per query — so the same cached plan always uses the
-*current* tenant. Reading a single, side-effect-free property keeps that per-query evaluation cheap.
+EF Core compiles a global query filter **once** and caches the plan, but it evaluates the parts of a filter that
+read from the `DbContext` again every time a query runs. Tenantry's filter reads the tenant through the context
+that runs the query, from its `ITenantContext<TKey>`, so the same cached plan always uses the *current* tenant.
 This is covered in depth in [EF Core integration](efcore-integration.md#how-the-query-filter-stays-correct).
 
 ## `ITenantScopeFactory<TKey>` and `ITenantScope<TKey>` — work as a tenant
@@ -180,8 +179,9 @@ and runs your work in such a scope. See [Non-HTTP hosts](non-http-hosts.md).
 There is one entry point, `AddTenantry<TKey>(configure?)` in `Tenantry.Core`, for every kind of host. It registers
 the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITenantScopeFactory<TKey>` and
 `ITenantStoreAccessor<TKey>`. Inside the `configure` lambda you compose, on `ITenantBuilder<TKey>`, a store
-(`UseInMemoryStore`, `UseStore`), connection strings, isolation (`AddEfCoreIsolation`, from `Tenantry.EfCore`),
-and — for ASP.NET Core, from `Tenantry.AspNetCore` — resolution and access control. Every builder method
+(`UseInMemoryStore`, `UseStore`), connection strings, EF Core options (`ConfigureEfCoreIsolation`,
+`AddDbContextPerTenantDatabase`, from `Tenantry.EfCore`), and — for ASP.NET Core, from `Tenantry.AspNetCore` —
+resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`. Every builder method
 returns the builder, so they chain.
 
 Registration needs no Tenantry `using` directive: `AddTenantry` and the builder methods are extension methods in

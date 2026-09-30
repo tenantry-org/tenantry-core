@@ -6,13 +6,14 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace Tenantry.EfCore.Internal;
 
 /// <summary>
-/// Records, for each pooled context that <see cref="TenantDatabaseDbContextFactory{TContext,TKey}"/> connects,
-/// which lease and which tenant its connection string was set for.
+/// Records, for each context that <see cref="TenantDatabaseContexts{TContext,TKey}"/> connects, which lease (always
+/// 0 for a context that is not pooled) and which tenant its connection string was set for.
 /// </summary>
 /// <remarks>
 /// EF Core keeps a pooled context's connection string when the context returns to the pool, so a lease that
-/// skipped the factory would silently use the previous tenant's database. <see cref="TenantDatabaseGuard{TKey}"/>
-/// checks this record before a connection opens and before every command.
+/// skipped the factory would silently use the previous tenant's database, and any context could be kept and used
+/// after the tenant changes. <see cref="TenantDatabaseGuard{TKey}"/> checks this record before a connection opens and
+/// before every command.
 /// </remarks>
 internal static class TenantDatabaseLeases
 {
@@ -39,8 +40,8 @@ internal static class TenantDatabaseLeases
 }
 
 /// <summary>
-/// Fails closed when a pooled database-per-tenant context would use a connection that was not set for its
-/// current lease, or that belongs to a tenant other than the current one.
+/// Fails closed when a database-per-tenant context would use a connection that was not set for it (and, pooled, for
+/// its current lease), or that belongs to a tenant other than the current one.
 /// </summary>
 /// <remarks>
 /// The check runs before EF Core opens a connection and again before every command. EF Core raises no
@@ -161,9 +162,9 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
-                $"This pooled '{contextType}' was not connected to a tenant's database for its current lease, so it " +
-                "would reuse the database of whichever tenant used it before. Obtain it from DI or from " +
-                "IDbContextFactory, which AddTenantDbContextPool connects to the current tenant's database.",
+                $"This '{contextType}' was not connected to a tenant's database for its current lease, so it would " +
+                "reuse the database of whichever tenant used it before. Obtain it from DI or from IDbContextFactory, " +
+                "which AddDbContextPerTenantDatabase connects to the current tenant's database.",
                 expectedTenantId: currentTenantId);
         }
 
@@ -176,7 +177,7 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
                 TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
                 $"This '{contextType}''s connection was changed after it was connected to tenant '{lease.TenantId}''s " +
-                "database. Do not call SetConnectionString or SetDbConnection on a context from AddTenantDbContextPool.",
+                "database. Do not call SetConnectionString or SetDbConnection on a context from AddDbContextPerTenantDatabase.",
                 leaseTenantId,
                 currentTenantId);
         }

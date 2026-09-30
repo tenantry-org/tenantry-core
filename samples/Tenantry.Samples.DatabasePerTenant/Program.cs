@@ -1,12 +1,12 @@
 // Tenantry Database-per-Tenant Sample: each tenant's data lives in its own database.
 //
-// UseConnectionStrings says how to find a tenant's connection string, and the DbContext asks
-// CurrentTenantConnectionString for the current tenant's one each time a context is created. Here every
-// tenant gets its own SQLite file; with SQL Server or PostgreSQL the delegate would return a different
-// database (or server) per tenant in the same way.
+// UseConnectionStrings says how to find a tenant's connection string, and AddDbContextPerTenantDatabase
+// connects each context to the current tenant's database, here from a pool. Every tenant gets its own SQLite
+// file; with SQL Server or PostgreSQL the delegate would return a different database (or server) per tenant in
+// the same way.
 //
-// The context still derives from MultiTenantDbContext, so rows are stamped and filtered by tenant as well.
-// That second layer catches a connection string that points at the wrong database.
+// The entities still implement ITenantEntity, so rows are stamped and filtered by tenant as well. That second
+// layer catches a connection string that points at the wrong database.
 //
 // Run:
 //   dotnet run --project samples/Tenantry.Samples.DatabasePerTenant
@@ -34,14 +34,9 @@ builder.Services.AddTenantry<string>(tenant =>
     tenant.UseConnectionStrings(options =>
         options.GetConnectionString = t => $"Data Source=tenant-{t.TenantId}.db");
 
-    tenant.AddEfCoreIsolation();
+    // No connection string here: each context gets the current tenant's. It also uses UseTenantry().
+    tenant.AddDbContextPerTenantDatabase<NotesDbContext>((_, options) => options.UseSqlite(), pooled: true);
 });
-
-// The options callback runs for every new context, so each one gets the current tenant's database.
-// To pool contexts, use AddTenantDbContextPool instead: AddDbContextPool's callback runs only once.
-builder.Services.AddDbContext<NotesDbContext>((sp, options) =>
-    options.UseSqlite(sp.GetRequiredService<CurrentTenantConnectionString<string>>().Get())
-           .AddTenantInterceptors(sp));
 
 using var host = builder.Build();
 

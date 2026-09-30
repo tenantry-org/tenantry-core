@@ -9,7 +9,7 @@ namespace Tenantry.EfCore.Tests.Workers;
 
 /// <summary>
 /// Background-worker patterns end to end: <see cref="ITenantScopeFactory{TKey}"/> scopes around EF Core work,
-/// with both a regular and a pooled <see cref="MultiTenantDbContext{TKey}"/>.
+/// with both a regular and a pooled context that uses <c>UseTenantry()</c>.
 /// </summary>
 public sealed class WorkerScopeTests : IDisposable
 {
@@ -104,14 +104,9 @@ public sealed class WorkerScopeTests : IDisposable
     {
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantry<string>(tenant =>
-        {
-            tenant.UseInMemoryStore(Tenants);
-            tenant.AddEfCoreIsolation();
-        });
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore(Tenants));
 
-        void Configure(IServiceProvider sp, DbContextOptionsBuilder options) =>
-            options.UseSqlite(_connectionString).AddTenantInterceptors(sp);
+        void Configure(DbContextOptionsBuilder options) => options.UseSqlite(_connectionString).UseTenantry();
 
         if (pooled)
         {

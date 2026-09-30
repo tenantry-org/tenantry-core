@@ -22,7 +22,6 @@ updates:
       # Banded packages: begin
       - dependency-name: "Microsoft.AspNetCore.Mvc.Testing"
       - dependency-name: "Microsoft.AspNetCore.TestHost"
-      - dependency-name: "Microsoft.EntityFrameworkCore"
       - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
       - dependency-name: "Microsoft.EntityFrameworkCore.Sqlite"
       - dependency-name: "Microsoft.EntityFrameworkCore.SqlServer"

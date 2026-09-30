@@ -3,7 +3,7 @@ using AwesomeAssertions;
 namespace Tenantry.EfCore.Tests.Interceptor;
 
 /// <summary>
-/// Verifies that query filters applied via the interceptor path restrict results
+/// Verifies that the query filters UseTenantry() adds restrict results
 /// to the current tenant across all common query patterns.
 /// </summary>
 public sealed class InterceptorIsolationTests
@@ -16,7 +16,7 @@ public sealed class InterceptorIsolationTests
         await using var conn = DbContextFactory.CreateSharedConnection();
 
         ctx.As("acme");
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        await using var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         db.Orders.Add(new Order { Description = "Acme order 1" });
         db.Orders.Add(new Order { Description = "Acme order 2" });
@@ -46,7 +46,7 @@ public sealed class InterceptorIsolationTests
         await using var conn = DbContextFactory.CreateSharedConnection();
 
         ctx.As("acme");
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
+        await using var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         db.Orders.Add(new Order { Description = "Acme order" });
         await db.SaveChangesAsync();
 

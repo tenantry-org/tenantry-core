@@ -10,12 +10,52 @@ public static class TenantryEfCoreTenantBuilderExtensions
 
 ## Methods
 
-### `AddEfCoreIsolation<TKey>(ITenantBuilder<TKey>, Action<EfCoreIsolationOptions>?)`
+### `AddDbContextPerTenantDatabase<TContext>(ITenantBuilder, Action<IServiceProvider, DbContextOptionsBuilder>, bool, int)`
 
-Registers EF Core tenant isolation services (the SaveChanges interceptor and the configured isolation policy). Call this inside your `AddTenantry` configuration lambda.
+Registers `TContext` for a database per tenant: each context is connected to the current tenant's database, through [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md), and uses `UseTenantry()`. Registers a scoped `TContext` and a singleton `IDbContextFactory<TContext>`.
 
 ```csharp
-public static ITenantBuilder<TKey> AddEfCoreIsolation<TKey>(this ITenantBuilder<TKey> builder, Action<EfCoreIsolationOptions>? configure = null) where TKey : IEquatable<TKey>, IParsable<TKey>
+public static ITenantBuilder AddDbContextPerTenantDatabase<TContext>(this ITenantBuilder builder, Action<IServiceProvider, DbContextOptionsBuilder> configure, bool pooled = false, int poolSize = 1024) where TContext : DbContext
+```
+
+Type parameters:
+
+- `TContext`: The context type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder`](tenantry-itenantbuilder.md): The tenant builder, after `UseConnectionStrings` (or another registration of [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md)).
+- `configure` `Action<IServiceProvider, DbContextOptionsBuilder>`: Configures the context's options, *without* a connection string: for example `(sp, options) => options.UseSqlServer()`.
+- `pooled` `bool`: Whether to reuse context instances from a pool, as `AddDbContextPool` does. A pooled context needs a constructor that takes only its options.
+- `poolSize` `int`: The most contexts the pool keeps for reuse, when `pooled`.
+
+Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder` for chaining.
+
+Exceptions:
+
+- `InvalidOperationException`: No [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) is registered yet, or `TContext` is already registered this way.
+
+A context that is not pooled is created with its options and any other services its constructor needs: the scoped `TContext` from its scope, and one from the factory from the root provider, as EF Core's `AddDbContextFactory` does. Creating a context without a current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md).
+
+The scoped `TContext` reads the connection string synchronously, so it needs [`TenantConnectionStringOptions<TKey>.GetConnectionString`](tenantry-tenantconnectionstringoptions.md). With only an asynchronous delegate, use `IDbContextFactory<TContext>.CreateDbContextAsync`.
+
+A guard checks each context before it opens a connection and before every command it runs, including on a connection that is already open: the connection must have been set for the context (and, pooled, for its current lease) and for the tenant that is current now. Otherwise it throws [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) rather than use another tenant's database.
+
+```csharp
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromHeader("X-Tenant-Id")
+    .UseStore<AppTenantStore>()
+    .UseConnectionStrings(options =>
+        options.GetConnectionString = t => $"Server=db;Database=app_{t.TenantId};Integrated Security=true")
+    .AddDbContextPerTenantDatabase<AppDbContext>((sp, options) => options.UseSqlServer(), pooled: true));
+```
+
+### `ConfigureEfCoreIsolation<TKey>(ITenantBuilder<TKey>, Action<EfCoreIsolationOptions>)`
+
+Sets the EF Core isolation options, such as what happens to a write without a tenant. Optional: without it, the defaults apply, which are the strictest.
+
+```csharp
+public static ITenantBuilder<TKey> ConfigureEfCoreIsolation<TKey>(this ITenantBuilder<TKey> builder, Action<EfCoreIsolationOptions> configure) where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
 
 Type parameters:
@@ -25,7 +65,7 @@ Type parameters:
 Parameters:
 
 - `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `configure` `Action<EfCoreIsolationOptions>`: Sets the isolation options, such as what happens to a write without a tenant, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for the defaults.
+- `configure` `Action<EfCoreIsolationOptions>`: Sets the options.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
@@ -35,5 +75,5 @@ Calling it again configures the same options instance.
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .UseInMemoryStore(tenants)
-    .AddEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Warn));
+    .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Warn));
 ```
