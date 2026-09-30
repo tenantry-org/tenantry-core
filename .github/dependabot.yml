@@ -28,6 +28,7 @@ updates:
       - dependency-name: "Microsoft.EntityFrameworkCore.SqlServer"
       - dependency-name: "Microsoft.Extensions.DependencyInjection"
       - dependency-name: "Microsoft.Extensions.DependencyInjection.Abstractions"
+      - dependency-name: "Microsoft.Extensions.Hosting"
       - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
       - dependency-name: "Tenantry.AspNetCore"
       - dependency-name: "Tenantry.Core"
