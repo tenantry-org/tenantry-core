@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- CI builds every ```csharp block in the README and docs against the packed packages
+  (`scripts/check-doc-snippets.sh`), so a guide can no longer show code that does not compile; a block that is
+  not meant to compile is marked ```csharp no-compile. CI also starts every sample in Development, where the
+  host validates its registrations, and sends a tenant request to the web ones (`scripts/smoke-samples.sh`).
+- An `.editorconfig`, checked in CI with `dotnet format --verify-no-changes`.
+
 ### Changed
 
 - A tenant store returns every tenant that exists, suspended ones included; whether a tenant may be served
@@ -18,8 +26,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `MissingTenantBehavior.Allow` said EF Core saves writes without a stamped `TenantId`, and troubleshooting
+  said the same of `Warn`; both let updates and deletes through, but a new entity without a `TenantId` still
+  throws.
 - `docs/access-control.md` documented `ValidateTenantAccessAny`, which was removed before 0.4.0. It now
   shows OR logic written in one validator.
+- The getting-started `DbContext` did not compile with `Guid` keys (`Guid? CurrentTenantId`), and several
+  guides left out the using directives their code needs.
+- The README suggested the interceptor alone isolates a plain `DbContext`; it stamps and checks writes but
+  does not filter reads, which also needs the query filters.
+- Behaviour the docs misstated: without a tenant, `SaveChanges` throws by default (`Reject`) rather than
+  logging a warning; the subdomain resolver takes the first label of any host with three or more (so
+  `www.example.com` resolves to `www`); `MissingTenantBehavior`'s documentation named the wrong default and
+  said EF Core accepts `Skip`.
+- The `EfCoreWeb` sample did not start: its migration has `TenantId` indexes that its model never declared
+  (the model now declares them, as the EF Core guide recommends), and its seed data referenced categories by
+  an id they did not have yet. The sample `.http` files carried the old product name.
 
 ## [0.4.0] - 2026-09-29
 

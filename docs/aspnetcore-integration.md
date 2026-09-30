@@ -12,6 +12,8 @@
 
 ```csharp
 using Tenantry.AspNetCore.Extensions;
+using Tenantry.Core;
+using Tenantry.EfCore.Extensions;
 
 builder.Services.AddTenantry<Guid>(tenant =>
 {

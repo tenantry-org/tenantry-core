@@ -16,7 +16,7 @@ public interface ITenantBuilder<TKey>
 {
     /// <summary>Gets the underlying service collection.</summary>
     IServiceCollection Services { get; }
-    
+
     /// <summary>
     /// Registers a pre-populated in-memory tenant store.
     /// </summary>

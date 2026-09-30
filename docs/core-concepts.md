@@ -7,7 +7,7 @@ the EF Core and ASP.NET Core layers obvious.
 
 Every Tenantry type is generic over `TKey`, the type of your tenant identifier. The constraint is:
 
-```csharp
+```csharp no-compile
 where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
 
@@ -24,7 +24,7 @@ the two never line up and isolation silently does nothing for those entities.
 
 A descriptor is the minimal description of a tenant:
 
-```csharp
+```csharp no-compile
 public interface ITenantDescriptor<out TKey>
 {
     TKey TenantId { get; }   // used for data isolation
@@ -35,6 +35,8 @@ public interface ITenantDescriptor<out TKey>
 `TenantDescriptor<TKey>` is the default implementation:
 
 ```csharp
+using Tenantry.Core;
+
 new TenantDescriptor<Guid> { TenantId = id, Name = "Acme" };
 ```
 
@@ -66,7 +68,7 @@ public interface ITenantScoped<TKey>
 This is the read-only view of "who is the tenant right now", and the type you inject into endpoints,
 services, and your `DbContext`:
 
-```csharp
+```csharp no-compile
 public interface ITenantContext<out TKey>
 {
     ITenantDescriptor<TKey>? CurrentTenant { get; }  // null if none resolved
@@ -82,7 +84,7 @@ public interface ITenantContext<out TKey>
 
 `ITenantScope<TKey>` extends `ITenantContext<TKey>` with the ability to *set* the current tenant:
 
-```csharp
+```csharp no-compile
 public interface ITenantScope<TKey> : ITenantContext<TKey>
 {
     IDisposable BeginScope(ITenantDescriptor<TKey> tenant);

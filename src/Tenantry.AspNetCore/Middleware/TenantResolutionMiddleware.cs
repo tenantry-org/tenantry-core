@@ -16,7 +16,7 @@ namespace Tenantry.AspNetCore.Middleware;
 /// The tenant identifier type. Must implement <see cref="IEquatable{T}"/> and <see cref="IParsable{T}"/>.
 /// </typeparam>
 /// <remarks>
-/// Registered via <c>app.UseTenantry{TKey}()</c>.
+/// Registered via <c>app.UseTenantry()</c>.
 /// Resolvers are tried in registration order; the first non-null result wins.
 /// If no resolver matches, the request continues without a tenant context.
 /// The resolved tenant ID is added to the logging scope for structured log correlation.
@@ -98,7 +98,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             _logger.LogWarning("Tenant ID '{RawTenantId}' could not be parsed as {TKeyType}. Returning 400",
                 rawTenantId,
                 typeof(TKey).Name);
-            
+
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsync($"Invalid tenant ID format: '{rawTenantId}'.", context.RequestAborted);
             return;
@@ -131,7 +131,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 return;
             }
         }
-        
+
         using var _ = tenantScope.BeginScope(tenant);
         using var logScope = _logger.BeginScope(new Dictionary<string, object>
         {
@@ -162,7 +162,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         for (var i = endpoint.Metadata.Count - 1; i >= 0; i--)
         {
             var metadata = endpoint.Metadata[i];
-            
+
             switch (metadata)
             {
                 case AllowMissingTenantAttribute:

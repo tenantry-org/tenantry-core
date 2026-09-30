@@ -27,7 +27,7 @@ public sealed class EfCoreIsolationRegistrationTests
     }
 
     [Fact]
-    public void AddEfCoreIsolation_Default_UsesWarnPolicyAndNoSpoofDetection()
+    public void AddEfCoreIsolation_Default_UsesRejectPolicyAndNoSpoofDetection()
     {
         ServiceCollection services = new();
         ITenantBuilder<string> builder = new TestTenantBuilder<string>(services);

@@ -10,7 +10,7 @@ public static class DataSeeder
         SeedTenants(db);
         SeedCatalog(db);
     }
-    
+
     public static async Task SeedAsync(DbContext db)
     {
         await SeedTenantsAsync(db);
@@ -20,7 +20,7 @@ public static class DataSeeder
     private static void SeedTenants(DbContext db)
     {
         var tenants = db.Set<Tenant>();
-        
+
         if (tenants.Any())
         {
             return;
@@ -34,7 +34,7 @@ public static class DataSeeder
     private static async Task SeedTenantsAsync(DbContext db)
     {
         var tenants = db.Set<Tenant>();
-        
+
         if (await tenants.AnyAsync())
         {
             return;
@@ -54,21 +54,21 @@ public static class DataSeeder
         {
             return;
         }
-        
+
         // Seed global reference data (Categories and Products)
         // This data is NOT tenanted and will be visible to all tenants
         categories.AddRange(Electronics, Office, Furniture);
-        
+
         // Seed Products
         db.Set<Product>().AddRange(Products);
 
         db.SaveChanges();
     }
-    
+
     private static async Task SeedCatalogAsync(DbContext db)
     {
         var categories = db.Set<Category>();
-        
+
         // Only seed if the database is empty
         if (await categories.AnyAsync())
         {
@@ -78,13 +78,13 @@ public static class DataSeeder
         // Seed global reference data (Categories and Products)
         // This data is NOT tenanted and will be visible to all tenants
         categories.AddRange(Electronics, Office, Furniture);
-        
+
         // Seed Products
         db.Set<Product>().AddRange(Products);
 
         await db.SaveChangesAsync();
     }
-    
+
     private static readonly List<Tenant> Tenants =
     [
         new()
@@ -104,7 +104,7 @@ public static class DataSeeder
             SubscriptionTier = "Free"
         }
     ];
-    
+
     private static readonly Category Electronics = new()
     {
         Name = "Electronics",
@@ -122,27 +122,27 @@ public static class DataSeeder
         Name = "Furniture",
         Description = "Office and home furniture"
     };
-    
+
     private static readonly List<Product> Products =
     [
         // Electronics
-        new() {Name = "Laptop - Dell XPS 13", Price = 1299.99m, CategoryId = Electronics.Id},
-        new() {Name = "Monitor - 27\" 4K", Price = 449.99m, CategoryId = Electronics.Id},
-        new() {Name = "Wireless Mouse", Price = 29.99m, CategoryId = Electronics.Id},
-        new() {Name = "Mechanical Keyboard", Price = 89.99m, CategoryId = Electronics.Id},
-        new() {Name = "USB-C Hub", Price = 49.99m, CategoryId = Electronics.Id},
+        new() {Name = "Laptop - Dell XPS 13", Price = 1299.99m, Category = Electronics},
+        new() {Name = "Monitor - 27\" 4K", Price = 449.99m, Category = Electronics},
+        new() {Name = "Wireless Mouse", Price = 29.99m, Category = Electronics},
+        new() {Name = "Mechanical Keyboard", Price = 89.99m, Category = Electronics},
+        new() {Name = "USB-C Hub", Price = 49.99m, Category = Electronics},
 
         // Office Supplies
-        new() {Name = "Paper Ream (500 sheets)", Price = 8.99m, CategoryId = Office.Id},
-        new() {Name = "Ballpoint Pens (12 pack)", Price = 5.99m, CategoryId = Office.Id},
-        new() {Name = "Sticky Notes Set", Price = 12.99m, CategoryId = Office.Id},
-        new() {Name = "Stapler Heavy Duty", Price = 15.99m, CategoryId = Office.Id},
-        new() {Name = "File Folders (25 pack)", Price = 18.99m, CategoryId = Office.Id},
+        new() {Name = "Paper Ream (500 sheets)", Price = 8.99m, Category = Office},
+        new() {Name = "Ballpoint Pens (12 pack)", Price = 5.99m, Category = Office},
+        new() {Name = "Sticky Notes Set", Price = 12.99m, Category = Office},
+        new() {Name = "Stapler Heavy Duty", Price = 15.99m, Category = Office},
+        new() {Name = "File Folders (25 pack)", Price = 18.99m, Category = Office},
 
         // Furniture
-        new() {Name = "Ergonomic Office Chair", Price = 399.99m, CategoryId = Furniture.Id},
-        new() {Name = "Standing Desk", Price = 599.99m, CategoryId = Furniture.Id},
-        new() {Name = "Bookshelf - 5 Tier", Price = 149.99m, CategoryId = Furniture.Id},
-        new() {Name = "File Cabinet - 3 Drawer", Price = 199.99m, CategoryId = Furniture.Id}
+        new() {Name = "Ergonomic Office Chair", Price = 399.99m, Category = Furniture},
+        new() {Name = "Standing Desk", Price = 599.99m, Category = Furniture},
+        new() {Name = "Bookshelf - 5 Tier", Price = 149.99m, Category = Furniture},
+        new() {Name = "File Cabinet - 3 Drawer", Price = 199.99m, Category = Furniture}
     ];
 }

@@ -25,7 +25,7 @@ internal class TenantBuilder<TKey>(IServiceCollection services) : ITenantBuilder
     /// be registered into the dependency injection container.
     /// </remarks>
     public IServiceCollection Services { get; } = services;
-    
+
     /// <summary>
     /// Registers a pre-populated in-memory tenant store.
     /// Suitable for testing and simple single-instance deployments.
@@ -46,7 +46,7 @@ internal class TenantBuilder<TKey>(IServiceCollection services) : ITenantBuilder
         Services.AddScoped<ITenantStore<TKey>, TStore>();
         return this;
     }
-    
+
     /// <summary>
     /// Registers a custom <see cref="ITenantStore{TKey}"/> implementation with a factory function.
     /// </summary>

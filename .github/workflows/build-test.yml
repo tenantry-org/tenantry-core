@@ -57,6 +57,10 @@ jobs:
         # Locked: fails if a test or sample project's packages.lock.json is out of date
         run: dotnet restore Tenantry.slnx --locked-mode
 
+      - name: Check formatting
+        # .editorconfig; fix locally with `dotnet format Tenantry.slnx`
+        run: dotnet format Tenantry.slnx --verify-no-changes --no-restore
+
       - name: SonarCloud begin
         if: ${{ inputs.run_sonar }}
         env:
@@ -78,6 +82,12 @@ jobs:
 
       - name: Build
         run: dotnet build Tenantry.slnx -c Release --no-restore
+
+      - name: Smoke-start the samples
+        # Each sample starts in Development (the host validates its registrations when built) and answers a
+        # request for a tenant, or runs to completion (see the script)
+        run: bash scripts/smoke-samples.sh
+        timeout-minutes: 10
 
       - name: Test (all) + coverage
         run: >
@@ -125,6 +135,10 @@ jobs:
         # A stand-in application restores these packages from an empty cache with package source mapping,
         # builds for every target framework and runs, as an application would (see the script)
         run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'
+
+      - name: Check the documentation's code blocks
+        # Every ```csharp block in the README and docs builds against these packages (see the script)
+        run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'
 
       - name: Upload packages
         # The release job publishes exactly these packages: the ones built, tested and checked above

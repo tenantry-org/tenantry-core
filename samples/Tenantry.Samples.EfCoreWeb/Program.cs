@@ -18,20 +18,20 @@
 //
 // Try:
 //   # Get product catalogue (global data, visible to all tenants)
-//   curl http://localhost:5000/products
+//   curl http://localhost:5181/products
 //
 //   # Create an order for Acme tenant
 //   curl -H "X-Tenant-Id: acme" -X POST -H "Content-Type: application/json" \
-//        -d '{"items":[{"productId":1,"quantity":2}]}' http://localhost:5000/orders
+//        -d '{"items":[{"productId":1,"quantity":2}]}' http://localhost:5181/orders
 //
 //   # List Acme's orders
-//   curl -H "X-Tenant-Id: acme" http://localhost:5000/orders
+//   curl -H "X-Tenant-Id: acme" http://localhost:5181/orders
 //
 //   # List Globex's orders (different tenant — empty, isolation working)
-//   curl -H "X-Tenant-Id: globex" http://localhost:5000/orders
+//   curl -H "X-Tenant-Id: globex" http://localhost:5181/orders
 //
 //   # Admin stats (crosses tenant boundaries with IgnoreQueryFilters)
-//   curl http://localhost:5000/admin/stats
+//   curl http://localhost:5181/admin/stats
 
 using Microsoft.EntityFrameworkCore;
 using Tenantry.AspNetCore.Extensions;
@@ -232,12 +232,12 @@ Tenants (seeded from database):
   Globex: globex
 
 Try these commands:
-  curl http://localhost:5000/products
-  curl -H "X-Tenant-Id: acme" http://localhost:5000/me
-  curl -H "X-Tenant-Id: acme" http://localhost:5000/orders
+  curl http://localhost:5181/products
+  curl -H "X-Tenant-Id: acme" http://localhost:5181/me
+  curl -H "X-Tenant-Id: acme" http://localhost:5181/orders
   curl -H "X-Tenant-Id: acme" -X POST -H "Content-Type: application/json" \
-       -d '{"items":[{"productId":1,"quantity":2}]}' http://localhost:5000/orders
-  curl http://localhost:5000/admin/stats
+       -d '{"items":[{"productId":1,"quantity":2}]}' http://localhost:5181/orders
+  curl http://localhost:5181/admin/stats
 """);
 
 await app.RunAsync();

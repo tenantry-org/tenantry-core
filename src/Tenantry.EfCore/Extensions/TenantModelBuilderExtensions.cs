@@ -12,10 +12,10 @@ namespace Tenantry.EfCore.Extensions;
 /// </summary>
 public static class TenantModelBuilderExtensions
 {
-#if NET10_0_OR_GREATER 
+#if NET10_0_OR_GREATER
     private const string TenantryFilterKey = "__TenantryFilter__";
 #endif
-    
+
     /// <summary>
     /// Discovers all entity types in the model that implement <see cref="ITenantScoped{TKey}"/>
     /// and applies a global query filter that restricts results to the current tenant.
@@ -204,8 +204,8 @@ public static class TenantModelBuilderExtensions
 
         protected override Expression VisitParameter(ParameterExpression node)
         {
-            return node == source 
-                ? replacement 
+            return node == source
+                ? replacement
                 : base.VisitParameter(node);
         }
     }

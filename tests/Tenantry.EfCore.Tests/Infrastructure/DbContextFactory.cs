@@ -49,7 +49,7 @@ public static class DbContextFactory
 
     /// <summary>
     /// Builds a <see cref="TenantSaveChangesInterceptor{TKey}"/> for tests, with default
-    /// (<c>Warn</c>) isolation policy unless <paramref name="isolationOptions"/> is supplied.
+    /// (<c>Reject</c>) isolation policy unless <paramref name="isolationOptions"/> is supplied.
     /// </summary>
     private static TenantSaveChangesInterceptor<TKey> BuildInterceptor<TKey>(
         ITenantContext<TKey> tenantContext,

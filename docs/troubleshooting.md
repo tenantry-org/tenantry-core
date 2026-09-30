@@ -42,8 +42,10 @@ in order:
 
 - The interceptor is not attached: ensure `.AddTenantInterceptors(sp)` is in the `AddDbContext`
   callback for that context, and that `AddEfCoreIsolation()` was called in the registration lambda.
-- No tenant is in scope at `SaveChanges`: the interceptor logs a warning and stamps nothing. Save
-  inside a tenant scope.
+- No tenant is in scope at `SaveChanges`. By default (`MissingTenantBehavior.Reject`) a save that writes
+  tenant-scoped entities throws `TenantNotResolvedException` and nothing is written. `Warn` (which logs) and
+  `Allow` let updates and deletes through unchecked, but a new entity must still carry its `TenantId`: without
+  one the save throws. Save inside a tenant scope, or set `TenantId` yourself in deliberate cross-tenant code.
 
 ## `TenantIsolationViolationException` on save
 

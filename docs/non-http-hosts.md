@@ -11,6 +11,7 @@ below it (EF Core read filtering and write stamping and validation) behaves exac
 ## Registration with `AddTenantryCore`
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
 using Tenantry.Core;
 using Tenantry.Core.Extensions;
 using Tenantry.EfCore.Extensions;

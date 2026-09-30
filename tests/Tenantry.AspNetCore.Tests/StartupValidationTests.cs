@@ -27,8 +27,8 @@ public sealed class StartupValidationTests
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*no tenant resolvers were registered*");
-        
-        await app.DisposeAsync();       
+
+        await app.DisposeAsync();
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class StartupValidationTests
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*no tenant store was registered*");
-        
+
         await app.DisposeAsync();
     }
 }

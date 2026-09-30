@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    The code blocks of the README and docs, as scripts/check-doc-snippets.sh builds them against freshly packed
+    packages: scripts/doc-snippets.cs writes one file per block next to this project, and Ambient.cs supplies what a
+    block takes for granted (a builder, an app). A web project with implicit usings, as in the getting-started guide.
+    Not part of the solution.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Only errors fail the check: a snippet may leave a variable unused or a method without an await. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tenantry.Core" Version="[$(TenantryVersion)]" />
+    <PackageReference Include="Tenantry.AspNetCore" Version="[$(TenantryVersion)]" />
+    <PackageReference Include="Tenantry.EfCore" Version="[$(TenantryVersion)]" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+</Project>

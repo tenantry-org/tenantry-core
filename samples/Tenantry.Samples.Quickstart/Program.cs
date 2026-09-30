@@ -16,7 +16,7 @@ builder.Services.AddTenantry<string>(tenant =>
     // We can chain multiple resolution methods together, they will be tried in order of registration.
     // Startup will fail without at least one registered resolver
     tenant.ResolveFromQueryString("tenant");
-    
+
     // Prevent requests without a tenant ID from executing by default
     // Can be overridden with [AllowMissingTenant] (MVC) or .AllowMissingTenant() (Minimal APIs)
     // Omitting this will allow all requests to execute regardless of whether a tenant was resolved.
@@ -25,9 +25,9 @@ builder.Services.AddTenantry<string>(tenant =>
 
     // We can register custom validators to put additional constraints on access
     // They have access to the entire HTTP context and the tenant info
-    tenant.ValidateTenantAccess((ctx, tenantInfo) => 
+    tenant.ValidateTenantAccess((ctx, tenantInfo) =>
         !ctx.Request.Headers.ContainsKey("X-Block-Access"));
-    
+
     // Validators can be chained together and will be evaluated with logical AND (both this and the last must pass)
     // They can also be asynchronous
     tenant.ValidateTenantAccess(async (ctx, tenantInfo, ct) =>
@@ -57,7 +57,7 @@ var orders = new List<Order>
 };
 
 // List orders for the current tenant only, do not execute if tenant is unresolved
-app.MapGet("/orders", (ITenantContext<string> ctx) => 
+app.MapGet("/orders", (ITenantContext<string> ctx) =>
         Results.Ok(orders.Where(o => o.TenantId == ctx.CurrentTenantId)))
     .RequireTenant(); // <- Has no effect here because we're already using RequireTenantByDefault()
 

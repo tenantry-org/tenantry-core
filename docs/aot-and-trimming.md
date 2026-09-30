@@ -21,7 +21,7 @@ Both are marked `IsAotCompatible` and `IsTrimmable` and compile clean under both
 public API accepts a type that DI must construct, it is annotated so the trimmer preserves the needed
 members — for example:
 
-```csharp
+```csharp no-compile
 ITenantBuilder<TKey> UseStore<[DynamicallyAccessedMembers(PublicConstructors)] TStore>()
     where TStore : class, ITenantStore<TKey>;
 ```
@@ -48,7 +48,7 @@ dotnet publish samples/Tenantry.Samples.Aot -c Release
 `Tenantry.EfCore` is marked `IsTrimmable` but **not** `IsAotCompatible`, and the read-side query-filter
 APIs are explicitly annotated:
 
-```csharp
+```csharp no-compile
 [RequiresDynamicCode("Expression tree construction requires dynamic code generation.")]
 [RequiresUnreferencedCode("Iterates model entity types and accesses members by name.")]
 public static void ApplyTenantFilters<TKey, TContext>(this ModelBuilder modelBuilder, TContext context)

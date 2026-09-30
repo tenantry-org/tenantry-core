@@ -5,7 +5,7 @@ calls it with a parsed `TKey` and expects back an `ITenantDescriptor<TKey>` (or 
 such tenant). It lists every tenant that exists, suspended ones included; whether a tenant may be served
 is decided elsewhere (see [Suspended and inactive tenants](#suspended-and-inactive-tenants)).
 
-```csharp
+```csharp no-compile
 public interface ITenantStore<TKey>
 {
     ValueTask<ITenantDescriptor<TKey>?> GetTenantAsync(TKey tenantId, CancellationToken ct = default);
@@ -43,6 +43,9 @@ after registration.
 For anything real — tenants in a database, a cache, a config service — implement `ITenantStore<TKey>`.
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+using Tenantry.Core;
+
 public sealed class EfCoreTenantStore(AppDbContext db) : ITenantStore<string>
 {
     // Every tenant that exists, active or not. Tenant is your own entity (any ITenantDescriptor<string>).

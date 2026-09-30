@@ -127,10 +127,13 @@ app.MapGet("/me", (ITenantContext<Guid> ctx) =>
 app.Run();
 ```
 
-Add EF Core isolation by registering `tenant.AddEfCoreIsolation()` in the lambda above and either
-deriving your context from `MultiTenantDbContext<Guid>` or calling `options.AddTenantInterceptors(sp)` in
-your `AddDbContext` callback. See the
-[EF Core integration guide](docs/efcore-integration.md) for the full picture.
+Add EF Core isolation by registering `tenant.AddEfCoreIsolation()` in the lambda above, then give your
+context both halves: the query filters and the interceptor. Deriving from `MultiTenantDbContext<Guid>` gives
+you both (it attaches the interceptor itself unless the context is pooled). Otherwise implement
+`ITenantAwareDbContext<Guid>`, call `ApplyTenantFilters` in `OnModelCreating`, and add
+`options.AddTenantInterceptors(sp)` in your `AddDbContext` callback. The interceptor alone stamps and checks
+writes but does not filter reads. See the [EF Core integration guide](docs/efcore-integration.md)
+for the full picture.
 
 ## Quick start (console / worker — no ASP.NET Core)
 

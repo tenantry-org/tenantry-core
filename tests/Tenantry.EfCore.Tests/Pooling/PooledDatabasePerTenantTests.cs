@@ -53,7 +53,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
 
         await using var services = Build();
 
-        foreach (var tenant in new[] {Acme, Globex})
+        foreach (var tenant in new[] { Acme, Globex })
         {
             await using var scope = services.GetRequiredService<ITenantScopeFactory<string>>().CreateScope(tenant);
             await scope.ServiceProvider.GetRequiredService<PooledNotesContext>().Database.EnsureCreatedAsync();
@@ -78,13 +78,13 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         HashSet<Guid> instances = [];
         List<string> seen = [];
 
-        foreach (var tenant in new[] {Acme, Globex, Acme})
+        foreach (var tenant in new[] { Acme, Globex, Acme })
         {
             await using var scope = scopes.CreateScope(tenant);
             var db = scope.ServiceProvider.GetRequiredService<PooledNotesContext>();
             instances.Add(db.ContextId.InstanceId);
 
-            db.Notes.Add(new PooledNote { Text = $"{tenant.TenantId } note"});
+            db.Notes.Add(new PooledNote { Text = $"{tenant.TenantId} note" });
             await db.SaveChangesAsync();
             seen.Add($"{tenant.TenantId}:{await db.Notes.CountAsync()}");
         }
@@ -131,7 +131,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
             async (scope, ct) =>
             {
                 var db = scope.ServiceProvider.GetRequiredService<PooledNotesContext>();
-                db.Notes.Add(new PooledNote { Text = $"write {i }"});
+                db.Notes.Add(new PooledNote { Text = $"write {i}" });
                 await Task.Yield();
                 await db.SaveChangesAsync(ct);
             })));
@@ -181,10 +181,10 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         TheoryData<string, string> cases = new();
 
         foreach (var openedBy in new[] { "OpenConnection", "BeginTransaction" })
-        foreach (var command in new[] { "SaveChangesAsync", "SaveChanges", "CountAsync", "Count", "ExecuteSqlRaw", "ExecuteDelete" })
-        {
-            cases.Add(openedBy, command);
-        }
+            foreach (var command in new[] { "SaveChangesAsync", "SaveChanges", "CountAsync", "Count", "ExecuteSqlRaw", "ExecuteDelete" })
+            {
+                cases.Add(openedBy, command);
+            }
 
         return cases;
     }

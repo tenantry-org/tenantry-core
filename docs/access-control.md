@@ -17,6 +17,8 @@ tenant globally or per-endpoint.
 ### Globally
 
 ```csharp
+using Tenantry.AspNetCore.Extensions;
+
 builder.Services.AddTenantry<Guid>(tenant =>
 {
     tenant.ResolveFromHeader("X-Tenant-Id");
@@ -40,6 +42,9 @@ app.MapGet("/health", () => "ok").AllowMissingTenant();  // tenant optional even
 Controllers (attributes target both classes and methods):
 
 ```csharp
+using Microsoft.AspNetCore.Mvc;
+using Tenantry.AspNetCore.Attributes;
+
 [RequireTenant]                       // applies to the whole controller
 public class OrdersController : ControllerBase
 {
@@ -129,6 +134,9 @@ background jobs never call them, so background work must check the tenant's stat
 ## Putting it together
 
 ```csharp
+using Tenantry.AspNetCore.Extensions;
+using Tenantry.EfCore.Extensions;
+
 builder.Services.AddTenantry<Guid>(tenant =>
 {
     tenant.ResolveFromClaim("tenant_id");        // bind tenant to the token

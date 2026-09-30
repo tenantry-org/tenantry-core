@@ -10,7 +10,7 @@ namespace Tenantry.EfCore.Tests;
 internal sealed class NonTenantedProduct
 {
     public int Id { get; set; }
-    
+
     [MaxLength(64)]
     public string Name { get; set; } = string.Empty;
 }

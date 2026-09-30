@@ -60,13 +60,19 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
 
     private static Expression? StripConvert(Expression? expression)
     {
-        while (expression is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs } convert)
+        while (expression is not null && CastOperand(expression) is { } operand)
         {
-            expression = convert.Operand;
+            expression = operand;
         }
 
         return expression;
     }
+
+    // The operand of a cast, or null when the expression is not one.
+    private static Expression? CastOperand(Expression expression) =>
+        expression is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs } convert
+            ? convert.Operand
+            : null;
 
     // The tenant-scoped entity type a setter's instance expression refers to, looking through casts (which
     // matter for inheritance: ((TenantScopedDerived)baseEntity).TenantId) and falling back to the member's
@@ -75,10 +81,7 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
     {
         Type? found = null;
 
-        for (Expression? current = instance; current is not null; current = current is UnaryExpression
-                 { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs } convert
-                 ? convert.Operand
-                 : null)
+        for (Expression? current = instance; current is not null; current = CastOperand(current))
         {
             if (IsTenantScoped(current.Type) && (found is null || found.IsInterface || !current.Type.IsInterface))
             {

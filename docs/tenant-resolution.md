@@ -3,7 +3,7 @@
 Resolution is the act of extracting a raw tenant identifier from an HTTP request. A resolver
 implements `ITenantResolver`:
 
-```csharp
+```csharp no-compile
 public interface ITenantResolver
 {
     ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken ct = default);
@@ -41,10 +41,12 @@ yields `null`.
 tenant.ResolveFromSubdomain();   // acme.app.example.com → "acme"
 ```
 
-To distinguish a real subdomain from a bare domain, the host must have **at least three** dot-separated
-segments. So `acme.app.example.com` resolves to `acme`, but `app.example.com`, `example.com`,
-`localhost`, and `acme.localhost` all resolve to `null`. For local development, use header resolution
-instead.
+The resolver takes the first dot-separated label of any host that has **at least three**, and resolves
+nothing for shorter hosts. So `acme.app.example.com` resolves to `acme`, and so do `app.example.com` (to
+`app`) and `www.example.com` (to `www`), while `example.com`, `localhost` and `acme.localhost` resolve to
+`null`. It does not know your base domain: if the same app also serves `www.` or other non-tenant hosts,
+route those elsewhere, or make sure no tenant has that identifier. For local development, use header
+resolution instead.
 
 ### Route value
 
@@ -98,6 +100,8 @@ Implement `ITenantResolver` for any source not covered above — a cookie, a gRP
 combination of signals, an external lookup, etc.
 
 ```csharp
+using Tenantry.AspNetCore.Resolution;
+
 public sealed class CookieTenantResolver : ITenantResolver
 {
     public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken ct = default)

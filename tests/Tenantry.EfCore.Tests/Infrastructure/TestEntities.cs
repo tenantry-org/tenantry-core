@@ -8,10 +8,10 @@ namespace Tenantry.EfCore.Tests.Infrastructure;
 public class Order : ITenantScoped<string>
 {
     public int Id { get; set; }
-    
+
     [MaxLength(64)]
     public string TenantId { get; set; } = string.Empty;
-    
+
     [MaxLength(64)]
     public string Description { get; set; } = string.Empty;
 }
@@ -57,7 +57,7 @@ public class GuidOrder : ITenantScoped<Guid>
 {
     public int Id { get; set; }
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(64)]
     public string Description { get; set; } = string.Empty;
 }
@@ -89,7 +89,7 @@ public class GuidTestDbContext(DbContextOptions<GuidTestDbContext> options, ITen
 public class NonTenant
 {
     public int Id { get; set; }
-    
+
     [MaxLength(64)]
     public string Name { get; set; } = string.Empty;
 }

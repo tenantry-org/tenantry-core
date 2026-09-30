@@ -15,7 +15,7 @@ namespace Tenantry.AspNetCore.Internal;
 /// <typeparam name="TKey">
 /// The tenant identifier type. Must implement <see cref="IEquatable{T}"/> and <see cref="IParsable{T}"/>.
 /// </typeparam>
-internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services) : 
+internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services) :
     TenantBuilder<TKey>(services),
     IAspNetCoreTenantBuilder<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -80,7 +80,7 @@ internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services)
         Services.AddSingleton<ITenantResolver, TResolver>();
         return this;
     }
-    
+
     /// <summary>
     /// Registers a custom <see cref="ITenantResolver"/> implementation with a concrete instance.
     /// </summary>
@@ -89,7 +89,7 @@ internal sealed class AspNetCoreTenantBuilder<TKey>(IServiceCollection services)
         Services.AddSingleton(resolver);
         return this;
     }
-    
+
     /// <summary>
     /// Registers a custom <see cref="ITenantResolver"/> implementation with a factory method.
     /// </summary>

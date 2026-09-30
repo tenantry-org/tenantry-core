@@ -33,6 +33,7 @@ This guide uses `Guid`.
 ## 3. Register Tenantry
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
 using Tenantry.AspNetCore.Extensions;
 using Tenantry.Core;
 using Tenantry.EfCore.Extensions;
@@ -102,7 +103,7 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<Guid>
     public DbSet<Order> Orders => Set<Order>();
 
     // EF Core re-reads this per query because it is a DbContext member — see Core concepts.
-    public Guid? CurrentTenantId => _tenantContext.CurrentTenantId;
+    public Guid CurrentTenantId => _tenantContext.CurrentTenantId;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

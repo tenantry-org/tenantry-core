@@ -22,6 +22,13 @@ identically.
 > they belong to the tenant they select, as in the [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi).
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+using Tenantry.AspNetCore.Extensions;
+using Tenantry.Core;
+using Tenantry.Core.Extensions;
+using Tenantry.EfCore;
+using Tenantry.EfCore.Extensions;
+
 // 1. Register isolation services inside AddTenantry / AddTenantryCore
 builder.Services.AddTenantry<Guid>(tenant =>
 {
@@ -41,7 +48,12 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 
 ```csharp
 // 3. Mark entities tenant-scoped
-public class Order : TenantScoped<Guid> { public int Id { get; set; } /* … */ }
+public class Order : TenantScoped<Guid>
+{
+    public int Id { get; set; }
+    public string Reference { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+}
 
 // 4. Apply the query filters in the DbContext (see "wiring the DbContext" below)
 ```

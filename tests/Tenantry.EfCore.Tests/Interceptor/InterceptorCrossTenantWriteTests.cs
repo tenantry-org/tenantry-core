@@ -45,7 +45,7 @@ public sealed class InterceptorCrossTenantWriteTests
         await act.Should().ThrowAsync<TenantIsolationViolationException>()
             .WithMessage("*acme*")
             .WithMessage("*globex*");
-        
+
         await db.DisposeAsync();
     }
 
@@ -69,7 +69,7 @@ public sealed class InterceptorCrossTenantWriteTests
 
         Func<Task> act = () => db.SaveChangesAsync();
         await act.Should().ThrowAsync<TenantIsolationViolationException>();
-        
+
         await db.DisposeAsync();
     }
 
@@ -89,7 +89,7 @@ public sealed class InterceptorCrossTenantWriteTests
 
         Func<Task> act = () => db.SaveChangesAsync();
         await act.Should().NotThrowAsync();
-        
+
         await db.DisposeAsync();
     }
 }

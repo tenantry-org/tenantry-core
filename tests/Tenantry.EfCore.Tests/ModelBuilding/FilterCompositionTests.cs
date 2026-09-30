@@ -233,15 +233,15 @@ public class FilterCompositionTests
     {
         [Key]
         public int Id { get; set; }
-        
+
         [MaxLength(64)]
         public string TenantId { get; set; } = string.Empty;
-        
+
         [MaxLength(64)]
         public string Name { get; set; } = string.Empty;
-        
+
         public bool IsDeleted { get; set; }
-        
+
         public bool IsPublished { get; set; }
     }
 

@@ -16,7 +16,7 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<string>
     {
         _tenantContext = tenantContext;
     }
-    
+
     // Required by ITenantAwareDbContext — EF Core re-evaluates this per query
     public string? CurrentTenantId => _tenantContext.CurrentTenantId;
 
@@ -53,6 +53,7 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<string>
         {
             b.Property(o => o.OrderNumber).HasMaxLength(100);
             b.Property(o => o.Status).HasMaxLength(50);
+            b.HasIndex(o => o.TenantId);   // Tenantry adds no index; every filtered query compares TenantId
             b.HasIndex(o => o.OrderNumber);
             b.HasIndex(o => o.CreatedAt);
             b.HasMany(o => o.Items)
@@ -64,6 +65,7 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<string>
         // ── OrderItem ─────────────────────────────────────────────────────────
         modelBuilder.Entity<OrderItem>(b =>
         {
+            b.HasIndex(i => i.TenantId);
             b.HasOne(i => i.Product)
                 .WithMany(p => p.OrderItems)
                 .HasForeignKey(i => i.ProductId)
