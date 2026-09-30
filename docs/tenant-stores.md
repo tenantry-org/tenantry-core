@@ -2,7 +2,8 @@
 
 A tenant store answers "which tenants exist, and what are their details?" The resolution middleware
 calls it with a parsed `TKey` and expects back an `ITenantDescriptor<TKey>` (or `null` if there is no
-such tenant). It is also where you enforce that a tenant is *active*/not suspended.
+such tenant). It lists every tenant that exists, suspended ones included; whether a tenant may be served
+is decided elsewhere (see [Suspended and inactive tenants](#suspended-and-inactive-tenants)).
 
 ```csharp
 public interface ITenantStore<TKey>
@@ -42,41 +43,25 @@ after registration.
 For anything real — tenants in a database, a cache, a config service — implement `ITenantStore<TKey>`.
 
 ```csharp
-public sealed class EfCoreTenantStore(AppDbContext db, ILogger<EfCoreTenantStore> logger)
-    : ITenantStore<string>
+public sealed class EfCoreTenantStore(AppDbContext db) : ITenantStore<string>
 {
-    public async ValueTask<ITenantDescriptor<string>?> GetTenantAsync(string tenantId, CancellationToken ct = default)
-    {
-        var tenant = await db.Tenants.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TenantId == tenantId, ct);
-
-        if (tenant is null) return null;
-
-        // The store is the right place to reject suspended/inactive tenants — return null and the
-        // middleware responds 404 (tenant not found), never opening a scope for them.
-        if (!tenant.IsActive)
-        {
-            logger.LogWarning("Tenant {TenantId} is inactive", tenantId);
-            return null;
-        }
-
-        return tenant; // any ITenantDescriptor<string> implementation
-    }
+    // Every tenant that exists, active or not. Tenant is your own entity (any ITenantDescriptor<string>).
+    public async ValueTask<ITenantDescriptor<string>?> GetTenantAsync(string tenantId, CancellationToken ct = default) =>
+        await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.TenantId == tenantId, ct);
 
     public async ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken ct = default) =>
-        await db.Tenants.AsNoTracking().Where(t => t.IsActive)
-            .ToListAsync<ITenantDescriptor<string>>(ct);
+        await db.Tenants.AsNoTracking().ToListAsync<ITenantDescriptor<string>>(ct);
 }
 ```
 
-Register it one of three ways:
+Register it one of two ways:
 
 ```csharp
 // 1. By type — resolved from DI, registered as Scoped.
 tenant.UseStore<EfCoreTenantStore>();
 
 // 2. By factory — also Scoped; use when you need IServiceProvider to construct it.
-tenant.UseStore(sp => new EfCoreTenantStore(sp.GetRequiredService<AppDbContext>(), sp.GetRequiredService<ILogger<EfCoreTenantStore>>()));
+tenant.UseStore(sp => new EfCoreTenantStore(sp.GetRequiredService<AppDbContext>()));
 ```
 
 > **Lifetimes.** `UseInMemoryStore` registers a **singleton**; `UseStore<T>()` and `UseStore(factory)`
@@ -85,6 +70,55 @@ tenant.UseStore(sp => new EfCoreTenantStore(sp.GetRequiredService<AppDbContext>(
 > request's `DbContext` works correctly. If your store is stateless and cheap, that is fine; if it does
 > a database round-trip per request and you want caching, add an `IMemoryCache`/`HybridCache` layer
 > inside your implementation.
+
+## Suspended and inactive tenants
+
+Tenantry has no tenant status of its own: a descriptor carries only `TenantId` and `Name`. Keep the
+status on your own descriptor type, and keep **every** tenant that exists in the store whatever its
+status. Do not hide a suspended tenant by returning `null` or leaving it out of `GetAllTenantsAsync`:
+tools that maintain each tenant's database find tenants through the store. Tenantry.Pro's provisioning
+and single-tenant migration fail for a tenant the store does not return, and its migration runs,
+migration status and health checks cover only the tenants `GetAllTenantsAsync` lists. A tenant hidden
+while it is suspended misses every migration and breaks when it is reactivated. For the same reason, keep
+a suspended tenant's database available; remove a tenant from the store only once its database has been
+archived or dropped.
+
+```csharp
+public class Tenant : TenantDescriptor<string>
+{
+    public bool IsActive { get; set; } = true;   // yours; Tenantry never reads it
+}
+```
+
+Decide whether a tenant may be served where its work starts:
+
+- **HTTP requests:** add an [access validator](access-control.md#validating-tenant-access). It receives
+  the descriptor your store returned and runs before any scope opens; a refused request gets
+  `403 Forbidden`.
+
+  ```csharp
+  tenant.UseStore<EfCoreTenantStore>();
+  tenant.ValidateTenantAccess((http, t) => t is Tenant { IsActive: true });
+  ```
+
+- **Background work:** access validators run only in the HTTP middleware, never for
+  `ITenantScopeFactory` or background jobs, so check the descriptor yourself:
+
+  ```csharp
+  foreach (var t in await tenants.GetAllTenantsAsync(ct))
+  {
+      if (t is not Tenant { IsActive: true }) continue;   // not active: skip it
+      await using var scope = scopes.CreateScope(t);
+      // ...
+  }
+  ```
+
+  With `RunInScopeAsync`, check `scope.Tenant` at the start of the work. Check for the active status, as
+  here, rather than for the suspended one, so a descriptor of another type is skipped rather than served.
+
+An unknown id gets `404 Not Found` but a refused one gets `403`, so a caller can tell that a suspended
+tenant's id exists. If that matters, keep tenant ids unguessable, or resolve the tenant from the
+caller's token (`ResolveFromClaim`) rather than from a header.
 
 ## Bootstrapping with an EF Core-backed store
 
@@ -99,4 +133,6 @@ entity, an `EfCoreTenantStore`, and seeded data.
 
 The middleware calls `GetTenantAsync` once per request. If that is a database hit you would rather not
 take every request, cache inside your store implementation — Tenantry deliberately does not impose a
-caching strategy. Remember to invalidate on tenant changes (rename, suspend, delete).
+caching strategy. Remember to invalidate on tenant changes (rename, suspend, delete): an access
+validator reads the status from the descriptor your store returns, so a stale cached descriptor keeps a
+suspended tenant served.

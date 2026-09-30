@@ -60,6 +60,11 @@ public sealed class InvoiceWorker(ITenantScopeFactory<Guid> scopes, ITenantStore
 }
 ```
 
+`GetAllTenantsAsync` lists suspended tenants too, and nothing here checks a tenant's status (HTTP
+access validators never run for these scopes). If your app suspends tenants, skip them yourself, for
+example with `if (tenant is not Tenant { IsActive: true }) continue;` at the top of the loop (see
+[Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
+
 Give each tenant its own scope, and therefore its own `DbContext`, so change-tracker state never bleeds
 across tenants. Disposing the scope disposes its services while the tenant is still active, then
 restores whichever tenant was current before it, in the code that disposed it. That holds for `using`
@@ -80,7 +85,8 @@ await scopes.RunInScopeAsync(message.TenantId, async (scope, ct) =>
 ```
 
 It throws `TenantNotResolvedException` if the store has no such tenant, and there is an overload whose
-work returns a value.
+work returns a value. It does not check whether the tenant is suspended: read your status from
+`scope.Tenant` at the start of the work if that matters.
 
 There is deliberately no `CreateScopeAsync(tenantId)`. The tenant lives in an `AsyncLocal`, and an
 `async` method's changes to one never reach its caller, so a scope opened inside an asynchronous lookup

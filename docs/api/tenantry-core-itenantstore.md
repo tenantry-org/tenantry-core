@@ -6,6 +6,8 @@ Persists and retrieves tenant definitions. Implement this interface to back tena
 
 A custom store registered via `UseStore<TStore>()` is **scoped**, and Tenantry resolves it per operation from a fresh dependency-injection scope (so singleton/background services can read tenants without capturing it). Implementations may therefore depend on scoped services such as a `DbContext`, but must not assume a singleton lifetime or cache scope-bound state across calls.
 
+Return every tenant that exists, suspended or inactive ones included, from both methods: tools that maintain each tenant's database, such as migrations, find tenants here. Decide whether a tenant may be served elsewhere: with an access validator for HTTP requests, and in your own code for background work.
+
 ```csharp
 public interface ITenantStore<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
@@ -20,7 +22,7 @@ Derived types: [`InMemoryTenantStore<TKey>`](tenantry-core-stores-inmemorytenant
 
 ### `GetAllTenantsAsync(CancellationToken)`
 
-Returns all registered tenants.
+Returns every tenant that exists, suspended or inactive ones included.
 
 ```csharp
 ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default)

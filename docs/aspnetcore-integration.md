@@ -68,7 +68,7 @@ works correctly.
 | Tenant required but none resolved | `400 Bad Request` | internal default |
 | Raw id fails `TKey.TryParse` | `400 Bad Request` | no |
 | Tenant id not found in store | `404 Not Found` | no |
-| Access validator denied | `403 Forbidden` | internal default |
+| Access validator denied (including a suspended tenant your validator refuses) | `403 Forbidden` | internal default |
 
 The "required but missing" and "access denied" codes have internal defaults (`400`/`403`); they are
 not currently exposed as public options.

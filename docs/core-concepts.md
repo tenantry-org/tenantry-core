@@ -40,7 +40,9 @@ new TenantDescriptor<Guid> { TenantId = id, Name = "Acme" };
 
 You can implement `ITenantDescriptor<TKey>` on your own type to carry extra metadata (subscription
 tier, connection string, feature flags…). Your [tenant store](tenant-stores.md) returns whatever
-implementation you like; Tenantry only ever reads `TenantId` and `Name`.
+implementation you like; Tenantry only ever reads `TenantId` and `Name`. That includes status: Tenantry
+has no notion of an active or suspended tenant, so keep yours on your descriptor type and check it where
+work starts (see [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
 
 ## `ITenantScoped<TKey>` — a tenant-owned entity
 

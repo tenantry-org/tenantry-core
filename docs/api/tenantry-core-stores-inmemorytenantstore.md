@@ -32,7 +32,7 @@ Parameters:
 
 ### `GetAllTenantsAsync(CancellationToken)`
 
-Returns all registered tenants.
+Returns every tenant that exists, suspended or inactive ones included.
 
 ```csharp
 public ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default)

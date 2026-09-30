@@ -102,24 +102,29 @@ tenant.ValidateTenantAccessByClaim("tenant_id");           // must hold the clai
 tenant.ValidateTenantAccess((http, _) => IsFromTrustedIp(http)); // … AND be from a trusted IP
 ```
 
-For **OR** semantics, use `ValidateTenantAccessAny`. It takes one or more *groups*; the request passes
-if **any group** passes, and a group passes only if **all** validators within it pass (AND inside a
-group, OR across groups):
+For **OR** semantics, put the alternatives in one validator:
 
 ```csharp
-tenant.ValidateTenantAccessAny(
-    // group A: a valid tenant claim …
-    group => group.ValidateTenantAccessByClaim("tenant_id"),
-    // … OR group B: an admin header AND an internal network flag
-    group => group
-        .ValidateTenantAccess((http, _) => http.Request.Headers.ContainsKey("X-Admin"))
-        .ValidateTenantAccess((http, _) => IsInternal(http)));
+tenant.ValidateTenantAccess((http, t) =>
+    http.User.HasClaim("tenant_id", t.TenantId.ToString())        // a matching tenant claim …
+    || (http.Request.Headers.ContainsKey("X-Admin") && IsInternal(http))); // … OR an internal admin
 ```
 
-`ValidateTenantAccessAny` is itself just another validator in the chain, so it still combines with any
-plainly-added validators using AND. In other words: all top-level `ValidateTenantAccess(...)` calls
-**and** the `ValidateTenantAccessAny(...)` result must all pass. At least one group must be supplied,
-or the call throws `ArgumentException`.
+That validator still combines with any others you add using AND. `HasClaim` compares the claim value as
+a string; it does not read the JSON-array form that `ValidateTenantAccessByClaim` accepts.
+
+### Suspended tenants
+
+Your store returns suspended tenants too (see
+[Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)), so refuse them with a
+validator that reads the status from your own descriptor type:
+
+```csharp
+tenant.ValidateTenantAccess((http, t) => t is Tenant { IsActive: true });
+```
+
+Access validators run only in the HTTP middleware. `ITenantScopeFactory`, `ITenantScope.BeginScope` and
+background jobs never call them, so background work must check the tenant's status itself.
 
 ## Putting it together
 
@@ -131,9 +136,10 @@ builder.Services.AddTenantry<Guid>(tenant =>
     tenant.UseStore<EfCoreTenantStore>();
     tenant.RequireTenantByDefault();             // no anonymous tenant access
     tenant.ValidateTenantAccessByClaim("tenant_id"); // caller must be entitled to the tenant
+    tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true }); // and it must be active
     tenant.AddEfCoreIsolation(o => o.DetectSpoofedWrites = true);
 });
 ```
 
 See the [`Quickstart` sample](../samples/Tenantry.Samples.Quickstart) for a runnable demonstration of
-required tenants, AND/OR validators, and endpoint metadata.
+required tenants, chained (AND) validators, and endpoint metadata.

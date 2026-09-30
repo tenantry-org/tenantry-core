@@ -6,10 +6,17 @@ namespace Tenantry.Core;
 /// or any other store.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A custom store registered via <c>UseStore&lt;TStore&gt;()</c> is <strong>scoped</strong>, and Tenantry
 /// resolves it per operation from a fresh dependency-injection scope (so singleton/background services
 /// can read tenants without capturing it). Implementations may therefore depend on scoped services such
 /// as a <c>DbContext</c>, but must not assume a singleton lifetime or cache scope-bound state across calls.
+/// </para>
+/// <para>
+/// Return every tenant that exists, suspended or inactive ones included, from both methods: tools that
+/// maintain each tenant's database, such as migrations, find tenants here. Decide whether a tenant may be
+/// served elsewhere: with an access validator for HTTP requests, and in your own code for background work.
+/// </para>
 /// </remarks>
 /// <typeparam name="TKey">
 /// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.
@@ -26,7 +33,7 @@ public interface ITenantStore<TKey>
     ValueTask<ITenantDescriptor<TKey>?> GetTenantAsync(TKey tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns all registered tenants.
+    /// Returns every tenant that exists, suspended or inactive ones included.
     /// </summary>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default);

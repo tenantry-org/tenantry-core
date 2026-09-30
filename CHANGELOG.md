@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A tenant store returns every tenant that exists, suspended ones included; whether a tenant may be served
+  is decided by an access validator for HTTP requests and by your own code for background work. The docs
+  and the `EfCoreWeb` sample hid inactive tenants from the store (a `404`), which made tools that maintain
+  every tenant's database, such as Tenantry.Pro's migrations, skip them. The sample now keeps them in the
+  store and refuses them with a validator (`403`); see "Suspended and inactive tenants" in
+  `docs/tenant-stores.md`. Nothing checks a tenant's status for you in background work.
+
+### Fixed
+
+- `docs/access-control.md` documented `ValidateTenantAccessAny`, which was removed before 0.4.0. It now
+  shows OR logic written in one validator.
+
 ## [0.4.0] - 2026-09-29
 
 The first beta release. Tenantry stays on 0.x releases until 1.0; a minor release can change the API, and

@@ -36,6 +36,8 @@ public sealed class EfCoreTenantStoreTests : IAsyncLifetime
         {
             t.ResolveFromHeader("X-Tenant-Id");
             t.UseStore<EfStoreTenantStore>();
+            // The store returns inactive tenants too; the validator refuses them.
+            t.ValidateTenantAccess((_, tenant) => tenant is EfStoreTenant { IsActive: true });
         });
 
         _app = builder.Build();
@@ -82,14 +84,25 @@ public sealed class EfCoreTenantStoreTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EfStore_InactiveTenant_Returns404()
+    public async Task EfStore_InactiveTenant_IsRefusedByValidator()
     {
-        // Tenant exists in the DB, but IsActive = false — store returns null → 404.
+        // Tenant exists in the DB with IsActive = false: the store returns it and the validator → 403.
         _client.DefaultRequestHeaders.Add("X-Tenant-Id", "inactive");
 
         var response = await _client.GetAsync("/me");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task EfStore_ListsInactiveTenants()
+    {
+        // Tools that maintain every tenant's database (migrations, provisioning) enumerate the store.
+        using var scope = _app.Services.CreateScope();
+        var tenants = await scope.ServiceProvider.GetRequiredService<ITenantStoreAccessor<string>>()
+            .GetAllTenantsAsync();
+
+        tenants.Select(t => t.TenantId).Should().BeEquivalentTo("acme", "inactive");
     }
 
     public async Task DisposeAsync()
@@ -129,16 +142,12 @@ internal sealed class EfStoreTenantStore(EfStoreDbContext db) : ITenantStore<str
 {
     public async ValueTask<ITenantDescriptor<string>?> GetTenantAsync(
         string tenantId,
-        CancellationToken cancellationToken = default)
-    {
-        var tenant = await db.Tenants.FindAsync([tenantId], cancellationToken: cancellationToken);
-        return tenant is { IsActive: true } ? tenant : null;
-    }
+        CancellationToken cancellationToken = default) =>
+        await db.Tenants.FindAsync([tenantId], cancellationToken: cancellationToken);
 
     public async ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(
         CancellationToken cancellationToken = default) =>
         await db.Tenants
             .AsNoTracking()
-            .Where(t => t.IsActive)
             .ToListAsync<ITenantDescriptor<string>>(cancellationToken);
 }

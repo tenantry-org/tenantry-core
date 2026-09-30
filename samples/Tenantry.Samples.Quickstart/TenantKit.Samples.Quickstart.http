@@ -14,10 +14,11 @@ X-Tenant-Id: acme
 
 ### Get current tenant info for Globex, using the query string resolver we registered
 GET {{host}}/me?tenant=globex
-X-Or-This-Alternative: ignored # We have to pass this alternative due to the ValidateTenantAccessAny call
 
-### Using the query string resolver without the alternative header will fail with 403
-GET {{host}}/me?tenant=globex
+### A custom access validator refuses this request with 403
+GET {{host}}/me
+X-Tenant-Id: globex
+X-Block-Access: true
 
 ### Get current tenant info for Globex
 GET {{host}}/me

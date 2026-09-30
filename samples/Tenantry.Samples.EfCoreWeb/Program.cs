@@ -3,6 +3,7 @@
 // This sample shows:
 // - Real EF Core migrations (not EnsureCreated)
 // - Tenants stored as EF entities, looked up via EfCoreTenantStore
+// - Inactive tenants kept in the store and refused by an access validator (403)
 // - Mixed tenanted/non-tenanted entities (Orders are tenanted, Products are global)
 // - Relationships across tenant boundaries (OrderItem → Product)
 // - Seeding global reference data and tenants
@@ -47,6 +48,10 @@ builder.Services.AddTenantry<string>(tenant =>
 {
     tenant.ResolveFromHeader("X-Tenant-Id");
     tenant.UseStore<EfCoreTenantStore>();
+
+    // The store returns inactive tenants too; refuse them here (403) before any scope opens.
+    tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true });
+
     tenant.AddEfCoreIsolation(options =>
     {
         // Reject Added entities pre-stamped with a foreign tenant id (spoofing detection).
