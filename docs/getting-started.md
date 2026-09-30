@@ -108,6 +108,7 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<Guid>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        // Your own entity configuration goes here, before ApplyTenantFilters.
         modelBuilder.ApplyTenantFilters<Guid, AppDbContext>(this); // filters every ITenantScoped<Guid> entity
     }
 }

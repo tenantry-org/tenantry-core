@@ -30,6 +30,14 @@ Parameters:
 - `modelBuilder` `ModelBuilder`: The model builder from `OnModelCreating`.
 - `context` `TContext`: The calling `DbContext` instance. Pass `this` from inside `OnModelCreating`:  ```csharp modelBuilder.ApplyTenantFilters{Guid, AppDbContext}(this); ```
 
+Exceptions:
+
+- [`TenantIsolationViolationException`](tenantry-core-exceptions-tenantisolationviolationexception.md): An entity type implements [`ITenantScoped<TKey>`](tenantry-core-itenantscoped.md) with a key type other than `TKey`, derives from an entity type that is not tenant-scoped, or is owned by one.
+
 EF Core caches the compiled query plan but re-evaluates `DbContext` property accesses on every execution. By closing the filter over the `DbContext` (rather than an external `ITenantContext<TKey>` service), the correct tenant ID is always used even though the model is built once and shared across context instances.
 
 Implement [`ITenantAwareDbContext<TKey>`](tenantry-efcore-itenantawaredbcontext.md) on your `DbContext` and expose `CurrentTenantId` as a property that delegates to your injected `ITenantContext<TKey>`. This method is idempotent and combines the tenant filter with any existing query filters.
+
+Call it at the end of `OnModelCreating`, after your own configuration: an entity type added after it gets no tenant filter, and a `HasQueryFilter` call after it can replace the tenant filter (or, on EF Core 10, fail the model build). Tenantry's interceptors check the model on its first query and save, and throw [`TenantIsolationViolationException`](tenantry-core-exceptions-tenantisolationviolationexception.md) if any tenant-scoped entity type has lost its filter. Only the filter this method adds counts, not one written by hand.
+
+An owned type gets no filter of its own (EF Core reads owned rows only through their owner), so a tenant-scoped owned type needs a tenant-scoped owner. Its `TenantId` is still made a concurrency token.

@@ -10,7 +10,8 @@ using Tenantry.Core.Exceptions;
 namespace Tenantry.EfCore.Internal;
 
 /// <summary>
-/// Rejects <c>ExecuteUpdate</c> queries that set <c>TenantId</c> on a tenant-scoped entity.
+/// Rejects <c>ExecuteUpdate</c> queries that set <c>TenantId</c> on a tenant-scoped entity, and queries against a
+/// model that does not isolate every tenant-scoped entity type (<see cref="TenantModelCheck{TKey}"/>).
 /// </summary>
 /// <remarks>
 /// The tenant query filter limits which rows a bulk update touches, but not the values it writes, and bulk
@@ -26,7 +27,8 @@ namespace Tenantry.EfCore.Internal;
 /// and <c>SelectMany</c> result selectors and element-preserving operators such as <c>Where</c>) and then
 /// checks the entity property the setter lands on, whether it is named by member access or by
 /// <c>EF.Property</c>. It fails closed: a setter whose <c>EF.Property</c> name cannot be read, or that lands on
-/// a projection it cannot see through, is rejected.
+/// a projection it cannot see through, is rejected, and so is an <c>ExecuteUpdate</c> whose setters are not in the
+/// shape <see cref="ExecuteUpdateSetterReader"/> knows for this EF Core version.
 /// </para>
 /// <para>
 /// EF Core keys its internal service provider on query-expression interceptor instances, so a new instance
@@ -48,9 +50,23 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
     /// <inheritdoc />
     public Expression QueryCompilationStarting(Expression queryExpression, QueryExpressionEventData eventData)
     {
-        new ExecuteUpdateVisitor(eventData.Context?.Model).Visit(queryExpression);
+        // Every query is compiled for its model before it first runs, so a model that lost a tenant filter fails
+        // here, before it can return another tenant's rows.
+        if (eventData.Context is { } context)
+        {
+            TenantModelCheck<TKey>.Verify(context);
+        }
+
+        CheckExecuteUpdates(queryExpression, eventData.Context?.Model);
         return queryExpression;
     }
+
+    /// <summary>
+    /// Throws <see cref="TenantIsolationViolationException"/> when an <c>ExecuteUpdate</c> in the query sets
+    /// <c>TenantId</c> on a tenant-scoped entity, or has setters the guard cannot read.
+    /// </summary>
+    internal static void CheckExecuteUpdates(Expression queryExpression, IModel? model) =>
+        new ExecuteUpdateVisitor(model).Visit(queryExpression);
 
     private static bool IsTenantScoped(Type? type) =>
         type is not null && typeof(ITenantScoped<TKey>).IsAssignableFrom(type);
@@ -107,14 +123,6 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
         _ => null,
     };
 
-    private static LambdaExpression? AsLambda(Expression expression) => expression switch
-    {
-        LambdaExpression lambda => lambda,
-        UnaryExpression { NodeType: ExpressionType.Quote, Operand: LambdaExpression quoted } => quoted,
-        ConstantExpression { Value: LambdaExpression constant } => constant,
-        _ => null,
-    };
-
     // The element type of the sequence types LINQ operators return. Deliberately limited to the generic
     // interfaces themselves (no interface scanning), which is all the guard needs to spot pass-through operators.
     private static Type? SequenceElementType(Type type)
@@ -137,16 +145,22 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
     {
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
-            if (node.Method is { Name: "ExecuteUpdate", DeclaringType.Namespace: "Microsoft.EntityFrameworkCore" })
+            if (ExecuteUpdateSetterReader.IsExecuteUpdate(node))
             {
-                SetterSelectorCollector setters = new();
+                var selectors = ExecuteUpdateSetterReader.ReadSelectors(node);
 
-                foreach (var argument in node.Arguments.Skip(1))
+                // EF Core requires at least one setter, so none means a shape the reader does not know, as a new EF
+                // Core version could bring. Fail closed rather than let its setters through unchecked.
+                if (selectors.Count == 0)
                 {
-                    setters.Visit(argument);
+                    var source = node.Method.IsGenericMethod ? node.Method.GetGenericArguments()[0] : typeof(object);
+                    Reject(source, $"Tenantry cannot read the setters of this ExecuteUpdate on EF Core " +
+                                   $"{typeof(DbContext).Assembly.GetName().Version?.ToString(2)}, so it cannot rule out " +
+                                   "that one sets TenantId. Write them as SetProperty calls; if they are, this EF Core " +
+                                   "version may be newer than your Tenantry version supports.");
                 }
 
-                foreach (var selector in setters.Selectors)
+                foreach (var selector in selectors)
                 {
                     var element = ElementOf(node.Arguments[0], selector.Parameters[0].Type);
                     CheckSetter(Substitution.Apply(selector, element));
@@ -216,20 +230,20 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
                 {
                     switch (call.Method.Name)
                     {
-                        case nameof(Queryable.Select) when AsLambda(call.Arguments[1]) is { Parameters.Count: 1 } projection:
+                        case nameof(Queryable.Select) when ExecuteUpdateSetterReader.AsLambda(call.Arguments[1]) is { Parameters.Count: 1 } projection:
                             return Substitution.Apply(projection, ElementOf(call.Arguments[0], projection.Parameters[0].Type));
 
                         case nameof(Queryable.Join) when call.Arguments.Count == 5 &&
-                                                         AsLambda(call.Arguments[4]) is { Parameters.Count: 2 } result:
+                                                         ExecuteUpdateSetterReader.AsLambda(call.Arguments[4]) is { Parameters.Count: 2 } result:
                             return Substitution.Apply(
                                 result,
                                 ElementOf(call.Arguments[0], result.Parameters[0].Type),
                                 ElementOf(call.Arguments[1], result.Parameters[1].Type));
 
-                        case nameof(Queryable.SelectMany) when AsLambda(call.Arguments[1]) is { Parameters.Count: 1 } collection:
+                        case nameof(Queryable.SelectMany) when ExecuteUpdateSetterReader.AsLambda(call.Arguments[1]) is { Parameters.Count: 1 } collection:
                             var outer = ElementOf(call.Arguments[0], collection.Parameters[0].Type);
 
-                            if (call.Arguments.Count == 3 && AsLambda(call.Arguments[2]) is { Parameters.Count: 2 } selector)
+                            if (call.Arguments.Count == 3 && ExecuteUpdateSetterReader.AsLambda(call.Arguments[2]) is { Parameters.Count: 2 } selector)
                             {
                                 var inner = ElementOf(Substitution.Apply(collection, outer), selector.Parameters[1].Type);
                                 return Substitution.Apply(selector, outer, inner);
@@ -328,36 +342,6 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
             }
 
             return null;
-        }
-    }
-
-    // Collects the property selector (first argument) of each ExecuteUpdate setter. EF Core 8 and 9 express
-    // setters as SetPropertyCalls<T>.SetProperty(selector, value) calls; EF Core 10 passes an array of
-    // Tuple<LambdaExpression, Expression>(selector, value).
-    private sealed class SetterSelectorCollector : ExpressionVisitor
-    {
-        public List<LambdaExpression> Selectors { get; } = [];
-
-        protected override Expression VisitMethodCall(MethodCallExpression node)
-        {
-            if (node.Method.Name == "SetProperty" && node.Arguments.Count == 2 && AsLambda(node.Arguments[0]) is { } selector)
-            {
-                Selectors.Add(selector);
-            }
-
-            return base.VisitMethodCall(node);
-        }
-
-        protected override Expression VisitNew(NewExpression node)
-        {
-            if (node.Type.IsGenericType &&
-                node.Type.GetGenericTypeDefinition() == typeof(Tuple<,>) &&
-                AsLambda(node.Arguments[0]) is { } selector)
-            {
-                Selectors.Add(selector);
-            }
-
-            return base.VisitNew(node);
         }
     }
 }

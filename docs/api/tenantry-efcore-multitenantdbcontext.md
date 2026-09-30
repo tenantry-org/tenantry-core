@@ -6,7 +6,7 @@ Optional base `DbContext` that automatically applies tenant query filters in `On
 
 This class is a convenience for greenfield projects.
 
-To use: derive from [`MultiTenantDbContext<TKey>`](tenantry-efcore-multitenantdbcontext.md), give your context a constructor that takes only its `DbContextOptions<TContext>`, and call `base.OnModelCreating(modelBuilder)` at the start of your override. The current tenant comes from Tenantry's ambient [`ITenantContext<TKey>`](tenantry-core-itenantcontext.md), resolved from the application service provider, so the same instance serves whichever tenant is active when it runs a query or saves.
+To use: derive from [`MultiTenantDbContext<TKey>`](tenantry-efcore-multitenantdbcontext.md), give your context a constructor that takes only its `DbContextOptions<TContext>`, and call `base.OnModelCreating(modelBuilder)` at the end of your override, after your own configuration. The current tenant comes from Tenantry's ambient [`ITenantContext<TKey>`](tenantry-core-itenantcontext.md), resolved from the application service provider, so the same instance serves whichever tenant is active when it runs a query or saves.
 
 **DbContext pooling is supported.** Register with `AddDbContextPool` or `AddPooledDbContextFactory` and call `options.AddTenantInterceptors(sp)` in the options callback: EF Core does not let [`MultiTenantDbContext<TKey>.OnConfiguring`](tenantry-efcore-multitenantdbcontext.md) change the options of a pooled context, so the self-wiring described below cannot run there, and a pooled context without the interceptors fails on first use instead of saving without isolation.
 
@@ -17,7 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : MultiTenantD
 {
     public DbSet<Order> Orders => Set<Order>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)     {         base.OnModelCreating(modelBuilder); // applies tenant filters         // ... your entity configuration     } }
+    protected override void OnModelCreating(ModelBuilder modelBuilder)     {         // ... your entity configuration         base.OnModelCreating(modelBuilder); // last: applies tenant filters     } }
 
 // Either builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString)); // or, pooled builder.Services.AddDbContextPool<AppDbContext>((sp, options) =>     options.UseSqlServer(connectionString).AddTenantInterceptors(sp)); ```
 

@@ -26,4 +26,8 @@
     <ProjectReference Include="..\..\src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\Conformance.cs" Link="Shared\Conformance.cs" />
+  </ItemGroup>
+
 </Project>

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
@@ -22,6 +21,7 @@ namespace Tenantry.EfCore.Internal;
 ///   <item>Stamps <see cref="ITenantScoped{TKey}.TenantId"/> on all <c>Added</c> entities that implement <see cref="ITenantScoped{TKey}"/>.</item>
 ///   <item>Validates that every <c>Modified</c> or <c>Deleted</c> entity was loaded or attached as, and still belongs to, the current tenant.</item>
 ///   <item>Relies on the <c>TenantId</c> concurrency token added by <c>ApplyTenantFilters</c> so that a forged <c>TenantId</c> matches no row; EF Core then throws <see cref="DbUpdateConcurrencyException"/>.</item>
+///   <item>Checks, once per model, that every tenant-scoped entity type still has the tenant filter and concurrency token (<see cref="TenantModelCheck{TKey}"/>).</item>
 ///   <item>When <see cref="EfCoreIsolationOptions.DetectSpoofedWrites"/> is enabled, also rejects <c>Added</c> entities pre-stamped with a foreign tenant.</item>
 ///   <item>Throws <see cref="TenantIsolationViolationException"/> (before any data is written) if a cross-tenant violation is detected.</item>
 /// </list>
@@ -101,6 +101,8 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
             return;
         }
 
+        TenantModelCheck<TKey>.Verify(context);
+
         if (!tenantContext.HasTenant)
         {
             HandleMissingTenant(context);
@@ -122,17 +124,6 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
                 diagnostics.EntityTypeName,
                 diagnostics.OffendingTenantId,
                 diagnostics.ExpectedTenantId);
-        },
-        entry =>
-        {
-            if (UnenforcedOwnershipWarnings.FirstFor(entry.Metadata.ClrType))
-            {
-                logger.LogWarning(
-                    "Entity '{EntityType}' implements ITenantScoped but its TenantId is not a concurrency token, " +
-                    "so UPDATE and DELETE statements do not check the stored tenant. Call " +
-                    "modelBuilder.ApplyTenantFilters(...) in OnModelCreating",
-                    entry.Metadata.ClrType.Name);
-            }
         });
     }
 
@@ -184,15 +175,4 @@ internal sealed class TenantSaveChangesInterceptor<TKey>(
                 "TenantId. Set TenantId explicitly or save it inside a tenant scope.");
         }
     }
-}
-
-/// <summary>
-/// Entity types already reported as lacking database-enforced ownership, so each is warned about once per process
-/// (not once per tenant key type, as a static field in the generic interceptor would be).
-/// </summary>
-internal static class UnenforcedOwnershipWarnings
-{
-    private static readonly ConcurrentDictionary<Type, byte> Reported = new();
-
-    public static bool FirstFor(Type entityType) => Reported.TryAdd(entityType, 0);
 }

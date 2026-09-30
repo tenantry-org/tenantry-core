@@ -35,9 +35,6 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<string>
     {
         base.OnModelCreating(modelBuilder);
 
-        // Apply global query filters to all ITenantScoped types.
-        modelBuilder.ApplyTenantFilters<string, AppDbContext>(this);
-
         // ── Tenant ────────────────────────────────────────────────────────────
         modelBuilder.Entity<Tenant>(b =>
         {
@@ -89,5 +86,8 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<string>
             b.Property(c => c.Name).HasMaxLength(100);
             b.Property(c => c.Description).HasMaxLength(500);
         });
+
+        // Last, after all other configuration: applies the tenant query filter to every ITenantScoped type.
+        modelBuilder.ApplyTenantFilters<string, AppDbContext>(this);
     }
 }

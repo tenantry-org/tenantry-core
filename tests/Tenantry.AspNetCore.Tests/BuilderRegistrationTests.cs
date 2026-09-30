@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Tenantry.AspNetCore.Extensions;
+using Tenantry.AspNetCore.Internal;
 using Tenantry.AspNetCore.Resolution;
 
 namespace Tenantry.AspNetCore.Tests;
@@ -10,6 +11,29 @@ namespace Tenantry.AspNetCore.Tests;
 /// </summary>
 public sealed class BuilderRegistrationTests
 {
+    [Fact]
+    public void AddTenantry_CalledTwice_KeepsTheFirstCallsSettings()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant =>
+        {
+            tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.UseInMemoryStore([]);
+            tenant.RequireTenantByDefault();
+            tenant.ValidateTenantAccess((_, _) => true);
+        });
+        services.AddTenantry<string>(tenant => tenant.ValidateTenantAccessByClaim("tenants"));
+
+        services.Count(sd => sd.ServiceType == typeof(TenantResolutionOptions<string>)).Should().Be(1);
+        services.Count(sd => sd.ServiceType == typeof(ITenantResolutionMiddlewareConfigurator)).Should().Be(1);
+        services.Count(sd => sd.ImplementationType == typeof(TenantConfigurationValidatorHostedService<string>)).Should().Be(1);
+
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<TenantResolutionOptions<string>>();
+        options.RequireTenantByDefault.Should().BeTrue();
+        options.AccessValidators.Should().HaveCount(2);
+    }
+
     [Fact]
     public void ResolveFromClaim_RegistersClaimTenantResolver()
     {

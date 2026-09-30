@@ -14,9 +14,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not meant to compile is marked ```csharp no-compile. CI also starts every sample in Development, where the
   host validates its registrations, and sends a tenant request to the web ones (`scripts/smoke-samples.sh`).
 - An `.editorconfig`, checked in CI with `dotnet format --verify-no-changes`.
+- The tenant interceptors check each model on its first query and first save, and throw
+  `TenantIsolationViolationException` instead of running either when a tenant-scoped entity type has lost its
+  tenant query filter or its `TenantId` concurrency token. This catches configuration that ran after
+  `ApplyTenantFilters`: on EF Core 8 and 9, a `HasQueryFilter` call after it replaced the tenant filter, so the
+  tenant's queries returned every tenant's rows, and an entity type added after it got no filter at all.
+- Conformance tests for each package: a host that registers the package's features through its public
+  methods, with a scoped store, validates scopes and every registration on build, resolves every Tenantry
+  service and starts.
 
 ### Changed
 
+- **Breaking:** a context with the tenant interceptors (`AddTenantInterceptors`, or a non-pooled
+  `MultiTenantDbContext`) must apply the tenant filters to every tenant-scoped entity type. A context that
+  attached the interceptors but left the filters out, for example to read across tenants, used to save with a
+  warning and read every tenant's rows; it now throws on its first query or save. Apply the filters and use
+  `IgnoreQueryFilters()` for deliberate cross-tenant reads. Only the filter `ApplyTenantFilters` adds is
+  recognised, not a tenant filter written by hand.
+- Call `ApplyTenantFilters`, or `base.OnModelCreating` in a `MultiTenantDbContext`, at the **end** of
+  `OnModelCreating`, after your own configuration. The docs said to call the base first, which is the order
+  that lost the tenant filter (see Added); the guides, samples and XML documentation now show it last.
+- `ApplyTenantFilters` throws `TenantIsolationViolationException` for an entity that implements
+  `ITenantScoped` with a key type other than its own `TKey`, which it used to skip silently, leaving the
+  entity with no isolation at all. The model check rejects such an entity too.
+- `ExecuteUpdate` fails closed on setters the guard cannot read. Their expression shape is undocumented and
+  changes between EF Core versions, so a version whose shape Tenantry does not know is now rejected instead of
+  its setters going unchecked. Tests pin the shape of each supported version (8, 9, 10, and the 11 release
+  candidate).
+- The interceptor no longer logs a warning when `TenantId` is not a concurrency token: the model check throws
+  instead.
 - A tenant store returns every tenant that exists, suspended ones included; whether a tenant may be served
   is decided by an access validator for HTTP requests and by your own code for background work. The docs
   and the `EfCoreWeb` sample hid inactive tenants from the store (a `404`), which made tools that maintain
@@ -26,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A tenant-scoped inheritance hierarchy failed to build its model, because `ApplyTenantFilters` gave the
+  derived types a filter of their own, which EF Core allows only on the root. The root's filter now covers the
+  hierarchy, and a tenant-scoped type whose base type is not tenant-scoped throws a Tenantry error. A
+  tenant-scoped owned type, which also failed to build, gets its `TenantId` concurrency token and is filtered
+  through its owner, which must be tenant-scoped too (otherwise it throws).
+- Calling `AddTenantry` twice registered a second set of resolution options, so the first call's access
+  validators and `RequireTenantByDefault` were silently dropped. Calling `AddEfCoreIsolation` twice ignored the
+  second call's options. Both now configure the options already registered.
 - `MissingTenantBehavior.Allow` said EF Core saves writes without a stamped `TenantId`, and troubleshooting
   said the same of `Warn`; both let updates and deletes through, but a new entity without a `TenantId` still
   throws.

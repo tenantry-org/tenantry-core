@@ -29,6 +29,8 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-core-itenantbuilder.md)
 
+Calling it again configures the same options instance.
+
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant =>
 {

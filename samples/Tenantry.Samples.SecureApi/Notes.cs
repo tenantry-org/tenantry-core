@@ -22,10 +22,11 @@ public sealed class NotesDbContext(DbContextOptions<NotesDbContext> options) : M
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
-
         // Every query is filtered by TenantId, so lead indexes with it.
         modelBuilder.Entity<Note>().HasIndex(note => new { note.TenantId, note.Id });
+
+        // Last, after your own configuration: applies the tenant query filters.
+        base.OnModelCreating(modelBuilder);
     }
 }
 

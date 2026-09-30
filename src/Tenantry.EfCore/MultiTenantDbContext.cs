@@ -22,7 +22,7 @@ namespace Tenantry.EfCore;
 /// <para>
 /// To use: derive from <see cref="MultiTenantDbContext{TKey}"/>, give your context a constructor that takes
 /// only its <see cref="DbContextOptions{TContext}"/>, and call <c>base.OnModelCreating(modelBuilder)</c> at the
-/// start of your override. The current tenant comes from Tenantry's ambient <see cref="ITenantContext{TKey}"/>,
+/// end of your override, after your own configuration. The current tenant comes from Tenantry's ambient <see cref="ITenantContext{TKey}"/>,
 /// resolved from the application service provider, so the same instance serves whichever tenant is active
 /// when it runs a query or saves.
 /// </para>
@@ -49,8 +49,8 @@ namespace Tenantry.EfCore;
 ///
 ///     protected override void OnModelCreating(ModelBuilder modelBuilder)
 ///     {
-///         base.OnModelCreating(modelBuilder); // applies tenant filters
 ///         // ... your entity configuration
+///         base.OnModelCreating(modelBuilder); // last: applies tenant filters
 ///     }
 /// }
 ///
@@ -115,8 +115,10 @@ public abstract class MultiTenantDbContext<TKey> : DbContext, ITenantAwareDbCont
 
     /// <inheritdoc />
     /// <remarks>
-    /// Applies tenant query filters to all <see cref="ITenantScoped{TKey}"/> types.
-    /// Always call <c>base.OnModelCreating(modelBuilder)</c> first in derived classes.
+    /// Applies tenant query filters to all <see cref="ITenantScoped{TKey}"/> types. Call
+    /// <c>base.OnModelCreating(modelBuilder)</c> at the end of your override, after your own configuration:
+    /// an entity type added after it gets no tenant filter, and a <c>HasQueryFilter</c> call after it can replace the
+    /// tenant filter. The tenant interceptors throw on the first query or save of such a model.
     /// </remarks>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

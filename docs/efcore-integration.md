@@ -86,7 +86,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.ApplyTenantFilters<Guid, AppDbContext>(this);
+        // … your entity configuration, including your own query filters
+        modelBuilder.ApplyTenantFilters<Guid, AppDbContext>(this); // last
     }
 }
 ```
@@ -103,14 +104,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);   // implements ITenantAwareDbContext + applies filters
-        // … your entity configuration
+        // … your entity configuration, including your own query filters
+        base.OnModelCreating(modelBuilder);   // last: applies the tenant filters
     }
 }
 ```
 
-The base class implements `ITenantAwareDbContext<TKey>` and calls `ApplyTenantFilters` for you. Always
-call `base.OnModelCreating(modelBuilder)` **first**.
+The base class implements `ITenantAwareDbContext<TKey>` and calls `ApplyTenantFilters` for you. Call
+`base.OnModelCreating(modelBuilder)` **last**, after your own configuration (see
+[Combining with your own query filters](#combining-with-your-own-query-filters)).
 
 Either way, the context only ever *reads* the tenant, through `ITenantContext<TKey>` (never
 `ITenantScope<TKey>`). Tenantry registers it as a singleton over ambient per-request state, so one context
@@ -137,6 +139,13 @@ modelBuilder.Entity<Order>().HasIndex(o => new { o.TenantId, o.Reference }).IsUn
 So a plain `db.Orders.ToListAsync()` returns only the current tenant's rows — you never write
 `Where(o => o.TenantId == …)` by hand. Entities without `ITenantScoped<TKey>` are untouched and remain
 global.
+
+In an inheritance hierarchy, EF Core filters through the root entity type, so the root's tenant filter
+covers the derived types; a tenant-scoped type whose base entity type is not tenant-scoped throws
+`TenantIsolationViolationException`. EF Core reads an owned type's rows only through its owner and does not
+let it have a filter of its own, so a tenant-scoped owned type needs a tenant-scoped owner (otherwise it
+throws); its `TenantId` is still a concurrency token. An entity that implements `ITenantScoped` with a key
+type other than the one in use also throws, because nothing would isolate it.
 
 ### Fail-closed behaviour
 
@@ -168,9 +177,25 @@ execution anyway, so they are not affected.
 ### Combining with your own query filters
 
 `ApplyTenantFilters` is idempotent and combines the tenant filter with any filter you have already
-configured on an entity (with logical AND). On **EF Core 10+** it uses *keyed* query filters so the
-tenant filter is registered independently of yours; on earlier versions it merges the expressions. You
-can configure your own soft-delete or status filters normally and the tenant filter is added on top.
+configured on an entity (with logical AND). On **EF Core 10+** it adds a *named* query filter, registered
+independently of your named filters; on earlier versions, and with an unnamed filter on EF Core 10, it
+merges the expressions.
+
+Call it (or `base.OnModelCreating` in a `MultiTenantDbContext`) **at the end of `OnModelCreating`**,
+after your own configuration:
+
+- An entity type added after it gets no tenant filter.
+- A `HasQueryFilter` call after it can replace the tenant filter: before EF Core 10 any call does, and on EF
+  Core 10 an unnamed one does when `ApplyTenantFilters` merged the tenant filter into your unnamed filter
+  (otherwise it fails the model build).
+
+The tenant interceptors check the model on its first query and its first save. If a tenant-scoped entity
+type has lost its tenant filter or its `TenantId` concurrency token, they throw
+`TenantIsolationViolationException` instead of running the query or the save, which would otherwise read
+every tenant's rows. Only the filter `ApplyTenantFilters` adds counts: a tenant filter written by hand, or
+one a model-building convention or `IModelCustomizer` sets after `OnModelCreating`, is not recognised. A
+context that attaches the interceptors must therefore apply the tenant filters; to read across tenants on
+purpose, use `IgnoreQueryFilters()` (see below) rather than leaving the filters out.
 
 ### Bypassing the filter (admin / reporting)
 
@@ -376,11 +401,11 @@ access), add row-level security policies in the database as well, or use a datab
 |-----------|-----------|-----------|
 | LINQ queries | Yes | The query filter limits results to the current tenant; with no tenant they match nothing. |
 | `SaveChanges` insert, update, delete | Yes | Inserts are stamped; updates and deletes must belong to the current tenant, checked in memory and in the SQL `WHERE` clause. Without a tenant, `OnMissingTenant` applies. |
-| `ExecuteUpdate`, `ExecuteDelete` | Yes | The query filter limits affected rows to the current tenant; with no tenant they affect nothing. `ExecuteUpdate` may not set `TenantId`: when the query is compiled, a guard resolves each setter the way EF Core does (member access or `EF.Property`, through casts and through `Select`, `Join` and `SelectMany` projections) and throws `TenantIsolationViolationException` if it lands on `TenantId`. It fails closed on a setter it cannot resolve, such as one through a `GroupBy` projection or an `EF.Property` name it cannot read. It does not see a second property mapped to the `TenantId` column. |
+| `ExecuteUpdate`, `ExecuteDelete` | Yes | The query filter limits affected rows to the current tenant; with no tenant they affect nothing. `ExecuteUpdate` may not set `TenantId`: when the query is compiled, a guard resolves each setter the way EF Core does (member access or `EF.Property`, through casts and through `Select`, `Join` and `SelectMany` projections) and throws `TenantIsolationViolationException` if it lands on `TenantId`. It fails closed on a setter it cannot resolve, such as one through a `GroupBy` projection or an `EF.Property` name it cannot read, and on setters it cannot read at all, as a new EF Core version could bring. It does not see a second property mapped to the `TenantId` column. |
 | `IgnoreQueryFilters()` | No, by design | Removes the tenant filter from that query, including `ExecuteUpdate`/`ExecuteDelete`, which then affect **every** tenant. Treat it as a privileged operation. |
 | Raw SQL (`FromSql`, `SqlQuery`, `ExecuteSql`) | No | Neither the filter nor the interceptors see raw SQL. Add the tenant predicate yourself. |
 | Pooled contexts | Yes | Each use reads the tenant active at that moment; see [DbContext pooling](#dbcontext-pooling). |
-| Other `DbContext` instances | No | Contexts created without `AddTenantInterceptors` (or not deriving from `MultiTenantDbContext`) get no write isolation. The interceptor logs a warning when a tenant-scoped entity's `TenantId` is not a concurrency token, which means `ApplyTenantFilters` was not called. |
+| Other `DbContext` instances | No | Contexts created without `AddTenantInterceptors` (or not deriving from `MultiTenantDbContext`) get no write isolation, and nothing checks that their model has the tenant filters. With the interceptors, a model missing a filter or the `TenantId` concurrency token throws on its first query or save. |
 
 ## Migrations
 

@@ -3,6 +3,8 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Tenantry.Core;
+using Tenantry.Core.Exceptions;
+using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Extensions;
 
@@ -53,7 +55,22 @@ public static class TenantModelBuilderExtensions
     /// <c>ITenantContext&lt;TKey&gt;</c>. This method is idempotent and combines the tenant
     /// filter with any existing query filters.
     /// </para>
+    /// <para>
+    /// Call it at the end of <c>OnModelCreating</c>, after your own configuration: an entity type added after it
+    /// gets no tenant filter, and a <c>HasQueryFilter</c> call after it can replace the tenant filter (or, on EF Core
+    /// 10, fail the model build). Tenantry's interceptors check the model on its first query and save, and throw
+    /// <see cref="TenantIsolationViolationException"/> if any tenant-scoped entity type has lost its filter. Only the
+    /// filter this method adds counts, not one written by hand.
+    /// </para>
+    /// <para>
+    /// An owned type gets no filter of its own (EF Core reads owned rows only through their owner), so a
+    /// tenant-scoped owned type needs a tenant-scoped owner. Its <c>TenantId</c> is still made a concurrency token.
+    /// </para>
     /// </remarks>
+    /// <exception cref="TenantIsolationViolationException">
+    /// An entity type implements <see cref="ITenantScoped{TKey}"/> with a key type other than
+    /// <typeparamref name="TKey"/>, derives from an entity type that is not tenant-scoped, or is owned by one.
+    /// </exception>
     [RequiresDynamicCode("Expression tree construction requires dynamic code generation.")]
     [RequiresUnreferencedCode("Iterates model entity types and accesses members by name.")]
     public static void ApplyTenantFilters<TKey, TContext>(
@@ -67,12 +84,39 @@ public static class TenantModelBuilderExtensions
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (!typeof(ITenantScoped<TKey>).IsAssignableFrom(entityType.ClrType))
+            if (!TenantScopedTypes.IsTenantScoped(entityType.ClrType))
             {
                 continue;
             }
 
+            TenantScopedTypes.ThrowIfOtherKeyType<TKey>(entityType.ClrType);
             MarkTenantIdAsConcurrencyToken(entityType);
+
+            // EF Core reads an owned type's rows only through its owner and does not let it have a filter of its
+            // own, so the owner's tenant filter must cover it.
+            if (entityType.IsOwned())
+            {
+                TenantScopedTypes.ThrowIfOwnerIsNotTenantScoped<TKey>(entityType);
+                continue;
+            }
+
+            // EF Core filters an inheritance hierarchy through its root type, so the root's tenant filter covers
+            // the derived types.
+            if (entityType.BaseType is not null)
+            {
+                var rootType = entityType.GetRootType().ClrType;
+
+                if (!typeof(ITenantScoped<TKey>).IsAssignableFrom(rootType))
+                {
+                    throw new TenantIsolationViolationException(
+                        entityType.ClrType.Name,
+                        $"Entity '{entityType.ClrType.Name}' is tenant-scoped but its base entity type " +
+                        $"'{rootType.Name}' is not. EF Core applies query filters to the root of an inheritance " +
+                        $"hierarchy only, so implement ITenantScoped<{typeof(TKey).Name}> on '{rootType.Name}'.");
+                }
+
+                continue;
+            }
 
             var builder = modelBuilder.Entity(entityType.ClrType);
             var tenantFilter = BuildFilterExpression<TKey, TContext>(entityType.ClrType, context);

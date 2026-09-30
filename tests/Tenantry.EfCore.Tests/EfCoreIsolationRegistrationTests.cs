@@ -61,6 +61,22 @@ public sealed class EfCoreIsolationRegistrationTests
     }
 
     [Fact]
+    public void AddEfCoreIsolation_CalledTwice_ConfiguresTheSameOptions()
+    {
+        ServiceCollection services = new();
+        ITenantBuilder<string> builder = new TestTenantBuilder<string>(services);
+
+        builder.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+        builder.AddEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Warn);
+
+        services.Count(sd => sd.ServiceType == typeof(EfCoreIsolationOptions)).Should().Be(1);
+        using var sp = services.BuildServiceProvider();
+        var options = sp.GetRequiredService<EfCoreIsolationOptions>();
+        options.DetectSpoofedWrites.Should().BeTrue();
+        options.OnMissingTenant.Should().Be(MissingTenantBehavior.Warn);
+    }
+
+    [Fact]
     public void AddTenantInterceptors_WithEfCoreIsolationRegistered_AttachesInterceptorToOptions()
     {
         // Exercises TenantInterceptorConfigurator.AddInterceptors (resolves TenantSaveChangesInterceptor

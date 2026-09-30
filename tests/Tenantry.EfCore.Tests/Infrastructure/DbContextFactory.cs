@@ -48,6 +48,18 @@ public static class DbContextFactory
     }
 
     /// <summary>
+    /// Options for any context type on the given connection, with the tenant interceptors attached.
+    /// </summary>
+    public static DbContextOptions<TContext> InterceptorOptions<TContext>(
+        TestTenantContext tenantContext,
+        SqliteConnection connection)
+        where TContext : DbContext =>
+        new DbContextOptionsBuilder<TContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(BuildInterceptor(tenantContext), TenantBulkUpdateGuard<string>.Instance)
+            .Options;
+
+    /// <summary>
     /// Builds a <see cref="TenantSaveChangesInterceptor{TKey}"/> for tests, with default
     /// (<c>Reject</c>) isolation policy unless <paramref name="isolationOptions"/> is supplied.
     /// </summary>

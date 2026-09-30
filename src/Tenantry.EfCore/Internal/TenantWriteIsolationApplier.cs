@@ -11,8 +11,7 @@ internal static class TenantWriteIsolationApplier
     public static void Apply<TKey>(
         IEnumerable<EntityEntry> entries,
         ITenantContext<TKey> tenantContext,
-        Action<IsolationDiagnostics>? onViolation = null,
-        Action<EntityEntry>? onOwnershipNotEnforced = null)
+        Action<IsolationDiagnostics>? onViolation = null)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         if (!tenantContext.HasTenant)
@@ -51,11 +50,6 @@ internal static class TenantWriteIsolationApplier
                     if (!TenantOwnership.IsOwnedBy(tenantEntity.TenantId, currentTenantId))
                     {
                         ThrowViolation(entry, tenantEntity.TenantId, currentTenantId, onViolation);
-                    }
-
-                    if (!TenantOwnership.IsEnforcedByDatabase(entry))
-                    {
-                        onOwnershipNotEnforced?.Invoke(entry);
                     }
 
                     break;

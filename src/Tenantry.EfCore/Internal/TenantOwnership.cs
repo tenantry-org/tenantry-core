@@ -40,14 +40,4 @@ internal static class TenantOwnership
     public static bool IsUnstamped<TKey>(TKey? tenantId)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         tenantId is null or string { Length: 0 } || EqualityComparer<TKey>.Default.Equals(tenantId, default!);
-
-    /// <summary>
-    /// Returns true when the database enforces the stored tenant on <c>UPDATE</c> and <c>DELETE</c> for
-    /// this entry: <c>TenantId</c> is a concurrency token or part of the primary key.
-    /// </summary>
-    public static bool IsEnforcedByDatabase(EntityEntry entry)
-    {
-        var property = entry.Property(TenantIdProperty).Metadata;
-        return property.IsConcurrencyToken || property.IsPrimaryKey();
-    }
 }

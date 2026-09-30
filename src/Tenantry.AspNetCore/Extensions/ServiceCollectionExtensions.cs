@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Tenantry.AspNetCore.Internal;
 using Tenantry.Core.Extensions;
 
@@ -39,10 +40,11 @@ public static class ServiceCollectionExtensions
         // Register core infrastructure (idempotent — safe to call alongside AddTenantry)
         services.AddTenantryCore<TKey>();
 
-        // Register ASP.NET Core specific services
-        services.AddSingleton(new TenantResolutionOptions<TKey>());
+        // Register ASP.NET Core specific services once: a second AddTenantry call configures the same resolution
+        // options, so it adds to the first call's access validators instead of replacing them.
+        services.TryAddSingleton(new TenantResolutionOptions<TKey>());
         services.AddHostedService<TenantConfigurationValidatorHostedService<TKey>>();
-        services.AddSingleton<ITenantResolutionMiddlewareConfigurator>(new TenantResolutionMiddlewareConfigurator<TKey>());
+        services.TryAddSingleton<ITenantResolutionMiddlewareConfigurator>(new TenantResolutionMiddlewareConfigurator<TKey>());
 
         AspNetCoreTenantBuilder<TKey> builder = new(services);
         configure(builder);

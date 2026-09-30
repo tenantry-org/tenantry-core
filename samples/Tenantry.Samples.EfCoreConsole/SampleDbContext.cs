@@ -24,13 +24,13 @@ public sealed class SampleDbContext(
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Always call the base first — it discovers every ITenantScoped<Guid> entity and
-        // applies the per-tenant global query filter.
-        base.OnModelCreating(modelBuilder);
-
         modelBuilder.Entity<Order>(order =>
         {
             order.Property(o => o.Description).HasMaxLength(200);
         });
+
+        // Call the base last, after your own configuration: it finds every ITenantScoped<Guid> entity and
+        // applies the per-tenant global query filter.
+        base.OnModelCreating(modelBuilder);
     }
 }

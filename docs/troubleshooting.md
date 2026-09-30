@@ -35,8 +35,10 @@ in order:
 - You probably called `IgnoreQueryFilters()` somewhere (directly, or via a shared queryable helper).
 - The entity does not implement `ITenantScoped<TKey>`, so it is treated as global. If it should be
   isolated, implement the interface (or derive from `TenantScoped<TKey>`).
-- `ApplyTenantFilters` was not called. With Option A you must call it in `OnModelCreating`; with
-  `MultiTenantDbContext<TKey>` you must call `base.OnModelCreating(modelBuilder)`.
+- The context has no tenant interceptors (`.AddTenantInterceptors(sp)`, or a non-pooled
+  `MultiTenantDbContext`), and `ApplyTenantFilters` was not called or ran before configuration that
+  replaced its filter. With the interceptors attached, such a model throws on its first query instead (see
+  below).
 
 ## `TenantId` is not being stamped on insert
 
@@ -60,6 +62,22 @@ one with an explicit wrong id) belongs to a different tenant than the current sc
   per tenant, or `IgnoreQueryFilters()` for reads. `SaveChanges` still validates every write against the
   current scope, but `IgnoreQueryFilters()` combined with `ExecuteUpdate`/`ExecuteDelete` affects every
   tenant, so treat it as privileged.
+
+## `TenantIsolationViolationException`: "has no tenant query filter" or "is not a concurrency token"
+
+The model check found a tenant-scoped entity type that would not be isolated, and stopped the query or save
+before it ran.
+
+- **No tenant query filter:** call `ApplyTenantFilters` (or `base.OnModelCreating` in a
+  `MultiTenantDbContext`) at the **end** of `OnModelCreating`. An entity type configured after it gets no
+  filter, and a `HasQueryFilter` after it can replace the tenant filter. Only the filter `ApplyTenantFilters`
+  adds counts, not one written by hand or set by a convention or model customizer.
+- **Not a concurrency token:** something after `ApplyTenantFilters` configured `TenantId` with
+  `IsConcurrencyToken(false)`. Remove it: updates and deletes rely on it to match the stored tenant.
+- **"implements ITenantScoped&lt;X&gt;, but the tenant key type here is Y":** the entity uses a different key
+  type from `AddTenantry<Y>` or `ApplyTenantFilters<Y, …>`. Use the same key type everywhere.
+- **"Owned entity … is tenant-scoped but its owner … is not":** EF Core filters owned rows only through their
+  owner, so make the owner tenant-scoped too.
 
 ## Filter uses a stale tenant / leaks across requests
 

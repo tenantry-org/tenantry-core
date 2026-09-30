@@ -16,6 +16,7 @@ public static class TenantBuilderEfCoreExtensions
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="configure">Sets the isolation options, such as what happens to a write without a tenant, or <see langword="null"/> for the defaults.</param>
+    /// <remarks>Calling it again configures the same options instance.</remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt;
@@ -37,13 +38,21 @@ public static class TenantBuilderEfCoreExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        EfCoreIsolationOptions options = new();
+        // The interceptor reads the options at SaveChanges time, so register one instance and configure it in
+        // place: calling this again changes the same options rather than being ignored.
+        var options = builder.Services
+            .FirstOrDefault(d => d.ServiceType == typeof(EfCoreIsolationOptions) && !d.IsKeyedService)
+            ?.ImplementationInstance as EfCoreIsolationOptions;
+
+        if (options is null)
+        {
+            options = new EfCoreIsolationOptions();
+            builder.Services.TryAddSingleton(options);
+        }
+
         configure?.Invoke(options);
 
-        // The resolved options are read by the interceptor at SaveChanges time, so register the
-        // configured instance directly. The spoof validator is cheap and only invoked when
-        // DetectSpoofedWrites is enabled.
-        builder.Services.TryAddSingleton(options);
+        // The spoof validator is cheap and only invoked when DetectSpoofedWrites is enabled.
         builder.Services.TryAddSingleton<StrictIsolationValidator<TKey>>();
         builder.Services.TryAddSingleton<TenantSaveChangesInterceptor<TKey>>();
         builder.Services.TryAddSingleton<ITenantInterceptorConfigurator>(new TenantInterceptorConfigurator<TKey>());
