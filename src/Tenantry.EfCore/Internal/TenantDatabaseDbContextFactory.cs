@@ -33,10 +33,11 @@ internal sealed class TenantDatabaseContexts<
         builder.UseApplicationServiceProvider(services);
 
         // The guard goes first, so a context used under the wrong tenant is rejected before any other interceptor
-        // acts on it (for example, stamping pending inserts with the current tenant).
+        // acts on it (for example, stamping pending inserts with the current tenant). Tenantry's own interceptors come
+        // next, so the application's (an audit log, say) see new entities already stamped.
         builder.AddInterceptors(new TenantDatabaseGuard<TKey>(_tenantContext));
-        configure(services, builder);
         builder.UseTenantry();
+        configure(services, builder);
         _options = builder.Options;
 
         if (pooled)
@@ -50,13 +51,16 @@ internal sealed class TenantDatabaseContexts<
     }
 
     /// <summary>A context connected to the current tenant's database.</summary>
-    /// <param name="services">Provides the services a context that is not pooled takes in its constructor.</param>
+    /// <param name="services">
+    /// For a context that is not pooled, the services it takes in its constructor and its application service
+    /// provider, as with <c>AddDbContext</c>: the scope it is created in, or the root for the factory.
+    /// </param>
     public TContext Create(IServiceProvider services)
     {
         // The connection string first: without a tenant this throws before a context is created.
         var tenant = CurrentTenant();
         var connectionString = _connectionStrings.Get(tenant);
-        return Connect(_pool?.CreateDbContext() ?? _activator!(services, [_options]), tenant, connectionString);
+        return Connect(_pool?.CreateDbContext() ?? New(services), tenant, connectionString);
     }
 
     /// <inheritdoc cref="Create"/>
@@ -64,9 +68,14 @@ internal sealed class TenantDatabaseContexts<
     {
         var tenant = CurrentTenant();
         var connectionString = await _connectionStrings.GetAsync(tenant, cancellationToken);
-        var context = _pool is null ? _activator!(services, [_options]) : await _pool.CreateDbContextAsync(cancellationToken);
+        var context = _pool is null ? New(services) : await _pool.CreateDbContextAsync(cancellationToken);
         return Connect(context, tenant, connectionString);
     }
+
+    // The application service provider is not part of EF Core's internal service provider key, so this reuses the
+    // internal services of the options built above.
+    private TContext New(IServiceProvider services) =>
+        _activator!(services, [new DbContextOptionsBuilder<TContext>(_options).UseApplicationServiceProvider(services).Options]);
 
     private ITenantDescriptor<TKey> CurrentTenant() =>
         _tenantContext.CurrentTenant

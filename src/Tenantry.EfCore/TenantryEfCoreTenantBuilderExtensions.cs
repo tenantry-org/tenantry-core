@@ -79,13 +79,19 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// constructor that takes only its options.
     /// </param>
     /// <param name="poolSize">The most contexts the pool keeps for reuse, when <paramref name="pooled"/>.</param>
-    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <returns>The same builder, without its key type: call methods that need it (such as <c>UseConnectionStrings</c>) first.</returns>
     /// <remarks>
     /// <para>
-    /// A context that is not pooled is created with its options and any other services its constructor needs: the
-    /// scoped <typeparamref name="TContext"/> from its scope, and one from the factory from the root provider, as
-    /// EF Core's <c>AddDbContextFactory</c> does. Creating a context without a current tenant throws
-    /// <see cref="TenantNotResolvedException"/>.
+    /// A context that is not pooled is created with its options and any other services its constructor needs, and
+    /// has them as its application service provider, as with <c>AddDbContext</c>: the scoped
+    /// <typeparamref name="TContext"/> from its scope, and one from the factory from the root provider, as EF Core's
+    /// <c>AddDbContextFactory</c> does. Creating a context without a current tenant throws
+    /// <see cref="TenantNotResolvedException"/>, so <c>dotnet ef</c> needs an <c>IDesignTimeDbContextFactory</c>
+    /// for the context.
+    /// </para>
+    /// <para>
+    /// The options get <c>UseTenantry()</c> before <paramref name="configure"/> runs, so interceptors added there
+    /// (an audit log, say) see new entities already stamped with their tenant.
     /// </para>
     /// <para>
     /// The scoped <typeparamref name="TContext"/> reads the connection string synchronously, so it needs

@@ -18,14 +18,12 @@ public sealed class UseTenantryRegistrationTests : IDisposable
     public void Dispose() => _connection.Dispose();
 
     [Fact]
-    public void WithoutConfigureEfCoreIsolation_SavesUseTheRejectPolicy()
+    public async Task WithoutConfigureEfCoreIsolation_SavesUseTheRejectPolicy()
     {
-        ServiceCollection services = new();
+        await using var db = await DbContextFactory.CreateContextAsync(TestTenantContext.Empty().AsNone(), _connection);
+        db.Orders.Add(new Order { Description = "no tenant" });
 
-        services.AddTenantry<string>();
-
-        services.Should().NotContain(descriptor => descriptor.ServiceType == typeof(EfCoreIsolationOptions));
-        new EfCoreIsolationOptions().OnMissingTenant.Should().Be(MissingTenantBehavior.Reject);
+        await db.Awaiting(context => context.SaveChangesAsync()).Should().ThrowAsync<TenantNotResolvedException>();
     }
 
     [Fact]

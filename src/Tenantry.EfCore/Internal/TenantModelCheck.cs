@@ -14,10 +14,9 @@ namespace Tenantry.EfCore.Internal;
 /// <para>
 /// <c>UseTenantry()</c>'s model customizer gives each tenant-owned entity type the tenant query filter after all of
 /// the context's own configuration, and makes its <c>TenantId</c> a concurrency token. Something that runs after it
-/// could still undo that: another <c>IModelCustomizer</c> put in its place by a custom internal service provider, a
-/// convention, or a compiled model built without it. The tenant's queries would then return every tenant's rows. The
-/// query and save interceptors check the model they are about to use, so such a model fails on its first query or
-/// save instead.
+/// could still undo that, such as a model-building convention, or a model it never built (a compiled model). The
+/// tenant's queries would then return every tenant's rows. The query and save interceptors check the model they are
+/// about to use, so such a model fails on its first query or save instead.
 /// </para>
 /// <para>
 /// A filter passes when it is the tenant filter or contains it as one of its <c>&amp;&amp;</c> operands, as when it
@@ -77,9 +76,9 @@ internal static class TenantModelCheck
                 TenantIsolationViolationKind.ModelConfiguration,
                 clrType.Name,
                 $"Tenant-owned entity '{clrType.Name}' has no tenant query filter, so its queries could return every " +
-                "tenant's rows. UseTenantry() adds it after OnModelCreating, so something replaced it later: an " +
-                "IModelCustomizer in a custom internal service provider, a convention, or a compiled model built " +
-                "without it. Let UseTenantry() build the model.");
+                "tenant's rows. UseTenantry() adds it after OnModelCreating, so something replaced it later, such as a " +
+                "model-building convention, or the model is one UseTenantry() did not build (a compiled model, which " +
+                "it does not support).");
         }
 
         // Keyless entity types are never updated or deleted.
@@ -90,7 +89,7 @@ internal static class TenantModelCheck
                 clrType.Name,
                 $"The TenantId of tenant-owned entity '{clrType.Name}' is not a concurrency token, so UPDATE and " +
                 "DELETE statements would not check the tenant a row is stored under. UseTenantry() makes it one; " +
-                "do not configure TenantId with IsConcurrencyToken(false) in a convention or compiled model.");
+                "do not configure TenantId with IsConcurrencyToken(false) in a convention.");
         }
     }
 

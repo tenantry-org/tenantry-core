@@ -136,6 +136,45 @@ public sealed class TenantModelCheckTests : IDisposable
     }
 
     [Fact]
+    public void ExplicitlyImplementedTenantId_FailsToBuildTheModel()
+    {
+        var db = new ExplicitTenantIdContext(DbContextFactory.Options<ExplicitTenantIdContext>(_tenant, _connection));
+
+        db.Invoking(context => context.Model)
+            .Should().Throw<TenantIsolationViolationException>()
+            .WithMessage("Tenant-owned entity 'ExplicitItem' has no mapped public property 'TenantId' of type String*")
+            .Where(e => e.Kind == TenantIsolationViolationKind.ModelConfiguration);
+    }
+
+#if EFCORE10_OR_GREATER
+    [Fact]
+    public void OwnFilterNamedLikeTheTenantFilter_FailsToBuildTheModel()
+    {
+        var db = new ReservedFilterNameContext(DbContextFactory.Options<ReservedFilterNameContext>(_tenant, _connection));
+
+        db.Invoking(context => context.Model)
+            .Should().Throw<TenantIsolationViolationException>()
+            .WithMessage("*query filter named 'Tenantry.Tenant'*Give your filter another name*");
+    }
+#endif
+
+    [Fact]
+    public void UseInternalServiceProvider_IsRefused()
+    {
+        var internalServices = new ServiceCollection().AddEntityFrameworkSqlite().BuildServiceProvider();
+        var options = new DbContextOptionsBuilder<ItemsOnlyContext>()
+            .UseSqlite(_connection)
+            .UseInternalServiceProvider(internalServices)
+            .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant))
+            .UseTenantry()
+            .Options;
+
+        // On EF Core 10, EF Core's own check of the singleton bulk guard may throw first; both name UseInternalServiceProvider.
+        FluentActions.Invoking(() => new ItemsOnlyContext(options).Model)
+            .Should().Throw<InvalidOperationException>().WithMessage("*UseInternalServiceProvider*");
+    }
+
+    [Fact]
     public void EntitiesWithTwoTenantKeyTypes_FailToBuildTheModel()
     {
         var db = new TwoKeyTypesContext(DbContextFactory.Options<TwoKeyTypesContext>(_tenant, _connection));
@@ -349,6 +388,16 @@ public sealed class TenantModelCheckTests : IDisposable
         public int TenantId { get; set; }
     }
 
+    public sealed class ExplicitItem : ITenantEntity<string>
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string OrganizationId { get; set; } = string.Empty;
+
+        string ITenantEntity<string>.TenantId => OrganizationId;
+    }
+
     public sealed class GuidItem : ITenantEntity<Guid>
     {
         public int Id { get; set; }
@@ -476,6 +525,21 @@ public sealed class TenantModelCheckTests : IDisposable
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
             modelBuilder.Entity<Item>().Property(item => item.TenantId).IsConcurrencyToken(false);
     }
+
+    private sealed class ExplicitTenantIdContext(DbContextOptions<ExplicitTenantIdContext> options) : DbContext(options)
+    {
+        public DbSet<ExplicitItem> Items => Set<ExplicitItem>();
+    }
+
+#if EFCORE10_OR_GREATER
+    private sealed class ReservedFilterNameContext(DbContextOptions<ReservedFilterNameContext> options) : DbContext(options)
+    {
+        public DbSet<Item> Items => Set<Item>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<Item>().HasQueryFilter(TenantryQueryFilters.Tenant, item => item.Name != "");
+    }
+#endif
 
     private sealed class TwoKeyTypesContext(DbContextOptions<TwoKeyTypesContext> options) : DbContext(options)
     {

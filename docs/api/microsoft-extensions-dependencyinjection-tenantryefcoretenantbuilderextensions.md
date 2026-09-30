@@ -29,13 +29,15 @@ Parameters:
 - `pooled` `bool`: Whether to reuse context instances from a pool, as `AddDbContextPool` does. A pooled context needs a constructor that takes only its options.
 - `poolSize` `int`: The most contexts the pool keeps for reuse, when `pooled`.
 
-Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder` for chaining.
+Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same builder, without its key type: call methods that need it (such as `UseConnectionStrings`) first.
 
 Exceptions:
 
 - `InvalidOperationException`: No [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) is registered yet, or `TContext` is already registered this way.
 
-A context that is not pooled is created with its options and any other services its constructor needs: the scoped `TContext` from its scope, and one from the factory from the root provider, as EF Core's `AddDbContextFactory` does. Creating a context without a current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md).
+A context that is not pooled is created with its options and any other services its constructor needs, and has them as its application service provider, as with `AddDbContext`: the scoped `TContext` from its scope, and one from the factory from the root provider, as EF Core's `AddDbContextFactory` does. Creating a context without a current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), so `dotnet ef` needs an `IDesignTimeDbContextFactory` for the context.
+
+The options get `UseTenantry()` before `configure` runs, so interceptors added there (an audit log, say) see new entities already stamped with their tenant.
 
 The scoped `TContext` reads the connection string synchronously, so it needs [`TenantConnectionStringOptions<TKey>.GetConnectionString`](tenantry-tenantconnectionstringoptions.md). With only an asynchronous delegate, use `IDbContextFactory<TContext>.CreateDbContextAsync`.
 

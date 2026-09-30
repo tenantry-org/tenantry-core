@@ -25,8 +25,8 @@ There is one `AddTenantry`, in `Tenantry.Core`, for every kind of host. It regis
 (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`, `ITenantScopeFactory<TKey>`, `ITenantStoreAccessor<TKey>`),
 and its builder, `ITenantBuilder<TKey>`, gains the ASP.NET Core methods above when `Tenantry.AspNetCore` is
 referenced; the first one you call registers the middleware's services. Every builder method returns the
-builder, so calls chain in any order (with one exception: `UseResolver<TResolver>()` returns the builder without
-its key type, so call it last). `AddTenantry` can be called again, from another part of the application, to add
+builder, so calls chain in any order (with two exceptions: `UseResolver<TResolver>()`, and Tenantry.EfCore's
+`AddDbContextPerTenantDatabase<TContext>()`, return the builder without its key type, so call them last). `AddTenantry` can be called again, from another part of the application, to add
 to the same registration.
 
 ### Startup validation

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
@@ -495,12 +496,69 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         RowsIn("acme").Should().Equal("acme:once");
     }
 
+    [Fact]
+    public async Task PoolSize_ReachesThePool()
+    {
+        await using var services = Build(poolSize: 7);
+
+        using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
+        {
+            await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
+
+            db.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()!.MaxPoolSize.Should().Be(pooled ? 7 : null);
+        }
+    }
+
+    [Fact]
+    public async Task ScopedContext_HasItsScopeAsItsApplicationServiceProvider_UnlessPooled()
+    {
+        await using var services = Build();
+        await using var scope = services.GetRequiredService<ITenantScopeFactory<string>>().CreateScope(Acme);
+        var db = scope.ServiceProvider.GetRequiredService<PooledNotesContext>();
+
+        var applicationServices = db.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()!.ApplicationServiceProvider;
+
+        // As with AddDbContext and AddDbContextPool: a pool's options, and so its contexts, are built once.
+        (applicationServices == scope.ServiceProvider).Should().Be(!pooled);
+    }
+
+    [Fact]
+    public async Task InterceptorsAddedInTheConfiguration_SeeNewEntitiesAlreadyStamped()
+    {
+        StampObserver observer = new();
+        await using var services = Build(interceptor: observer);
+
+        using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
+        {
+            await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
+            db.Notes.Add(new PooledNote { Text = "observed" });
+            await db.SaveChangesAsync();
+        }
+
+        observer.TenantIds.Should().Equal("acme");
+    }
+
+    private sealed class StampObserver : SaveChangesInterceptor
+    {
+        public List<string> TenantIds { get; } = [];
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            TenantIds.AddRange(eventData.Context!.ChangeTracker.Entries<PooledNote>().Select(entry => entry.Entity.TenantId));
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
     protected ServiceProvider Build(
         int poolSize = 1024,
         bool asyncOnly = false,
         bool useTenantryToo = false,
         Action<IServiceCollection>? configure = null,
-        bool context = true)
+        bool context = true,
+        IInterceptor? interceptor = null)
     {
         ServiceCollection services = new();
         services.AddLogging();
@@ -526,6 +584,11 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
                     (_, options) =>
                     {
                         options.UseSqlite();
+
+                        if (interceptor is not null)
+                        {
+                            options.AddInterceptors(interceptor);
+                        }
 
                         if (useTenantryToo)
                         {

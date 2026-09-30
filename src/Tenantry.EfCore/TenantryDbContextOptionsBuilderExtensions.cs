@@ -38,9 +38,13 @@ public static class TenantryDbContextOptionsBuilderExtensions
     /// </para>
     /// <para>
     /// Every <see cref="ITenantDbContextOptionsContributor"/> registered in the application service provider
-    /// configures the options here, and every <see cref="ITenantModelContributor"/> the model. Calling this again
-    /// changes nothing. It installs Tenantry's own EF Core model customizer, so the options must not also replace
-    /// <c>IModelCustomizer</c>.
+    /// configures the options here, and every <see cref="ITenantModelContributor"/> the model; without an application
+    /// service provider, none runs. Calling this again changes nothing.
+    /// </para>
+    /// <para>
+    /// It installs Tenantry's own EF Core model customizer, so the options must not also replace
+    /// <c>IModelCustomizer</c>, nor use <c>UseInternalServiceProvider</c>; creating such a context throws. A compiled
+    /// model (<c>dotnet ef dbcontext optimize</c>) is not supported: EF Core compiles no model with query filters.
     /// </para>
     /// </remarks>
     /// <example>

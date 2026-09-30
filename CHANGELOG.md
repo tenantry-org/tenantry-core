@@ -50,6 +50,9 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   pooled or not, connecting each one to the current tenant's database, and checks at registration that
   `UseConnectionStrings` was called. It replaces `AddTenantDbContextPool` and the hand-written non-pooled recipe;
   the pooled variant uses EF Core's public `PooledDbContextFactory` instead of rebuilding EF Core's registration.
+  It applies `UseTenantry()` before your configuration, so your interceptors (an audit log) see new entities
+  stamped, and a context that is not pooled has its scope as its application service provider, as with
+  `AddDbContext`.
 - On EF Core 10 the tenant filter is named `TenantryQueryFilters.Tenant`, so
   `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes it alone. An entity with an unnamed filter of its
   own gets the tenant filter merged into it instead, and Tenantry logs this once per model.
@@ -114,8 +117,11 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   `IgnoreQueryFilters()` for deliberate cross-tenant reads.
 - **Breaking:** a model that Tenantry cannot isolate fails to build, instead of being left unisolated: entities
   that implement `ITenantEntity` with a key type other than the registered one (0.4 skipped them silently), with
-  more than one key type, or a tenant-scoped type whose base type or owner is not tenant-scoped. So does a
-  context that also replaces `IModelCustomizer`, which Tenantry's own customizer would otherwise override.
+  more than one key type, a tenant-scoped type whose base type or owner is not tenant-scoped, a `TenantId` that is
+  not a mapped public property (an explicit interface implementation failed with an `ArgumentException`), and, on
+  EF Core 10, a filter of your own named `TenantryQueryFilters.Tenant`. Creating a context that also replaces
+  `IModelCustomizer`, which Tenantry's own customizer would otherwise override, or uses `UseInternalServiceProvider`,
+  which never gets Tenantry's customizer, throws.
 - `Tenantry.EfCore` depends on `Microsoft.EntityFrameworkCore.Relational` only (it brings
   `Microsoft.EntityFrameworkCore`), and has no API annotated for dynamic code of its own.
 - `ExecuteUpdate` fails closed on setters the guard cannot read. Their expression shape is undocumented and

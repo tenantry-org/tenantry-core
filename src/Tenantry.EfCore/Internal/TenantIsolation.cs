@@ -61,9 +61,6 @@ internal abstract class TenantIsolation
     // A model built at run time needs dynamic code anyway (DbContext's constructors say so), and the key type comes
     // from an ITenantEntity<TKey> the model maps, which has the same constraints as TenantIsolation<TKey>.
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Only reached from a DbContext, which requires dynamic code.")]
-    [UnconditionalSuppressMessage("Trimming", "IL2055", Justification = "The key type satisfies the constraints, as ITenantEntity<TKey> has them too.")]
-    [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "The DynamicDependency keeps the constructor.")]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor, typeof(TenantIsolation<>))]
     private static TenantIsolation Create(Type keyType) =>
         (TenantIsolation)Activator.CreateInstance(typeof(TenantIsolation<>).MakeGenericType(keyType))!;
 
@@ -111,6 +108,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
                 continue;
             }
 
+            ThrowIfTenantIdIsNotMapped(entityType);
             MarkTenantIdAsConcurrencyToken(entityType);
 
             // EF Core reads an owned type's rows only through its owner and does not let it have a filter of its
@@ -151,7 +149,19 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
 #if EFCORE10_OR_GREATER
         // EF Core 10 names filters, so the tenant filter can be removed on its own. It does not allow a named filter
         // beside an unnamed one, though, so then the tenant filter joins the unnamed filter.
-        if (entityType.GetDeclaredQueryFilters().FirstOrDefault(filter => filter.Key is null) is not { Expression: { } unnamed })
+        var declared = entityType.GetDeclaredQueryFilters();
+
+        // The name is Tenantry's: a filter of the application's by that name would be replaced without a trace.
+        if (declared.Any(filter => filter.Key == TenantryQueryFilters.Tenant))
+        {
+            throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.ModelConfiguration,
+                entityType.ClrType.Name,
+                $"Entity '{entityType.ClrType.Name}' has a query filter named '{TenantryQueryFilters.Tenant}', the name of " +
+                "the tenant filter Tenantry adds, which would replace it. Give your filter another name.");
+        }
+
+        if (declared.FirstOrDefault(filter => filter.Key is null) is not { Expression: { } unnamed })
         {
             builder.HasQueryFilter(TenantryQueryFilters.Tenant, tenantFilter);
             return;
@@ -167,6 +177,22 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
         _ = logger;
         builder.HasQueryFilter(entityType.GetQueryFilter() is { } existing ? Combine(existing, tenantFilter) : tenantFilter);
 #endif
+    }
+
+    // The filter reads TenantId as a CLR property, and stamping writes it through EF Core, so it must be a mapped
+    // property of the key type. One implemented explicitly (ITenantEntity<TKey>.TenantId => OrganizationId) is not.
+    private static void ThrowIfTenantIdIsNotMapped(IMutableEntityType entityType)
+    {
+        if (entityType.FindProperty(TenantOwnership.TenantIdProperty) is not { PropertyInfo: not null } tenantId ||
+            tenantId.ClrType != typeof(TKey))
+        {
+            throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.ModelConfiguration,
+                entityType.ClrType.Name,
+                $"Tenant-owned entity '{entityType.ClrType.Name}' has no mapped public property 'TenantId' of type " +
+                $"{typeof(TKey).Name}, so Tenantry can neither filter nor stamp it. Implement ITenantEntity<{typeof(TKey).Name}>.TenantId " +
+                "as a public property (its setter can be private or init-only), and do not ignore it in the model.");
+        }
     }
 
     // Makes EF Core include the stored TenantId in the WHERE clause of every UPDATE and DELETE, so a write can only

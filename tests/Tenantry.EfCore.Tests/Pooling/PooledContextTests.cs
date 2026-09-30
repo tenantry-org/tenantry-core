@@ -157,22 +157,55 @@ public sealed class PooledContextTests : IDisposable
     }
 
     [Fact]
-    public async Task ContextWithoutTenantry_ExplainsHowToRegisterIt()
+    public async Task ContextWithoutTenantry_FailsToBuildItsModel_NamingTheRegistration()
     {
         ServiceCollection collection = new();
-        collection.AddDbContext<PooledOrdersContext>(options => options.UseSqlite(_connectionString).UseTenantry());
+        collection.AddDbContext<UnregisteredOrdersContext>(options => options.UseSqlite(_connectionString).UseTenantry());
         await using var services = collection.BuildServiceProvider();
         await using var scope = services.CreateAsyncScope();
 
-        var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
+        // A context type no other test uses, so this builds its model.
+        scope.ServiceProvider.GetRequiredService<UnregisteredOrdersContext>().Invoking(db => db.Model)
+            .Should().Throw<InvalidOperationException>().WithMessage("*ITenantEntity<String>*not registered*AddTenantry<String>*");
+    }
 
-        // Building the model throws, and so does every query and save, as EF Core may already have this context
-        // type's model from another application in the process (another test here).
+    [Fact]
+    public async Task ContextWithoutTenantry_WhoseModelAnotherApplicationBuilt_FailsOnQueryAndSave()
+    {
+        // EF Core caches a context type's model across applications in the process.
+        ServiceCollection registered = new();
+        registered.AddTenantry<string>();
+        registered.AddDbContext<SharedModelOrdersContext>(options => options.UseSqlite(_connectionString).UseTenantry());
+        await using (var services = registered.BuildServiceProvider())
+        await using (var scope = services.CreateAsyncScope())
+        {
+            _ = scope.ServiceProvider.GetRequiredService<SharedModelOrdersContext>().Model;
+        }
+
+        ServiceCollection unregistered = new();
+        unregistered.AddDbContext<SharedModelOrdersContext>(options => options.UseSqlite(_connectionString).UseTenantry());
+        await using var provider = unregistered.BuildServiceProvider();
+        await using var unregisteredScope = provider.CreateAsyncScope();
+        var db = unregisteredScope.ServiceProvider.GetRequiredService<SharedModelOrdersContext>();
+
         await db.Awaiting(context => context.Orders.ToListAsync())
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("*ITenantEntity<String>*not registered*AddTenantry<String>*");
-        db.Orders.Add(new Order { Description = "unisolated" });
-        await db.Awaiting(context => context.SaveChangesAsync())
+        await db.Awaiting(context =>
+            {
+                context.Orders.Add(new Order { Description = "unisolated" });
+                return context.SaveChangesAsync();
+            })
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("*ITenantEntity<String>*not registered*AddTenantry<String>*");
+    }
+
+    private sealed class UnregisteredOrdersContext(DbContextOptions<UnregisteredOrdersContext> options) : DbContext(options)
+    {
+        public DbSet<Order> Orders => Set<Order>();
+    }
+
+    private sealed class SharedModelOrdersContext(DbContextOptions<SharedModelOrdersContext> options) : DbContext(options)
+    {
+        public DbSet<Order> Orders => Set<Order>();
     }
 
     private ServiceProvider BuildServices(bool pooledFactory)

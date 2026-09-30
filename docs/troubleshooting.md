@@ -69,9 +69,8 @@ to a different tenant than the current one. The exception's `Kind` is `EntityWri
 
 The model check found a tenant-scoped entity type that would not be isolated, and stopped the query or save
 before it ran. `UseTenantry()` adds the tenant filter and the concurrency token after `OnModelCreating`, so your
-own configuration cannot remove them; something that runs after it did: an `IModelCustomizer` put in place
-through a custom internal service provider (`UseInternalServiceProvider`), a model-building convention, or a
-compiled model (`dotnet ef dbcontext optimize`) built without them. Let `UseTenantry()` build the model.
+own configuration cannot remove them; something that runs after it did, such as a model-building convention, or
+the model is one `UseTenantry()` did not build: a compiled model (`UseModel`), which it does not support.
 
 ## The model fails to build with `TenantIsolationViolationException` or "Tenantry is not registered"
 
@@ -86,9 +85,29 @@ compiled model (`dotnet ef dbcontext optimize`) built without them. Let `UseTena
   root, so make the root tenant-owned too.
 - **"Owned entity … is tenant-owned but its owner … is not":** EF Core filters owned rows only through their
   owner, so make the owner tenant-owned too.
+- **"has no mapped public property 'TenantId'":** `TenantId` is implemented explicitly, not mapped, or of another
+  type. Make it a public property of the key type; its setter can be private or init-only.
+- **"has a query filter named 'Tenantry.Tenant'"** (EF Core 10): that name is the tenant filter's. Name your filter
+  something else.
+
+## Creating the context fails with "replaces EF Core's IModelCustomizer" or "UseInternalServiceProvider"
+
+`UseTenantry()` adds the tenant filters through its own model customizer, and EF Core checks the options when a
+context is created:
+
 - **"This context replaces EF Core's IModelCustomizer":** the options also call
   `ReplaceService<IModelCustomizer, …>()`. Move that configuration into `OnModelCreating` or an
   `ITenantModelContributor`.
+- **"cannot be used with UseInternalServiceProvider"** (on EF Core 10, possibly EF Core's own error about
+  `ISingletonInterceptor` services): EF Core adds no extension's services to an internal service provider you
+  build. Remove `UseInternalServiceProvider`.
+
+## A `DbUpdateConcurrencyException` handler shows another tenant's data
+
+A write whose key belongs to another tenant matches no row (the stored `TenantId` is part of the `WHERE` clause),
+so EF Core throws `DbUpdateConcurrencyException`. `entry.GetDatabaseValues()` and `entry.Reload()` then read the row
+by its key **without** query filters, so they return the other tenant's values. Do not show a tenant-owned
+entity's database values to the caller from such a handler; treat the conflict as "not found" instead.
 
 ## "has no application service provider"
 
@@ -117,8 +136,9 @@ automatic; in a custom pipeline, ensure `UseRouting()` precedes `UseTenantry()`.
 
 ## Subdomain resolution returns null on localhost
 
-`ResolveFromSubdomain` requires at least three dot-separated host segments, so `localhost` and
-`acme.localhost` resolve to `null`. Use header resolution for local development.
+Without a base domain, `ResolveFromSubdomain` requires at least three dot-separated host segments, so `localhost`
+and `acme.localhost` resolve to `null`. Set it for development:
+`tenant.ResolveFromSubdomain(o => o.BaseDomain = "localhost")` resolves `acme.localhost` to `acme`.
 
 ## Background/queued work loses the tenant
 

@@ -28,7 +28,9 @@ Any `DbContext` works, pooled or not, with no base class or interface. Tenantry 
 
 The current tenant is read from the context's application service provider, which `AddDbContext`, `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbContextFactory` supply, so Tenantry must be registered there with `AddTenantry` for the tenant key type your entities use. A context without an application service provider (one built by hand without `UseApplicationServiceProvider`) builds its model, for design-time tools, but throws on its first query or save.
 
-Every [`ITenantDbContextOptionsContributor`](tenantry-efcore-itenantdbcontextoptionscontributor.md) registered in the application service provider configures the options here, and every [`ITenantModelContributor`](tenantry-efcore-itenantmodelcontributor.md) the model. Calling this again changes nothing. It installs Tenantry's own EF Core model customizer, so the options must not also replace `IModelCustomizer`.
+Every [`ITenantDbContextOptionsContributor`](tenantry-efcore-itenantdbcontextoptionscontributor.md) registered in the application service provider configures the options here, and every [`ITenantModelContributor`](tenantry-efcore-itenantmodelcontributor.md) the model; without an application service provider, none runs. Calling this again changes nothing.
+
+It installs Tenantry's own EF Core model customizer, so the options must not also replace `IModelCustomizer`, nor use `UseInternalServiceProvider`; creating such a context throws. A compiled model (`dotnet ef dbcontext optimize`) is not supported: EF Core compiles no model with query filters.
 
 ```csharp
 builder.Services.AddDbContext<AppDbContext>(options => options
@@ -58,7 +60,9 @@ Any `DbContext` works, pooled or not, with no base class or interface. Tenantry 
 
 The current tenant is read from the context's application service provider, which `AddDbContext`, `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbContextFactory` supply, so Tenantry must be registered there with `AddTenantry` for the tenant key type your entities use. A context without an application service provider (one built by hand without `UseApplicationServiceProvider`) builds its model, for design-time tools, but throws on its first query or save.
 
-Every [`ITenantDbContextOptionsContributor`](tenantry-efcore-itenantdbcontextoptionscontributor.md) registered in the application service provider configures the options here, and every [`ITenantModelContributor`](tenantry-efcore-itenantmodelcontributor.md) the model. Calling this again changes nothing. It installs Tenantry's own EF Core model customizer, so the options must not also replace `IModelCustomizer`.
+Every [`ITenantDbContextOptionsContributor`](tenantry-efcore-itenantdbcontextoptionscontributor.md) registered in the application service provider configures the options here, and every [`ITenantModelContributor`](tenantry-efcore-itenantmodelcontributor.md) the model; without an application service provider, none runs. Calling this again changes nothing.
+
+It installs Tenantry's own EF Core model customizer, so the options must not also replace `IModelCustomizer`, nor use `UseInternalServiceProvider`; creating such a context throws. A compiled model (`dotnet ef dbcontext optimize`) is not supported: EF Core compiles no model with query filters.
 
 ```csharp
 builder.Services.AddDbContext<AppDbContext>(options => options

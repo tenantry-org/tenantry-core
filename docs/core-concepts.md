@@ -181,8 +181,10 @@ the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITen
 `ITenantStoreAccessor<TKey>`. Inside the `configure` lambda you compose, on `ITenantBuilder<TKey>`, a store
 (`UseInMemoryStore`, `UseStore`), connection strings, EF Core options (`ConfigureEfCoreIsolation`,
 `AddDbContextPerTenantDatabase`, from `Tenantry.EfCore`), and — for ASP.NET Core, from `Tenantry.AspNetCore` —
-resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`. Every builder method
-returns the builder, so they chain.
+resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`.
+Every builder method returns the builder, so they chain; the few that take a type parameter of their own
+(`UseResolver<TResolver>()`, `AddDbContextPerTenantDatabase<TContext>()`) return it without its key type, so they
+go last.
 
 Registration needs no Tenantry `using` directive: `AddTenantry` and the builder methods are extension methods in
 `Microsoft.Extensions.DependencyInjection`. Calling `AddTenantry` again adds to the same registration, and the

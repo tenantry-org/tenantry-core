@@ -26,7 +26,19 @@ internal sealed class TenantryOptionsExtension : IDbContextOptionsExtension
     // silently drop it (or, if it came last, the tenant filters would be lost). Refuse the combination instead.
     public void Validate(IDbContextOptions options)
     {
-        var replaced = options.FindExtension<CoreOptionsExtension>()?.ReplacedServices;
+        var core = options.FindExtension<CoreOptionsExtension>();
+
+        // EF Core applies no extension's services to an internal service provider the application builds itself, so
+        // the tenant filters would be missing (and EF Core 10 also refuses the bulk guard, a singleton interceptor).
+        if (core?.InternalServiceProvider is not null)
+        {
+            throw new InvalidOperationException(
+                "UseTenantry() cannot be used with UseInternalServiceProvider: EF Core does not add Tenantry's model " +
+                "customizer to an internal service provider you build, so the tenant query filters would be missing. " +
+                "Remove UseInternalServiceProvider and let EF Core build its own.");
+        }
+
+        var replaced = core?.ReplacedServices;
 
         if (replaced?.FirstOrDefault(service => service.Key.Item1 == typeof(IModelCustomizer)) is { Value: { } customizer })
         {
