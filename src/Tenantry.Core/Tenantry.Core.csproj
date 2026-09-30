@@ -1,14 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageDescription>Core interfaces and abstractions for Tenantry. Provides ITenantDescriptor, ITenantContext, ITenantStore, ITenantBuilder, and tenant isolation exceptions.</PackageDescription>
+    <PackageDescription>Core of Tenantry: AddTenantry, the ambient tenant (ITenantContext), tenant stores, tenant scopes for background work (ITenantScopeFactory), per-tenant connection strings and the ITenantEntity marker.</PackageDescription>
     <PackageTags>multi-tenancy;aspnetcore;saas;tenantry;tenant-isolation</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
     <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Tenantry.AspNetCore"/>
     <InternalsVisibleTo Include="Tenantry.EfCore.Tests"/>
   </ItemGroup>
 

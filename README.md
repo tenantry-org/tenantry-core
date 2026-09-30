@@ -18,12 +18,10 @@ pipeline. You pick the tenant key type, how tenants are resolved, and where they
 Tenantry wires the isolation in.
 
 ```csharp
-builder.Services.AddTenantry<Guid>(tenant =>
-{
-    tenant.ResolveFromHeader("X-Tenant-Id");                          // where the tenant comes from
-    tenant.UseInMemoryStore(tenants);                                 // where tenants are defined
-    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true); // how data is isolated
-});
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromHeader("X-Tenant-Id")   // where the tenant comes from
+    .UseInMemoryStore(tenants)          // where tenants are defined
+    .AddEfCoreIsolation());             // how data is isolated
 ```
 
 ## Why Tenantry?
@@ -35,14 +33,15 @@ builder.Services.AddTenantry<Guid>(tenant =>
   `DbContext` via EF Core interceptors and `ApplyTenantFilters` — no base class required. An optional
   `MultiTenantDbContext<TKey>` base class is provided for greenfield convenience.
 - **Fails closed.** When no tenant is resolved, query filters match nothing rather than leaking every
-  tenant's rows. Updates and deletes of another tenant's rows are rejected before saving, and the
-  stored tenant is also part of every `UPDATE`/`DELETE` statement, so a forged key matches nothing.
+  tenant's rows. New rows that name another tenant, and updates and deletes of another tenant's rows, are
+  rejected before saving, and the stored tenant is also part of every `UPDATE`/`DELETE` statement, so a forged
+  key matches nothing.
   Tenant-scoped writes without a tenant context are rejected by default (`OnMissingTenant`).
   Isolation is enforced by EF Core, not the database: raw SQL and `IgnoreQueryFilters()` are unisolated
   ([what is and isn't isolated](docs/efcore-integration.md#what-is-and-isnt-isolated)).
-- **HTTP and beyond.** `AddTenantry` covers ASP.NET Core (resolution middleware, access validation,
-  endpoint metadata). `AddTenantryCore` brings the same isolation to console apps, worker services,
-  and desktop UIs with no web stack.
+- **HTTP and beyond.** One `AddTenantry` serves ASP.NET Core (resolution middleware, access validation,
+  endpoint metadata, from `Tenantry.AspNetCore`) and brings the same isolation to console apps, worker
+  services and desktop UIs with no web stack.
 - **Modern .NET.** Built for .NET 10, with .NET 11 added when it ships; .NET 8 and 9 are supported as
   legacy until 10 November 2027 ([compatibility](docs/compatibility.md)). The core and ASP.NET Core packages are trim- and
   Native-AOT-compatible (see [AOT & trimming](#aot--trimming)).
@@ -97,8 +96,7 @@ API, with the steps to update in the [changelog](CHANGELOG.md).
 > they belong to the tenant they select, as in the [`SecureApi` sample](samples/Tenantry.Samples.SecureApi).
 
 ```csharp
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
+using Tenantry;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -142,14 +140,11 @@ There is no request to resolve a tenant from, so you open a tenant scope around 
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 
-builder.Services.AddTenantryCore<Guid>(tenant =>
-{
-    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
-});
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .UseStore<EfCoreTenantStore>()
+    .AddEfCoreIsolation());
 
 // …later, in a hosted service (inject ITenantScopeFactory<Guid> scopes):
 var acme = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" };
@@ -202,7 +197,7 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 | [Tenant resolution](docs/tenant-resolution.md) | Header, subdomain, route, claim, query-string, and custom resolvers |
 | [Access control](docs/access-control.md) | Requiring tenants, access validators, claim-based validation |
 | [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
-| [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantryCore` in console apps, workers, and background jobs |
+| [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantry` in console apps, workers, and background jobs |
 | [AOT & trimming](docs/aot-and-trimming.md) | What is supported, per package, and why |
 | [Compatibility](docs/compatibility.md) | Supported .NET and EF Core versions, databases, and dependency ranges |
 | [Troubleshooting](docs/troubleshooting.md) | Common pitfalls and how to diagnose them |
@@ -214,9 +209,9 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 | [`SecureApi`](samples/Tenantry.Samples.SecureApi) | **Start here for production:** JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation, integration tests |
 | [`Quickstart`](samples/Tenantry.Samples.Quickstart) | Minimal ASP.NET Core setup, resolvers, access validators, endpoint metadata |
 | [`EfCoreWeb`](samples/Tenantry.Samples.EfCoreWeb) | Realistic EF Core app: migrations, DB-backed store, mixed tenanted/global entities, admin queries |
-| [`EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantryCore` and manual scopes |
-| [`DatabasePerTenant`](samples/Tenantry.Samples.DatabasePerTenant) | A database per tenant with `UseConnectionStrings` and `ITenantConnectionStringResolver`, plus worker scopes |
-| [`Aot`](samples/Tenantry.Samples.Aot) | Native-AOT-published ASP.NET Core app |
+| [`EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantry` and manual scopes |
+| [`DatabasePerTenant`](samples/Tenantry.Samples.DatabasePerTenant) | A database per tenant with `UseConnectionStrings` and `CurrentTenantConnectionString`, plus worker scopes |
+| [`Aot`](samples/Tenantry.Samples.Aot) | Native-AOT-published ASP.NET Core app: header, subdomain and custom resolvers, problem details |
 
 ## License
 

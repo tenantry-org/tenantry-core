@@ -22,3 +22,21 @@ Accept: application/json
 ### Orders without tenant header (should fail)
 GET {{host}}/orders
 Accept: application/json
+
+### The current tenant's database
+GET {{host}}/database
+X-Tenant-Id: acme
+
+### Tenant from the subdomain (acme.localhost resolves to localhost)
+GET http://acme.localhost:5268/me
+Accept: application/json
+
+### Tenant from a cookie
+GET {{host}}/me
+Cookie: tenant=globex
+Accept: application/json
+
+### Unknown tenant (problem details, 403: the sample hides which tenants exist)
+GET {{host}}/orders
+X-Tenant-Id: initech
+Accept: application/json

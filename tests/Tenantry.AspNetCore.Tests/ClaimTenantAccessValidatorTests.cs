@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using AwesomeAssertions;
+using Tenantry;
 using Tenantry.AspNetCore.Internal;
-using Tenantry.Core;
 
 namespace Tenantry.AspNetCore.Tests;
 

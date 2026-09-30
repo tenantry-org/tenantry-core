@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
+using Tenantry;
 
 namespace Tenantry.Core.Tests;
 
@@ -16,12 +15,12 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
 
     private ITenantScopeFactory<string> Scopes => _services.GetRequiredService<ITenantScopeFactory<string>>();
 
-    private ITenantScope<string> Ambient => _services.GetRequiredService<ITenantScope<string>>();
+    private ITenantContextSetter<string> Ambient => _services.GetRequiredService<ITenantContextSetter<string>>();
 
     public Task InitializeAsync()
     {
         ServiceCollection services = new();
-        services.AddTenantryCore<string>(tenant => tenant.UseStore(_ => _store));
+        services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store));
         services.AddScoped<DisposalProbe>();
         _services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
 
@@ -45,7 +44,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     [Fact]
     public async Task CreateScope_WithAwaitUsing_RestoresThePreviousTenant()
     {
-        using (Ambient.BeginScope(Tenant("old")))
+        using (Ambient.Use(Tenant("old")))
         {
             await using (Scopes.CreateScope(Tenant("acme")))
             {
@@ -73,7 +72,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     [Fact]
     public void CreateScope_WithUsing_RestoresThePreviousTenant()
     {
-        using (Ambient.BeginScope(Tenant("old")))
+        using (Ambient.Use(Tenant("old")))
         {
             using (Scopes.CreateScope(Tenant("acme")))
             {
@@ -146,7 +145,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     {
         _store.Yield = true;
 
-        using (Ambient.BeginScope(Tenant("old")))
+        using (Ambient.Use(Tenant("old")))
         {
             await Scopes.RunInScopeAsync("acme", async (scope, _) =>
             {
@@ -199,8 +198,43 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
             return Task.CompletedTask;
         });
 
-        (await act.Should().ThrowAsync<TenantNotResolvedException>()).WithMessage("*'missing'*");
+        var thrown = await act.Should().ThrowAsync<TenantNotFoundException>();
+        thrown.WithMessage("*'missing'*").Which.TenantId.Should().Be("missing");
+        thrown.Which.Should().BeAssignableTo<TenantNotResolvedException>("existing handlers of that exception still catch it");
         ran.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RunInScopeAsync_EmptyId_ThrowsWithoutLookingUpTheTenant()
+    {
+        var act = () => Scopes.RunInScopeAsync("", (_, _) => Task.CompletedTask);
+
+        await act.Should().ThrowAsync<ArgumentException>().WithParameterName("tenantId");
+        _store.Lookups.Should().Be(0);
+    }
+
+    [Fact]
+    public void CreateScope_TenantWithTheKeyTypesDefaultId_ThrowsBeforeCreatingTheScope()
+    {
+        var act = () => Scopes.CreateScope(new TenantDescriptor<string> { TenantId = "", Name = "Unnamed" });
+
+        act.Should().Throw<ArgumentException>().WithMessage("*reserves*").WithParameterName("tenant");
+        Ambient.HasTenant.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateScope_ValueTypeKeyWithDefaultId_Throws()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<Guid>(tenant => tenant.UseInMemoryStore([]));
+        await using var provider = services.BuildServiceProvider();
+        var scopes = provider.GetRequiredService<ITenantScopeFactory<Guid>>();
+
+        var create = () => scopes.CreateScope(new TenantDescriptor<Guid> { TenantId = Guid.Empty, Name = "Empty" });
+        var run = () => scopes.RunInScopeAsync(Guid.Empty, (_, _) => Task.CompletedTask);
+
+        create.Should().Throw<ArgumentException>();
+        await run.Should().ThrowAsync<ArgumentException>();
     }
 
     [Fact]
@@ -289,12 +323,12 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     [Fact]
     public async Task DisposingTwice_IsHarmless()
     {
-        using (Ambient.BeginScope(Tenant("old")))
+        using (Ambient.Use(Tenant("old")))
         {
             var scope = Scopes.CreateScope(Tenant("acme"));
             await scope.DisposeAsync();
 
-            using (Ambient.BeginScope(Tenant("later")))
+            using (Ambient.Use(Tenant("later")))
             {
                 await scope.DisposeAsync();
                 scope.Dispose();

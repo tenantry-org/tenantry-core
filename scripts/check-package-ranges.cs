@@ -3,7 +3,9 @@
 //   dotnet run scripts/check-package-ranges.cs -- <directory containing the .nupkg files>
 //
 // The rules:
-//   - A dependency on another package from the same directory (a sibling from this release) must be exact: [x.y.z].
+//   - A dependency on another package from the same directory (a sibling from this release) must take this release
+//     up to the next minor: [x.y.z, x.(y+1).0). The packages share no internals, and a minor release in 0.x may
+//     break (in 1.x a major would), so a consumer can update one of them within the minor.
 //   - Microsoft.Extensions.*, Microsoft.Data.SqlClient, MySqlConnector, Azure.Identity and Microsoft.Identity.Client
 //     take a minimum only (">= x.y.z", no upper bound). Microsoft ships every Microsoft.Extensions major for every
 //     supported framework and keeps it compatible, and current Azure SDKs need Microsoft.Extensions 10.x even on
@@ -75,10 +77,16 @@ Console.WriteLine(failures.Count == 0
 
 return failures.Count == 0 ? 0 : 1;
 
-static string? CheckSibling(Dependency dependency, string packageVersion) =>
-    dependency.Version == $"[{packageVersion}]"
+static string? CheckSibling(Dependency dependency, string packageVersion)
+{
+    var release = Regex.Match(packageVersion, @"^(?<major>\d+)\.(?<minor>\d+)\.");
+    var expected = $"[{packageVersion}, {release.Groups["major"].Value}.{int.Parse(release.Groups["minor"].Value) + 1}.0)";
+
+    // A nuspec writes the range without the space.
+    return dependency.Version.Replace(" ", "") == expected.Replace(" ", "")
         ? null
-        : $"expected exactly [{packageVersion}], because packages from the same release are used together";
+        : $"expected {expected}: this release up to the next minor";
+}
 
 static string? CheckBand(Dependency dependency)
 {

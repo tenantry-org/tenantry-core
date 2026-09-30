@@ -1,34 +1,30 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core.Extensions;
-using Tenantry.Core.Stores;
 
 namespace Tenantry.Core.Tests;
 
 public sealed class ServiceRegistrationTests
 {
     [Fact]
-    public void AddTenantryCore_WithNullConfigure_RegistersCoreServices()
+    public void AddTenantry_WithNullConfigure_RegistersCoreServices()
     {
         ServiceCollection services = new();
-        services.AddTenantryCore<string>();
+        services.AddTenantry<string>();
 
         using var sp = services.BuildServiceProvider();
 
-        // Resolving these triggers the factory lambdas registered on lines 45-46
         var tenantContext = sp.GetRequiredService<ITenantContext<string>>();
-        var tenantAccessor = sp.GetRequiredService<ITenantScope<string>>();
+        var setter = sp.GetRequiredService<ITenantContextSetter<string>>();
 
-        tenantContext.Should().NotBeNull();
-        tenantAccessor.Should().NotBeNull();
+        tenantContext.Should().BeSameAs(setter, "both are views of the one ambient tenant");
     }
 
     [Fact]
-    public void AddTenantryCore_RegistersWorkerScopeServicesAsSingletonsOnce()
+    public void AddTenantry_RegistersWorkerScopeServicesAsSingletonsOnce()
     {
         ServiceCollection services = new();
-        services.AddTenantryCore<string>();
-        services.AddTenantryCore<string>();
+        services.AddTenantry<string>();
+        services.AddTenantry<string>();
 
         services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantScopeFactory<string>))
             .Which.Lifetime.Should().Be(ServiceLifetime.Singleton);
@@ -37,39 +33,114 @@ public sealed class ServiceRegistrationTests
     }
 
     [Fact]
-    public void AddTenantryCore_UseStoreFactory_RegistersFactoryStore()
+    public void AddTenantry_WithAnotherKeyType_Throws()
     {
         ServiceCollection services = new();
-        services.AddTenantryCore<string>(builder =>
-        {
-            builder.UseStore(_ => new InMemoryTenantStore<string>([]));
-        });
+        services.AddTenantry<string>();
 
-        using var sp = services.BuildServiceProvider();
-        using var scope = sp.CreateScope();
+        var act = () => services.AddTenantry<Guid>();
 
-        var store = scope.ServiceProvider.GetRequiredService<ITenantStore<string>>();
-
-        store.Should().NotBeNull();
+        act.Should().Throw<InvalidOperationException>().WithMessage("*'String'*'Guid'*one tenant key type*");
     }
 
     [Fact]
-    public void AddTenantryCore_UseStoreGeneric_RegistersStoreType()
+    public void UseStore_Factory_RegistersAScopedFactoryStore()
     {
         ServiceCollection services = new();
-        services.AddTenantryCore<string>(builder =>
-        {
-            builder.UseStore<StubTenantStore>();
-        });
-
+        services.AddTenantry<string>(builder => builder.UseStore(_ => new InMemoryTenantStore<string>([])));
         using var sp = services.BuildServiceProvider();
         using var scope = sp.CreateScope();
 
-        var store = scope.ServiceProvider.GetRequiredService<ITenantStore<string>>();
-
-        store.Should().BeOfType<StubTenantStore>();
+        scope.ServiceProvider.GetRequiredService<ITenantStore<string>>().Should().BeOfType<InMemoryTenantStore<string>>();
+        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantStore<string>))
+            .Which.Lifetime.Should().Be(ServiceLifetime.Scoped);
     }
 
+    [Fact]
+    public void UseStore_Generic_RegistersAScopedStoreType()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(builder => builder.UseStore<StubTenantStore>());
+        using var sp = services.BuildServiceProvider();
+        using var scope = sp.CreateScope();
+
+        scope.ServiceProvider.GetRequiredService<ITenantStore<string>>().Should().BeOfType<StubTenantStore>();
+        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantStore<string>))
+            .Which.Lifetime.Should().Be(ServiceLifetime.Scoped);
+    }
+
+    [Fact]
+    public void ASecondStore_Throws_WhicheverWayEitherIsRegistered()
+    {
+        Action<ITenantBuilder<string>>[] stores =
+        [
+            tenant => tenant.UseStore<StubTenantStore>(),
+            tenant => tenant.UseStore(_ => new StubTenantStore()),
+            tenant => tenant.UseInMemoryStore([]),
+        ];
+
+        foreach (var first in stores)
+        {
+            foreach (var second in stores)
+            {
+                ServiceCollection services = new();
+                services.AddTenantry(first);
+
+                var act = () => services.AddTenantry(second);
+
+                act.Should().Throw<InvalidOperationException>().WithMessage("*already registered*one store*");
+            }
+        }
+    }
+
+    [Fact]
+    public void AStoreRegisteredDirectly_CountsAsTheStore()
+    {
+        ServiceCollection services = new();
+        services.AddScoped<ITenantStore<string>, StubTenantStore>();
+
+        var act = () => services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*already registered*");
+    }
+
+    [Fact]
+    public void Chaining_EveryCoreBuilderMethodReturnsTheBuilder()
+    {
+        ServiceCollection services = new();
+
+        services.AddTenantry<string>(tenant => tenant
+            .UseStore<StubTenantStore>()
+            .UseConnectionStrings(options => options.GetConnectionString = t => t.TenantId));
+
+        services.Should().Contain(d => d.ServiceType == typeof(ITenantConnectionStringProvider<string>));
+    }
+
+    [Fact]
+    public void Add_AppliesTheRegistrationWithTheBuildersKeyType()
+    {
+        ServiceCollection services = new();
+        RecordingRegistration registration = new();
+
+        services.AddTenantry<Guid>(tenant => ((ITenantBuilder)tenant).Add(registration));
+
+        registration.KeyType.Should().Be<Guid>();
+        registration.Services.Should().BeSameAs(services);
+    }
+
+    private sealed class RecordingRegistration : ITenantRegistration
+    {
+        public Type? KeyType { get; private set; }
+
+        public IServiceCollection? Services { get; private set; }
+
+        public void Apply<TKey>(ITenantBuilder<TKey> tenant)
+            where TKey : IEquatable<TKey>, IParsable<TKey>
+        {
+            KeyType = typeof(TKey);
+            Services = tenant.Services;
+        }
+    }
 
     private sealed class StubTenantStore : ITenantStore<string>
     {
@@ -79,6 +150,4 @@ public sealed class ServiceRegistrationTests
         public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken cancellationToken = default)
             => ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([]);
     }
-
-    // no additional internal-visibility tests here; internal TenantBuilder is exercised from the EfCore.Tests assembly
 }

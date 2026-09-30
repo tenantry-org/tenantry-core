@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Tenantry.Core.Exceptions;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.BaseClass;
 
@@ -48,18 +48,17 @@ public sealed class BaseClassStampingTests
     }
 
     [Fact]
-    public async Task SaveChanges_WhenEntityAddedWithWrongTenantId_OverridesWithCurrentTenant()
+    public async Task SaveChanges_WhenEntityAddedWithAnotherTenantsId_ThrowsAndWritesNothing()
     {
         TestTenantContext ctx = TestTenantContext.For("acme");
         await using SqliteConnection conn = DbContextFactory.CreateSharedConnection();
         await using BaseClassTestDbContext db = await DbContextFactory.CreateBaseClassContextAsync(ctx, conn);
 
-        Order order = new() { Description = "Wrong tenant", TenantId = "attacker" };
-        db.Orders.Add(order);
+        db.Orders.Add(new Order { Description = "Wrong tenant", TenantId = "attacker" });
 
-        await db.SaveChangesAsync();
-
-        order.TenantId.Should().Be("acme");
+        (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+            .Which.Kind.Should().Be(TenantIsolationViolationKind.EntityWrite);
+        (await db.Orders.IgnoreQueryFilters().CountAsync()).Should().Be(0);
     }
 
     [Fact]

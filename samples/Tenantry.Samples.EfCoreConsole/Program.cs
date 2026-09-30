@@ -1,17 +1,17 @@
 // Tenantry EF Core Console Sample — multi-tenancy with NO ASP.NET Core.
 //
-// This sample shows how AddTenantryCore wires up the full tenant-isolation
+// This sample shows how AddTenantry wires up the full tenant-isolation
 // infrastructure for a non-HTTP host (console app, worker service, desktop UI, CLI…).
-// There is no middleware and no request: YOU open and close the tenant scope manually
-// with ITenantScope<TKey>.BeginScope(...) around the work that should run as a tenant.
+// There is no middleware and no request: YOU make a tenant current manually
+// with ITenantContextSetter<TKey>.Use(...) around the work that should run as a tenant.
 //
 // It demonstrates:
-//   1. Registering core + EF Core isolation with AddTenantryCore (no AspNetCore package).
+//   1. Registering core + EF Core isolation with AddTenantry (no AspNetCore package).
 //   2. Stamping TenantId automatically on insert.
 //   3. Reads being transparently filtered to the active tenant.
 //   4. Nested scopes (an inner tenant shadows the outer one, restored on dispose).
-//   5. Strict isolation catching a cross-tenant write before it hits the database.
-//   6. Fail-closed behaviour when no tenant scope is active.
+//   5. Write isolation catching a cross-tenant write before it hits the database.
+//   6. Fail-closed behaviour when no tenant is current.
 //   7. Bypassing isolation deliberately for admin/reporting with IgnoreQueryFilters().
 //   8. A worker-style sweep: every tenant in its own DI scope, with ITenantScopeFactory.
 //
@@ -22,10 +22,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
+using Tenantry.EfCore;
 using Tenantry.Samples.EfCoreConsole;
 
 // Two tenants we will switch between. In a real worker these would come from your
@@ -37,20 +35,20 @@ var globex = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0
 var builder = Host.CreateApplicationBuilder(args);
 
 // Quieten the host's lifetime chatter so the sample's own output is easy to read,
-// but keep Warning+ so Tenantry's strict-mode diagnostics are visible.
+// but keep Warning+ so Tenantry's isolation diagnostics are visible.
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
-// ── 1. Register the core Tenantry infrastructure (NOT AddTenantry — that's ASP.NET only) ──
-builder.Services.AddTenantryCore<Guid>(tenant =>
+// ── 1. Register Tenantry (no ASP.NET Core package needed) ───────────────────────────────
+builder.Services.AddTenantry<Guid>(tenant =>
 {
-    // A store is optional for AddTenantryCore (nothing resolves tenants for you off the
+    // A store is optional for AddTenantry (nothing resolves tenants for you off the
     // request like the ASP.NET middleware does), but registering one lets you look tenants
     // up by id from anywhere — e.g. when a queued message only carries the tenant id.
     tenant.UseInMemoryStore([acme, globex]);
 
-    // Turn on EF Core write isolation. Cross-tenant Modified/Deleted writes are always rejected
-    // DetectSpoofedWrites also rejects Added entities pre-stamped with a foreign tenant id.
-    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+    // Turn on EF Core write isolation: cross-tenant writes are rejected, including a new entity
+    // pre-stamped with another tenant's id.
+    tenant.AddEfCoreIsolation();
 });
 
 // ── 2. Register the DbContext and attach the tenant interceptors ──────────────────────────
@@ -63,7 +61,7 @@ using var host = builder.Build();
 // A console app has no request scope, so create one DI scope for our unit of work.
 using var scope = host.Services.CreateScope();
 var sp = scope.ServiceProvider;
-var tenantScope = sp.GetRequiredService<ITenantScope<Guid>>();
+var tenantContext = sp.GetRequiredService<ITenantContextSetter<Guid>>();
 var db = sp.GetRequiredService<SampleDbContext>();
 
 // Fresh database every run so the sample is reproducible.
@@ -72,7 +70,7 @@ await db.Database.EnsureCreatedAsync();
 
 // ── 3. Do some work as Acme ───────────────────────────────────────────────────────────────
 Order acmeOrder;
-using (tenantScope.BeginScope(acme))
+using (tenantContext.Use(acme))
 {
     db.Orders.Add(new Order { Description = "Acme widget order" });
     db.Orders.Add(new Order { Description = "Acme gadget order" });
@@ -85,7 +83,7 @@ using (tenantScope.BeginScope(acme))
 }
 
 // ── 4. Do some work as Globex (note the automatic read isolation) ──────────────────────────
-using (tenantScope.BeginScope(globex))
+using (tenantContext.Use(globex))
 {
     db.Orders.Add(new Order { Description = "Globex sprocket order" });
     await db.SaveChangesAsync();
@@ -93,9 +91,9 @@ using (tenantScope.BeginScope(globex))
     // The global query filter restricts this to Globex's rows only — Acme's are invisible.
     Print("Globex", $"sees {await db.Orders.CountAsync()} order(s) (Acme's are filtered out)");
 
-    // ── 5. Strict isolation blocks a cross-tenant write ────────────────────────────────────
+    // ── 5. Write isolation blocks a cross-tenant write ─────────────────────────────────────
     // acmeOrder is still tracked by the context. Mutating it while Globex is active is a
-    // cross-tenant modification; strict mode aborts SaveChanges before anything is written.
+    // cross-tenant modification; Tenantry aborts SaveChanges before anything is written.
     try
     {
         acmeOrder.Description = "tampered by Globex";
@@ -104,12 +102,12 @@ using (tenantScope.BeginScope(globex))
     }
     catch (TenantIsolationViolationException ex)
     {
-        Print("Globex", $"blocked cross-tenant write: {ex.EntityTypeName} belongs to {ex.OffendingTenantId}");
+        Print("Globex", $"blocked cross-tenant write: {ex.TypeName} belongs to {ex.OffendingTenantId}");
         db.Entry(acmeOrder).State = EntityState.Unchanged; // discard the bad change
     }
 
     // ── 6. Nested scopes: temporarily act as Acme, then fall back to Globex ────────────────
-    using (tenantScope.BeginScope(acme))
+    using (tenantContext.Use(acme))
     {
         Print("Globex→Acme (nested)", $"sees {await db.Orders.CountAsync()} order(s)");
     }
@@ -139,7 +137,7 @@ foreach (var tenant in await tenants.GetAllTenantsAsync())
     Print($"Sweep: {tenant.Name}", $"sees {await tenantDb.Orders.CountAsync()} order(s)");
 }
 
-Print("After sweep", $"tenant active: {tenantScope.HasTenant}");
+Print("After sweep", $"tenant current: {tenantContext.HasTenant}");
 
 return;
 

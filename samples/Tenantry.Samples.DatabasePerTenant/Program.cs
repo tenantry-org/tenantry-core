@@ -1,7 +1,7 @@
 // Tenantry Database-per-Tenant Sample: each tenant's data lives in its own database.
 //
 // UseConnectionStrings says how to find a tenant's connection string, and the DbContext asks
-// ITenantConnectionStringResolver for the current tenant's one each time a context is created. Here every
+// CurrentTenantConnectionString for the current tenant's one each time a context is created. Here every
 // tenant gets its own SQLite file; with SQL Server or PostgreSQL the delegate would return a different
 // database (or server) per tenant in the same way.
 //
@@ -15,15 +15,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Tenantry.Core;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 using Tenantry.Samples.DatabasePerTenant;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
-builder.Services.AddTenantryCore<string>(tenant =>
+builder.Services.AddTenantry<string>(tenant =>
 {
     tenant.UseInMemoryStore(
     [
@@ -36,13 +34,13 @@ builder.Services.AddTenantryCore<string>(tenant =>
     tenant.UseConnectionStrings(options =>
         options.GetConnectionString = t => $"Data Source=tenant-{t.TenantId}.db");
 
-    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+    tenant.AddEfCoreIsolation();
 });
 
 // The options callback runs for every new context, so each one gets the current tenant's database.
 // To pool contexts, use AddTenantDbContextPool instead: AddDbContextPool's callback runs only once.
 builder.Services.AddDbContext<NotesDbContext>((sp, options) =>
-    options.UseSqlite(sp.GetRequiredService<ITenantConnectionStringResolver<string>>().Resolve())
+    options.UseSqlite(sp.GetRequiredService<CurrentTenantConnectionString<string>>().Get())
            .AddTenantInterceptors(sp));
 
 using var host = builder.Build();

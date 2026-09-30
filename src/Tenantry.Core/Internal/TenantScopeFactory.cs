@@ -1,36 +1,47 @@
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core.Exceptions;
 
-namespace Tenantry.Core.Internal;
+namespace Tenantry.Internal;
 
 /// <summary>
 /// Default <see cref="ITenantScopeFactory{TKey}"/>.
 /// </summary>
+/// <remarks>
+/// The store accessor is resolved on the first <c>RunInScopeAsync</c>, not when the factory is created:
+/// <see cref="CreateScope"/> takes a tenant the caller already has, so a host that only creates scopes needs no
+/// store.
+/// </remarks>
 internal sealed class TenantScopeFactory<TKey>(
     IServiceScopeFactory serviceScopes,
-    ITenantScope<TKey> tenantScope,
-    ITenantStoreAccessor<TKey> tenants)
+    ITenantContextSetter<TKey> tenantContext,
+    IServiceProvider services)
     : ITenantScopeFactory<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
+    private ITenantStoreAccessor<TKey>? _tenants;
+
+    // A race resolves the singleton twice, which returns the same instance.
+    private ITenantStoreAccessor<TKey> Tenants => _tenants ??= services.GetRequiredService<ITenantStoreAccessor<TKey>>();
+
     /// <inheritdoc />
     /// <remarks>
     /// Must stay synchronous: the tenant is activated in the caller's own context, which an
     /// <see langword="async"/> method cannot do.
     /// </remarks>
-    public ITenantServiceScope<TKey> CreateScope(ITenantDescriptor<TKey> tenant)
+    public ITenantScope<TKey> CreateScope(ITenantDescriptor<TKey> tenant)
     {
         ArgumentNullException.ThrowIfNull(tenant);
 
+        // Checked before the services are created, so a tenant Use rejects leaves nothing to dispose.
+        TenantIds.ThrowIfUnset(tenant, nameof(tenant));
         var services = serviceScopes.CreateAsyncScope();
 
-        return new TenantServiceScope<TKey>(services, tenantScope.BeginScope(tenant), tenant);
+        return new TenantScope<TKey>(services, tenantContext.Use(tenant), tenant);
     }
 
     /// <inheritdoc />
     public Task RunInScopeAsync(
         TKey tenantId,
-        Func<ITenantServiceScope<TKey>, CancellationToken, Task> work,
+        Func<ITenantScope<TKey>, CancellationToken, Task> work,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(work);
@@ -48,7 +59,7 @@ internal sealed class TenantScopeFactory<TKey>(
     /// <inheritdoc />
     public async Task<TResult> RunInScopeAsync<TResult>(
         TKey tenantId,
-        Func<ITenantServiceScope<TKey>, CancellationToken, Task<TResult>> work,
+        Func<ITenantScope<TKey>, CancellationToken, Task<TResult>> work,
         CancellationToken cancellationToken = default)
     {
         if (tenantId is null)
@@ -56,12 +67,19 @@ internal sealed class TenantScopeFactory<TKey>(
             throw new ArgumentNullException(nameof(tenantId));
         }
 
+        if (TenantIds.IsUnset(tenantId))
+        {
+            throw new ArgumentException(
+                $"'{tenantId}' is the default value of {typeof(TKey).Name}, which Tenantry reserves for \"no tenant\", " +
+                "so no tenant has it.",
+                nameof(tenantId));
+        }
+
         ArgumentNullException.ThrowIfNull(work);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var tenant = await tenants.GetTenantAsync(tenantId, cancellationToken)
-                     ?? throw new TenantNotResolvedException(
-                         $"Tenant '{tenantId}' was not found in the tenant store.");
+        var tenant = await Tenants.GetTenantAsync(tenantId, cancellationToken)
+                     ?? throw new TenantNotFoundException(tenantId);
 
         // The scope is opened inside this method, so it is active for the work and never for the caller.
         await using var scope = CreateScope(tenant);

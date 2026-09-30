@@ -1,11 +1,9 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Pooling;
 
@@ -56,10 +54,10 @@ public sealed class PooledContextTests : IDisposable
     public async Task PooledInstance_IsolatesEachTenantItServes()
     {
         await using var services = BuildServices(pooledFactory: false);
-        var tenants = services.GetRequiredService<ITenantScope<string>>();
+        var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
         Guid instanceId;
 
-        using (tenants.BeginScope(Tenant("acme")))
+        using (tenants.Use(Tenant("acme")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -69,7 +67,7 @@ public sealed class PooledContextTests : IDisposable
             instanceId = db.ContextId.InstanceId;
         }
 
-        using (tenants.BeginScope(Tenant("globex")))
+        using (tenants.Use(Tenant("globex")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -81,7 +79,7 @@ public sealed class PooledContextTests : IDisposable
             await db.SaveChangesAsync();
         }
 
-        using (tenants.BeginScope(Tenant("acme")))
+        using (tenants.Use(Tenant("acme")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -96,10 +94,10 @@ public sealed class PooledContextTests : IDisposable
     public async Task PooledInstance_ReusedByAnotherTenant_RejectsForgedWrites()
     {
         await using var services = BuildServices(pooledFactory: false);
-        var tenants = services.GetRequiredService<ITenantScope<string>>();
+        var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
         int acmeOrderId;
 
-        using (tenants.BeginScope(Tenant("acme")))
+        using (tenants.Use(Tenant("acme")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -110,7 +108,7 @@ public sealed class PooledContextTests : IDisposable
             acmeOrderId = order.Id;
         }
 
-        using (tenants.BeginScope(Tenant("globex")))
+        using (tenants.Use(Tenant("globex")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -130,10 +128,10 @@ public sealed class PooledContextTests : IDisposable
     public async Task PooledFactory_ConcurrentTenants_EachSeeOnlyTheirOwnRows()
     {
         await using var services = BuildServices(pooledFactory: true);
-        var tenants = services.GetRequiredService<ITenantScope<string>>();
+        var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
         var factory = services.GetRequiredService<IDbContextFactory<PooledOrdersContext>>();
 
-        using (tenants.BeginScope(Tenant("setup")))
+        using (tenants.Use(Tenant("setup")))
         await using (var db = await factory.CreateDbContextAsync())
         {
             await db.Database.EnsureCreatedAsync();
@@ -143,7 +141,7 @@ public sealed class PooledContextTests : IDisposable
 
         var seen = await Task.WhenAll(tenantIds.Select(tenantId => Task.Run(async () =>
         {
-            using var _ = tenants.BeginScope(Tenant(tenantId));
+            using var _ = tenants.Use(Tenant(tenantId));
 
             for (var i = 0; i < 3; i++)
             {
@@ -170,15 +168,15 @@ public sealed class PooledContextTests : IDisposable
     {
         ServiceCollection collection = new();
         collection.AddLogging();
-        collection.AddTenantryCore<string>(tenant => tenant.AddEfCoreIsolation());
+        collection.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
         collection.AddDbContextPool<RawPooledOrdersContext>((sp, options) =>
             options.UseSqlite(_connectionString).AddTenantInterceptors(sp));
         await using var services = collection.BuildServiceProvider();
-        var tenants = services.GetRequiredService<ITenantScope<string>>();
+        var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
 
         foreach (var tenantId in new[] { "acme", "globex" })
         {
-            using (tenants.BeginScope(Tenant(tenantId)))
+            using (tenants.Use(Tenant(tenantId)))
             await using (var scope = services.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<RawPooledOrdersContext>();
@@ -197,9 +195,9 @@ public sealed class PooledContextTests : IDisposable
     public async Task PooledContext_WithoutTenantInterceptors_FailsInsteadOfSavingUnisolated()
     {
         await using var services = BuildServices(pooledFactory: false, addTenantInterceptors: false);
-        var tenants = services.GetRequiredService<ITenantScope<string>>();
+        var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (tenants.BeginScope(Tenant("acme")))
+        using (tenants.Use(Tenant("acme")))
         await using (var scope = services.CreateAsyncScope())
         {
             await scope.ServiceProvider
@@ -222,7 +220,7 @@ public sealed class PooledContextTests : IDisposable
     {
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantryCore<string>(tenant => tenant.AddEfCoreIsolation());
+        services.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
 
         void Configure(IServiceProvider sp, DbContextOptionsBuilder options)
         {

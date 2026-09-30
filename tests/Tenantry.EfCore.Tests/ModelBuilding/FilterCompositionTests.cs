@@ -1,8 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
@@ -127,7 +128,6 @@ public class FilterCompositionTests
         TenantSaveChangesInterceptor<string> interceptor = new(
             tenantContext,
             new EfCoreIsolationOptions(),
-            new StrictIsolationValidator<string>(NullLogger<StrictIsolationValidator<string>>.Instance),
             NullLogger<TenantSaveChangesInterceptor<string>>.Instance);
 
         var options = new DbContextOptionsBuilder<FilterCompositionDbContext>()
@@ -192,7 +192,7 @@ public class FilterCompositionTests
     public async Task ApplyTenantFilters_WithUnkeyedPreExistingFilter_CombinesFilters()
     {
         // Uses an always-unkeyed HasQueryFilter (no key string argument).
-        // In net10 this hits the CombineFilters path at L90-98 of TenantModelBuilderExtensions
+        // In net10 this hits the CombineFilters path at L90-98 of TenantryModelBuilderExtensions
         // (existingFilters has a null-key entry). In net8/net9 it exercises the #else merge path.
         var tenantContext = TestTenantContext.For("acme");
         await using var connection = new SqliteConnection("DataSource=:memory:");
@@ -229,7 +229,7 @@ public class FilterCompositionTests
         public bool IsDeleted { get; set; }
     }
 
-    private class FilterableItem : ITenantScoped<string>
+    private class FilterableItem : ITenantEntity<string>
     {
         [Key]
         public int Id { get; set; }
@@ -308,7 +308,7 @@ public class FilterCompositionTests
         }
     }
 
-    private class UnkeyedItem : ITenantScoped<string>
+    private class UnkeyedItem : ITenantEntity<string>
     {
         [Key]
         public int Id { get; set; }

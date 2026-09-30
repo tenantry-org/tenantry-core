@@ -1,10 +1,9 @@
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Tenantry.Core;
 
 namespace Tenantry.EfCore.Internal;
 
 /// <summary>
-/// Reads the tenant that owns a tracked <see cref="ITenantScoped{TKey}"/> entry.
+/// Reads the tenant that owns a tracked <see cref="ITenantEntity{TKey}"/> entry.
 /// </summary>
 /// <remarks>
 /// The original <c>TenantId</c> value is the tenant the row is matched on when EF Core issues an
@@ -15,7 +14,7 @@ namespace Tenantry.EfCore.Internal;
 /// </remarks>
 internal static class TenantOwnership
 {
-    private const string TenantIdProperty = nameof(ITenantScoped<>.TenantId);
+    public const string TenantIdProperty = nameof(ITenantEntity<>.TenantId);
 
     /// <summary>
     /// Returns the tenant the entry was loaded or attached with (the value EF Core uses in the

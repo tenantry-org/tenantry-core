@@ -1,4 +1,4 @@
-using Tenantry.Core;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Infrastructure;
 

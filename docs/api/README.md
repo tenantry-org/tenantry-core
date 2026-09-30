@@ -5,81 +5,83 @@ the pieces fit together; this reference is for the details of each type and memb
 
 ## Tenantry.AspNetCore
 
+### `Microsoft.AspNetCore.Builder`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`TenantryApplicationBuilderExtensions`](microsoft-aspnetcore-builder-tenantryapplicationbuilderextensions.md) | class | Adds Tenantry's tenant resolution to the request pipeline. |
+| [`TenantryEndpointConventionBuilderExtensions`](microsoft-aspnetcore-builder-tenantryendpointconventionbuilderextensions.md) | class | Extension methods for applying Tenantry endpoint metadata. |
+
+### `Microsoft.Extensions.DependencyInjection`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`TenantryAspNetCoreTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryaspnetcoretenantbuilderextensions.md) | class | Tenantry's ASP.NET Core features on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): how a request is resolved to a tenant, whether endpoints need one, and who may use it. `app.UseTenantry()` applies them to requests. |
+
 ### `Tenantry.AspNetCore`
 
 | Type | Kind | Summary |
 |------|------|---------|
-| [`IAspNetCoreTenantBuilder<TKey>`](tenantry-aspnetcore-iaspnetcoretenantbuilder.md) | interface | Fluent builder for configuring multi-tenancy services. Obtained from [`ServiceCollectionExtensions.AddTenantry<TKey>`](tenantry-aspnetcore-extensions-servicecollectionextensions.md). |
-
-### `Tenantry.AspNetCore.Attributes`
-
-| Type | Kind | Summary |
-|------|------|---------|
-| [`AllowMissingTenantAttribute`](tenantry-aspnetcore-attributes-allowmissingtenantattribute.md) | class | Allows an endpoint or controller action to execute without a resolved tenant. |
-| [`RequireTenantAttribute`](tenantry-aspnetcore-attributes-requiretenantattribute.md) | class | Requires Tenantry to resolve a tenant before the endpoint or controller action executes. |
-
-### `Tenantry.AspNetCore.Extensions`
-
-| Type | Kind | Summary |
-|------|------|---------|
-| [`ApplicationBuilderExtensions`](tenantry-aspnetcore-extensions-applicationbuilderextensions.md) | class | Extension methods for adding Tenantry middleware to the request pipeline. |
-| [`EndpointConventionBuilderExtensions`](tenantry-aspnetcore-extensions-endpointconventionbuilderextensions.md) | class | Extension methods for applying Tenantry endpoint metadata. |
-| [`ServiceCollectionExtensions`](tenantry-aspnetcore-extensions-servicecollectionextensions.md) | class | Extension methods for registering Tenantry services. |
-
-### `Tenantry.AspNetCore.Resolution`
-
-| Type | Kind | Summary |
-|------|------|---------|
-| [`ClaimTenantResolver`](tenantry-aspnetcore-resolution-claimtenantresolver.md) | class | Resolves the tenant from a claim on the current request principal. |
-| [`HeaderTenantResolver`](tenantry-aspnetcore-resolution-headertenantresolver.md) | class | Resolves the tenant from a request header (e.g. `X-Tenant-Id`). |
-| [`ITenantResolver`](tenantry-aspnetcore-resolution-itenantresolver.md) | interface | Extracts a tenant identifier from an HTTP request. |
-| [`QueryStringTenantResolver`](tenantry-aspnetcore-resolution-querystringtenantresolver.md) | class | Resolves the tenant from a query string parameter (e.g. `?tenantId=acme`). |
-| [`RouteValueTenantResolver`](tenantry-aspnetcore-resolution-routevaluetenantresolver.md) | class | Resolves the tenant from a route value (e.g. `/api/{tenant}/resource`). |
-| [`SubdomainTenantResolver`](tenantry-aspnetcore-resolution-subdomaintenantresolver.md) | class | Resolves the tenant from the first subdomain segment of the request host. For example, `acme.app.example.com` resolves to `acme`. |
+| [`AllowMissingTenantAttribute`](tenantry-aspnetcore-allowmissingtenantattribute.md) | class | Allows an endpoint or controller action to execute without a resolved tenant. |
+| [`ClaimTenantResolver`](tenantry-aspnetcore-claimtenantresolver.md) | class | Resolves the tenant from a claim on the current request principal. |
+| [`HeaderTenantResolver`](tenantry-aspnetcore-headertenantresolver.md) | class | Resolves the tenant from a request header (e.g. `X-Tenant-Id`). |
+| [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md) | interface | Extracts a tenant identifier from an HTTP request. |
+| [`QueryStringTenantResolver`](tenantry-aspnetcore-querystringtenantresolver.md) | class | Resolves the tenant from a query string parameter (e.g. `?tenantId=acme`). |
+| [`RequireTenantAttribute`](tenantry-aspnetcore-requiretenantattribute.md) | class | Requires Tenantry to resolve a tenant before the endpoint or controller action executes. |
+| [`RouteValueTenantResolver`](tenantry-aspnetcore-routevaluetenantresolver.md) | class | Resolves the tenant from a route value (e.g. `/api/{tenant}/resource`). |
+| [`SubdomainTenantResolver`](tenantry-aspnetcore-subdomaintenantresolver.md) | class | Resolves the tenant from the subdomain of the request host. For example, `acme.app.example.com` resolves to `acme`. |
+| [`SubdomainTenantResolverOptions`](tenantry-aspnetcore-subdomaintenantresolveroptions.md) | class | Options for [`SubdomainTenantResolver`](tenantry-aspnetcore-subdomaintenantresolver.md), set with `tenant.ResolveFromSubdomain(o => …)`. |
+| [`TenantResolutionOptions`](tenantry-aspnetcore-tenantresolutionoptions.md) | class | How `app.UseTenantry()` treats requests: whether they need a tenant, and the status code of each rejection. Configure it with `tenant.ConfigureResolution(o => …)` or `tenant.RequireTenantByDefault()`. |
 
 ## Tenantry.Core
 
-### `Tenantry.Core`
+### `Microsoft.Extensions.DependencyInjection`
 
 | Type | Kind | Summary |
 |------|------|---------|
-| [`ITenantBuilder<TKey>`](tenantry-core-itenantbuilder.md) | interface | Minimal builder interface that captures `TKey` and exposes the service collection. Satellite packages (e.g. Tenantry.EfCore) add extension methods on this interface so users only specify TKey once in `AddTenantry`. |
-| [`ITenantConnectionStringResolver<TKey>`](tenantry-core-itenantconnectionstringresolver.md) | interface | Returns tenants' connection strings, as configured by [`TenantConnectionStringOptions<TKey>`](tenantry-core-tenantconnectionstringoptions.md). |
-| [`ITenantContext<TKey>`](tenantry-core-itenantcontext.md) | interface | Provides read-only access to the currently resolved tenant for the active request scope. Registered as a singleton backed by `AsyncLocal<T>` — the value is per-async-context (effectively per HTTP request) rather than per-instance. |
-| [`ITenantDescriptor<TKey>`](tenantry-core-itenantdescriptor.md) | interface | Represents a resolved tenant. |
-| [`ITenantScope<TKey>`](tenantry-core-itenantscope.md) | interface | Represents a scoped interface for managing tenant-specific context within the application. |
-| [`ITenantScopeFactory<TKey>`](tenantry-core-itenantscopefactory.md) | interface | Opens tenant scopes for work that runs outside an HTTP request: hosted services, queue consumers, scheduled jobs and console tools. Each scope pairs a fresh dependency-injection scope with an active tenant, so scoped services such as a `DbContext` are created for that tenant and isolated to it. |
-| [`ITenantScoped<TKey>`](tenantry-core-itenantscoped.md) | interface | Marker interface for objects that belong to a specific tenant. |
-| [`ITenantServiceScope<TKey>`](tenantry-core-itenantservicescope.md) | interface | A dependency-injection scope with a tenant active, created by [`ITenantScopeFactory<TKey>`](tenantry-core-itenantscopefactory.md). |
-| [`ITenantStore<TKey>`](tenantry-core-itenantstore.md) | interface | Persists and retrieves tenant definitions. |
-| [`ITenantStoreAccessor<TKey>`](tenantry-core-itenantstoreaccessor.md) | interface | Reads tenants from the registered [`ITenantStore<TKey>`](tenantry-core-itenantstore.md) on behalf of singletons, such as hosted services, resolving the store from a fresh dependency-injection scope for each call. |
-| [`MissingTenantBehavior`](tenantry-core-missingtenantbehavior.md) | enum | Policy for what happens when a tenant-scoped operation runs without a resolved tenant context. |
-| [`TenantConnectionStringOptions<TKey>`](tenantry-core-tenantconnectionstringoptions.md) | class | How to find each tenant's connection string, for applications that give tenants their own database (or route them to different servers). Configure it with `UseConnectionStrings` and read connection strings through [`ITenantConnectionStringResolver<TKey>`](tenantry-core-itenantconnectionstringresolver.md). |
-| [`TenantConnectionStringResolver<TKey>`](tenantry-core-tenantconnectionstringresolver.md) | class | The default [`ITenantConnectionStringResolver<TKey>`](tenantry-core-itenantconnectionstringresolver.md): calls the configured delegates on every resolution, without caching. |
-| [`TenantDescriptor<TKey>`](tenantry-core-tenantdescriptor.md) | class | Default implementation of [`ITenantDescriptor<TKey>`](tenantry-core-itenantdescriptor.md). |
-| [`TenantScoped<TKey>`](tenantry-core-tenantscoped.md) | class | Optional base class for tenant-owned objects. Implements [`ITenantScoped<TKey>`](tenantry-core-itenantscoped.md) for convenience. |
+| [`TenantryServiceCollectionExtensions`](microsoft-extensions-dependencyinjection-tenantryservicecollectionextensions.md) | class | Registers Tenantry. |
+| [`TenantryTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantrytenantbuilderextensions.md) | class | Tenantry's core features on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): the tenant store and per-tenant connection strings. |
 
-### `Tenantry.Core.Exceptions`
+### `Tenantry`
 
 | Type | Kind | Summary |
 |------|------|---------|
-| [`TenantIsolationViolationException`](tenantry-core-exceptions-tenantisolationviolationexception.md) | class | Thrown when a cross-tenant data isolation violation is detected during a `SaveChanges` or `SaveChangesAsync` call, or when a bulk update would set `TenantId`. |
-| [`TenantNotResolvedException`](tenantry-core-exceptions-tenantnotresolvedexception.md) | class | Thrown when a tenant could not be resolved from the current request context and the operation requires a resolved tenant. |
-
-### `Tenantry.Core.Extensions`
-
-| Type | Kind | Summary |
-|------|------|---------|
-| [`ConnectionStringExtensions`](tenantry-core-extensions-connectionstringextensions.md) | class | Registers per-tenant connection strings: [`TenantConnectionStringOptions<TKey>`](tenantry-core-tenantconnectionstringoptions.md) and [`ITenantConnectionStringResolver<TKey>`](tenantry-core-itenantconnectionstringresolver.md). |
-| [`ServiceCollectionExtensions`](tenantry-core-extensions-servicecollectionextensions.md) | class | Extension methods for registering core Tenantry services. |
-
-### `Tenantry.Core.Stores`
-
-| Type | Kind | Summary |
-|------|------|---------|
-| [`InMemoryTenantStore<TKey>`](tenantry-core-stores-inmemorytenantstore.md) | class | An [`ITenantStore<TKey>`](tenantry-core-itenantstore.md) backed by an in-memory dictionary. |
+| [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) | class | Returns the current tenant's connection string, through the registered [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md). |
+| [`ITenantBuilder`](tenantry-itenantbuilder.md) | interface | The builder `AddTenantry` passes to its configuration callback, without the tenant key type. Features that take a type parameter of their own register through [`ITenantBuilder.Add`](tenantry-itenantbuilder.md), so their callers never repeat the key type. |
+| [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md) | interface | The builder `AddTenantry<TKey>` passes to its configuration callback. |
+| [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) | interface | Returns a tenant's connection string, as configured by [`TenantConnectionStringOptions<TKey>`](tenantry-tenantconnectionstringoptions.md). |
+| [`ITenantContext<TKey>`](tenantry-itenantcontext.md) | interface | Provides read-only access to the currently resolved tenant for the active request scope. Registered as a singleton backed by `AsyncLocal<T>` — the value is per-async-context (effectively per HTTP request) rather than per-instance. |
+| [`ITenantContextSetter<TKey>`](tenantry-itenantcontextsetter.md) | interface | Makes a tenant current for the calling code, for code that has already found the tenant and needs no new dependency-injection scope. Most code uses [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md) instead, which also creates a scope for the tenant's services. |
+| [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md) | interface | Represents a resolved tenant. |
+| [`ITenantEntity<TKey>`](tenantry-itenantentity.md) | interface | Marks an entity that belongs to a tenant. |
+| [`ITenantRegistration`](tenantry-itenantregistration.md) | interface | A registration that needs the tenant key type, added through [`ITenantBuilder.Add`](tenantry-itenantbuilder.md). Packages use it for builder methods that take a type parameter of their own, such as a `DbContext` type. |
+| [`ITenantScope<TKey>`](tenantry-itenantscope.md) | interface | A dependency-injection scope with a tenant current, created by [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md). |
+| [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md) | interface | Opens tenant scopes for work that runs outside an HTTP request: hosted services, queue consumers, scheduled jobs and console tools. Each scope pairs a fresh dependency-injection scope with an active tenant, so scoped services such as a `DbContext` are created for that tenant and isolated to it. |
+| [`ITenantStore<TKey>`](tenantry-itenantstore.md) | interface | Persists and retrieves tenant definitions. |
+| [`ITenantStoreAccessor<TKey>`](tenantry-itenantstoreaccessor.md) | interface | Reads tenants from the registered [`ITenantStore<TKey>`](tenantry-itenantstore.md) on behalf of singletons, such as hosted services, resolving the store from a fresh dependency-injection scope for each call. |
+| [`InMemoryTenantStore<TKey>`](tenantry-inmemorytenantstore.md) | class | An [`ITenantStore<TKey>`](tenantry-itenantstore.md) backed by an in-memory dictionary. |
+| [`TenantConnectionStringOptions<TKey>`](tenantry-tenantconnectionstringoptions.md) | class | How to find each tenant's connection string, for applications that give tenants their own database (or route them to different servers). Configure it with `UseConnectionStrings` and read connection strings through [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md), or the current tenant's through [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md). |
+| [`TenantConnectionStringProvider<TKey>`](tenantry-tenantconnectionstringprovider.md) | class | The default [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md): calls the configured delegates on every call, without caching. |
+| [`TenantDescriptor<TKey>`](tenantry-tenantdescriptor.md) | class | Default implementation of [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md). |
+| [`TenantEntity<TKey>`](tenantry-tenantentity.md) | class | Optional base class for tenant-owned entities, implementing [`ITenantEntity<TKey>`](tenantry-itenantentity.md). |
+| [`TenantNotFoundException`](tenantry-tenantnotfoundexception.md) | class | Thrown when a tenant is looked up by its id and the tenant store has no tenant with that id, for example by [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md). |
+| [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md) | class | Thrown when an operation needs a current tenant and none is current, or when the tenant it names does not exist ([`TenantNotFoundException`](tenantry-tenantnotfoundexception.md)). |
 
 ## Tenantry.EfCore
+
+### `Microsoft.EntityFrameworkCore`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`TenantryDbContextOptionsBuilderExtensions`](microsoft-entityframeworkcore-tenantrydbcontextoptionsbuilderextensions.md) | class | Extension methods for wiring Tenantry into `DbContextOptionsBuilder`. |
+| [`TenantryModelBuilderExtensions`](microsoft-entityframeworkcore-tenantrymodelbuilderextensions.md) | class | Extension methods for `ModelBuilder` that apply tenant isolation to all entities implementing [`ITenantEntity<TKey>`](tenantry-itenantentity.md). |
+
+### `Microsoft.Extensions.DependencyInjection`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`TenantryDbContextPoolServiceCollectionExtensions`](microsoft-extensions-dependencyinjection-tenantrydbcontextpoolservicecollectionextensions.md) | class | DbContext pooling for applications that give each tenant its own database. |
+| [`TenantryEfCoreTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryefcoretenantbuilderextensions.md) | class | Extension methods for configuring EF Core tenant isolation on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md). |
 
 ### `Tenantry.EfCore`
 
@@ -87,13 +89,7 @@ the pieces fit together; this reference is for the details of each type and memb
 |------|------|---------|
 | [`EfCoreIsolationOptions`](tenantry-efcore-efcoreisolationoptions.md) | class | Options for configuring EF Core tenant isolation registration. Passed to `builder.AddEfCoreIsolation(options => ...)`. |
 | [`ITenantAwareDbContext<TKey>`](tenantry-efcore-itenantawaredbcontext.md) | interface | Marks a `DbContext` as tenant-aware, exposing the current tenant identifier for use in EF Core global query filters. |
+| [`MissingTenantBehavior`](tenantry-efcore-missingtenantbehavior.md) | enum | What `SaveChanges` does when it writes tenant-owned entities and no tenant is current. Set with [`EfCoreIsolationOptions.OnMissingTenant`](tenantry-efcore-efcoreisolationoptions.md). |
 | [`MultiTenantDbContext<TKey>`](tenantry-efcore-multitenantdbcontext.md) | class | Optional base `DbContext` that automatically applies tenant query filters in `OnModelCreating`. |
-
-### `Tenantry.EfCore.Extensions`
-
-| Type | Kind | Summary |
-|------|------|---------|
-| [`DbContextOptionsBuilderExtensions`](tenantry-efcore-extensions-dbcontextoptionsbuilderextensions.md) | class | Extension methods for wiring Tenantry into `DbContextOptionsBuilder`. |
-| [`TenantBuilderEfCoreExtensions`](tenantry-efcore-extensions-tenantbuilderefcoreextensions.md) | class | Extension methods for configuring EF Core tenant isolation on [`ITenantBuilder<TKey>`](tenantry-core-itenantbuilder.md). |
-| [`TenantDbContextPoolExtensions`](tenantry-efcore-extensions-tenantdbcontextpoolextensions.md) | class | DbContext pooling for applications that give each tenant its own database. |
-| [`TenantModelBuilderExtensions`](tenantry-efcore-extensions-tenantmodelbuilderextensions.md) | class | Extension methods for `ModelBuilder` that apply tenant isolation to all entities implementing [`ITenantScoped<TKey>`](tenantry-core-itenantscoped.md). |
+| [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) | class | Thrown when EF Core would read or write across tenants: before `SaveChanges` writes another tenant's entity, before an `ExecuteUpdate` that could move rows between tenants, before a pooled database-per-tenant context uses another tenant's database, or on the first use of a model that does not isolate a tenant-owned entity type. Nothing has been written when it is thrown. [`TenantIsolationViolationException.Kind`](tenantry-efcore-tenantisolationviolationexception.md) says which. |
+| [`TenantIsolationViolationKind`](tenantry-efcore-tenantisolationviolationkind.md) | enum | Which isolation check threw a [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md). |

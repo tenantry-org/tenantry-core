@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading from 0.4
+
+0.5 reshapes the public API once, before 1.0. Registration code needs no Tenantry `using` directive any more;
+entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` for the EF Core types).
+
+| 0.4 | 0.5 |
+|-----|-----|
+| `AddTenantryCore<TKey>(…)` (Core) and `AddTenantry<TKey>(…)` (AspNetCore) | `AddTenantry<TKey>(…)`, in Core, for every host |
+| `IAspNetCoreTenantBuilder<TKey>` | `ITenantBuilder<TKey>`; the ASP.NET Core methods are extension methods on it |
+| namespaces `Tenantry.Core`, `.Core.Exceptions`, `.Core.Stores` | `Tenantry` |
+| `Tenantry.AspNetCore.Attributes`, `.Resolution` | `Tenantry.AspNetCore` |
+| `Tenantry.Core.Extensions`, `Tenantry.AspNetCore.Extensions`, `Tenantry.EfCore.Extensions` | `Microsoft.Extensions.DependencyInjection`, `Microsoft.AspNetCore.Builder`, `Microsoft.EntityFrameworkCore` (no `using` needed) |
+| `ITenantScope<TKey>.BeginScope(tenant)` | `ITenantContextSetter<TKey>.Use(tenant)` |
+| `ITenantServiceScope<TKey>` (what `ITenantScopeFactory` creates) | `ITenantScope<TKey>` |
+| `ITenantScoped<TKey>` / `TenantScoped<TKey>` | `ITenantEntity<TKey>` (get-only `TenantId`) / `TenantEntity<TKey>` |
+| `ITenantConnectionStringResolver<TKey>.Resolve(tenant)` / `ResolveAsync(tenant)` | `ITenantConnectionStringProvider<TKey>.Get(tenant)` / `GetAsync(tenant)` |
+| `ITenantConnectionStringResolver<TKey>.Resolve()` / `ResolveAsync()` (current tenant) | `CurrentTenantConnectionString<TKey>.Get()` / `GetAsync()` |
+| `services.AddTenantConnectionStrings<TKey>(…)` | `tenant.UseConnectionStrings(…)` inside `AddTenantry` |
+| `Tenantry.Core.MissingTenantBehavior` (`Allow`, `Warn`, `Reject`, `Skip`) | `Tenantry.EfCore.MissingTenantBehavior` (`Reject`, `Warn`, `Allow`) |
+| `EfCoreIsolationOptions.DetectSpoofedWrites` | removed: a new entity that names another tenant is always rejected |
+| `Tenantry.Core.Exceptions.TenantIsolationViolationException.EntityTypeName` | `Tenantry.EfCore.TenantIsolationViolationException.TypeName`, plus `Kind` |
+
 ### Added
 
 - CI builds every ```csharp block in the README and docs against the packed packages
@@ -22,8 +44,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Conformance tests for each package: a host that registers the package's features through its public
   methods, with a scoped store, validates scopes and every registration on build, resolves every Tenantry
   service and starts.
+- `TenantNotFoundException`, a `TenantNotResolvedException` that carries the `TenantId` that was looked up.
+  `RunInScopeAsync` throws it for an id the store does not have, so a queue consumer can tell a message for a
+  deleted tenant from code that runs without a tenant.
+- `TenantResolutionOptions` is public, configured with `tenant.ConfigureResolution(o => …)`: the status codes of
+  each rejection (`MissingTenantStatusCode`, `InvalidTenantStatusCode`, `TenantNotFoundStatusCode`,
+  `AccessDeniedStatusCode`) and `RequireTenantByDefault`.
+- Rejections are written as problem details (`application/problem+json`) when an `IProblemDetailsService` is
+  registered (`builder.Services.AddProblemDetails()`).
+- `ResolveFromSubdomain(o => …)` takes a `BaseDomain` (only `<tenant>.<base domain>` resolves, and
+  `acme.localhost` works in development with `localhost`) and `IgnoredSubdomains` (`www` by default); a host that
+  is an IP address resolves nothing.
+- `CurrentTenantConnectionString<TKey>`, the current tenant's connection string.
+- `TenantIsolationViolationException.Kind` (`EntityWrite`, `BulkUpdate`, `TenantDatabaseMismatch`,
+  `ModelConfiguration`), and the tenant ids on a database-per-tenant mismatch, which were empty.
+- `ITenantBuilder`, the builder without its key type, and `ITenantRegistration`, for packages whose builder
+  methods take a type parameter of their own. Both are trimming- and Native AOT-safe (no `MakeGenericType`).
+- The `Aot` sample uses every ASP.NET Core builder method, problem details and connection strings, so CI
+  publishes all of them with Native AOT.
 
 ### Changed
+
+- **Breaking:** the API reshape in [Upgrading from 0.4](#upgrading-from-04). There is one entry point and one
+  builder, so every builder method chains (`tenant => tenant.ResolveFromHeader(…).UseStore<T>().AddEfCoreIsolation()`),
+  and `UseResolver<TResolver>()` returns the builder without its key type (call it last).
+- **Breaking:** an application registers one store and one tenant key type. A second `UseStore`/`UseInMemoryStore`
+  (or an `ITenantStore<TKey>` registered directly), and `AddTenantry` with another key type, throw.
+- **Breaking:** `app.UseTenantry()` checks the registration when the pipeline is built (a resolver and a store,
+  and a Tenantry-worded error when `AddTenantry` registered no request resolution), in place of the hosted service
+  that checked at startup. Creating `ITenantStoreAccessor` without a store throws, so a worker's hosted service that
+  depends on it fails as the host starts. `AddTenantInterceptors` without `AddEfCoreIsolation` throws a
+  Tenantry error instead of DI's error about an internal type.
+- **Breaking:** the resolution middleware no longer echoes the request's identifier, and a rejection's body is
+  empty (or problem details, above) instead of plain text. An endpoint that does not require a tenant is never
+  rejected: a request whose identifier is invalid, names no tenant, or names one an access validator refuses
+  continues without a tenant, so `www.` hosts and health probes no longer get `404`. With access validators, a
+  tenant that does not exist gets the access-denied response, so a caller cannot tell which tenants exist.
+- **Breaking:** a new entity that names another tenant is always rejected with
+  `TenantIsolationViolationException` (it was silently moved to the current tenant unless `DetectSpoofedWrites`
+  was on). The stamp goes through EF Core, so `ITenantEntity.TenantId` needs only a getter.
+- **Breaking:** the key type's default (`Guid.Empty`, `0`, an empty string) is reserved for "no tenant":
+  `ITenantContextSetter.Use`, `ITenantScopeFactory.CreateScope` and `RunInScopeAsync` throw `ArgumentException` for
+  it, and the middleware treats it as an invalid identifier. It could write but never read its own rows.
+- `TenantNotResolvedException`'s default message names every way to make a tenant current, not only
+  `app.UseTenantry()`, and the EF Core error for a write without a tenant names `RunInScopeAsync`.
+- The packages depend on each other from this release up to the next minor (`[0.5.0, 0.6.0)`) instead of exactly:
+  they no longer share internals, so one can be updated within the minor without the others.
 
 - **Breaking:** a context with the tenant interceptors (`AddTenantInterceptors`, or a non-pooled
   `MultiTenantDbContext`) must apply the tenant filters to every tenant-scoped entity type. A context that
@@ -35,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `OnModelCreating`, after your own configuration. The docs said to call the base first, which is the order
   that lost the tenant filter (see Added); the guides, samples and XML documentation now show it last.
 - `ApplyTenantFilters` throws `TenantIsolationViolationException` for an entity that implements
-  `ITenantScoped` with a key type other than its own `TKey`, which it used to skip silently, leaving the
+  `ITenantEntity` (then `ITenantScoped`) with a key type other than its own `TKey`, which it used to skip silently, leaving the
   entity with no isolation at all. The model check rejects such an entity too.
 - `ExecuteUpdate` fails closed on setters the guard cannot read. Their expression shape is undocumented and
   changes between EF Core versions, so a version whose shape Tenantry does not know is now rejected instead of
@@ -70,9 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The README suggested the interceptor alone isolates a plain `DbContext`; it stamps and checks writes but
   does not filter reads, which also needs the query filters.
 - Behaviour the docs misstated: without a tenant, `SaveChanges` throws by default (`Reject`) rather than
-  logging a warning; the subdomain resolver takes the first label of any host with three or more (so
-  `www.example.com` resolves to `www`); `MissingTenantBehavior`'s documentation named the wrong default and
-  said EF Core accepts `Skip`.
+  logging a warning; `MissingTenantBehavior`'s documentation named the wrong default and said EF Core accepts
+  `Skip`.
 - The `EfCoreWeb` sample did not start: its migration has `TenantId` indexes that its model never declared
   (the model now declares them, as the EF Core guide recommends), and its seed data referenced categories by
   an id they did not have yet. The sample `.http` files carried the old product name.

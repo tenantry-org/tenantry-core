@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
-using Tenantry.Core;
+using Tenantry;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Infrastructure;
@@ -69,7 +69,6 @@ public static class DbContextFactory
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         new(tenantContext,
             isolationOptions ?? new EfCoreIsolationOptions(),
-            new StrictIsolationValidator<TKey>(NullLogger<StrictIsolationValidator<TKey>>.Instance),
             NullLogger<TenantSaveChangesInterceptor<TKey>>.Instance);
 
     /// <summary>

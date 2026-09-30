@@ -1,10 +1,9 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Tenantry.Core;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.EfCore.Tests;
@@ -42,11 +41,11 @@ public sealed class ConformanceTests : IDisposable
         var builder = Host.CreateApplicationBuilder();
         builder.ConfigureContainer(new DefaultServiceProviderFactory(Conformance.ProviderOptions));
         builder.Services.AddScoped<ScopedTenantStore.Session>();
-        builder.Services.AddTenantryCore<string>(tenant =>
+        builder.Services.AddTenantry<string>(tenant =>
         {
             tenant.UseStore<ScopedTenantStore>();
             tenant.UseConnectionStrings(options => options.GetConnectionString = _ => _acme);
-            tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+            tenant.AddEfCoreIsolation();
         });
         builder.Services.AddDbContext<InterceptedContext>((sp, options) => options.UseSqlite(_intercepted).AddTenantInterceptors(sp));
         builder.Services.AddDbContext<SelfWiringContext>(options => options.UseSqlite(_selfWiring));

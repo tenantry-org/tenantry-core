@@ -16,6 +16,11 @@ X-Tenant-Id: acme
 GET {{host}}/me?tenant=globex
 
 ### A custom access validator refuses this request with 403
+GET {{host}}/orders
+X-Tenant-Id: globex
+X-Block-Access: true
+
+### /me allows a missing tenant, so the same refused request runs without one (the endpoint's own 404)
 GET {{host}}/me
 X-Tenant-Id: globex
 X-Block-Access: true
@@ -24,7 +29,7 @@ X-Block-Access: true
 GET {{host}}/me
 X-Tenant-Id: globex
 
-### Get current tenant info without tenant header (should return 404)
+### Get current tenant info without tenant header (the endpoint's own 404: it allows a missing tenant)
 GET {{host}}/me
 
 ### Health check (no tenant required)

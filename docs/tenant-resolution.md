@@ -13,15 +13,15 @@ public interface ITenantResolver
 A resolver returns the raw id **as a string**, or `null` if it cannot determine the tenant from this
 request. The middleware then parses that string into `TKey` and looks it up in the store.
 
-> Resolution is an **ASP.NET Core** concept. In console/worker apps there is no `HttpContext`; you set
-> the tenant directly with `BeginScope` — see [Non-HTTP hosts](non-http-hosts.md).
+> Resolution is an **ASP.NET Core** concept. In console/worker apps there is no `HttpContext`; you make a
+> tenant current with `ITenantScopeFactory` — see [Non-HTTP hosts](non-http-hosts.md).
 
 ## Built-in resolvers
 
 | Method | Source | Notes |
 |--------|--------|-------|
 | `ResolveFromHeader(name)` | request header `name` | Trims whitespace. e.g. `X-Tenant-Id`. |
-| `ResolveFromSubdomain()` | first host segment | Requires ≥3 dot-separated segments; see below. |
+| `ResolveFromSubdomain(options)` | the subdomain of the host | Ignores `www` and IP addresses; takes a base domain. See below. |
 | `ResolveFromRouteValue(key = "tenant")` | route value `key` | For routes like `/api/{tenant}/…`. Needs routing before the middleware. |
 | `ResolveFromClaim(type = "tenant_id")` | claim on `HttpContext.User` | Needs authentication before the middleware. |
 | `ResolveFromQueryString(name = "tenantId")` | query string parameter | **Development/testing only** — see warning. |
@@ -38,15 +38,26 @@ yields `null`.
 ### Subdomain
 
 ```csharp
-tenant.ResolveFromSubdomain();   // acme.app.example.com → "acme"
+tenant.ResolveFromSubdomain(options =>
+{
+    options.BaseDomain = "example.com";      // acme.example.com → "acme"
+    options.IgnoredSubdomains.Add("api");    // api.example.com serves the app itself; "www" is ignored by default
+});
 ```
 
-The resolver takes the first dot-separated label of any host that has **at least three**, and resolves
-nothing for shorter hosts. So `acme.app.example.com` resolves to `acme`, and so do `app.example.com` (to
-`app`) and `www.example.com` (to `www`), while `example.com`, `localhost` and `acme.localhost` resolve to
-`null`. It does not know your base domain: if the same app also serves `www.` or other non-tenant hosts,
-route those elsewhere, or make sure no tenant has that identifier. For local development, use header
-resolution instead.
+With `BaseDomain` set, only a host of exactly one label followed by the base domain resolves a tenant:
+`acme.example.com` resolves to `acme`, while `example.com`, `www.example.com`, `x.acme.example.com` and
+`acme.other.org` resolve nothing. In development, set it to `localhost` so `acme.localhost` resolves to `acme`
+(browsers send `*.localhost` to the local machine).
+
+Without it (`tenant.ResolveFromSubdomain()`), the resolver takes the first label of any host that has **at least
+three**, and resolves nothing for shorter hosts: `acme.app.example.com` and `app.example.com` resolve to `acme`
+and `app`, while `example.com`, `localhost` and `acme.localhost` resolve nothing.
+
+Either way, a subdomain in `IgnoredSubdomains` (`www` by default) and a host that is an IP address (a load
+balancer's or Kubernetes' health probe) resolve nothing. A host that still names no tenant does not break an
+endpoint that does not require one: the request continues without a tenant (see
+[ASP.NET Core integration](aspnetcore-integration.md#the-middleware)).
 
 ### Route value
 
@@ -92,7 +103,7 @@ tenant.ResolveFromHeader("X-Tenant-Id");  // 2. fall back to an explicit header
 Order by trust and specificity: put the most authoritative source first. If none match, the request
 proceeds without a tenant unless a tenant is required (see [Access control](access-control.md)).
 
-At least one resolver must be registered, or `AddTenantry` throws at startup.
+At least one resolver must be registered, or `app.UseTenantry()` throws at startup.
 
 ## Custom resolvers
 
@@ -100,7 +111,7 @@ Implement `ITenantResolver` for any source not covered above — a cookie, a gRP
 combination of signals, an external lookup, etc.
 
 ```csharp
-using Tenantry.AspNetCore.Resolution;
+using Tenantry.AspNetCore;
 
 public sealed class CookieTenantResolver : ITenantResolver
 {
@@ -115,13 +126,16 @@ public sealed class CookieTenantResolver : ITenantResolver
 Register it by type, instance, or factory:
 
 ```csharp
-tenant.UseResolver<CookieTenantResolver>();                          // resolved from DI (singleton)
 tenant.UseResolver(new CookieTenantResolver());                      // a specific instance
 tenant.UseResolver(sp => new CookieTenantResolver(/* deps */));      // via a factory
+tenant.UseResolver<CookieTenantResolver>();                          // resolved from DI (singleton)
 ```
+
+`UseResolver<TResolver>()` has a type parameter of its own, so it returns the builder without its key type: call
+it last in a chain.
 
 Registration order relative to the built-in resolvers is preserved, so you can slot a custom resolver
 anywhere in the fallback chain.
 
 Return only a raw identifier — do **not** validate the tenant exists; that is the store's job, and
-returning a value the store does not know yields a clean `404`.
+returning a value the store does not know yields a clean `404` on an endpoint that requires a tenant.

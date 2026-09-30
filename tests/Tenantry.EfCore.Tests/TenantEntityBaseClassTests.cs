@@ -1,10 +1,10 @@
 using AwesomeAssertions;
-using Tenantry.Core;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests;
 
 /// <summary>A concrete entity using the TenantScoped base class.</summary>
-internal sealed class Invoice : TenantScoped<string>
+internal sealed class Invoice : TenantEntity<string>
 {
     public int Id { get; set; }
     public string Description { get; set; } = string.Empty;
@@ -27,7 +27,7 @@ public sealed class TenantEntityBaseClassTests
     {
         Invoice invoice = new();
 
-        invoice.Should().BeAssignableTo<ITenantScoped<string>>();
+        invoice.Should().BeAssignableTo<ITenantEntity<string>>();
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class TenantEntityBaseClassTests
         // Use the base-class DbContext path which also inherits MultiTenantDbContext
         await using var db = await DbContextFactory.CreateBaseClassContextAsync(ctx, conn);
 
-        // BaseClassTestDbContext uses Order (which implements ITenantScoped<string> directly),
+        // BaseClassTestDbContext uses Order (which implements ITenantEntity<string> directly),
         // but we need a DbContext that has Invoice. Use a minimal inline context instead.
         // Test the property round-trip via the base class directly.
         Invoice invoice = new() { Description = "test" };

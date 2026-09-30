@@ -3,7 +3,7 @@ using DotNet.Testcontainers.Containers;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Tenantry.Core;
+using Tenantry;
 using Tenantry.EfCore;
 using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
@@ -64,7 +64,7 @@ public sealed class PostgreSqlFixture : DatabaseFixture
         new NpgsqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString;
 }
 
-public sealed class ProviderOrder : ITenantScoped<string>
+public sealed class ProviderOrder : ITenantEntity<string>
 {
     public int Id { get; set; }
 

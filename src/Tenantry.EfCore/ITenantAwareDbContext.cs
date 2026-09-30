@@ -1,4 +1,3 @@
-using Tenantry.Core;
 
 namespace Tenantry.EfCore;
 
@@ -7,7 +6,7 @@ namespace Tenantry.EfCore;
 /// exposing the current tenant identifier for use in EF Core global query filters.
 /// </summary>
 /// <typeparam name="TKey">
-/// The tenant identifier type. See <see cref="ITenantScoped{TKey}"/> for constraints.
+/// The tenant identifier type. See <see cref="ITenantEntity{TKey}"/> for constraints.
 /// </typeparam>
 /// <remarks>
 /// <para>

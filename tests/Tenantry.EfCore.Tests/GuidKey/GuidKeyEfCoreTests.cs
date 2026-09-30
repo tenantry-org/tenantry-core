@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Tenantry.Core.Exceptions;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.GuidKey;
 

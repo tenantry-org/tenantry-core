@@ -1,14 +1,14 @@
-using Tenantry.Core;
+using Tenantry;
 
 namespace Tenantry.Samples.EfCoreConsole;
 
 /// <summary>
-/// A tenant-owned entity. Implementing <see cref="ITenantScoped{TKey}"/> (here via the
-/// convenience base class <see cref="TenantScoped{TKey}"/>) is the only thing that opts an
+/// A tenant-owned entity. Implementing <see cref="ITenantEntity{TKey}"/> (here via the
+/// convenience base class <see cref="TenantEntity{TKey}"/>) is the only thing that opts an
 /// entity into tenant isolation: the interceptor stamps <c>TenantId</c> on insert and the
 /// global query filter restricts reads to the current tenant.
 /// </summary>
-public sealed class Order : TenantScoped<Guid>
+public sealed class Order : TenantEntity<Guid>
 {
     public int Id { get; set; }
 

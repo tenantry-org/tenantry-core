@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using Tenantry.Core.Exceptions;
 
 namespace Tenantry.Core.Tests;
 
@@ -21,33 +20,8 @@ public sealed class ExceptionTests
         ex.Should().BeAssignableTo<Exception>();
     }
 
-    [Fact]
-    public void TenantIsolationViolationException_StoresEntityAndTenantIds()
-    {
-        TenantIsolationViolationException ex = new("Order", "attacker", "acme");
 
-        ex.EntityTypeName.Should().Be("Order");
-        ex.OffendingTenantId.Should().Be("attacker");
-        ex.ExpectedTenantId.Should().Be("acme");
-    }
 
-    [Fact]
-    public void TenantIsolationViolationException_MessageContainsEntityAndTenantIds()
-    {
-        TenantIsolationViolationException ex = new("Order", "attacker", "acme");
-
-        ex.Message.Should().Contain("Order")
-            .And.Contain("attacker")
-            .And.Contain("acme");
-    }
-
-    [Fact]
-    public void TenantIsolationViolationException_IsException()
-    {
-        TenantIsolationViolationException ex = new("Order", "attacker", "acme");
-
-        ex.Should().BeAssignableTo<Exception>();
-    }
 
     [Fact]
     public void TenantNotResolvedException_MessageOverload_StoresMessage()
@@ -68,13 +42,6 @@ public sealed class ExceptionTests
         ex.InnerException.Should().BeSameAs(inner);
     }
 
-    [Fact]
-    public void TenantIsolationViolationException_DerivesFromInvalidOperationException()
-    {
-        TenantIsolationViolationException ex = new("Order", "attacker", "acme");
-
-        ex.Should().BeAssignableTo<InvalidOperationException>();
-    }
 
     [Fact]
     public void TenantNotResolvedException_DerivesFromInvalidOperationException()
@@ -82,5 +49,34 @@ public sealed class ExceptionTests
         TenantNotResolvedException ex = new();
 
         ex.Should().BeAssignableTo<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void TenantNotResolvedException_DefaultMessage_NamesEveryHostsWayToMakeATenantCurrent()
+    {
+        TenantNotResolvedException ex = new();
+
+        ex.Message.Should().Contain("app.UseTenantry()").And.Contain("ITenantScopeFactory");
+    }
+
+    [Fact]
+    public void TenantNotFoundException_CarriesTheIdAndIsATenantNotResolvedException()
+    {
+        var id = Guid.NewGuid();
+
+        TenantNotFoundException ex = new(id);
+
+        ex.TenantId.Should().Be(id);
+        ex.Message.Should().Contain(id.ToString());
+        ex.Should().BeAssignableTo<TenantNotResolvedException>();
+    }
+
+    [Fact]
+    public void TenantNotFoundException_WithAMessage_KeepsBoth()
+    {
+        TenantNotFoundException ex = new("acme", "Custom message");
+
+        ex.TenantId.Should().Be("acme");
+        ex.Message.Should().Be("Custom message");
     }
 }

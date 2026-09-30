@@ -2,8 +2,6 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore;
@@ -13,7 +11,7 @@ namespace Tenantry.EfCore;
 /// in <c>OnModelCreating</c>.
 /// </summary>
 /// <typeparam name="TKey">
-/// The tenant identifier type. See <see cref="ITenantScoped{TKey}"/> for constraints.
+/// The tenant identifier type. See <see cref="ITenantEntity{TKey}"/> for constraints.
 /// </typeparam>
 /// <remarks>
 /// <para>
@@ -110,12 +108,12 @@ public abstract class MultiTenantDbContext<TKey> : DbContext, ITenantAwareDbCont
         _tenantContext ??= _applicationServiceProvider?.GetService<ITenantContext<TKey>>()
             ?? throw new InvalidOperationException(
                 $"{GetType().Name} has no ITenantContext<{typeof(TKey).Name}>. Register Tenantry " +
-                "(AddTenantry or AddTenantryCore) and create the context through AddDbContext, AddDbContextPool " +
+                "(AddTenantry) and create the context through AddDbContext, AddDbContextPool " +
                 "or AddPooledDbContextFactory, or pass an ITenantContext to the base constructor.");
 
     /// <inheritdoc />
     /// <remarks>
-    /// Applies tenant query filters to all <see cref="ITenantScoped{TKey}"/> types. Call
+    /// Applies tenant query filters to all <see cref="ITenantEntity{TKey}"/> types. Call
     /// <c>base.OnModelCreating(modelBuilder)</c> at the end of your override, after your own configuration:
     /// an entity type added after it gets no tenant filter, and a <c>HasQueryFilter</c> call after it can replace the
     /// tenant filter. The tenant interceptors throw on the first query or save of such a model.

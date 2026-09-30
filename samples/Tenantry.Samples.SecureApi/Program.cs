@@ -18,9 +18,7 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 using Tenantry.Samples.SecureApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -65,7 +63,7 @@ builder.Services.AddTenantry<string>(tenant =>
     tenant.ValidateTenantAccessByClaim(AuthSettings.TenantClaim); // 403 unless the token lists the tenant
     tenant.RequireTenantByDefault();                               // 400 when no tenant is selected
     tenant.UseInMemoryStore(tenants);                              // use a database-backed store in production
-    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+    tenant.AddEfCoreIsolation();
 });
 
 builder.Services.AddDbContext<NotesDbContext>(options =>

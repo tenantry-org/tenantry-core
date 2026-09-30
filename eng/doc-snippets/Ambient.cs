@@ -6,9 +6,7 @@
 global using static DocSnippets.Ambient;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
-using Tenantry.AspNetCore;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
+using Tenantry;
 
 namespace DocSnippets;
 
@@ -26,6 +24,7 @@ public static class Ambient
     public static TenantList tenants = new();
     public static ITenantDescriptor<Guid> tenant = null!, acme = null!, globex = null!;
     public static Guid id, tenantId, dequeuedId, acmeId, globexId;
+    public static ITenantContextSetter<Guid> tenantContext = null!;
     public static ITenantScope<Guid> scope = null!;
     public static ITenantScopeFactory<Guid> scopes = null!;
     public static AppDbContext db = null!;
@@ -34,7 +33,7 @@ public static class Ambient
     public static Queue<Guid> queue = new();
     public static Entitlements _entitlements = null!;
 
-    public static void WithTenant<TKey>(Action<IAspNetCoreTenantBuilder<TKey>> configure)
+    public static void WithTenant<TKey>(Action<ITenantBuilder<TKey>> configure)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         builder.Services.AddTenantry(configure);
 
@@ -42,8 +41,8 @@ public static class Ambient
     public static bool IsFromTrustedIp(HttpContext http) => true;
     public static bool IsInternal(HttpContext http) => true;
     public static Task ProcessAsync(AppDbContext db, CancellationToken ct) => Task.CompletedTask;
-    public static Task HandleAsync(ITenantServiceScope<Guid> scope, CancellationToken ct) => Task.CompletedTask;
-    public static Task HandleAsync(ITenantServiceScope<Guid> scope, Message message, CancellationToken ct) =>
+    public static Task HandleAsync(ITenantScope<Guid> scope, CancellationToken ct) => Task.CompletedTask;
+    public static Task HandleAsync(ITenantScope<Guid> scope, Message message, CancellationToken ct) =>
         Task.CompletedTask;
 }
 
@@ -73,7 +72,7 @@ public class Tenant : TenantDescriptor<string>
     public bool IsActive { get; set; } = true;
 }
 
-public class Order : TenantScoped<Guid>
+public class Order : TenantEntity<Guid>
 {
     public int Id { get; set; }
     public string Description { get; set; } = "";

@@ -1,6 +1,5 @@
 using AwesomeAssertions;
-using Tenantry.Core;
-using Tenantry.Core.Stores;
+using Tenantry;
 
 namespace Tenantry.AspNetCore.Tests;
 

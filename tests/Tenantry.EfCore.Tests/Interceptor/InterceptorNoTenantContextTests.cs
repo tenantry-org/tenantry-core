@@ -2,8 +2,7 @@ using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
+using Tenantry;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
@@ -118,19 +117,6 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         ReadRow(acmeOrderId).Should().Be(("acme", "maintenance"));
     }
 
-    [Theory]
-    [InlineData(MissingTenantBehavior.Skip)]
-    [InlineData((MissingTenantBehavior)99)]
-    public void OnMissingTenant_RejectsValuesWithNoMeaningForWrites(MissingTenantBehavior behavior)
-    {
-        EfCoreIsolationOptions options = new();
-
-        var act = () => options.OnMissingTenant = behavior;
-
-        act.Should().Throw<ArgumentOutOfRangeException>();
-        options.OnMissingTenant.Should().Be(MissingTenantBehavior.Reject);
-    }
-
     [Fact]
     public void Apply_WhenNoTenantContext_ReturnsWithoutProcessingEntries()
     {
@@ -150,7 +136,6 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         TenantSaveChangesInterceptor<string> interceptor = new(
             _tenant.As("acme"),
             new EfCoreIsolationOptions(),
-            new StrictIsolationValidator<string>(NullLogger<StrictIsolationValidator<string>>.Instance),
             NullLogger<TenantSaveChangesInterceptor<string>>.Instance);
 
         var act = () => interceptor.SavingChanges(new NullContextEventData(), default);
@@ -161,7 +146,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     [Fact]
     public async Task Apply_SkipsNonTenantScopedEntities()
     {
-        // Verifies the branch where an entry.Entity is not ITenantScoped — the applier should skip it.
+        // Verifies the branch where an entry.Entity is not ITenantEntity — the applier should skip it.
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
         db.NonTenants.Add(new NonTenant { Name = "plain" });
 

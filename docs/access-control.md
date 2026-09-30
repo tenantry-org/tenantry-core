@@ -17,8 +17,6 @@ tenant globally or per-endpoint.
 ### Globally
 
 ```csharp
-using Tenantry.AspNetCore.Extensions;
-
 builder.Services.AddTenantry<Guid>(tenant =>
 {
     tenant.ResolveFromHeader("X-Tenant-Id");
@@ -27,8 +25,10 @@ builder.Services.AddTenantry<Guid>(tenant =>
 });
 ```
 
-With this on, any request that does not resolve a tenant gets `400 Bad Request`. Individual endpoints
-opt out with `AllowMissingTenant()`.
+With this on, a request that does not resolve a tenant gets `400 Bad Request`, and one whose tenant is invalid,
+unknown or refused is rejected too ([status codes](aspnetcore-integration.md#status-codes)). Individual endpoints
+opt out with `AllowMissingTenant()`. On an endpoint that does not require a tenant, a request whose tenant is
+invalid, unknown or refused continues without one.
 
 ### Per-endpoint
 
@@ -43,7 +43,7 @@ Controllers (attributes target both classes and methods):
 
 ```csharp
 using Microsoft.AspNetCore.Mvc;
-using Tenantry.AspNetCore.Attributes;
+using Tenantry.AspNetCore;
 
 [RequireTenant]                       // applies to the whole controller
 public class OrdersController : ControllerBase
@@ -63,8 +63,12 @@ confusion. When no metadata is present, `RequireTenantByDefault()` decides.
 
 Resolving and finding a tenant does not mean the *caller* is allowed to use it. A user authenticated as
 Acme should not be able to send `X-Tenant-Id: globex`. Access validators run **after** the tenant is
-found in the store but **before** the scope is opened; if validation fails the request gets
-`403 Forbidden` and no scope is set.
+found in the store but **before** it is made current. If validation fails, an endpoint that requires a tenant
+responds `403 Forbidden`, and any other endpoint runs without a tenant; either way the refused tenant is never
+current.
+
+Once any validator is configured, a request for a tenant that does not exist gets the same response as one for a
+tenant the caller may not use, so an authenticated user of one tenant cannot discover which others exist.
 
 ### Claim-based validation
 
@@ -128,15 +132,12 @@ validator that reads the status from your own descriptor type:
 tenant.ValidateTenantAccess((http, t) => t is Tenant { IsActive: true });
 ```
 
-Access validators run only in the HTTP middleware. `ITenantScopeFactory`, `ITenantScope.BeginScope` and
+Access validators run only in the HTTP middleware. `ITenantScopeFactory`, `ITenantContextSetter.Use` and
 background jobs never call them, so background work must check the tenant's status itself.
 
 ## Putting it together
 
 ```csharp
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.EfCore.Extensions;
-
 builder.Services.AddTenantry<Guid>(tenant =>
 {
     tenant.ResolveFromClaim("tenant_id");        // bind tenant to the token
@@ -145,7 +146,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
     tenant.RequireTenantByDefault();             // no anonymous tenant access
     tenant.ValidateTenantAccessByClaim("tenant_id"); // caller must be entitled to the tenant
     tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true }); // and it must be active
-    tenant.AddEfCoreIsolation(o => o.DetectSpoofedWrites = true);
+    tenant.AddEfCoreIsolation();
 });
 ```
 

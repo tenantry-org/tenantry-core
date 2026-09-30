@@ -3,16 +3,22 @@
 Common symptoms and what causes them. Most isolation surprises come down to one of: no tenant in scope,
 the wrong `TKey`, middleware ordering, or the interceptor not attached.
 
-## Startup fails with "no tenant resolvers were registered" / "no tenant store was registered"
+## Startup fails with "has no tenant resolvers", "has no tenant store" or "found no tenant resolution"
 
-`AddTenantry` validates configuration at startup. You called `AddTenantry` but forgot a resolver or a
-store.
+`app.UseTenantry()` checks the registration when the pipeline is built. You called `AddTenantry` but forgot a
+resolver or a store, or did not register Tenantry's request resolution at all.
 
 - Add at least one resolver: `tenant.ResolveFromHeader(...)`, `ResolveFromClaim(...)`, etc., or
   `UseResolver(...)`.
 - Add exactly one store: `tenant.UseInMemoryStore(...)` or `tenant.UseStore<T>()`.
 
-(`AddTenantryCore` does not perform this validation — see [Non-HTTP hosts](non-http-hosts.md).)
+In a worker or console app, `ITenantStoreAccessor` and `ITenantScopeFactory.RunInScopeAsync` throw the same "has no
+tenant store" error; a hosted service that depends on the accessor throws it as the host starts.
+
+## Registration fails with "A tenant store is already registered" or "already registered with tenant key type"
+
+An application has one store and one tenant key type. Remove the second `UseStore`/`UseInMemoryStore` (or the
+`ITenantStore<TKey>` you registered yourself), and call `AddTenantry` with the same key type everywhere.
 
 ## Queries return **no** rows for a valid tenant
 
@@ -21,20 +27,20 @@ in order:
 
 1. **Is a tenant actually in scope?** Inject `ITenantContext<TKey>` and confirm `HasTenant` is true at
    the point of the query. On the web, `UseTenantry()` must have run and resolved a tenant. In a
-   worker, you must be inside a scope from `ITenantScopeFactory` (or `BeginScope`).
+   worker, you must be inside a scope from `ITenantScopeFactory` (or `ITenantContextSetter.Use`).
 2. **Did the request resolve a tenant?** A missing/blank header (or other source) means no tenant. If
    the endpoint should require one, add `.RequireTenant()` so you get a clear `400` instead of silent
    empties.
-3. **Is the entity actually tenant-scoped?** It must implement `ITenantScoped<TKey>` with the **same**
-   `TKey` you registered. A `Guid` registration plus an `ITenantScoped<string>` entity never lines up.
-4. **Is the tenant id the default value?** Avoid `Guid.Empty`/`0` as a real tenant id; the fail-closed
-   guard treats the default as "no tenant".
+3. **Is the entity actually tenant-scoped?** It must implement `ITenantEntity<TKey>` with the **same**
+   `TKey` you registered. A `Guid` registration plus an `ITenantEntity<string>` entity never lines up.
+4. **Is the tenant id the default value?** `Guid.Empty`, `0` and an empty string mean "no tenant", so no
+   tenant can have them: making such a tenant current throws `ArgumentException`.
 
 ## Queries return **all** tenants' rows
 
 - You probably called `IgnoreQueryFilters()` somewhere (directly, or via a shared queryable helper).
-- The entity does not implement `ITenantScoped<TKey>`, so it is treated as global. If it should be
-  isolated, implement the interface (or derive from `TenantScoped<TKey>`).
+- The entity does not implement `ITenantEntity<TKey>`, so it is treated as global. If it should be
+  isolated, implement the interface (or derive from `TenantEntity<TKey>`).
 - The context has no tenant interceptors (`.AddTenantInterceptors(sp)`, or a non-pooled
   `MultiTenantDbContext`), and `ApplyTenantFilters` was not called or ran before configuration that
   replaced its filter. With the interceptors attached, such a model throws on its first query instead (see
@@ -51,9 +57,9 @@ in order:
 
 ## `TenantIsolationViolationException` on save
 
-This is the system working: a `Modified`/`Deleted` entity (or, with `DetectSpoofedWrites`, an `Added`
-one with an explicit wrong id) belongs to a different tenant than the current scope. The exception's
-`OffendingTenantId` and `ExpectedTenantId` tell you which.
+This is the system working: a `Modified`/`Deleted` entity, or an `Added` one that names another tenant, belongs
+to a different tenant than the current one. The exception's `Kind` is `EntityWrite`, and its
+`OffendingTenantId` and `ExpectedTenantId` tell you which tenants.
 
 - You loaded an entity in one tenant's scope and modified it in another's. Do tenant work inside the
   owning tenant's scope.
@@ -74,7 +80,7 @@ before it ran.
   adds counts, not one written by hand or set by a convention or model customizer.
 - **Not a concurrency token:** something after `ApplyTenantFilters` configured `TenantId` with
   `IsConcurrencyToken(false)`. Remove it: updates and deletes rely on it to match the stored tenant.
-- **"implements ITenantScoped&lt;X&gt;, but the tenant key type here is Y":** the entity uses a different key
+- **"implements ITenantEntity&lt;X&gt;, but the tenant key type here is Y":** the entity uses a different key
   type from `AddTenantry<Y>` or `ApplyTenantFilters<Y, …>`. Use the same key type everywhere.
 - **"Owned entity … is tenant-scoped but its owner … is not":** EF Core filters owned rows only through their
   owner, so make the owner tenant-scoped too.
@@ -87,7 +93,7 @@ not a captured service:
 - Implement `ITenantAwareDbContext<TKey>` and expose `CurrentTenantId => _tenantContext.CurrentTenantId`,
   then `ApplyTenantFilters<TKey, TContext>(this)`. Passing `this` is what lets EF Core re-evaluate the
   tenant per query. See [EF Core integration](efcore-integration.md#how-the-query-filter-stays-correct).
-- Inject `ITenantContext<TKey>` (read-only) into the context, not `ITenantScope<TKey>`.
+- Inject `ITenantContext<TKey>` (read-only) into the context, not `ITenantContextSetter<TKey>`.
 
 ## Claim-based resolution or validation never matches
 

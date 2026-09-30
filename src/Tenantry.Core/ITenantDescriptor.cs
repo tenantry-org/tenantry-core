@@ -1,4 +1,4 @@
-namespace Tenantry.Core;
+namespace Tenantry;
 
 /// <summary>
 /// Represents a resolved tenant.

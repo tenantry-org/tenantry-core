@@ -1,4 +1,4 @@
-namespace Tenantry.Core;
+namespace Tenantry;
 
 /// <summary>
 /// Opens tenant scopes for work that runs outside an HTTP request: hosted services, queue consumers,
@@ -10,7 +10,7 @@ namespace Tenantry.Core;
 /// </typeparam>
 /// <remarks>
 /// <para>
-/// Registered as a singleton by <c>AddTenantryCore</c> and <c>AddTenantry</c>, so hosted services can
+/// Registered as a singleton by <c>AddTenantry</c>, so hosted services can
 /// take it as a constructor dependency. There are two ways to use it:
 /// </para>
 /// <list type="bullet">
@@ -41,11 +41,12 @@ public interface ITenantScopeFactory<TKey>
     /// new scope and see this tenant.
     /// </summary>
     /// <param name="tenant">The tenant to activate.</param>
+    /// <exception cref="ArgumentException">The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".</exception>
     /// <returns>
     /// The scope. Dispose it (<c>using</c> or <c>await using</c>) to dispose its services and restore the
     /// tenant that was current before it was created.
     /// </returns>
-    ITenantServiceScope<TKey> CreateScope(ITenantDescriptor<TKey> tenant);
+    ITenantScope<TKey> CreateScope(ITenantDescriptor<TKey> tenant);
 
     /// <summary>
     /// Looks the tenant up with <see cref="ITenantStoreAccessor{TKey}"/>, then runs
@@ -55,18 +56,20 @@ public interface ITenantScopeFactory<TKey>
     /// <param name="tenantId">The id of the tenant to run the work as.</param>
     /// <param name="work">The work to run. It receives the scope and <paramref name="cancellationToken"/>.</param>
     /// <param name="cancellationToken">Passed to the tenant lookup and to <paramref name="work"/>.</param>
-    /// <exception cref="Exceptions.TenantNotResolvedException">The tenant store has no tenant with that id.</exception>
+    /// <exception cref="TenantNotFoundException">The tenant store has no tenant with that id.</exception>
+    /// <exception cref="InvalidOperationException">No tenant store is registered.</exception>
+    /// <exception cref="ArgumentException"><paramref name="tenantId"/> is the key type's default value or an empty string, which no tenant can have.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled before the work started.</exception>
     Task RunInScopeAsync(
         TKey tenantId,
-        Func<ITenantServiceScope<TKey>, CancellationToken, Task> work,
+        Func<ITenantScope<TKey>, CancellationToken, Task> work,
         CancellationToken cancellationToken = default);
 
-    /// <inheritdoc cref="RunInScopeAsync(TKey, Func{ITenantServiceScope{TKey}, CancellationToken, Task}, CancellationToken)"/>
+    /// <inheritdoc cref="RunInScopeAsync(TKey, Func{ITenantScope{TKey}, CancellationToken, Task}, CancellationToken)"/>
     /// <typeparam name="TResult">The type of the work's result.</typeparam>
     /// <returns>The value returned by <paramref name="work"/>.</returns>
     Task<TResult> RunInScopeAsync<TResult>(
         TKey tenantId,
-        Func<ITenantServiceScope<TKey>, CancellationToken, Task<TResult>> work,
+        Func<ITenantScope<TKey>, CancellationToken, Task<TResult>> work,
         CancellationToken cancellationToken = default);
 }

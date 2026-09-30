@@ -1,12 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Tenantry;
 using Tenantry.EfCore;
-using Tenantry.EfCore.Extensions;
 using Testcontainers.MsSql;
 
 namespace Tenantry.IntegrationTests;
@@ -48,10 +48,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
                 new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
                 new TenantDescriptor<string> { TenantId = "globex", Name = "Globex LLC" },
             ]);
-            t.AddEfCoreIsolation(options =>
-            {
-                options.DetectSpoofedWrites = true;
-            });
+            t.AddEfCoreIsolation();
         });
 
         builder.Services.AddDbContext<IntegrationOrderDbContext>((sp, options) =>
@@ -71,7 +68,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
                 .Select(o => new IntegrationOrderResponse(o.Id, o.TenantId, o.Description))
                 .ToListAsync();
             return orders;
-        });
+        }).RequireTenant();
 
         // Endpoint: create an order (interceptor stamps TenantId)
         _app.MapPost("/orders", async (IntegrationOrderDbContext db, IntegrationCreateOrderRequest req) =>
@@ -82,7 +79,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
             return new IntegrationOrderResponse(order.Id, order.TenantId, order.Description);
         });
 
-        // Endpoint: global reference data — no tenant filter (Labels don't implement ITenantScoped)
+        // Endpoint: global reference data — no tenant filter (Labels don't implement ITenantEntity)
         _app.MapGet("/labels", async (IntegrationOrderDbContext db) =>
         {
             var labels = await db.Labels
@@ -226,7 +223,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
     [Fact]
     public async Task NonTenantedEntity_VisibleToAllTenants()
     {
-        // IntegrationLabel doesn't implement ITenantScoped<string>, so no query filter
+        // IntegrationLabel doesn't implement ITenantEntity<string>, so no query filter
         // is applied. It must be visible regardless of the tenant context.
 
         using var acmeClient = _app.GetTestClient();
@@ -285,11 +282,10 @@ public sealed class FullPipelineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task StrictMode_SpoofedTenantId_Returns500()
+    public async Task ForeignTenantIdOnInsert_Returns500()
     {
         // Client authenticates as Acme but provides a body claiming ownership by Globex.
-        // StrictIsolationValidator sees an Added entity with TenantId="globex" (non-null, non-current)
-        // and throws before any DB write operation.
+        // The save interceptor always rejects an Added entity that names another tenant, before any DB write.
         using var acmeClient = _app.GetTestClient();
         acmeClient.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
@@ -316,10 +312,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
             [
                 new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
             ]);
-            t.AddEfCoreIsolation(options =>
-            {
-                options.DetectSpoofedWrites = true;
-            });
+            t.AddEfCoreIsolation();
         });
 
         builder.Services.AddDbContext<IntegrationOrderDbContext>((sp, options) =>
@@ -354,7 +347,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
 
 // ── In-test models ──────────────────────────────────────────────────────────
 
-internal sealed class IntegrationOrder : ITenantScoped<string>
+internal sealed class IntegrationOrder : ITenantEntity<string>
 {
     public int Id { get; init; }
 
@@ -365,7 +358,7 @@ internal sealed class IntegrationOrder : ITenantScoped<string>
     public string Description { get; init; } = string.Empty;
 }
 
-/// <summary>Non-tenanted global reference entity — no ITenantScoped, no query filter.</summary>
+/// <summary>Non-tenanted global reference entity — no ITenantEntity, no query filter.</summary>
 internal sealed class IntegrationLabel
 {
     public int Id { get; set; }
@@ -386,7 +379,7 @@ internal sealed class IntegrationOrderDbContext(
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        // Only ITenantScoped<string> types get a query filter — IntegrationLabel is excluded.
+        // Only ITenantEntity<string> types get a query filter — IntegrationLabel is excluded.
         modelBuilder.ApplyTenantFilters<string, IntegrationOrderDbContext>(this);
     }
 }

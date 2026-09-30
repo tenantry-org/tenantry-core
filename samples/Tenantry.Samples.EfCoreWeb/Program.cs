@@ -34,9 +34,7 @@
 //   curl http://localhost:5181/admin/stats
 
 using Microsoft.EntityFrameworkCore;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 using Tenantry.Samples.EfCoreWeb.Data;
 using Tenantry.Samples.EfCoreWeb.Entities;
 using Tenantry.Samples.EfCoreWeb.Requests;
@@ -52,11 +50,7 @@ builder.Services.AddTenantry<string>(tenant =>
     // The store returns inactive tenants too; refuse them here (403) before any scope opens.
     tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true });
 
-    tenant.AddEfCoreIsolation(options =>
-    {
-        // Reject Added entities pre-stamped with a foreign tenant id (spoofing detection).
-        options.DetectSpoofedWrites = true;
-    });
+    tenant.AddEfCoreIsolation();
 });
 
 // ── 2. Register EF Core with tenant interceptors ─────────────────────────────────

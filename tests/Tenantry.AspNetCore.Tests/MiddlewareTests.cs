@@ -1,10 +1,9 @@
 using System.Security.Claims;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
-using Tenantry.AspNetCore.Attributes;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.AspNetCore.Tests;
 
@@ -51,14 +50,31 @@ public sealed class MiddlewareTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Request_WithUnknownTenantId_Returns404()
+    public async Task Request_WithUnknownTenantId_OnAnEndpointThatRequiresATenant_Returns404()
+    {
+        await using var app = await StartAsync<string>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .RequireTenantByDefault()
+            .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }]));
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", "unknown-corp");
+
+        var response = await client.GetAsync("/tenant");
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+        (await response.Content.ReadAsStringAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Request_WithUnknownTenantId_OnAnOptionalEndpoint_ContinuesWithoutTenant()
     {
         using var client = _app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "unknown-corp");
 
         var response = await client.GetAsync("/tenant");
 
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).Should().Be("(none)");
     }
 
     [Fact]
@@ -99,7 +115,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
-        body.Should().Be("Tenant resolution is required for this endpoint.");
+        body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
     }
 
     [Fact]
@@ -112,6 +128,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         builder.Services.AddTenantry<int>(tenant =>
         {
             tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.RequireTenantByDefault();
             tenant.UseInMemoryStore([new TenantDescriptor<int> { TenantId = 1, Name = "Test" }]);
         });
 
@@ -126,6 +143,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var response = await client.GetAsync("/tenant");
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().BeEmpty();
     }
 
     [Fact]
@@ -265,7 +283,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
-        body.Should().Be("Tenant resolution is required for this endpoint.");
+        body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
     }
 
     [Fact]
@@ -318,6 +336,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         builder.Services.AddTenantry<string>(tenant =>
         {
             tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.RequireTenantByDefault();
             tenant.UseInMemoryStore(
             [
                 new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
@@ -347,7 +366,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
-        body.Should().Be("Tenant access denied.");
+        body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
     }
 
     [Fact]
@@ -363,6 +382,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         builder.Services.AddTenantry<string>(tenant =>
         {
             tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.RequireTenantByDefault();
             tenant.UseInMemoryStore(
             [
                 new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
@@ -393,7 +413,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
-        body.Should().Be("Tenant access denied.");
+        body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
     }
 
     [Fact]
@@ -408,6 +428,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         builder.Services.AddTenantry<string>(tenant =>
         {
             tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.RequireTenantByDefault();
             tenant.UseInMemoryStore(
             [
                 new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
@@ -432,7 +453,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
-        body.Should().Be("Tenant access denied.");
+        body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
     }
 
     [Fact]
@@ -565,6 +586,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         builder.Services.AddTenantry<int>(tenant =>
         {
             tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.RequireTenantByDefault();
             tenant.UseInMemoryStore(
             [
                 new TenantDescriptor<int> { TenantId = 1, Name = "Acme Corp" },
@@ -593,7 +615,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
-        body.Should().Be("Tenant access denied.");
+        body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
     }
 
     [Fact]
@@ -605,6 +627,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         builder.Services.AddTenantry<string>(tenant =>
         {
             tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.RequireTenantByDefault();
             tenant.UseInMemoryStore(
             [
                 new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
@@ -634,7 +657,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
-        body.Should().Be("Tenant access denied.");
+        body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
     }
 
     [Fact]
@@ -663,7 +686,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
-        body.Should().Be("Tenant resolution is required for this endpoint.");
+        body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
     }
 
     [Fact]
@@ -859,6 +882,191 @@ public sealed class MiddlewareTests : IAsyncDisposable
 
         // Middleware defers to default (not required), framework returns 404
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+    }
+
+    [Theory]
+    [InlineData("not-a-number")]
+    [InlineData("0")]
+    public async Task Request_WithAnInvalidOrDefaultId_OnAnOptionalEndpoint_ContinuesWithoutTenant(string identifier)
+    {
+        await using var app = await StartAsync<int>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .UseInMemoryStore([new TenantDescriptor<int> { TenantId = 1, Name = "Test" }]));
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", identifier);
+
+        var response = await client.GetAsync("/tenant");
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).Should().Be("(none)");
+    }
+
+    [Fact]
+    public async Task Request_WithTheKeyTypesDefaultId_OnAnEndpointThatRequiresATenant_Returns400()
+    {
+        // A tenant stored with the default id is never served: Tenantry reserves it for "no tenant".
+        await using var app = await StartAsync<Guid>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .RequireTenantByDefault()
+            .UseInMemoryStore([new TenantDescriptor<Guid> { TenantId = Guid.Empty, Name = "Empty" }]));
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", Guid.Empty.ToString());
+
+        var response = await client.GetAsync("/tenant");
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Rejections_WithProblemDetails_AreProblemDetailsThatNeverRepeatTheIdentifier()
+    {
+        const string identifier = "<script>alert(1)</script>";
+        await using var app = await StartAsync<int>(
+            tenant => tenant
+                .ResolveFromHeader("X-Tenant-Id")
+                .RequireTenantByDefault()
+                .UseInMemoryStore([new TenantDescriptor<int> { TenantId = 1, Name = "Test" }]),
+            services => services.AddProblemDetails());
+
+        foreach (var (header, status, title) in new[]
+                 {
+                     ((string?)null, 400, "Tenant required"),
+                     (identifier, 400, "Invalid tenant"),
+                     ("31337", 404, "Tenant not found"),
+                 })
+        {
+            using var client = app.GetTestClient();
+            if (header is not null)
+            {
+                client.DefaultRequestHeaders.TryAddWithoutValidation("X-Tenant-Id", header);
+            }
+
+            var response = await client.GetAsync("/tenant");
+            var body = await response.Content.ReadAsStringAsync();
+
+            ((int)response.StatusCode).Should().Be(status);
+            response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+            var problem = System.Text.Json.JsonDocument.Parse(body).RootElement;
+            problem.GetProperty("status").GetInt32().Should().Be(status);
+            problem.GetProperty("title").GetString().Should().Be(title);
+            if (header is not null)
+            {
+                System.Text.RegularExpressions.Regex.Replace(body, "\"traceId\":\"[^\"]*\"", "")
+                    .Should().NotContain(header).And.NotContain("script");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WithAccessValidators_AnUnknownTenant_GetsTheSameResponseAsADeniedOne()
+    {
+        await using var app = await StartAsync<string>(
+            tenant => tenant
+                .ResolveFromHeader("X-Tenant-Id")
+                .RequireTenantByDefault()
+                .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }])
+                .ValidateTenantAccess((_, _) => false),
+            services => services.AddProblemDetails());
+
+        async Task<(System.Net.HttpStatusCode Status, string Body)> Get(string tenantId)
+        {
+            using var client = app.GetTestClient();
+            client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
+            var response = await client.GetAsync("/tenant");
+            var body = await response.Content.ReadAsStringAsync();
+
+            // Every response has its own trace id.
+            return (response.StatusCode, System.Text.RegularExpressions.Regex.Replace(body, "\"traceId\":\"[^\"]*\"", ""));
+        }
+
+        var denied = await Get("acme");
+        var unknown = await Get("unknown-corp");
+
+        denied.Status.Should().Be(System.Net.HttpStatusCode.Forbidden);
+        unknown.Should().Be(denied, "a caller must not learn which tenants exist");
+    }
+
+    [Fact]
+    public async Task WithAccessValidators_OnAnOptionalEndpoint_DeniedAndUnknownTenants_BothContinueWithoutTenant()
+    {
+        await using var app = await StartAsync<string>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }])
+            .ValidateTenantAccess((_, _) => false));
+
+        foreach (var tenantId in new[] { "acme", "unknown-corp" })
+        {
+            using var client = app.GetTestClient();
+            client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
+
+            var response = await client.GetAsync("/tenant");
+
+            response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+            (await response.Content.ReadAsStringAsync()).Should().Be("(none)");
+        }
+    }
+
+    [Fact]
+    public async Task ConfiguredStatusCodes_AreUsed()
+    {
+        await using var app = await StartAsync<int>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .RequireTenantByDefault()
+            .UseInMemoryStore([new TenantDescriptor<int> { TenantId = 1, Name = "Test" }])
+            .ConfigureResolution(options =>
+            {
+                options.MissingTenantStatusCode = 401;
+                options.InvalidTenantStatusCode = 422;
+                options.TenantNotFoundStatusCode = 410;
+            }));
+
+        foreach (var (header, status) in new[] { ((string?)null, 401), ("x", 422), ("2", 410) })
+        {
+            using var client = app.GetTestClient();
+            if (header is not null)
+            {
+                client.DefaultRequestHeaders.Add("X-Tenant-Id", header);
+            }
+
+            ((int)(await client.GetAsync("/tenant")).StatusCode).Should().Be(status);
+        }
+    }
+
+    [Fact]
+    public async Task ConfiguredAccessDeniedStatusCode_IsUsedForDeniedAndUnknownTenants()
+    {
+        await using var app = await StartAsync<string>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .RequireTenantByDefault()
+            .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }])
+            .ValidateTenantAccess((_, _) => false)
+            .ConfigureResolution(options => options.AccessDeniedStatusCode = 404));
+
+        foreach (var tenantId in new[] { "acme", "unknown-corp" })
+        {
+            using var client = app.GetTestClient();
+            client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
+
+            (await client.GetAsync("/tenant")).StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+        }
+    }
+
+    // Starts an application with Tenantry configured by configure, and GET /tenant returning the current tenant id.
+    private static async Task<WebApplication> StartAsync<TKey>(
+        Action<ITenantBuilder<TKey>> configure,
+        Action<IServiceCollection>? services = null)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddTenantry(configure);
+        services?.Invoke(builder.Services);
+
+        var app = builder.Build();
+        app.UseTenantry();
+        app.MapGet("/tenant", (ITenantContext<TKey> ctx) => ctx.HasTenant ? ctx.CurrentTenantId!.ToString()! : "(none)");
+        await app.StartAsync();
+        return app;
     }
 
     public async ValueTask DisposeAsync()

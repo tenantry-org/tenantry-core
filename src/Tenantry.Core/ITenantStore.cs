@@ -1,4 +1,4 @@
-namespace Tenantry.Core;
+namespace Tenantry;
 
 /// <summary>
 /// Persists and retrieves tenant definitions.

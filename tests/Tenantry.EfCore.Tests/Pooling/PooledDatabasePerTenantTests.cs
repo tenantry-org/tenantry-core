@@ -1,16 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Pooling;
 
-public sealed class PooledNote : ITenantScoped<string>
+public sealed class PooledNote : ITenantEntity<string>
 {
     public int Id { get; set; }
 
@@ -100,16 +98,16 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     {
         await using var services = Build();
         var factory = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
-        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.BeginScope(Globex))
+        using (ambient.Use(Globex))
         {
             await using var db = factory.CreateDbContext();
             db.Notes.Add(new PooledNote { Text = "sync lease" });
             await db.SaveChangesAsync();
         }
 
-        using (ambient.BeginScope(Acme))
+        using (ambient.Use(Acme))
         {
             await using var db = await factory.CreateDbContextAsync();
             db.Notes.Add(new PooledNote { Text = "async lease" });
@@ -154,22 +152,26 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     public async Task ContextUsedAfterTheTenantChanges_RefusesToOpenAConnection()
     {
         await using var services = Build();
-        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
         PooledNotesContext db;
 
-        using (ambient.BeginScope(Acme))
+        using (ambient.Use(Acme))
         {
             db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
         }
 
         await using (db)
-        using (ambient.BeginScope(Globex))
+        using (ambient.Use(Globex))
         {
             db.Notes.Add(new PooledNote { Text = "globex row in acme's database" });
             var act = () => db.SaveChangesAsync();
 
-            (await act.Should().ThrowAsync<TenantIsolationViolationException>())
-                .WithMessage("*tenant 'acme'*current tenant is 'globex'*");
+            var thrown = (await act.Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("*tenant 'acme'*current tenant is 'globex'*").Which;
+            thrown.Kind.Should().Be(TenantIsolationViolationKind.TenantDatabaseMismatch);
+            thrown.TypeName.Should().Be(nameof(PooledNotesContext));
+            thrown.OffendingTenantId.Should().Be("acme", "the database belongs to acme");
+            thrown.ExpectedTenantId.Should().Be("globex");
         }
 
         RowsIn("acme").Should().BeEmpty();
@@ -199,11 +201,11 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         string command)
     {
         await using var services = Build();
-        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
         var factory = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
         PooledNotesContext db;
 
-        using (ambient.BeginScope(Acme))
+        using (ambient.Use(Acme))
         {
             await using (var seed = factory.CreateDbContext())
             {
@@ -224,7 +226,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         }
 
         await using (db)
-        using (ambient.BeginScope(Globex))
+        using (ambient.Use(Globex))
         {
             db.Notes.Add(new PooledNote { Text = "globex row in acme's database" });
 
@@ -255,9 +257,9 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     public async Task RejectedSave_LeavesPendingInsertsUnstamped_SoTheOwningTenantCanStillSave(bool openConnection)
     {
         await using var services = Build();
-        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.BeginScope(Acme))
+        using (ambient.Use(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
 
@@ -269,7 +271,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
             var note = new PooledNote { Text = "added by acme" };
             db.Notes.Add(note);
 
-            using (ambient.BeginScope(Globex))
+            using (ambient.Use(Globex))
             {
                 await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
             }
@@ -287,10 +289,10 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     public async Task SaveChanges_WithNothingToSave_OutsideTheContextsTenant_Throws()
     {
         await using var services = Build();
-        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
         PooledNotesContext db;
 
-        using (ambient.BeginScope(Acme))
+        using (ambient.Use(Acme))
         {
             db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
         }
@@ -299,7 +301,10 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         {
             var act = () => db.SaveChangesAsync();
 
-            (await act.Should().ThrowAsync<TenantIsolationViolationException>()).WithMessage("*current tenant is '(none)'*");
+            var thrown = (await act.Should().ThrowAsync<TenantIsolationViolationException>()).WithMessage("*current tenant is '(none)'*").Which;
+            thrown.Kind.Should().Be(TenantIsolationViolationKind.TenantDatabaseMismatch);
+            thrown.OffendingTenantId.Should().Be("acme");
+            thrown.ExpectedTenantId.Should().BeNull("no tenant is current");
         }
     }
 
@@ -309,9 +314,9 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     public async Task ContextWithAnOpenConnection_UsedByItsOwnTenant_RunsCommands(string openedBy)
     {
         await using var services = Build();
-        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.BeginScope(Acme))
+        using (ambient.Use(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             var transaction = openedBy == "BeginTransaction" ? await db.Database.BeginTransactionAsync() : null;
@@ -342,16 +347,16 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     public async Task ContextWhoseConnectionTheAppReplaced_RefusesToRunCommands(string replacedBy)
     {
         await using var services = Build();
-        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.BeginScope(Globex))
+        using (ambient.Use(Globex))
         {
             await using var seed = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             seed.Notes.Add(new PooledNote { Text = "globex's own note" });
             await seed.SaveChangesAsync();
         }
 
-        using (ambient.BeginScope(Acme))
+        using (ambient.Use(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
 
@@ -380,9 +385,9 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     public async Task ContextNotConnectedForItsCurrentLease_RefusesToOpenAConnection()
     {
         await using var services = Build();
-        var ambient = services.GetRequiredService<ITenantScope<string>>();
+        var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.BeginScope(Globex))
+        using (ambient.Use(Globex))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
 
@@ -400,7 +405,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
         await using var services = Build(asyncOnly: true);
         var factory = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
 
-        using (services.GetRequiredService<ITenantScope<string>>().BeginScope(Acme))
+        using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
         {
             await using (var db = await factory.CreateDbContextAsync())
             {
@@ -408,7 +413,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
             }
 
             var sync = () => factory.CreateDbContext();
-            sync.Should().Throw<InvalidOperationException>().WithMessage("*ResolveAsync*");
+            sync.Should().Throw<InvalidOperationException>().WithMessage("*GetAsync*");
         }
     }
 
@@ -417,7 +422,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     {
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantryCore<string>(tenant => tenant.AddEfCoreIsolation());
+        services.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
         services.AddTenantDbContextPool<PooledNotesContext, string>((sp, options) =>
             options.UseSqlite().AddTenantInterceptors(sp));
         await using var provider = services.BuildServiceProvider();
@@ -430,7 +435,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
     {
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantryCore<string>(tenant =>
+        services.AddTenantry<string>(tenant =>
         {
             tenant.UseInMemoryStore([Acme, Globex]);
             tenant.UseConnectionStrings(options =>
@@ -444,7 +449,7 @@ public sealed class PooledDatabasePerTenantTests : IAsyncLifetime
                     options.GetConnectionString = t => _databases[t.TenantId].ConnectionString;
                 }
             });
-            tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+            tenant.AddEfCoreIsolation();
         });
         services.AddTenantDbContextPool<PooledNotesContext, string>(
             (sp, options) => options.UseSqlite().AddTenantInterceptors(sp),

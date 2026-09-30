@@ -1,12 +1,12 @@
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
-using Tenantry.Core;
+using Tenantry;
 
 namespace Tenantry.Samples.EfCoreWeb.Entities;
 
 /// <summary>
 /// Tenant entity — stored in the database like any other entity.
-/// This is NOT tenanted (does not implement ITenantScoped) because it's global metadata.
+/// This is NOT tenanted (does not implement ITenantEntity) because it's global metadata.
 /// In production, you'd likely add: Subscription, BillingInfo, Settings, etc.
 /// </summary>
 public class Tenant : TenantDescriptor<string>

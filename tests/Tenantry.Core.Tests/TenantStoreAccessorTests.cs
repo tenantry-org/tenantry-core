@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Tenantry.Core.Tests;
 
@@ -11,7 +11,7 @@ public sealed class TenantStoreAccessorTests
     {
         ScopedStore.Created.Clear();
         ServiceCollection services = new();
-        services.AddTenantryCore<string>(tenant => tenant.UseStore<ScopedStore>());
+        services.AddTenantry<string>(tenant => tenant.UseStore<ScopedStore>());
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
 
         // Resolved from the root provider, as a hosted service would. A captive scoped store would fail scope validation.
@@ -28,7 +28,7 @@ public sealed class TenantStoreAccessorTests
     public async Task UnknownTenant_ReturnsNull()
     {
         ServiceCollection services = new();
-        services.AddTenantryCore<string>(tenant => tenant.UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }]));
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }]));
         await using var provider = services.BuildServiceProvider();
 
         var tenant = await provider.GetRequiredService<ITenantStoreAccessor<string>>().GetTenantAsync("missing");
@@ -37,14 +37,49 @@ public sealed class TenantStoreAccessorTests
     }
 
     [Fact]
-    public async Task NoStoreRegistered_ThrowsAnErrorThatSaysHowToRegisterOne()
+    public async Task NoStoreRegistered_CreatingTheAccessor_ThrowsAnErrorThatSaysHowToRegisterOne()
     {
         ServiceCollection services = new();
-        services.AddTenantryCore<string>();
+        services.AddTenantry<string>();
         await using var provider = services.BuildServiceProvider();
 
-        await provider.Awaiting(p => p.GetRequiredService<ITenantStoreAccessor<string>>().GetAllTenantsAsync().AsTask())
-            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseInMemoryStore*UseStore*");
+        provider.Invoking(p => p.GetRequiredService<ITenantStoreAccessor<string>>())
+            .Should().Throw<InvalidOperationException>().WithMessage("*no tenant store*UseStore*UseInMemoryStore*");
+    }
+
+    [Fact]
+    public async Task NoStoreRegistered_AHostedServiceThatReadsTenants_FailsAsTheHostStarts()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddTenantry<string>();
+        builder.Services.AddHostedService<TenantSweep>();
+        using var host = builder.Build();
+
+        await host.Invoking(h => h.StartAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*no tenant store*");
+    }
+
+    [Fact]
+    public async Task NoStoreRegistered_TheScopeFactory_CreatesScopesForTenantsItIsGiven_ButCannotLookThemUp()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>();
+        await using var provider = services.BuildServiceProvider();
+        var scopes = provider.GetRequiredService<ITenantScopeFactory<string>>();
+
+        await using (var scope = scopes.CreateScope(new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }))
+        {
+            scope.ServiceProvider.GetRequiredService<ITenantContext<string>>().CurrentTenantId.Should().Be("acme");
+        }
+
+        await scopes.Awaiting(s => s.RunInScopeAsync("acme", (_, _) => Task.CompletedTask))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*no tenant store*");
+    }
+
+    private sealed class TenantSweep(ITenantStoreAccessor<string> tenants) : BackgroundService
+    {
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+            tenants.GetAllTenantsAsync(stoppingToken).AsTask();
     }
 
     private sealed class ScopedStore : ITenantStore<string>, IDisposable

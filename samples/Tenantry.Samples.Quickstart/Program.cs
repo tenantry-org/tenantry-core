@@ -1,8 +1,7 @@
 // ReSharper disable UnusedParameter.Local
 // Introductory sample: tenants come from a header and callers are not authenticated, so any caller can
 // select any tenant. See Tenantry.Samples.SecureApi for a production-shaped setup.
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
+using Tenantry;
 using Tenantry.Samples.Quickstart.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,7 +13,7 @@ builder.Services.AddTenantry<string>(tenant =>
     tenant.ResolveFromHeader("X-Tenant-Id");
 
     // We can chain multiple resolution methods together, they will be tried in order of registration.
-    // Startup will fail without at least one registered resolver
+    // app.UseTenantry() fails at startup without at least one registered resolver
     tenant.ResolveFromQueryString("tenant");
 
     // Prevent requests without a tenant ID from executing by default
@@ -34,7 +33,7 @@ builder.Services.AddTenantry<string>(tenant =>
         await ValueTask.FromResult(!ctx.Request.Headers.ContainsKey("X-Also-Block-Access")));
 
     // In-memory store — replace with a database/cache-backed ITenantStore implementation in production.
-    // Startup will fail without a registered store
+    // app.UseTenantry() fails at startup without a registered store
     tenant.UseInMemoryStore(
     [
         new TenantDescriptor<string> { TenantId = "acme",   Name = "Acme Corp"  },

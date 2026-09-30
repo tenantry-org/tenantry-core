@@ -2,8 +2,6 @@ using System.Data.Common;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
 
 namespace Tenantry.EfCore.Internal;
 
@@ -156,32 +154,42 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         }
 
         var contextType = context.GetType().Name;
+        var currentTenantId = tenantContext.HasTenant ? tenantContext.CurrentTenantId?.ToString() : null;
 
         if (!TenantDatabaseLeases.TryGet(context, out var lease) || lease.Number != context.ContextId.Lease)
         {
             throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
                 $"This pooled '{contextType}' was not connected to a tenant's database for its current lease, so it " +
                 "would reuse the database of whichever tenant used it before. Obtain it from DI or from " +
-                "IDbContextFactory, which AddTenantDbContextPool connects to the current tenant's database.");
+                "IDbContextFactory, which AddTenantDbContextPool connects to the current tenant's database.",
+                expectedTenantId: currentTenantId);
         }
+
+        var leaseTenantId = lease.TenantId?.ToString();
 
         if (!ReferenceEquals(context.Database.GetDbConnection(), lease.Connection)
             || !string.Equals(context.Database.GetConnectionString(), lease.ConnectionString, StringComparison.Ordinal))
         {
             throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
                 $"This '{contextType}''s connection was changed after it was connected to tenant '{lease.TenantId}''s " +
-                "database. Do not call SetConnectionString or SetDbConnection on a context from AddTenantDbContextPool.");
+                "database. Do not call SetConnectionString or SetDbConnection on a context from AddTenantDbContextPool.",
+                leaseTenantId,
+                currentTenantId);
         }
 
         if (!tenantContext.HasTenant || !Equals(tenantContext.CurrentTenantId, lease.TenantId))
         {
             throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
                 $"This '{contextType}' is connected to tenant '{lease.TenantId}''s database, but the current tenant is " +
-                $"'{(tenantContext.HasTenant ? tenantContext.CurrentTenantId : "(none)")}'. Use a context created " +
-                "while the tenant you are working as is current.");
+                $"'{currentTenantId ?? "(none)"}'. Use a context created while the tenant you are working as is current.",
+                leaseTenantId,
+                currentTenantId);
         }
     }
 }

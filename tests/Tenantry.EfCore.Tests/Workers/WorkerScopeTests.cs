@@ -1,10 +1,8 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 using Tenantry.EfCore.Tests.Pooling;
 
 namespace Tenantry.EfCore.Tests.Workers;
@@ -106,10 +104,10 @@ public sealed class WorkerScopeTests : IDisposable
     {
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantryCore<string>(tenant =>
+        services.AddTenantry<string>(tenant =>
         {
             tenant.UseInMemoryStore(Tenants);
-            tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+            tenant.AddEfCoreIsolation();
         });
 
         void Configure(IServiceProvider sp, DbContextOptionsBuilder options) =>
@@ -129,7 +127,7 @@ public sealed class WorkerScopeTests : IDisposable
 
     // A pooled factory hands out a context per call, returned to the pool when disposed. Disposing the scope's own
     // context early is harmless, so callers always dispose.
-    private static PooledOrdersContext Orders(ITenantServiceScope<string> scope, bool pooled) =>
+    private static PooledOrdersContext Orders(ITenantScope<string> scope, bool pooled) =>
         pooled
             ? scope.ServiceProvider.GetRequiredService<IDbContextFactory<PooledOrdersContext>>().CreateDbContext()
             : scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();

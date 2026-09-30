@@ -32,11 +32,13 @@ This guide uses `Guid`.
 
 ## 3. Register Tenantry
 
+Registration needs no Tenantry `using` directive: `AddTenantry` and its builder methods are extension methods in
+`Microsoft.Extensions.DependencyInjection`, and `UseTenantry`, `RequireTenant` and `AllowMissingTenant` in
+`Microsoft.AspNetCore.Builder`. Types such as `TenantDescriptor<TKey>` are in the `Tenantry` namespace.
+
 ```csharp
 using Microsoft.EntityFrameworkCore;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,32 +57,37 @@ builder.Services.AddTenantry<Guid>(tenant =>
     ]);
 
     // (c) Isolation — turn on EF Core write protection.
-    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+    tenant.AddEfCoreIsolation();
 });
 ```
 
-> **Startup validation.** `AddTenantry` registers a hosted service that fails fast at startup if you
-> forgot to register a resolver or a store. You will get a clear `InvalidOperationException` rather
-> than silent misbehaviour at runtime.
+Every builder method returns the builder, so the same registration can be written as one chain:
+`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants).AddEfCoreIsolation()`.
+
+> **Startup validation.** `app.UseTenantry()` (step 7) checks the registration when the pipeline is built and
+> throws a clear `InvalidOperationException` if no resolver or no store is registered, rather than letting the
+> application misbehave at runtime. Registering a second store, or calling `AddTenantry` with another key
+> type, throws too.
 
 ## 4. Mark your tenant-owned entities
 
-An entity becomes tenant-scoped by implementing `ITenantScoped<TKey>`. The convenience base class
-`TenantScoped<TKey>` implements it for you:
+An entity becomes tenant-scoped by implementing `ITenantEntity<TKey>`. The convenience base class
+`TenantEntity<TKey>` implements it for you:
 
 ```csharp
-using Tenantry.Core;
+using Tenantry;
 
-public class Order : TenantScoped<Guid>   // adds a `Guid TenantId { get; set; }` property
+public class Order : TenantEntity<Guid>   // adds a `Guid TenantId { get; set; }` property
 {
     public int Id { get; set; }
     public string Description { get; set; } = string.Empty;
 }
 ```
 
-Entities that do **not** implement `ITenantScoped<TKey>` are treated as global/shared data (product
+Entities that do **not** implement `ITenantEntity<TKey>` are treated as global/shared data (product
 catalogues, reference tables) and are never filtered or stamped. You never set `TenantId` yourself —
-Tenantry stamps it on insert.
+Tenantry stamps it on insert, and rejects a new entity that already names another tenant. The interface needs
+only a getter, so an entity can implement it with a private or init-only setter.
 
 ## 5. Make your DbContext tenant-aware
 
@@ -89,9 +96,8 @@ Your `DbContext` must expose the current tenant id so the query filters can read
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
+using Tenantry;
 using Tenantry.EfCore;
-using Tenantry.EfCore.Extensions;
 
 public class AppDbContext : DbContext, ITenantAwareDbContext<Guid>
 {
@@ -109,7 +115,7 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<Guid>
     {
         base.OnModelCreating(modelBuilder);
         // Your own entity configuration goes here, before ApplyTenantFilters.
-        modelBuilder.ApplyTenantFilters<Guid, AppDbContext>(this); // filters every ITenantScoped<Guid> entity
+        modelBuilder.ApplyTenantFilters<Guid, AppDbContext>(this); // filters every ITenantEntity<Guid> entity
     }
 }
 ```
@@ -174,6 +180,9 @@ curl "…/orders"                                                          # 400
 curl -H "X-Tenant-Id: not-a-guid" "…/orders"                             # 400 (parse failure)
 curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000099" "…/orders"  # 404 (not in store)
 ```
+
+The rejections have an empty body. Add `builder.Services.AddProblemDetails()` to get `application/problem+json`
+bodies instead; see [ASP.NET Core integration](aspnetcore-integration.md#status-codes).
 
 ## Next steps
 

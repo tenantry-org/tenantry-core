@@ -1,5 +1,5 @@
 using AwesomeAssertions;
-using Tenantry.AspNetCore.Resolution;
+using Tenantry.AspNetCore;
 
 namespace Tenantry.AspNetCore.Tests.Resolvers;
 

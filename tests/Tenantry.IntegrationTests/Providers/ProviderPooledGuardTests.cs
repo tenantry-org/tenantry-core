@@ -4,16 +4,14 @@ using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
+using Tenantry;
 using Tenantry.EfCore;
-using Tenantry.EfCore.Extensions;
 
 namespace Tenantry.IntegrationTests.Providers;
 
-public sealed class HiLoItem : ITenantScoped<string>
+public sealed class HiLoItem : ITenantEntity<string>
 {
     public long Id { get; set; }
 
@@ -92,7 +90,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
 
     protected DatabaseFixture Fixture { get; }
 
-    private ITenantScope<string> Ambient => _services.GetRequiredService<ITenantScope<string>>();
+    private ITenantContextSetter<string> Ambient => _services.GetRequiredService<ITenantContextSetter<string>>();
 
     private IDbContextFactory<TContext> Factory => _services.GetRequiredService<IDbContextFactory<TContext>>();
 
@@ -104,7 +102,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
 
         foreach (var tenant in new[] { _acme, _globex })
         {
-            using (Ambient.BeginScope(tenant))
+            using (Ambient.Use(tenant))
             {
                 await using var db = await Factory.CreateDbContextAsync();
                 await db.Database.EnsureCreatedAsync();
@@ -116,7 +114,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
     {
         foreach (var tenant in new[] { _acme, _globex })
         {
-            using (Ambient.BeginScope(tenant))
+            using (Ambient.Use(tenant))
             {
                 await using var db = await Factory.CreateDbContextAsync();
                 await db.Database.EnsureDeletedAsync();
@@ -137,7 +135,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
         var acmeBefore = await ReadSequenceAsync(Database(_acme));
         TContext db;
 
-        using (Ambient.BeginScope(_acme))
+        using (Ambient.Use(_acme))
         {
             db = await Factory.CreateDbContextAsync();
 
@@ -154,7 +152,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
         HiLoItem item = new() { Text = "globex item" };
 
         await using (db)
-        using (Ambient.BeginScope(_globex))
+        using (Ambient.Use(_globex))
         {
             Func<Task> add = async ? async () => await db.AddAsync(item) : () => Task.FromResult(db.Add(item));
 
@@ -171,7 +169,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
     [InlineData(true)]
     public async Task HiLoKey_AddedByTheOwningTenant_Works(bool openConnection)
     {
-        using (Ambient.BeginScope(_acme))
+        using (Ambient.Use(_acme))
         {
             await using var db = await Factory.CreateDbContextAsync();
 
@@ -199,12 +197,12 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
     {
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantryCore<string>(tenant =>
+        services.AddTenantry<string>(tenant =>
         {
             tenant.UseInMemoryStore(tenants);
             tenant.UseConnectionStrings(options =>
                 options.GetConnectionString = t => fixture.WithDatabase($"tk_{prefix}_{t.TenantId}_{runId}"));
-            tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+            tenant.AddEfCoreIsolation();
         });
         services.AddTenantDbContextPool<TPooled, string>(
             (sp, options) => fixture.UseProvider(options)
@@ -235,7 +233,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
     private readonly TenantDescriptor<string> _globex = new() { TenantId = "globex", Name = "Globex" };
     private ServiceProvider _services = null!;
 
-    private ITenantScope<string> Ambient => _services.GetRequiredService<ITenantScope<string>>();
+    private ITenantContextSetter<string> Ambient => _services.GetRequiredService<ITenantContextSetter<string>>();
 
     private IDbContextFactory<ProviderOrdersContext> Factory =>
         _services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>();
@@ -247,7 +245,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
 
         foreach (var tenant in new[] { _acme, _globex })
         {
-            using (Ambient.BeginScope(tenant))
+            using (Ambient.Use(tenant))
             {
                 await using var db = await Factory.CreateDbContextAsync();
                 await db.Database.EnsureCreatedAsync();
@@ -261,7 +259,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
     {
         foreach (var tenant in new[] { _acme, _globex })
         {
-            using (Ambient.BeginScope(tenant))
+            using (Ambient.Use(tenant))
             {
                 await using var db = await Factory.CreateDbContextAsync();
                 await db.Database.EnsureDeletedAsync();
@@ -288,7 +286,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
     {
         ProviderOrdersContext db;
 
-        using (Ambient.BeginScope(_acme))
+        using (Ambient.Use(_acme))
         {
             db = await Factory.CreateDbContextAsync();
             await db.Database.BeginTransactionAsync();
@@ -297,7 +295,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
         Exception? error = null;
 
         await using (db)
-        using (Ambient.BeginScope(_globex))
+        using (Ambient.Use(_globex))
         {
             try
             {
@@ -339,7 +337,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
         ProviderOrdersContext db;
         TransactionScope? scope = null;
 
-        using (Ambient.BeginScope(_acme))
+        using (Ambient.Use(_acme))
         {
             if (scopeStartedByAcme)
             {
@@ -351,7 +349,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
         }
 
         await using (db)
-        using (Ambient.BeginScope(_globex))
+        using (Ambient.Use(_globex))
         {
             scope ??= new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
 
@@ -376,7 +374,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
 
     private async Task<List<string>> DescriptionsAsync(TenantDescriptor<string> tenant)
     {
-        using (Ambient.BeginScope(tenant))
+        using (Ambient.Use(tenant))
         {
             await using var db = await Factory.CreateDbContextAsync();
             return await db.Orders.IgnoreQueryFilters().Select(o => o.Description).ToListAsync();
@@ -402,12 +400,12 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : ICl
         await using var shared = NpgsqlDataSource.Create(fixture.ConnectionString);
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantryCore<string>(tenant =>
+        services.AddTenantry<string>(tenant =>
         {
             tenant.UseInMemoryStore([_acme, _globex]);
             tenant.UseConnectionStrings(options =>
                 options.GetConnectionString = t => fixture.WithDatabase($"tk_ds_{t.TenantId}_{_runId}"));
-            tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+            tenant.AddEfCoreIsolation();
         });
 
         if (mode == "DataSourceInDi")
@@ -422,7 +420,7 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : ICl
                 .AddTenantInterceptors(sp),
             poolSize: 4);
         await using var provider = services.BuildServiceProvider();
-        var ambient = provider.GetRequiredService<ITenantScope<string>>();
+        var ambient = provider.GetRequiredService<ITenantContextSetter<string>>();
         var factory = provider.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>();
         List<string> databases = [];
 
@@ -430,7 +428,7 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : ICl
         {
             foreach (var tenant in new[] { _acme, _globex })
             {
-                using (ambient.BeginScope(tenant))
+                using (ambient.Use(tenant))
                 {
                     await using var db = await factory.CreateDbContextAsync();
                     databases.Add($"{tenant.TenantId} -> {db.Database.GetDbConnection().Database}");
@@ -444,7 +442,7 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : ICl
         {
             foreach (var tenant in new[] { _acme, _globex })
             {
-                using (ambient.BeginScope(tenant))
+                using (ambient.Use(tenant))
                 {
                     await using var db = await factory.CreateDbContextAsync();
                     await db.Database.EnsureDeletedAsync();

@@ -4,8 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
 
 namespace Tenantry.EfCore.Internal;
 
@@ -39,7 +37,7 @@ namespace Tenantry.EfCore.Internal;
 internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    private const string TenantIdProperty = nameof(ITenantScoped<>.TenantId);
+    private const string TenantIdProperty = nameof(ITenantEntity<>.TenantId);
 
     public static readonly TenantBulkUpdateGuard<TKey> Instance = new();
 
@@ -68,8 +66,8 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
     internal static void CheckExecuteUpdates(Expression queryExpression, IModel? model) =>
         new ExecuteUpdateVisitor(model).Visit(queryExpression);
 
-    private static bool IsTenantScoped(Type? type) =>
-        type is not null && typeof(ITenantScoped<TKey>).IsAssignableFrom(type);
+    private static bool IsTenantEntity(Type? type) =>
+        type is not null && typeof(ITenantEntity<TKey>).IsAssignableFrom(type);
 
     private static bool IsEfProperty(MethodCallExpression call) =>
         call.Method is { Name: nameof(EF.Property), IsGenericMethod: true } && call.Method.DeclaringType == typeof(EF);
@@ -93,24 +91,24 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
     // The tenant-scoped entity type a setter's instance expression refers to, looking through casts (which
     // matter for inheritance: ((TenantScopedDerived)baseEntity).TenantId) and falling back to the member's
     // declaring type. Prefers the innermost concrete type, so an interface cast still names the entity.
-    private static Type? TenantScopedEntityType(Expression instance, MemberInfo? member)
+    private static Type? TenantEntityType(Expression instance, MemberInfo? member)
     {
         Type? found = null;
 
         for (Expression? current = instance; current is not null; current = CastOperand(current))
         {
-            if (IsTenantScoped(current.Type) && (found is null || found.IsInterface || !current.Type.IsInterface))
+            if (IsTenantEntity(current.Type) && (found is null || found.IsInterface || !current.Type.IsInterface))
             {
                 found = current.Type;
             }
         }
 
-        if (found is null or { IsInterface: true } && IsTenantScoped(member?.DeclaringType) && !member!.DeclaringType!.IsInterface)
+        if (found is null or { IsInterface: true } && IsTenantEntity(member?.DeclaringType) && !member!.DeclaringType!.IsInterface)
         {
             return member.DeclaringType;
         }
 
-        return found ?? (IsTenantScoped(member?.DeclaringType) ? StripConvert(instance)!.Type : null);
+        return found ?? (IsTenantEntity(member?.DeclaringType) ? StripConvert(instance)!.Type : null);
     }
 
     // The property name passed to EF.Property: a constant, or a captured variable EF has not yet inlined.
@@ -186,7 +184,7 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
                 return;
             }
 
-            if (TenantScopedEntityType(instance, member) is { } entityType)
+            if (TenantEntityType(instance, member) is { } entityType)
             {
                 if (name is null)
                 {
@@ -216,6 +214,7 @@ internal sealed class TenantBulkUpdateGuard<TKey> : IQueryExpressionInterceptor
 
         private static void Reject(Type type, string problem) =>
             throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.BulkUpdate,
                 type.Name,
                 $"{problem} Set properties on the entity itself, and move data between tenants with explicit, " +
                 "reviewed SQL.");

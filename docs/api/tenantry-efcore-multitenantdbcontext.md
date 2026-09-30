@@ -6,7 +6,7 @@ Optional base `DbContext` that automatically applies tenant query filters in `On
 
 This class is a convenience for greenfield projects.
 
-To use: derive from [`MultiTenantDbContext<TKey>`](tenantry-efcore-multitenantdbcontext.md), give your context a constructor that takes only its `DbContextOptions<TContext>`, and call `base.OnModelCreating(modelBuilder)` at the end of your override, after your own configuration. The current tenant comes from Tenantry's ambient [`ITenantContext<TKey>`](tenantry-core-itenantcontext.md), resolved from the application service provider, so the same instance serves whichever tenant is active when it runs a query or saves.
+To use: derive from [`MultiTenantDbContext<TKey>`](tenantry-efcore-multitenantdbcontext.md), give your context a constructor that takes only its `DbContextOptions<TContext>`, and call `base.OnModelCreating(modelBuilder)` at the end of your override, after your own configuration. The current tenant comes from Tenantry's ambient [`ITenantContext<TKey>`](tenantry-itenantcontext.md), resolved from the application service provider, so the same instance serves whichever tenant is active when it runs a query or saves.
 
 **DbContext pooling is supported.** Register with `AddDbContextPool` or `AddPooledDbContextFactory` and call `options.AddTenantInterceptors(sp)` in the options callback: EF Core does not let [`MultiTenantDbContext<TKey>.OnConfiguring`](tenantry-efcore-multitenantdbcontext.md) change the options of a pooled context, so the self-wiring described below cannot run there, and a pooled context without the interceptors fails on first use instead of saving without isolation.
 
@@ -29,7 +29,7 @@ public abstract class MultiTenantDbContext<TKey> : DbContext, IInfrastructure<IS
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantScoped<TKey>`](tenantry-core-itenantscoped.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantEntity<TKey>`](tenantry-itenantentity.md) for constraints.
 
 Inherits `DbContext`.
 
@@ -39,7 +39,7 @@ Implements `IInfrastructure<IServiceProvider>`, `IDbContextDependencies`, `IDbSe
 
 ### `MultiTenantDbContext(DbContextOptions)`
 
-Initialises a new instance that resolves the ambient [`ITenantContext<TKey>`](tenantry-core-itenantcontext.md) from the application service provider on first use. Use this constructor for pooled contexts.
+Initialises a new instance that resolves the ambient [`ITenantContext<TKey>`](tenantry-itenantcontext.md) from the application service provider on first use. Use this constructor for pooled contexts.
 
 ```csharp
 protected MultiTenantDbContext(DbContextOptions options)
@@ -51,7 +51,7 @@ Parameters:
 
 ### `MultiTenantDbContext(DbContextOptions, ITenantContext<TKey>)`
 
-Initialises a new instance that uses the given [`ITenantContext<TKey>`](tenantry-core-itenantcontext.md), for contexts created outside dependency injection.
+Initialises a new instance that uses the given [`ITenantContext<TKey>`](tenantry-itenantcontext.md), for contexts created outside dependency injection.
 
 ```csharp
 protected MultiTenantDbContext(DbContextOptions options, ITenantContext<TKey> tenantContext)
@@ -60,7 +60,7 @@ protected MultiTenantDbContext(DbContextOptions options, ITenantContext<TKey> te
 Parameters:
 
 - `options` `DbContextOptions`: The options for this context.
-- `tenantContext` [`ITenantContext<TKey>`](tenantry-core-itenantcontext.md): Supplies the current tenant.
+- `tenantContext` [`ITenantContext<TKey>`](tenantry-itenantcontext.md): Supplies the current tenant.
 
 ## Properties
 
@@ -76,7 +76,7 @@ Value: `TKey`
 
 Exceptions:
 
-- `InvalidOperationException`: No [`ITenantContext<TKey>`](tenantry-core-itenantcontext.md) was passed to the constructor and none is registered in the application service provider.
+- `InvalidOperationException`: No [`ITenantContext<TKey>`](tenantry-itenantcontext.md) was passed to the constructor and none is registered in the application service provider.
 
 Reads the ambient tenant each time it is accessed. EF Core re-evaluates this property on every query execution because it accesses a `DbContext` property, so the filter always reflects the tenant active at that moment, including when a pooled instance is reused for another tenant.
 

@@ -1,6 +1,6 @@
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
-using Tenantry.Core;
+using Tenantry;
 
 namespace Tenantry.Samples.EfCoreWeb.Entities;
 
@@ -10,7 +10,7 @@ namespace Tenantry.Samples.EfCoreWeb.Entities;
 /// Demonstrates relationships between tenanted entities and cross-boundary
 /// navigation to non-tenanted reference data (Product).
 /// </summary>
-public class OrderItem : TenantScoped<string>
+public class OrderItem : TenantEntity<string>
 {
     public int Id { get; set; }
 

@@ -1,9 +1,8 @@
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Tenantry;
+using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;
 
@@ -22,7 +21,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 {
     private readonly DatabaseFixture _fixture;
     private readonly ServiceProvider _services;
-    private readonly ITenantScope<string> _tenants;
+    private readonly ITenantContextSetter<string> _tenants;
     private readonly string _acme = $"acme-{Guid.NewGuid():N}";
     private readonly string _globex = $"globex-{Guid.NewGuid():N}";
 
@@ -32,10 +31,10 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantryCore<string>(tenant => tenant.AddEfCoreIsolation());
+        services.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
         services.AddDbContext<ProviderOrdersContext>(options => fixture.UseProvider(options));
         _services = services.BuildServiceProvider();
-        _tenants = _services.GetRequiredService<ITenantScope<string>>();
+        _tenants = _services.GetRequiredService<ITenantContextSetter<string>>();
     }
 
     public ValueTask DisposeAsync() => _services.DisposeAsync();
@@ -81,12 +80,12 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
             var db = scope.ServiceProvider.GetRequiredService<ProviderOrdersContext>();
             ProviderOrder order;
 
-            using (_tenants.BeginScope(Tenant(_acme)))
+            using (_tenants.Use(Tenant(_acme)))
             {
                 order = await db.Orders.SingleAsync(o => o.Id == id);
             }
 
-            using (_tenants.BeginScope(Tenant(_globex)))
+            using (_tenants.Use(Tenant(_globex)))
             {
                 order.Description = "moved";
                 order.TenantId = _globex;
@@ -168,16 +167,16 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     {
         ServiceCollection collection = new();
         collection.AddLogging();
-        collection.AddTenantryCore<string>(tenant => tenant.AddEfCoreIsolation());
+        collection.AddTenantry<string>(tenant => tenant.AddEfCoreIsolation());
         collection.AddPooledDbContextFactory<ProviderOrdersContext>((sp, options) =>
             _fixture.UseProvider(options).AddTenantInterceptors(sp));
         await using var services = collection.BuildServiceProvider();
-        var tenants = services.GetRequiredService<ITenantScope<string>>();
+        var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
         var factory = services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>();
 
         foreach (var tenantId in new[] { _acme, _globex, _acme })
         {
-            using (tenants.BeginScope(Tenant(tenantId)))
+            using (tenants.Use(Tenant(tenantId)))
             {
                 await using var db = await factory.CreateDbContextAsync();
                 db.Orders.Add(new ProviderOrder { Description = "pooled" });
@@ -199,7 +198,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
     private async Task<T> AsTenantAsync<T>(string tenantId, Func<ProviderOrdersContext, Task<T>> work)
     {
-        using var _ = _tenants.BeginScope(Tenant(tenantId));
+        using var _ = _tenants.Use(Tenant(tenantId));
         await using var scope = _services.CreateAsyncScope();
         return await work(scope.ServiceProvider.GetRequiredService<ProviderOrdersContext>());
     }

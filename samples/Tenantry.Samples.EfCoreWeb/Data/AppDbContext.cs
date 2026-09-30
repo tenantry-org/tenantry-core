@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
+using Tenantry;
 using Tenantry.EfCore;
-using Tenantry.EfCore.Extensions;
 using Tenantry.Samples.EfCoreWeb.Entities;
 
 namespace Tenantry.Samples.EfCoreWeb.Data;
@@ -87,7 +86,7 @@ public class AppDbContext : DbContext, ITenantAwareDbContext<string>
             b.Property(c => c.Description).HasMaxLength(500);
         });
 
-        // Last, after all other configuration: applies the tenant query filter to every ITenantScoped type.
+        // Last, after all other configuration: applies the tenant query filter to every ITenantEntity type.
         modelBuilder.ApplyTenantFilters<string, AppDbContext>(this);
     }
 }

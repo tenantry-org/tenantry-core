@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Tenantry.Core.Extensions;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.Core.Tests;
@@ -15,7 +14,7 @@ public sealed class ConformanceTests
         var builder = Host.CreateApplicationBuilder();
         builder.ConfigureContainer(new DefaultServiceProviderFactory(Conformance.ProviderOptions));
         builder.Services.AddScoped<ScopedTenantStore.Session>();
-        builder.Services.AddTenantryCore<string>(tenant =>
+        builder.Services.AddTenantry<string>(tenant =>
         {
             tenant.UseStore<ScopedTenantStore>();
             tenant.UseConnectionStrings(options => options.GetConnectionString = t => $"Database=app_{t.TenantId}");
@@ -26,7 +25,7 @@ public sealed class ConformanceTests
         await host.Services.GetRequiredService<ITenantScopeFactory<string>>().RunInScopeAsync("acme", (scope, _) =>
         {
             Conformance.ResolveEveryTenantryService(builder.Services, scope.ServiceProvider);
-            scope.ServiceProvider.GetRequiredService<ITenantConnectionStringResolver<string>>().Resolve()
+            scope.ServiceProvider.GetRequiredService<CurrentTenantConnectionString<string>>().Get()
                 .Should().Be("Database=app_acme");
             return Task.CompletedTask;
         });

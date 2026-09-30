@@ -5,37 +5,36 @@ jobs that run maintenance for every tenant, CLI tools, and desktop apps all need
 `Tenantry.Core` provides it with **no dependency on ASP.NET Core**.
 
 The one difference from a web app: there is no request and no middleware, so **you** decide when a
-tenant scope begins and ends. `ITenantScopeFactory<TKey>` does this for background work, and everything
+tenant becomes current and when it stops being current. `ITenantScopeFactory<TKey>` does this for background work, and everything
 below it (EF Core read filtering and write stamping and validation) behaves exactly as it does on the web.
 
-## Registration with `AddTenantryCore`
+## Registration with `AddTenantry`
+
+The same `AddTenantry` as in a web app, from `Tenantry.Core`, without the ASP.NET Core methods:
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
 
-builder.Services.AddTenantryCore<Guid>(tenant =>
-{
-    // A store is optional here — nothing resolves tenants off a request. Register one if you need to
-    // look tenants up by id (e.g. a queue message carries only the tenant id).
-    tenant.UseInMemoryStore(tenants);
-
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    // Where tenants are listed and looked up by id (e.g. a queue message carries only the tenant id).
+    .UseInMemoryStore(tenants)
     // Same EF Core isolation as the web — strongly recommended in background work.
-    tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
-});
+    .AddEfCoreIsolation());
 
 builder.Services.AddDbContext<AppDbContext>((sp, options) =>
     options.UseSqlite(connectionString)
            .AddTenantInterceptors(sp));
 ```
 
-`AddTenantryCore` registers `ITenantContext<TKey>` and `ITenantScope<TKey>` (the same `AsyncLocal`
+`AddTenantry` registers `ITenantContext<TKey>` and `ITenantContextSetter<TKey>` (the same `AsyncLocal`
 singleton used by the web layer), plus the `ITenantScopeFactory<TKey>` and `ITenantStoreAccessor<TKey>`
-singletons described below, and lets you compose stores and isolation. Unlike `AddTenantry`, it
-does **not** add startup validation for resolvers/stores, because a non-HTTP host may legitimately have
-neither.
+singletons described below, and lets you compose stores and isolation.
+
+`ITenantStoreAccessor` needs a store: creating it without one throws `InvalidOperationException` naming
+`UseStore` and `UseInMemoryStore`, so a hosted service that depends on it fails as the host starts, not on its first
+tenant. `ITenantScopeFactory.RunInScopeAsync` looks tenants up too, and throws the same error. A host that only
+creates scopes for tenants it already has (`CreateScope`), or makes them current with `ITenantContextSetter`
+(below), needs no store.
 
 ## Running work as a tenant
 
@@ -43,6 +42,8 @@ neither.
 scope it creates is a fresh dependency-injection scope (so a fresh `DbContext`) with the tenant active:
 
 ```csharp
+using Tenantry;
+
 public sealed class InvoiceWorker(ITenantScopeFactory<Guid> scopes, ITenantStoreAccessor<Guid> tenants)
     : BackgroundService
 {
@@ -85,9 +86,10 @@ await scopes.RunInScopeAsync(message.TenantId, async (scope, ct) =>
 }, cancellationToken);
 ```
 
-It throws `TenantNotResolvedException` if the store has no such tenant, and there is an overload whose
-work returns a value. It does not check whether the tenant is suspended: read your status from
-`scope.Tenant` at the start of the work if that matters.
+It throws `TenantNotFoundException`, with the id in its `TenantId` property, if the store has no such tenant
+(for example a message for a tenant deleted since it was queued); it derives from `TenantNotResolvedException`.
+There is an overload whose work returns a value. It does not check whether the tenant is suspended: read your
+status from `scope.Tenant` at the start of the work if that matters.
 
 There is deliberately no `CreateScopeAsync(tenantId)`. The tenant lives in an `AsyncLocal`, and an
 `async` method's changes to one never reach its caller, so a scope opened inside an asynchronous lookup
@@ -106,16 +108,16 @@ store registered with `UseStore` is scoped and may depend on a `DbContext`; a si
 fails scope validation in Development and shares one store instance for the life of the app in
 Production. The accessor resolves the store from a fresh scope on each call, whatever its lifetime.
 
-### Lower level: `ITenantScope.BeginScope`
+### Lower level: `ITenantContextSetter.Use`
 
-`ITenantScopeFactory` is built on `ITenantScope<TKey>.BeginScope(tenant)`, which only changes the ambient
+`ITenantScopeFactory` is built on `ITenantContextSetter<TKey>.Use(tenant)`, which only changes the ambient
 tenant and creates no DI scope. It is useful when you already have the services you need, such as in a
 console tool with one long-lived scope:
 
 ```csharp
-var ambient = sp.GetRequiredService<ITenantScope<Guid>>();
+var ambient = sp.GetRequiredService<ITenantContextSetter<Guid>>();
 
-using (ambient.BeginScope(tenant))
+using (ambient.Use(tenant))
 {
     db.Orders.Add(new Order { Description = "Created by a tool" });
     await db.SaveChangesAsync();
@@ -149,8 +151,8 @@ valid for the duration of the scope, within the async flow that opened it.
 
 [`Tenantry.Samples.EfCoreConsole`](../samples/Tenantry.Samples.EfCoreConsole) is a complete, runnable
 demonstration using `Host.CreateApplicationBuilder`, SQLite, and `MultiTenantDbContext<Guid>`. It
-shows automatic stamping, read isolation, nested scopes, a strict-mode cross-tenant rejection,
-fail-closed reads with no scope, `IgnoreQueryFilters()` for admin access, and a sweep over every tenant
+shows automatic stamping, read isolation, nested tenants, a cross-tenant write rejected,
+fail-closed reads with no tenant, `IgnoreQueryFilters()` for admin access, and a sweep over every tenant
 with `ITenantScopeFactory`:
 
 ```bash

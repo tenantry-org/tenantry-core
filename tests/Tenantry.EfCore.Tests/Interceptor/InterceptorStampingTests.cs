@@ -26,21 +26,21 @@ public sealed class InterceptorStampingTests
     }
 
     [Fact]
-    public async Task SaveChanges_WhenEntityAddedWithWrongTenantId_OverridesWithCurrentTenant()
+    public async Task SaveChanges_WhenEntityAddedWithAnotherTenantsId_ThrowsAndWritesNothing()
     {
-        // Arrange — consumer set a "wrong" TenantId; the interceptor must override it.
+        // A caller that names another tenant on a new entity (for example from a request body) is rejected rather
+        // than silently moved to the current tenant.
         var ctx = TestTenantContext.For("acme");
         await using var conn = DbContextFactory.CreateSharedConnection();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(ctx, conn);
 
-        Order order = new() { Description = "Test order", TenantId = "attacker" };
-        db.Orders.Add(order);
+        db.Orders.Add(new Order { Description = "Test order", TenantId = "attacker" });
 
-        // Act
-        await db.SaveChangesAsync();
-
-        // Assert — interceptor always overrides TenantId on Added entities
-        order.TenantId.Should().Be("acme");
+        var thrown = await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        thrown.Which.Kind.Should().Be(TenantIsolationViolationKind.EntityWrite);
+        thrown.Which.OffendingTenantId.Should().Be("attacker");
+        thrown.Which.ExpectedTenantId.Should().Be("acme");
+        (await db.Orders.IgnoreQueryFilters().CountAsync()).Should().Be(0);
     }
 
     [Fact]

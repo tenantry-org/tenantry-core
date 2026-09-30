@@ -1,9 +1,10 @@
 using System.Net;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Tenantry;
 using Testcontainers.MsSql;
 
 namespace Tenantry.IntegrationTests;
@@ -44,7 +45,8 @@ public sealed class EfCoreTenantStoreTests : IAsyncLifetime
         _app.UseTenantry();
 
         _app.MapGet("/me", (ITenantContext<string> ctx) =>
-            Results.Ok(ctx.CurrentTenant?.Name ?? "(none)"));
+            Results.Ok(ctx.CurrentTenant?.Name ?? "(none)"))
+            .RequireTenant();
 
         await _app.StartAsync();
 
@@ -74,13 +76,14 @@ public sealed class EfCoreTenantStoreTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EfStore_UnknownTenant_Returns404()
+    public async Task EfStore_UnknownTenant_GetsTheAccessDeniedResponse()
     {
+        // With an access validator, a tenant that does not exist is refused like one that is not allowed.
         _client.DefaultRequestHeaders.Add("X-Tenant-Id", "not-in-db");
 
         var response = await _client.GetAsync("/me");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]

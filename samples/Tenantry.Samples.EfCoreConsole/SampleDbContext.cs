@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
+using Tenantry;
 using Tenantry.EfCore;
 
 namespace Tenantry.Samples.EfCoreConsole;
@@ -29,7 +29,7 @@ public sealed class SampleDbContext(
             order.Property(o => o.Description).HasMaxLength(200);
         });
 
-        // Call the base last, after your own configuration: it finds every ITenantScoped<Guid> entity and
+        // Call the base last, after your own configuration: it finds every ITenantEntity<Guid> entity and
         // applies the per-tenant global query filter.
         base.OnModelCreating(modelBuilder);
     }

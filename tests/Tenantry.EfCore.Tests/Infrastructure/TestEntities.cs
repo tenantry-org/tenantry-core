@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
-using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Infrastructure;
 
 /// <summary>A simple order entity for testing.</summary>
-public class Order : ITenantScoped<string>
+public class Order : ITenantEntity<string>
 {
     public int Id { get; set; }
 
@@ -18,7 +19,7 @@ public class Order : ITenantScoped<string>
 
 /// <summary>
 /// A plain DbContext (no base class) for testing the interceptor-first path.
-/// Implements <see cref="ITenantAwareDbContext{TKey}"/> so that <see cref="TenantModelBuilderExtensions.ApplyTenantFilters{TKey,TContext}"/>
+/// Implements <see cref="ITenantAwareDbContext{TKey}"/> so that <see cref="TenantryModelBuilderExtensions.ApplyTenantFilters{TKey,TContext}"/>
 /// can close the query filter over <c>this</c> rather than an external service capture.
 /// EF Core re-evaluates DbContext property accesses per query, which makes the filter
 /// always reflect the current tenant even though the compiled plan is cached.
@@ -53,7 +54,7 @@ public class BaseClassTestDbContext(
 // ── Guid-keyed entities and DbContext ────────────────────────────────────────
 
 /// <summary>A simple order entity for Guid-keyed tenant tests.</summary>
-public class GuidOrder : ITenantScoped<Guid>
+public class GuidOrder : ITenantEntity<Guid>
 {
     public int Id { get; set; }
     public Guid TenantId { get; set; }
@@ -83,7 +84,7 @@ public class GuidTestDbContext(DbContextOptions<GuidTestDbContext> options, ITen
 }
 
 /// <summary>
-/// A mapped entity that does not implement ITenantScoped — used to ensure the isolation applier
+/// A mapped entity that does not implement ITenantEntity — used to ensure the isolation applier
 /// and validator skip non-tenant-scoped types.
 /// </summary>
 public class NonTenant

@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.EfCore.Extensions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
 
@@ -85,7 +85,8 @@ public sealed class TenantModelCheckTests : IDisposable
         await using var db = await CreateAsync<FilterBeforeAndAfterContext>();
 
         await db.Awaiting(context => context.Items.ToListAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*");
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*'Item' has no tenant query filter*")
+            .Where(e => e.Kind == TenantIsolationViolationKind.ModelConfiguration && e.TypeName == "Item");
     }
 
     [Fact]
@@ -124,7 +125,7 @@ public sealed class TenantModelCheckTests : IDisposable
 
         db.Invoking(context => context.Model)
             .Should().Throw<TenantIsolationViolationException>()
-            .WithMessage("Entity 'GuidItem' implements ITenantScoped<Guid>, but the tenant key type here is String*");
+            .WithMessage("Entity 'GuidItem' implements ITenantEntity<Guid>, but the tenant key type here is String*");
     }
 
     [Fact]
@@ -133,7 +134,7 @@ public sealed class TenantModelCheckTests : IDisposable
         await using var db = await CreateAsync<OtherKeyNoFiltersContext>();
 
         await db.Awaiting(context => context.Items.ToListAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*implements ITenantScoped<Guid>*");
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*implements ITenantEntity<Guid>*");
     }
 
     [Fact]
@@ -262,7 +263,7 @@ public sealed class TenantModelCheckTests : IDisposable
 
     // ── Entities ─────────────────────────────────────────────────────────────
 
-    public sealed class Item : ITenantScoped<string>
+    public sealed class Item : ITenantEntity<string>
     {
         public int Id { get; set; }
 
@@ -275,7 +276,7 @@ public sealed class TenantModelCheckTests : IDisposable
         public bool IsDeleted { get; set; }
     }
 
-    public sealed class LateItem : ITenantScoped<string>
+    public sealed class LateItem : ITenantEntity<string>
     {
         public int Id { get; set; }
 
@@ -283,14 +284,14 @@ public sealed class TenantModelCheckTests : IDisposable
         public string TenantId { get; set; } = string.Empty;
     }
 
-    public sealed class GuidItem : ITenantScoped<Guid>
+    public sealed class GuidItem : ITenantEntity<Guid>
     {
         public int Id { get; set; }
 
         public Guid TenantId { get; set; }
     }
 
-    public class Animal : ITenantScoped<string>
+    public class Animal : ITenantEntity<string>
     {
         public int Id { get; set; }
 
@@ -308,13 +309,13 @@ public sealed class TenantModelCheckTests : IDisposable
         public int Id { get; set; }
     }
 
-    public sealed class Car : Vehicle, ITenantScoped<string>
+    public sealed class Car : Vehicle, ITenantEntity<string>
     {
         [MaxLength(64)]
         public string TenantId { get; set; } = string.Empty;
     }
 
-    public sealed class Customer : ITenantScoped<string>
+    public sealed class Customer : ITenantEntity<string>
     {
         public int Id { get; set; }
 
@@ -327,7 +328,7 @@ public sealed class TenantModelCheckTests : IDisposable
         public List<Address> Addresses { get; set; } = [];
     }
 
-    public sealed class Address : ITenantScoped<string>
+    public sealed class Address : ITenantEntity<string>
     {
         public int Id { get; set; }
 
@@ -345,7 +346,7 @@ public sealed class TenantModelCheckTests : IDisposable
         public List<Price> Prices { get; set; } = [];
     }
 
-    public sealed class Price : ITenantScoped<string>
+    public sealed class Price : ITenantEntity<string>
     {
         public int Id { get; set; }
 

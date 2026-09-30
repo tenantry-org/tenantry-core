@@ -14,7 +14,7 @@ public interface ITenantAwareDbContext<out TKey> where TKey : IEquatable<out TKe
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantScoped<TKey>`](tenantry-core-itenantscoped.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantEntity<TKey>`](tenantry-itenantentity.md) for constraints.
 
 Derived types: [`MultiTenantDbContext<TKey>`](tenantry-efcore-multitenantdbcontext.md).
 

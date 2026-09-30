@@ -1,23 +1,21 @@
-namespace Tenantry.Core;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Tenantry;
 
 /// <summary>
-/// Represents a scoped interface for managing tenant-specific context within the application.
-/// It provides mechanisms to activate and maintain a tenant context within the current execution flow,
-/// such as for HTTP requests or background tasks.
+/// A dependency-injection scope with a tenant current, created by <see cref="ITenantScopeFactory{TKey}"/>.
 /// </summary>
 /// <typeparam name="TKey">
-/// The type used for tenant identification. This type must support equality comparison and parsing operations.
+/// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.
 /// </typeparam>
-public interface ITenantScope<TKey> : ITenantContext<TKey>
+/// <remarks>
+/// Disposing the scope (synchronously or asynchronously) disposes its services while the tenant is still
+/// current, then restores the tenant that was current when the scope was created. Both forms restore the
+/// tenant in the disposing code's own context, so <c>await using</c> is safe in loops and nested scopes.
+/// </remarks>
+public interface ITenantScope<TKey> : IServiceScope, IAsyncDisposable
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    /// <summary>
-    /// Activates a tenant for the current execution context (e.g. an HTTP request or background job).
-    /// Scopes may nest: an inner scope shadows the outer tenant, and disposing it restores the outer
-    /// tenant (the outermost scope restores "no tenant"). The returned <see cref="IDisposable"/>
-    /// restores the previously active tenant when disposed.
-    /// </summary>
-    /// <param name="tenant">The tenant to activate.</param>
-    /// <returns>A handle that restores the previously active tenant on disposal.</returns>
-    IDisposable BeginScope(ITenantDescriptor<TKey> tenant);
+    /// <summary>The tenant this scope runs as.</summary>
+    ITenantDescriptor<TKey> Tenant { get; }
 }

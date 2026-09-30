@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using Tenantry.AspNetCore.Resolution;
 
 namespace Tenantry.AspNetCore.Tests.Resolvers;
 
@@ -48,9 +47,9 @@ public sealed class SubdomainTenantResolverTests
     }
 
     [Fact]
-    public async Task SubdomainPlusLocalhost_ReturnsNull()
+    public async Task SubdomainPlusLocalhost_WithoutABaseDomain_ReturnsNull()
     {
-        // "acme.localhost" has only 2 segments — use header resolution for local dev.
+        // "acme.localhost" has only 2 segments; BaseDomain = "localhost" resolves it (below).
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost("acme.localhost");
 
@@ -82,5 +81,72 @@ public sealed class SubdomainTenantResolverTests
         var result = await resolver.ResolveAsync(context);
 
         result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("www.example.com")]
+    [InlineData("WWW.example.com")]
+    public async Task Www_IsIgnoredByDefault(string host)
+    {
+        (await new SubdomainTenantResolver().ResolveAsync(ContextWithHost(host))).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task IgnoredSubdomains_CanBeAdded_AndWwwRemoved()
+    {
+        SubdomainTenantResolverOptions options = new();
+        options.IgnoredSubdomains.Add("api");
+        options.IgnoredSubdomains.Remove("www");
+        SubdomainTenantResolver resolver = new(options);
+
+        (await resolver.ResolveAsync(ContextWithHost("api.example.com"))).Should().BeNull();
+        (await resolver.ResolveAsync(ContextWithHost("www.example.com"))).Should().Be("www");
+    }
+
+    [Fact]
+    public async Task Options_AreCopiedWhenTheResolverIsCreated()
+    {
+        SubdomainTenantResolverOptions options = new();
+        SubdomainTenantResolver resolver = new(options);
+
+        options.IgnoredSubdomains.Add("acme");
+        options.BaseDomain = "other.org";
+
+        (await resolver.ResolveAsync(ContextWithHost("acme.example.com"))).Should().Be("acme");
+    }
+
+    [Theory]
+    [InlineData("10.0.0.12")]
+    [InlineData("192.168.1.1")]
+    [InlineData("[::1]")]
+    public async Task IpAddressHost_ReturnsNull(string host)
+    {
+        // Load balancers and Kubernetes probes address a pod by IP.
+        (await new SubdomainTenantResolver().ResolveAsync(ContextWithHost(host))).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("acme.example.com", "acme")]
+    [InlineData("ACME.Example.COM", "ACME")]
+    [InlineData("example.com", null)]
+    [InlineData("www.example.com", null)]
+    [InlineData("x.acme.example.com", null)]
+    [InlineData("acme.other.org", null)]
+    [InlineData("acme.notexample.com", null)]
+    [InlineData("acme.example.com.evil.org", null)]
+    public async Task BaseDomain_OnlyAHostOfOneLabelUnderIt_ResolvesATenant(string host, string? expected)
+    {
+        SubdomainTenantResolver resolver = new(new SubdomainTenantResolverOptions { BaseDomain = "example.com" });
+
+        (await resolver.ResolveAsync(ContextWithHost(host))).Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task BaseDomain_Localhost_ResolvesSubdomainsInDevelopment()
+    {
+        SubdomainTenantResolver resolver = new(new SubdomainTenantResolverOptions { BaseDomain = ".localhost." });
+
+        (await resolver.ResolveAsync(ContextWithHost("acme.localhost"))).Should().Be("acme");
+        (await resolver.ResolveAsync(ContextWithHost("localhost"))).Should().BeNull();
     }
 }

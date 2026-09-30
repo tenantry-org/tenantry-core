@@ -1,4 +1,4 @@
-namespace Tenantry.Core;
+namespace Tenantry;
 
 /// <summary>
 /// Default implementation of <see cref="ITenantDescriptor{TKey}"/>.

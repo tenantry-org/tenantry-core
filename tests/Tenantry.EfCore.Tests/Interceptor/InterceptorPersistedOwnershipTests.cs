@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Tenantry.Core.Exceptions;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
 
@@ -16,19 +16,13 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     public void Dispose() => _connection.Dispose();
 
     [Theory]
-    [InlineData("update", false)]
-    [InlineData("update", true)]
-    [InlineData("attach-modified", false)]
-    [InlineData("attach-modified", true)]
-    [InlineData("remove", false)]
-    [InlineData("remove", true)]
-    public async Task ForgedTenantIdOnAnotherTenantsKey_MatchesNoRow_AndLeavesTheRowUnchanged(
-        string write,
-        bool detectSpoofedWrites)
+    [InlineData("update")]
+    [InlineData("attach-modified")]
+    [InlineData("remove")]
+    public async Task ForgedTenantIdOnAnotherTenantsKey_MatchesNoRow_AndLeavesTheRowUnchanged(string write)
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
-        EfCoreIsolationOptions options = new() { DetectSpoofedWrites = detectSpoofedWrites };
-        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("globex"), _connection, options);
+        await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("globex"), _connection);
 
         // The caller knows acme's primary key and claims the row is its own.
         Order forged = new() { Id = acmeOrderId, TenantId = "globex", Description = "overwritten" };

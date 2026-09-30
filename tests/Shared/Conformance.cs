@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Tenantry.Core;
+using Tenantry;
 
 namespace Tenantry.Tests.Shared;
 

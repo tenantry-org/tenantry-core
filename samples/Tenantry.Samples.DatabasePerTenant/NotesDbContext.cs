@@ -1,11 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
+using Tenantry;
 using Tenantry.EfCore;
 
 namespace Tenantry.Samples.DatabasePerTenant;
 
-public sealed class Note : ITenantScoped<string>
+public sealed class Note : ITenantEntity<string>
 {
     public int Id { get; set; }
 

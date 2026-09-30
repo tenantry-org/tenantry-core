@@ -1,76 +1,75 @@
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.Core;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.AspNetCore.Tests;
 
+/// <summary>
+/// <c>app.UseTenantry()</c> checks the registration when the pipeline is built, so a misconfigured application fails
+/// as it starts.
+/// </summary>
 public sealed class StartupValidationTests
 {
     [Fact]
-    public async Task StartAsync_NoResolverRegistered_ThrowsClearError()
+    public async Task UseTenantry_NoResolverRegistered_ThrowsClearError()
     {
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
+        await using var app = Build(tenant => tenant
+            .RequireTenantByDefault()
+            .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }]));
 
-        builder.Services.AddTenantry<string>(tenant =>
-        {
-            tenant.UseInMemoryStore(
-            [
-                new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
-            ]);
-        });
+        var act = () => app.UseTenantry();
 
-        var app = builder.Build();
-
-        var act = () => app.StartAsync();
-
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*no tenant resolvers were registered*");
-
-        await app.DisposeAsync();
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no tenant resolvers*ResolveFromHeader*");
     }
 
     [Fact]
-    public async Task StopAsync_WhenAppStopped_CompletesSuccessfully()
+    public async Task UseTenantry_NoStoreRegistered_ThrowsClearError()
     {
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
+        await using var app = Build(tenant => tenant.ResolveFromHeader("X-Tenant-Id"));
 
-        builder.Services.AddTenantry<string>(tenant =>
+        var act = () => app.UseTenantry();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no tenant store*UseStore*UseInMemoryStore*");
+    }
+
+    [Fact]
+    public async Task UseTenantry_WithoutTenantResolutionRegistered_SaysWhatToCall()
+    {
+        // AddTenantry without an ASP.NET Core feature, and without AddTenantry at all.
+        await using var withCoreOnly = Build(tenant => tenant.UseInMemoryStore([]));
+        await using var withNothing = Build(configure: null);
+
+        foreach (var app in new[] { withCoreOnly, withNothing })
         {
-            tenant.ResolveFromHeader("X-Tenant-Id");
-            tenant.UseInMemoryStore(
-            [
-                new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
-            ]);
-        });
+            var act = () => app.UseTenantry();
 
-        await using var app = builder.Build();
+            act.Should().Throw<InvalidOperationException>().WithMessage("*found no tenant resolution*AddTenantry*ResolveFromHeader*");
+        }
+    }
+
+    [Fact]
+    public async Task UseTenantry_Registered_StartsAndStops()
+    {
+        await using var app = Build(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }]));
+
+        app.UseTenantry();
         await app.StartAsync();
         await app.StopAsync();
-
-        app.Should().NotBeNull();
     }
 
-    [Fact]
-    public async Task StartAsync_NoStoreRegistered_ThrowsClearError()
+    private static WebApplication Build(Action<ITenantBuilder<string>>? configure)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
 
-        builder.Services.AddTenantry<string>(tenant =>
+        if (configure is not null)
         {
-            tenant.ResolveFromHeader("X-Tenant-Id");
-        });
+            builder.Services.AddTenantry(configure);
+        }
 
-        var app = builder.Build();
-
-        var act = () => app.StartAsync();
-
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*no tenant store was registered*");
-
-        await app.DisposeAsync();
+        return builder.Build();
     }
 }

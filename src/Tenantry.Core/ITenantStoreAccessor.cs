@@ -1,4 +1,4 @@
-namespace Tenantry.Core;
+namespace Tenantry;
 
 /// <summary>
 /// Reads tenants from the registered <see cref="ITenantStore{TKey}"/> on behalf of singletons, such as
@@ -11,8 +11,9 @@ namespace Tenantry.Core;
 /// A store registered with <c>UseStore</c> is scoped, and may depend on scoped services such as a
 /// <c>DbContext</c>. Injecting it into a singleton would capture one instance for the life of the
 /// application (and fails scope validation in Development). Singletons take this accessor instead, which
-/// is correct whatever the store's lifetime. Registered as a singleton by <c>AddTenantryCore</c> and
-/// <c>AddTenantry</c>.
+/// is correct whatever the store's lifetime. Registered as a singleton by <c>AddTenantry</c>. Creating it throws
+/// <see cref="InvalidOperationException"/> when no store is registered, so a hosted service that depends on it fails
+/// as the host starts.
 /// </remarks>
 public interface ITenantStoreAccessor<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -22,11 +23,9 @@ public interface ITenantStoreAccessor<TKey>
     /// </summary>
     /// <param name="tenantId">The identifier of the tenant to find.</param>
     /// <param name="cancellationToken">Cancels the lookup.</param>
-    /// <exception cref="InvalidOperationException">No <see cref="ITenantStore{TKey}"/> is registered.</exception>
     ValueTask<ITenantDescriptor<TKey>?> GetTenantAsync(TKey tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>Returns all tenants in the store.</summary>
     /// <param name="cancellationToken">Cancels the lookup.</param>
-    /// <exception cref="InvalidOperationException">No <see cref="ITenantStore{TKey}"/> is registered.</exception>
     ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default);
 }

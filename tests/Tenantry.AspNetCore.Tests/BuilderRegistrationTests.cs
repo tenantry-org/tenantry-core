@@ -1,13 +1,12 @@
 using AwesomeAssertions;
-using Tenantry.AspNetCore.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Tenantry.AspNetCore.Internal;
-using Tenantry.AspNetCore.Resolution;
 
 namespace Tenantry.AspNetCore.Tests;
 
 /// <summary>
-/// Verifies that AspNetCoreTenantBuilder registration methods add the correct
-/// ITenantResolver services to the service collection.
+/// Verifies that the ASP.NET Core builder methods add the correct services to the service collection.
 /// </summary>
 public sealed class BuilderRegistrationTests
 {
@@ -24,14 +23,74 @@ public sealed class BuilderRegistrationTests
         });
         services.AddTenantry<string>(tenant => tenant.ValidateTenantAccessByClaim("tenants"));
 
-        services.Count(sd => sd.ServiceType == typeof(TenantResolutionOptions<string>)).Should().Be(1);
         services.Count(sd => sd.ServiceType == typeof(ITenantResolutionMiddlewareConfigurator)).Should().Be(1);
-        services.Count(sd => sd.ImplementationType == typeof(TenantConfigurationValidatorHostedService<string>)).Should().Be(1);
 
         using var provider = services.BuildServiceProvider();
-        var options = provider.GetRequiredService<TenantResolutionOptions<string>>();
-        options.RequireTenantByDefault.Should().BeTrue();
-        options.AccessValidators.Should().HaveCount(2);
+        provider.GetRequiredService<IOptions<TenantResolutionOptions>>().Value.RequireTenantByDefault.Should().BeTrue();
+        provider.GetRequiredService<IOptions<TenantAccessOptions<string>>>().Value.Validators.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void ConfigureResolution_SetsTheStatusCodes()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant.ConfigureResolution(options =>
+        {
+            options.MissingTenantStatusCode = 401;
+            options.InvalidTenantStatusCode = 422;
+            options.TenantNotFoundStatusCode = 410;
+            options.AccessDeniedStatusCode = 404;
+        }));
+
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<TenantResolutionOptions>>().Value;
+
+        options.Should().BeEquivalentTo(new
+        {
+            RequireTenantByDefault = false,
+            MissingTenantStatusCode = 401,
+            InvalidTenantStatusCode = 422,
+            TenantNotFoundStatusCode = 410,
+            AccessDeniedStatusCode = 404,
+        });
+        services.Should().ContainSingle(sd => sd.ServiceType == typeof(ITenantResolutionMiddlewareConfigurator));
+    }
+
+    [Fact]
+    public void TenantResolutionOptions_Defaults()
+    {
+        new TenantResolutionOptions().Should().BeEquivalentTo(new
+        {
+            RequireTenantByDefault = false,
+            MissingTenantStatusCode = 400,
+            InvalidTenantStatusCode = 400,
+            TenantNotFoundStatusCode = 404,
+            AccessDeniedStatusCode = 403,
+        });
+    }
+
+    [Fact]
+    public void EveryBuilderMethod_Chains()
+    {
+        ServiceCollection services = new();
+
+        services.AddTenantry<Guid>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .ResolveFromClaim()
+            .ResolveFromRouteValue()
+            .ResolveFromQueryString()
+            .ResolveFromSubdomain(options => options.BaseDomain = "example.com")
+            .UseResolver(new TestTenantResolver())
+            .UseResolver(_ => new TestTenantResolver())
+            .RequireTenantByDefault()
+            .ConfigureResolution(options => options.AccessDeniedStatusCode = 404)
+            .ValidateTenantAccessByClaim("tenants")
+            .ValidateTenantAccess((_, _) => true)
+            .ValidateTenantAccess((_, _, _) => ValueTask.FromResult(true))
+            .UseInMemoryStore([])
+            .UseResolver<TestTenantResolver>());
+
+        services.Count(sd => sd.ServiceType == typeof(ITenantResolver)).Should().Be(8);
     }
 
     [Fact]
@@ -76,7 +135,7 @@ public sealed class BuilderRegistrationTests
 
         services.Should().Contain(sd =>
             sd.ServiceType == typeof(ITenantResolver) &&
-            sd.ImplementationType == typeof(SubdomainTenantResolver));
+            sd.ImplementationInstance is SubdomainTenantResolver);
     }
 
     [Fact]

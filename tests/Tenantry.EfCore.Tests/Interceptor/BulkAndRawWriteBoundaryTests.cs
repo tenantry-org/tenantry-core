@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
 
@@ -70,7 +69,8 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s
             .SetProperty(o => o.Description, "moved")
             .SetProperty(o => o.TenantId, newTenantId)))
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
+            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*")
+            .Where(e => e.Kind == TenantIsolationViolationKind.BulkUpdate && e.TypeName == nameof(Order) && e.OffendingTenantId == null);
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }
 
@@ -114,7 +114,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateInterceptorContextAsync(_tenant.As("acme"), _connection);
 
-        await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => ((ITenantScoped<string>)o).TenantId, "globex")))
+        await db.Awaiting(d => d.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => ((ITenantEntity<string>)o).TenantId, "globex")))
             .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("*TenantId*Order*");
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
     }

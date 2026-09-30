@@ -1,17 +1,25 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
 
 namespace Tenantry.EfCore.Internal;
 
+/// <summary>
+/// Stamps new tenant-owned entities with the current tenant and rejects writes of another tenant's entities.
+/// </summary>
 internal static class TenantWriteIsolationApplier
 {
+    /// <summary>
+    /// Applies write isolation to <paramref name="entries"/> while <paramref name="tenantContext"/> has a tenant.
+    /// </summary>
+    /// <param name="entries">The change tracker's entries.</param>
+    /// <param name="tenantContext">The current tenant.</param>
+    /// <param name="onViolation">Called with the exception before it is thrown, to log it.</param>
+    /// <exception cref="TenantIsolationViolationException">An entry belongs to, or names, another tenant.</exception>
     public static void Apply<TKey>(
         IEnumerable<EntityEntry> entries,
         ITenantContext<TKey> tenantContext,
-        Action<IsolationDiagnostics>? onViolation = null)
+        Action<TenantIsolationViolationException>? onViolation = null)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         if (!tenantContext.HasTenant)
@@ -23,7 +31,7 @@ internal static class TenantWriteIsolationApplier
 
         foreach (var entry in entries)
         {
-            if (entry.Entity is not ITenantScoped<TKey> tenantEntity)
+            if (entry.Entity is not ITenantEntity<TKey> tenantEntity)
             {
                 continue;
             }
@@ -31,7 +39,25 @@ internal static class TenantWriteIsolationApplier
             switch (entry.State)
             {
                 case EntityState.Added:
-                    tenantEntity.TenantId = currentTenantId;
+                    // A new entity is saved for the current tenant. One that already names another tenant is
+                    // rejected rather than silently moved: the caller meant another tenant's data.
+                    if (TenantOwnership.IsUnstamped(tenantEntity.TenantId))
+                    {
+                        // Through EF Core rather than the entity, so a private or init-only setter works.
+                        entry.Property(TenantOwnership.TenantIdProperty).CurrentValue = currentTenantId;
+                    }
+                    else if (!TenantOwnership.IsOwnedBy(tenantEntity.TenantId, currentTenantId))
+                    {
+                        ThrowViolation(
+                            entry,
+                            tenantEntity.TenantId,
+                            currentTenantId,
+                            $"A new '{entry.Entity.GetType().Name}' names tenant '{tenantEntity.TenantId}', but the current " +
+                            $"tenant is '{currentTenantId}'. Leave TenantId unset on new entities: they are saved for " +
+                            "the current tenant.",
+                            onViolation);
+                    }
+
                     break;
 
                 case EntityState.Modified:
@@ -67,21 +93,37 @@ internal static class TenantWriteIsolationApplier
         EntityEntry entry,
         TKey? offendingTenantId,
         TKey currentTenantId,
-        Action<IsolationDiagnostics>? onViolation)
+        Action<TenantIsolationViolationException>? onViolation)
+        where TKey : IEquatable<TKey>, IParsable<TKey> =>
+        ThrowViolation(
+            entry,
+            offendingTenantId,
+            currentTenantId,
+            $"Tenant isolation violation on entity '{entry.Entity.GetType().Name}': it belongs to tenant " +
+            $"'{Display(offendingTenantId)}' but the current tenant is '{currentTenantId}'. SaveChanges was aborted " +
+            "before anything was written. Change an entity only while its own tenant is current.",
+            onViolation);
+
+    [DoesNotReturn]
+    private static void ThrowViolation<TKey>(
+        EntityEntry entry,
+        TKey? offendingTenantId,
+        TKey currentTenantId,
+        string message,
+        Action<TenantIsolationViolationException>? onViolation)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
-        IsolationDiagnostics diagnostics = new()
-        {
-            EntityTypeName = entry.Entity.GetType().Name,
-            OffendingTenantId = offendingTenantId?.ToString() ?? "<null>",
-            ExpectedTenantId = currentTenantId.ToString()!,
-        };
+        TenantIsolationViolationException violation = new(
+            TenantIsolationViolationKind.EntityWrite,
+            entry.Entity.GetType().Name,
+            message,
+            Display(offendingTenantId),
+            currentTenantId.ToString());
 
-        onViolation?.Invoke(diagnostics);
+        onViolation?.Invoke(violation);
 
-        throw new TenantIsolationViolationException(
-            diagnostics.EntityTypeName,
-            diagnostics.OffendingTenantId,
-            diagnostics.ExpectedTenantId);
+        throw violation;
     }
+
+    private static string Display<TKey>(TKey? tenantId) => tenantId?.ToString() ?? "<null>";
 }

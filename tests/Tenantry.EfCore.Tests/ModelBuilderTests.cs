@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
-using Tenantry.Core;
-using Tenantry.EfCore.Extensions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests;
 
-// Non-tenanted entity — intentionally does NOT implement ITenantScoped<string>.
+// Non-tenanted entity — intentionally does NOT implement ITenantEntity<string>.
 // ApplyTenantFilters must skip it; all rows remain visible regardless of tenant.
 internal sealed class NonTenantedProduct
 {

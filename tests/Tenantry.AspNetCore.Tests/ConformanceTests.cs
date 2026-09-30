@@ -2,10 +2,9 @@ using AwesomeAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
-using Tenantry.AspNetCore.Extensions;
-using Tenantry.AspNetCore.Resolution;
-using Tenantry.Core;
-using Tenantry.Core.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Tenantry;
+using Tenantry.AspNetCore;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.AspNetCore.Tests;

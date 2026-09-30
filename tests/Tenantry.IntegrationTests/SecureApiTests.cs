@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Tenantry.Core.Exceptions;
+using Tenantry;
 using Tenantry.Samples.SecureApi;
 
 namespace Tenantry.IntegrationTests;
@@ -69,11 +69,15 @@ public sealed class SecureApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UnknownTenant_IsRejectedWith404()
+    public async Task UnknownTenant_GetsTheSameResponseAsATenantTheCallerMayNotUse()
     {
-        var response = await Client(Token("alice", "acme", "initech"), tenant: "initech").GetAsync("/notes");
+        // The access validator (the token's tenant claims) makes a tenant that does not exist look like one the
+        // caller may not use, so a caller cannot find out which tenants exist.
+        var unknown = await Client(Token("alice", "acme", "initech"), tenant: "initech").GetAsync("/notes");
+        var notTheirs = await Client(Token("alice", "acme"), tenant: "globex").GetAsync("/notes");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        unknown.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        notTheirs.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]

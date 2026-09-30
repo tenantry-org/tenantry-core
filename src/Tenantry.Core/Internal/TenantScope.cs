@@ -1,84 +1,58 @@
-namespace Tenantry.Core.Internal;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Tenantry.Internal;
 
 /// <summary>
-/// Singleton implementation of <see cref="ITenantScope{TKey}"/> backed by an
-/// <see cref="AsyncLocal{T}"/> so each async execution context carries its own tenant
-/// without creating a new accessor instance per request or operation.
+/// Default <see cref="ITenantScope{TKey}"/>: a dependency-injection scope plus the handle that made its tenant
+/// current.
 /// </summary>
-/// <remarks>
-/// Registered as a singleton. In ASP.NET Core, middleware sets the tenant at the start of
-/// each request and clears it in a finally block. In worker services, callers set and clear
-/// it manually around their tenant-scoped operations.
-/// </remarks>
-internal sealed class TenantScope<TKey> : ITenantScope<TKey>
+internal sealed class TenantScope<TKey>(
+    AsyncServiceScope services,
+    IDisposable tenantUse,
+    ITenantDescriptor<TKey> tenant)
+    : ITenantScope<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    // The ambient value is the innermost open scope. Each scope links to the one it shadows, so closing
-    // scopes in any order (or from another async flow) restores the nearest scope that is still open.
-    private static readonly AsyncLocal<Frame?> CurrentFrame = new();
+    /// <inheritdoc />
+    public IServiceProvider ServiceProvider => services.ServiceProvider;
 
     /// <inheritdoc />
-    public ITenantDescriptor<TKey>? CurrentTenant => CurrentFrame.Value?.Tenant;
+    public ITenantDescriptor<TKey> Tenant => tenant;
 
     /// <inheritdoc />
-    public bool HasTenant => CurrentFrame.Value is not null;
-
-    /// <inheritdoc />
-    public TKey? CurrentTenantId => CurrentFrame.Value is { } frame ? frame.Tenant.TenantId : default;
+    public void Dispose()
+    {
+        try
+        {
+            services.Dispose();
+        }
+        finally
+        {
+            tenantUse.Dispose();
+        }
+    }
 
     /// <inheritdoc />
     /// <remarks>
-    /// Scopes nest: an inner scope shadows the outer one, and disposing it restores the outer tenant. The
-    /// ambient value flows down into awaited callees, never back up to the caller. Disposing a scope that
-    /// is not the innermost one in the current flow (out of order, or from a different async flow) only
-    /// closes it; the innermost scope stays active, and when it closes the nearest scope that is still open
-    /// is restored. Disposal restores the tenant only in the flow that disposes: if a child task disposes a
-    /// handle it inherited, the caller keeps that tenant until it disposes the handle too, which then
-    /// restores the caller's previous tenant. Further disposals change nothing.
+    /// Deliberately not an <see langword="async"/> method. Changes an async method makes to an
+    /// <see cref="AsyncLocal{T}"/> are undone when it returns, so a tenant restored after an <c>await</c>
+    /// would never reach the caller. Instead this starts disposing the services while the tenant is still
+    /// active (any asynchronous part of that disposal keeps seeing it), then restores the previous tenant
+    /// here, in the caller's context, before returning.
     /// </remarks>
-    public IDisposable BeginScope(ITenantDescriptor<TKey> tenant)
+    public ValueTask DisposeAsync()
     {
-        ArgumentNullException.ThrowIfNull(tenant);
+        ValueTask disposal;
 
-        Frame frame = new(tenant, CurrentFrame.Value);
-        CurrentFrame.Value = frame;
-        return frame;
-    }
-
-    private sealed class Frame(ITenantDescriptor<TKey> tenant, Frame? parent) : IDisposable
-    {
-        private int _disposed;
-
-        public ITenantDescriptor<TKey> Tenant { get; } = tenant;
-
-        private Frame? Parent { get; } = parent;
-
-        private bool IsDisposed => Volatile.Read(ref _disposed) == 1;
-
-        public void Dispose()
+        try
         {
-            // Closing is shared by every flow, but the ambient value belongs to each flow. So every call, even a
-            // repeat, restores the calling flow if its innermost scope is closed: this one, or one another flow
-            // closed (for example a child task that disposed a handle it inherited).
-            Volatile.Write(ref _disposed, 1);
-
-            var current = CurrentFrame.Value;
-
-            if (current is not { IsDisposed: true })
-            {
-                // No scope, or the innermost scope is still open: it stays active, and this scope is skipped
-                // when it closes.
-                return;
-            }
-
-            var restored = current.Parent;
-
-            while (restored is { IsDisposed: true })
-            {
-                restored = restored.Parent;
-            }
-
-            CurrentFrame.Value = restored;
+            disposal = services.DisposeAsync();
         }
+        finally
+        {
+            tenantUse.Dispose();
+        }
+
+        return disposal;
     }
 }

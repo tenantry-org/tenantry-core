@@ -57,8 +57,9 @@ because EF Core is not. See [AOT & trimming](aot-and-trimming.md).
   upper bound. Microsoft ships every `Microsoft.Extensions` major for all supported frameworks, and current
   Azure SDKs need 10.x even on .NET 8.
 - **EF Core**: the target framework's major only, as above.
-- **Tenantry packages**: `Tenantry.EfCore` and `Tenantry.AspNetCore` need exactly the same version of
-  `Tenantry.Core`. Update them together.
+- **Tenantry packages**: `Tenantry.EfCore` and `Tenantry.AspNetCore` take `Tenantry.Core` from their own
+  release up to the next minor (`[0.5.0, 0.6.0)`), because a minor release may break the API before 1.0. Within a
+  minor they can be updated separately.
 
 CI checks every minimum is a version the tests run against, and a weekly job runs the whole test suite with
 every dependency at the newest version it allows.

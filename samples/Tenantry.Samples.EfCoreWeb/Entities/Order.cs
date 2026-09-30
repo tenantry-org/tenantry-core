@@ -1,6 +1,6 @@
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
-using Tenantry.Core;
+using Tenantry;
 
 namespace Tenantry.Samples.EfCoreWeb.Entities;
 
@@ -8,7 +8,7 @@ namespace Tenantry.Samples.EfCoreWeb.Entities;
 /// Tenanted entity — isolated per tenant.
 /// Each tenant sees only their own orders.
 /// </summary>
-public class Order : TenantScoped<string>
+public class Order : TenantEntity<string>
 {
     public int Id { get; set; }
 

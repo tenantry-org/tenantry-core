@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageDescription>EF Core integration for Tenantry. Provides the interceptor-first tenant isolation path, shared database strategy, DbContext pooling (including with a database per tenant), strict isolation mode, and optional MultiTenantDbContext base class.</PackageDescription>
+    <PackageDescription>EF Core integration for Tenantry: tenant query filters, stamping and checking of tenant-owned writes, guarded bulk updates, DbContext pooling (including with a database per tenant), and an optional MultiTenantDbContext base class.</PackageDescription>
     <PackageTags>multi-tenancy;efcore;aspnetcore;saas;tenantry;tenant-isolation</PackageTags>
     <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>

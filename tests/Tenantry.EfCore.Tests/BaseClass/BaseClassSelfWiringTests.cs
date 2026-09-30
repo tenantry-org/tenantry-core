@@ -1,10 +1,8 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Tenantry;
 
 namespace Tenantry.EfCore.Tests.BaseClass;
 
@@ -77,7 +75,7 @@ public sealed class BaseClassSelfWiringTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddTenantryCore<string>(b => b.AddEfCoreIsolation());
+        services.AddTenantry<string>(b => b.AddEfCoreIsolation());
         // Drive the interceptor's tenant from the mutable test context (registered last, so it wins).
         services.AddSingleton<ITenantContext<string>>(tenant);
 

@@ -18,7 +18,7 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 5. **[Tenant resolution](tenant-resolution.md)** — header, subdomain, route, claim, and query-string resolvers, resolver ordering, and custom resolvers.
 6. **[Access control](access-control.md)** — requiring tenants per-endpoint or globally, access validators, and claim-based validation.
 7. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, the isolation policy, the optional base context, pooling, a database per tenant, migrations, and admin/cross-tenant queries.
-8. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantryCore` for console apps, worker services, and background jobs.
+8. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantry` for console apps, worker services, and background jobs.
 9. **[AOT & trimming](aot-and-trimming.md)** — exactly what is supported, per package, and why EF Core differs.
 10. **[Compatibility](compatibility.md)** — supported .NET and EF Core versions, databases, and dependency ranges.
 11. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.
@@ -26,11 +26,11 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 
 ## How the pieces fit together
 
-Tenantry has three responsibilities, each configured in the `AddTenantry`/`AddTenantryCore` lambda:
+Tenantry has three responsibilities, each configured in the `AddTenantry` lambda:
 
 | Responsibility | Question it answers | Configured with |
 |----------------|---------------------|-----------------|
-| **Resolution** | *Who is the tenant for this request/operation?* | `ResolveFromHeader(...)`, `ResolveFromClaim(...)`, … (ASP.NET Core), or a manual `BeginScope(...)` (non-HTTP) |
+| **Resolution** | *Who is the tenant for this request/operation?* | `ResolveFromHeader(...)`, `ResolveFromClaim(...)`, … (ASP.NET Core), or `ITenantScopeFactory` (non-HTTP) |
 | **Storage** | *Which tenants exist, and what are their details?* | `UseInMemoryStore(...)`, `UseStore<T>()` |
 | **Isolation** | *How is each tenant's data kept separate?* | `AddEfCoreIsolation(...)`, plus `UseConnectionStrings(...)` for a database per tenant |
 
@@ -44,7 +44,7 @@ UseTenantry()  ──►  resolver(s) extract a raw id  ──►  parse to TKey
    │                                                                              │
    │                                          (optional) access validators run    │
    ▼                                                                              ▼
-ITenantScope.BeginScope(tenant)  sets the AsyncLocal tenant for the rest of the request
+ITenantContextSetter.Use(tenant)  sets the AsyncLocal tenant for the rest of the request
    │
    ▼
 Your endpoint + EF Core
@@ -52,5 +52,5 @@ Your endpoint + EF Core
    └─ writes ──► SaveChanges interceptor stamps/validates TenantId
 ```
 
-In a console or worker app there is no request, so you open the scope yourself with
-`ITenantScopeFactory` (or `BeginScope`); everything below that line behaves identically.
+In a console or worker app there is no request, so you make the tenant current yourself with
+`ITenantScopeFactory` (or `ITenantContextSetter.Use`); everything below that line behaves identically.

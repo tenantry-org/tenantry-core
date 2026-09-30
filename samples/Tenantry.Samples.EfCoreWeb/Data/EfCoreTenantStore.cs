@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
+using Tenantry;
 
 namespace Tenantry.Samples.EfCoreWeb.Data;
 

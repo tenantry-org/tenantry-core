@@ -14,7 +14,7 @@ public interface ITenantStore<TKey>
 ```
 
 Exactly one store must be registered. `AddTenantry` validates this at startup and throws a clear
-`InvalidOperationException` if no store is registered. (`AddTenantryCore` does not validate, because a
+`InvalidOperationException` if no store is registered. (`AddTenantry` does not validate, because a
 non-HTTP host may create every scope from a descriptor it already holds and never need a store — see
 [Non-HTTP hosts](non-http-hosts.md). `ITenantStoreAccessor` and `ITenantScopeFactory.RunInScopeAsync` do
 need one, and say so if it is missing.)
@@ -44,7 +44,7 @@ For anything real — tenants in a database, a cache, a config service — imple
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
+using Tenantry;
 
 public sealed class EfCoreTenantStore(AppDbContext db) : ITenantStore<string>
 {
@@ -119,15 +119,14 @@ Decide whether a tenant may be served where its work starts:
   With `RunInScopeAsync`, check `scope.Tenant` at the start of the work. Check for the active status, as
   here, rather than for the suspended one, so a descriptor of another type is skipped rather than served.
 
-An unknown id gets `404 Not Found` but a refused one gets `403`, so a caller can tell that a suspended
-tenant's id exists. If that matters, keep tenant ids unguessable, or resolve the tenant from the
-caller's token (`ResolveFromClaim`) rather than from a header.
+Once an access validator is configured, an unknown id gets the same response as a refused one (`403` by
+default), so a caller cannot tell that a suspended tenant's id exists.
 
 ## Bootstrapping with an EF Core-backed store
 
 There is a chicken-and-egg consideration if your tenant registry lives in the same database your
 tenanted entities do: the `Tenant` table itself must **not** be a tenanted entity (do not make it
-implement `ITenantScoped<TKey>`), or the query filter would prevent the store from reading it before a
+implement `ITenantEntity<TKey>`), or the query filter would prevent the store from reading it before a
 tenant is resolved. Keep the tenant registry global. See the
 [`EfCoreWeb` sample](../samples/Tenantry.Samples.EfCoreWeb) for a complete example with a `Tenant`
 entity, an `EfCoreTenantStore`, and seeded data.

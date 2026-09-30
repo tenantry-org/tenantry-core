@@ -1,9 +1,8 @@
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Tenantry.Core;
-using Tenantry.Core.Exceptions;
-using Tenantry.Core.Extensions;
-using Tenantry.EfCore.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Tenantry;
+using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;
 
@@ -98,10 +97,10 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
     [InlineData("BeginTransaction")]
     public async Task ContextWithAnOpenConnection_UsedAfterTheTenantChanges_RefusesToRunCommands(string openedBy)
     {
-        var ambient = _services.GetRequiredService<ITenantScope<string>>();
+        var ambient = _services.GetRequiredService<ITenantContextSetter<string>>();
         ProviderOrdersContext db;
 
-        using (ambient.BeginScope(_acme))
+        using (ambient.Use(_acme))
         {
             db = await _services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>().CreateDbContextAsync();
 
@@ -116,7 +115,7 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
         }
 
         await using (db)
-        using (ambient.BeginScope(_globex))
+        using (ambient.Use(_globex))
         {
             db.Orders.Add(new ProviderOrder { Description = "globex order in acme's database" });
             var save = () => db.SaveChangesAsync();
@@ -139,12 +138,12 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
     {
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddTenantryCore<string>(tenant =>
+        services.AddTenantry<string>(tenant =>
         {
             tenant.UseInMemoryStore([_acme, _globex]);
             tenant.UseConnectionStrings(options =>
                 options.GetConnectionString = t => _fixture.WithDatabase($"tk_pool_{t.TenantId}_{_runId}"));
-            tenant.AddEfCoreIsolation(options => options.DetectSpoofedWrites = true);
+            tenant.AddEfCoreIsolation();
         });
         services.AddTenantDbContextPool<ProviderOrdersContext, string>(
             (sp, options) => _fixture.UseProvider(options).AddTenantInterceptors(sp),
