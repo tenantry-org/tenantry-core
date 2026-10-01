@@ -117,17 +117,6 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     }
 
     [Fact]
-    public void Apply_WhenNoTenantContext_ReturnsWithoutProcessingEntries()
-    {
-        // TenantWriteIsolationApplier.Apply has an early-return guard for !HasTenant.
-        // The interceptor short-circuits before calling Apply in this case, so we test
-        // Apply directly to cover that defensive branch.
-        var act = () => TenantWriteIsolationApplier.Apply([], _tenant.AsNone());
-
-        act.Should().NotThrow();
-    }
-
-    [Fact]
     public void SavingChanges_WithNullContext_DoesNotThrow()
     {
         // DbContextEventData.Context is DbContext? — null is a valid (if rare) input.
@@ -135,16 +124,6 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         var act = () => TenantSaveChangesInterceptor.Instance.SavingChanges(new NullContextEventData(), default);
 
         act.Should().NotThrow();
-    }
-
-    [Fact]
-    public async Task Apply_SkipsNonTenantScopedEntities()
-    {
-        // Verifies the branch where an entry.Entity is not ITenantEntity — the applier should skip it.
-        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
-        db.NonTenants.Add(new NonTenant { Name = "plain" });
-
-        db.Invoking(d => TenantWriteIsolationApplier.Apply(d.ChangeTracker.Entries(), _tenant)).Should().NotThrow();
     }
 
     private async Task<int> SeedAcmeOrderAsync()

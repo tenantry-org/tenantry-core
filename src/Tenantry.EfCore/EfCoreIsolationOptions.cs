@@ -16,7 +16,8 @@ public sealed class EfCoreIsolationOptions
 {
     /// <summary>
     /// What happens when <c>SaveChanges</c> writes <see cref="ITenantEntity{TKey}" /> entities without a
-    /// resolved tenant. Saves that write no tenant-owned entity are never affected.
+    /// resolved tenant, or entities those own (EF Core owned types). Saves that write no tenant-owned entity are never
+    /// affected.
     /// <list type="bullet">
     ///   <item><description><see cref="MissingTenantBehavior.Reject" /> — throw <see cref="TenantNotResolvedException" /> before persisting. <strong>Default.</strong></description></item>
     ///   <item><description><see cref="MissingTenantBehavior.Warn" /> — allow the write and log a warning.</description></item>

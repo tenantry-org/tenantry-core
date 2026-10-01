@@ -14,7 +14,7 @@ public sealed class EfCoreIsolationOptions
 
 ### `OnMissingTenant`
 
-What happens when `SaveChanges` writes [`ITenantEntity<TKey>`](tenantry-itenantentity.md) entities without a resolved tenant. Saves that write no tenant-owned entity are never affected.
+What happens when `SaveChanges` writes [`ITenantEntity<TKey>`](tenantry-itenantentity.md) entities without a resolved tenant, or entities those own (EF Core owned types). Saves that write no tenant-owned entity are never affected.
 
 - [`MissingTenantBehavior.Reject`](tenantry-efcore-missingtenantbehavior.md) — throw [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md) before persisting. **Default.**
 - [`MissingTenantBehavior.Warn`](tenantry-efcore-missingtenantbehavior.md) — allow the write and log a warning.

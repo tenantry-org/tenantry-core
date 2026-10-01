@@ -17,12 +17,12 @@ namespace Tenantry.EfCore.Internal;
 /// </remarks>
 internal static class TenantDatabaseLeases
 {
-    private static readonly ConditionalWeakTable<DbContext, Lease> Leases = new();
+    private static readonly ConditionalWeakTable<DbContext, Lease> Leases = [];
 
     // EF Core runs some commands without a context (a HiLo sequence fetch, for example), so the guard maps
     // the command's connection back to the context that owns it. A pooled context keeps its DbConnection
     // across leases (the pool closes it but does not dispose it).
-    private static readonly ConditionalWeakTable<DbConnection, DbContext> Connections = new();
+    private static readonly ConditionalWeakTable<DbConnection, DbContext> Connections = [];
 
     public static void Record(DbContext context, int lease, object? tenantId)
     {

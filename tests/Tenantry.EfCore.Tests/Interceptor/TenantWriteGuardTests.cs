@@ -7,23 +7,8 @@ namespace Tenantry.EfCore.Tests.Interceptor;
 /// The checks the save interceptor applies to the change tracker's entries while a tenant is current. A new entity
 /// that names another tenant is always rejected.
 /// </summary>
-public sealed class WriteIsolationApplierTests
+public sealed class TenantWriteGuardTests
 {
-    [Fact]
-    public async Task NoTenantContext_DoesNotThrow()
-    {
-        var ctx = TestTenantContext.Empty();
-
-        await using var conn = DbContextFactory.CreateSharedConnection();
-        var db = await DbContextFactory.CreateContextAsync(ctx, conn);
-        db.Orders.Add(new Order { TenantId = "acme", Description = "test" });
-
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
-
-        act.Should().NotThrow();
-        await db.DisposeAsync();
-    }
-
     [Fact]
     public async Task AddedEntity_DefaultTenantId_IsStampedWithTheCurrentTenant()
     {
@@ -35,7 +20,7 @@ public sealed class WriteIsolationApplierTests
         Order order = new() { TenantId = null!, Description = "unstamped" };
         db.Orders.Add(order);
 
-        TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        TenantWriteGuard<string>.Check(db);
 
         order.TenantId.Should().Be("acme");
         await db.DisposeAsync();
@@ -53,7 +38,7 @@ public sealed class WriteIsolationApplierTests
         Order order = new() { TenantId = string.Empty, Description = "unstamped" };
         db.Orders.Add(order);
 
-        TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        TenantWriteGuard<string>.Check(db);
 
         order.TenantId.Should().Be("acme");
         await db.DisposeAsync();
@@ -68,7 +53,7 @@ public sealed class WriteIsolationApplierTests
         var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         db.Orders.Add(new Order { TenantId = "acme", Description = "matching" });
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        var act = () => TenantWriteGuard<string>.Check(db);
 
         act.Should().NotThrow();
         await db.DisposeAsync();
@@ -83,7 +68,7 @@ public sealed class WriteIsolationApplierTests
         var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         db.Orders.Add(new Order { TenantId = "globex", Description = "wrong tenant" });
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        var act = () => TenantWriteGuard<string>.Check(db);
 
         act.Should().Throw<TenantIsolationViolationException>();
         await db.DisposeAsync();
@@ -105,7 +90,7 @@ public sealed class WriteIsolationApplierTests
         order.Description = "updated";
         // State is now Modified
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        var act = () => TenantWriteGuard<string>.Check(db);
 
         act.Should().NotThrow();
         await db.DisposeAsync();
@@ -127,7 +112,7 @@ public sealed class WriteIsolationApplierTests
         var order = await db.Orders.FirstAsync();
         order.TenantId = "globex";
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        var act = () => TenantWriteGuard<string>.Check(db);
 
         act.Should().Throw<TenantIsolationViolationException>();
         await db.DisposeAsync();
@@ -148,7 +133,7 @@ public sealed class WriteIsolationApplierTests
         order.TenantId = "globex"; // Corrupt before delete
         db.Orders.Remove(order);
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        var act = () => TenantWriteGuard<string>.Check(db);
 
         act.Should().Throw<TenantIsolationViolationException>();
         await db.DisposeAsync();
@@ -164,7 +149,7 @@ public sealed class WriteIsolationApplierTests
         db.Orders.Add(new Order { TenantId = "attacker", Description = "cross-tenant" });
 
         var ex = Assert.Throws<TenantIsolationViolationException>(
-            () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx));
+            () => TenantWriteGuard<string>.Check(db));
 
         ex.Kind.Should().Be(TenantIsolationViolationKind.EntityWrite);
         ex.TypeName.Should().Be(nameof(Order));
@@ -195,7 +180,7 @@ public sealed class WriteIsolationApplierTests
         var attachedWithWrongTenant = new Order { Id = saved.Id, TenantId = "globex", Description = saved.Description };
         db.Attach(attachedWithWrongTenant); // State = Unchanged
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        var act = () => TenantWriteGuard<string>.Check(db);
 
         act.Should().NotThrow();
         await db.DisposeAsync();
@@ -214,7 +199,7 @@ public sealed class WriteIsolationApplierTests
         var db = await DbContextFactory.CreateGuidContextAsync(ctx, conn);
         db.Orders.Add(new GuidOrder { TenantId = tenantId, Description = "matching" });
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        var act = () => TenantWriteGuard<Guid>.Check(db);
 
         act.Should().NotThrow();
         await db.DisposeAsync();
@@ -231,7 +216,7 @@ public sealed class WriteIsolationApplierTests
         // Add a mapped entity that does not implement ITenantEntity — it is skipped
         db.NonTenants.Add(new NonTenant { Name = "plain" });
 
-        var act = () => TenantWriteIsolationApplier.Apply(db.ChangeTracker.Entries(), ctx);
+        var act = () => TenantWriteGuard<string>.Check(db);
 
         act.Should().NotThrow();
         await db.DisposeAsync();

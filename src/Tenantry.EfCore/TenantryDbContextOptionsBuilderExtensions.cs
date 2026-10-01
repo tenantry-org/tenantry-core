@@ -64,7 +64,7 @@ public static class TenantryDbContextOptionsBuilderExtensions
         }
 
         ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(new TenantryOptionsExtension());
-        optionsBuilder.AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantBulkUpdateGuard.Instance);
+        optionsBuilder.AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance);
 
         if (ApplicationServices.Find(optionsBuilder.Options) is { } services)
         {

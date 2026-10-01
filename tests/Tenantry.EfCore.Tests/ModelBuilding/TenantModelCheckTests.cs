@@ -169,7 +169,8 @@ public sealed class TenantModelCheckTests : IDisposable
             .UseTenantry()
             .Options;
 
-        // On EF Core 10, EF Core's own check of the singleton bulk guard may throw first; both name UseInternalServiceProvider.
+        // On EF Core 10, EF Core's own check of Tenantry's singleton query interceptor may throw first; both name
+        // UseInternalServiceProvider.
         FluentActions.Invoking(() => new ItemsOnlyContext(options).Model)
             .Should().Throw<InvalidOperationException>().WithMessage("*UseInternalServiceProvider*");
     }
@@ -339,7 +340,7 @@ public sealed class TenantModelCheckTests : IDisposable
         var options = new DbContextOptionsBuilder<TContext>()
             .UseSqlite(_connection)
             .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant))
-            .AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantBulkUpdateGuard.Instance)
+            .AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance)
             .Options;
         var db = (TContext)Activator.CreateInstance(typeof(TContext), options)!;
         await db.Database.EnsureCreatedAsync();

@@ -26,7 +26,7 @@ namespace Tenantry.EfCore.Internal;
 internal static class TenantModelCheck
 {
     // Models that passed, with their isolation. Weak, so a model the application no longer uses is not kept alive.
-    private static readonly ConditionalWeakTable<IModel, Checked> Passed = new();
+    private static readonly ConditionalWeakTable<IModel, Checked> Passed = [];
 
     /// <summary>
     /// Throws when the context's model does not isolate a tenant-owned entity type, and otherwise returns the

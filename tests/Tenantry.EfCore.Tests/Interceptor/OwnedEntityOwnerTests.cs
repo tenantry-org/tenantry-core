@@ -51,6 +51,44 @@ public sealed class OwnedEntityOwnerTests : IDisposable
     }
 
     [Fact]
+    public async Task AddingToAnotherTenantsOwnedCollection_ThroughAStubNamingThatTenant_IsRejected()
+    {
+        // The stub's TenantId is the owner's real one, so writing it back with its concurrency token would match the
+        // row: only the check on the attached owner stops this.
+        await SeedAcmeCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex")))
+        {
+            Customer stub = new() { Id = 1, TenantId = "acme" };
+            db.Attach(stub);
+            stub.Phones.Add(new Phone { Number = "from globex" });
+
+            (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+                .Which.OffendingTenantId.Should().Be("acme");
+        }
+
+        (await PhonesOfAcmeCustomerAsync()).Should().Equal("acme phone");
+    }
+
+    [Fact]
+    public async Task AddingAnOwnedEntityWithoutItsOwner_IsRejected()
+    {
+        await SeedAcmeCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex")))
+        {
+            var phone = db.Entry(new Phone { Number = "from globex" });
+            phone.Property("CustomerId").CurrentValue = 1;
+            phone.State = EntityState.Added;
+
+            (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("A 'Phone' is being saved without its owner 'Customer'*");
+        }
+
+        (await PhonesOfAcmeCustomerAsync()).Should().Equal("acme phone");
+    }
+
+    [Fact]
     public async Task GivingAnotherTenantsOwnerAnOwnedEntity_ThroughAStub_FailsAndWritesNothing()
     {
         await SeedAcmeCustomerAsync();

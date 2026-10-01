@@ -184,6 +184,19 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 
 ### Fixed
 
+- `Entry(…).Reload()` and `GetDatabaseValues()` read a row by its key without query filters (EF Core's behaviour),
+  so an entity attached with another tenant's key, as in a forged write that fails with
+  `DbUpdateConcurrencyException`, got that tenant's values. Tenantry now keeps the tenant filter on that query:
+  another tenant's row reads as deleted (`GetDatabaseValues()` returns `null`, `Reload()` detaches the entity). On
+  EF Core 8 and 9, and for an entity whose own filter is unnamed, the entity's own filter applies to these reads as
+  well.
+- An owned type that does not implement `ITenantEntity<TKey>` (an owned value object in its own table, or in its
+  owner's row) was not checked through its owner: through an attached stub of another tenant's owner, a tenant
+  could add, change or delete that tenant's owned rows, and an owned entity attached without its owner, whatever
+  its type, was saved unchecked; without a tenant, `Reject` let such writes through. Every owned entity is now
+  checked through its owner (its owner's `TenantId` is written back with its concurrency token, so an audit log sees
+  an update of the owner), an owned entity saved without its owner is rejected, and `OnMissingTenant` treats owned
+  entities of a tenant-scoped owner as tenant-scoped.
 - The middleware and `ValidateTenantAccessByClaim` parsed identifiers and claim values with the current culture, so
   a numeric id could parse differently, or not at all, on a server with another culture. They use the invariant
   culture, as Tenantry.Pro's jobs and messages do.

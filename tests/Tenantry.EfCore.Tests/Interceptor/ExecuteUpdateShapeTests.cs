@@ -76,7 +76,7 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
 #endif
 
         ExecuteUpdateSetterReader.ReadSelectors(unknown).Should().BeEmpty();
-        FluentActions.Invoking(() => TenantBulkUpdateGuard.CheckExecuteUpdates(unknown, model: null, TenantIsolation.ForModel(_capture.Model!)!))
+        FluentActions.Invoking(() => TenantBulkUpdateGuard.Check(unknown, model: null, TenantIsolation.ForModel(_capture.Model!)!))
             .Should().Throw<TenantIsolationViolationException>()
             .WithMessage("Tenantry cannot read the setters of this ExecuteUpdate on EF Core *");
     }

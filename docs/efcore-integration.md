@@ -89,10 +89,13 @@ global.
 
 In an inheritance hierarchy, EF Core filters through the root entity type, so the root's tenant filter
 covers the derived types. EF Core reads an owned type's rows only through its owner and does not let it have a
-filter of its own, so a tenant-scoped owned type is isolated through its owner; its `TenantId` is still a
-concurrency token. When a save adds an owned entity to an owner that is only attached, not loaded or changed, the
-owner's `TenantId` is written back with its concurrency token, so the database confirms the owner is the current
-tenant's (an audit log sees an update of the owner).
+filter of its own, so an owned type is isolated through its owner, whether or not it implements
+`ITenantEntity<TKey>` (a tenant-scoped owned type's `TenantId` is still a concurrency token). Its writes are checked
+through the owner too. When a save adds an owned entity, or changes or deletes one without a `TenantId` of its own,
+and the owner is unchanged (loaded or only attached), the owner's `TenantId` is written back with its concurrency
+token, so the database confirms the owner is the current tenant's (an audit log sees an update of the owner). An
+owned entity saved without its owner in the same context is rejected, and without a tenant, `OnMissingTenant`
+treats owned entities as tenant-scoped.
 
 These models cannot be isolated, so building them throws `TenantIsolationViolationException` (or, for the
 registration, `InvalidOperationException`):
@@ -335,7 +338,8 @@ rows an `UPDATE`/`DELETE` *matched* (the stored-tenant predicate turns a forged 
 update that EF Core reports as a concurrency failure). The combinations below run the write-isolation
 suite against a real database: forged updates and deletes, entities loaded under another tenant,
 unchanged-value updates, writes without a tenant, tenant-filtered `ExecuteUpdate`/`ExecuteDelete`, the
-`TenantId` bulk-update guard, pooled contexts, and pooled contexts with a database per tenant.
+`TenantId` bulk-update guard, `GetDatabaseValues` of another tenant's row, pooled contexts, and pooled
+contexts with a database per tenant.
 
 | Database | EF Core provider | Framework | Status |
 |----------|------------------|-----------|--------|
@@ -363,7 +367,7 @@ access), add row-level security policies in the database as well, or use a datab
 | `ExecuteUpdate`, `ExecuteDelete` | Yes | The query filter limits affected rows to the current tenant; with no tenant they affect nothing. `ExecuteUpdate` may not set `TenantId`: when the query is compiled, a guard resolves each setter the way EF Core does (member access or `EF.Property`, through casts and through `Select`, `Join` and `SelectMany` projections) and throws `TenantIsolationViolationException` if it lands on `TenantId`. It fails closed on a setter it cannot resolve, such as one through a `GroupBy` projection or an `EF.Property` name it cannot read, and on setters it cannot read at all, as a new EF Core version could bring. It does not see a second property mapped to the `TenantId` column. |
 | `IgnoreQueryFilters()` | No, by design | Removes the tenant filter from that query, including `ExecuteUpdate`/`ExecuteDelete`, which then affect **every** tenant. Treat it as a privileged operation. |
 | Raw SQL (`FromSql`, `SqlQuery`, `ExecuteSql`) | No | Neither the filter nor the interceptors see raw SQL. Add the tenant predicate yourself. |
-| `Entry(…).Reload()`, `GetDatabaseValues()` | No | EF Core reads the row by its key without query filters, so an entity attached with another tenant's key gets that tenant's values. A `DbUpdateConcurrencyException` handler must not return `GetDatabaseValues()` of a tenant-owned entity to the caller: a forged key reaches another tenant's row there (writing it back is still rejected). |
+| `Entry(…).Reload()`, `GetDatabaseValues()` | Yes | EF Core reads the row by its key without query filters; Tenantry keeps the tenant filter on that query, so another tenant's row reads as deleted: `GetDatabaseValues()` returns `null` and `Reload()` detaches the entity. On EF Core 10 the entity's other named filters are still ignored; on EF Core 8 and 9, and for an entity whose own filter is unnamed, its own filter applies too. |
 | Entities a context already tracks | No | `Find` and `Local` answer from the change tracker, which keeps entities loaded for an earlier tenant if the same context is used after a tenant switch. Use a context for one tenant. |
 | Pooled contexts | Yes | Each use reads the tenant active at that moment; see [DbContext pooling](#dbcontext-pooling). |
 | Other `DbContext` instances | No | A context whose options do not call `UseTenantry()` gets no isolation at all. |

@@ -108,12 +108,14 @@ context is created:
   `ISingletonInterceptor` services): EF Core adds no extension's services to an internal service provider you
   build. Remove `UseInternalServiceProvider`.
 
-## A `DbUpdateConcurrencyException` handler shows another tenant's data
+## `Reload()` detaches an entity, or `GetDatabaseValues()` returns `null`
 
-A write whose key belongs to another tenant matches no row (the stored `TenantId` is part of the `WHERE` clause),
-so EF Core throws `DbUpdateConcurrencyException`. `entry.GetDatabaseValues()` and `entry.Reload()` then read the row
-by its key **without** query filters, so they return the other tenant's values. Do not show a tenant-owned
-entity's database values to the caller from such a handler; treat the conflict as "not found" instead.
+EF Core reads an entity's database values by its key, and Tenantry keeps the tenant filter on that read, so a row
+it cannot see reads as deleted: `GetDatabaseValues()` returns `null` and `Reload()` detaches the entity. The row
+belongs to another tenant (a write whose key belongs to another tenant also matches no row, so EF Core throws
+`DbUpdateConcurrencyException` first), or no tenant is current. On EF Core 8 and 9, and for an entity whose own
+query filter is unnamed, that filter applies to the read as well, so a soft-deleted row also reads as deleted. In a
+`DbUpdateConcurrencyException` handler, treat `null` as "not found".
 
 ## "has no application service provider"
 

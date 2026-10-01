@@ -33,9 +33,9 @@ internal sealed class TenantScopeFactory<TKey>(
 
         // Checked before the services are created, so a tenant Use rejects leaves nothing to dispose.
         TenantIds.ThrowIfUnset(tenant, nameof(tenant));
-        var services = serviceScopes.CreateAsyncScope();
+        var scope = serviceScopes.CreateAsyncScope();
 
-        return new TenantScope<TKey>(services, tenantContext.Use(tenant), tenant);
+        return new TenantScope<TKey>(scope, tenantContext.Use(tenant), tenant);
     }
 
     /// <inheritdoc />

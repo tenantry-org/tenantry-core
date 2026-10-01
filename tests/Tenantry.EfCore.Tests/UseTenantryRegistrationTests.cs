@@ -58,7 +58,7 @@ public sealed class UseTenantryRegistrationTests : IDisposable
 
         options.FindExtension<TenantryOptionsExtension>().Should().NotBeNull();
         options.FindExtension<CoreOptionsExtension>()!.Interceptors
-            .Should().BeEquivalentTo(new IInterceptor[] { TenantSaveChangesInterceptor.Instance, TenantBulkUpdateGuard.Instance });
+            .Should().BeEquivalentTo(new IInterceptor[] { TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance });
     }
 
     [Fact]

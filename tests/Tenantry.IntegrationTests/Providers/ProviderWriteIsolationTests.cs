@@ -70,6 +70,20 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task DatabaseValues_OfAnotherTenantsRow_AreNotRead()
+    {
+        var id = await AddOrderAsync(_acme, "acme order");
+
+        var forged = await AsTenantAsync(_globex, db =>
+            db.Attach(new ProviderOrder { Id = id, TenantId = _globex }).GetDatabaseValuesAsync());
+        var own = await AsTenantAsync(_acme, db =>
+            db.Attach(new ProviderOrder { Id = id, TenantId = _acme }).GetDatabaseValuesAsync());
+
+        forged.Should().BeNull();
+        own!["Description"].Should().Be("acme order");
+    }
+
+    [Fact]
     public async Task EntityLoadedUnderAnotherTenant_ThrowsIsolationViolation()
     {
         var id = await AddOrderAsync(_acme, "acme order");

@@ -29,7 +29,8 @@ internal sealed class TenantryOptionsExtension : IDbContextOptionsExtension
         var core = options.FindExtension<CoreOptionsExtension>();
 
         // EF Core applies no extension's services to an internal service provider the application builds itself, so
-        // the tenant filters would be missing (and EF Core 10 also refuses the bulk guard, a singleton interceptor).
+        // the tenant filters would be missing (and EF Core 10 also refuses Tenantry's query interceptor, a singleton
+        // interceptor).
         if (core?.InternalServiceProvider is not null)
         {
             throw new InvalidOperationException(

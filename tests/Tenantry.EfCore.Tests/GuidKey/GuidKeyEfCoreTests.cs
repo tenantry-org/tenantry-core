@@ -44,6 +44,28 @@ public sealed class GuidKeyEfCoreTests
     }
 
     [Fact]
+    public async Task GetDatabaseValues_OfAnotherTenantsOrder_IsNull()
+    {
+        GuidTestTenantContext ctx = new();
+        Guid acme = Guid.NewGuid();
+        Guid globex = Guid.NewGuid();
+        await using SqliteConnection conn = DbContextFactory.CreateSharedConnection();
+        int acmeOrderId;
+
+        await using (GuidTestDbContext seed = await DbContextFactory.CreateGuidContextAsync(ctx.As(acme), conn))
+        {
+            GuidOrder order = new() { Description = "Acme order" };
+            seed.Orders.Add(order);
+            await seed.SaveChangesAsync();
+            acmeOrderId = order.Id;
+        }
+
+        await using GuidTestDbContext db = await DbContextFactory.CreateGuidContextAsync(ctx.As(globex), conn);
+
+        (await db.Attach(new GuidOrder { Id = acmeOrderId, TenantId = globex }).GetDatabaseValuesAsync()).Should().BeNull();
+    }
+
+    [Fact]
     public async Task Interceptor_StampsTenantIdOnAddedOrder()
     {
         // Arrange

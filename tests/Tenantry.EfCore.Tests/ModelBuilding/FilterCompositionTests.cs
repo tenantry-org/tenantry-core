@@ -78,7 +78,33 @@ public sealed class FilterCompositionTests : IDisposable
         (await db.Items.SingleAsync()).TenantId.Should().Be("acme");
     }
 
+    [Fact]
+    public async Task DatabaseValues_KeepTheTenantFilter_AndTheOwnFilterItWasMergedWith()
+    {
+        // On EF Core 8 and 9, and for an unnamed own filter on any version, the tenant filter is part of the
+        // entity's one filter, so Reload and GetDatabaseValues apply all of it.
+        await using var db = await CreateAsync<UnnamedFilterContext>();
+        await SeedAsync(db);
+        var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id);
+
+        db.Attach(new Item { Id = rows["acme active"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
+        db.Attach(new Item { Id = rows["acme deleted"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
+        db.Attach(new Item { Id = rows["globex active"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
+    }
+
 #if EFCORE10_OR_GREATER
+    [Fact]
+    public async Task DatabaseValues_KeepTheTenantFilter_AndStillIgnoreANamedOwnFilter()
+    {
+        await using var db = await CreateAsync<NamedFilterContext>();
+        await SeedAsync(db);
+        var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id);
+
+        db.Attach(new Item { Id = rows["acme active"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
+        db.Attach(new Item { Id = rows["acme deleted"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
+        db.Attach(new Item { Id = rows["globex active"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
+    }
+
     [Fact]
     public async Task WithoutOwnFilters_TheTenantFilterIsNamed()
     {

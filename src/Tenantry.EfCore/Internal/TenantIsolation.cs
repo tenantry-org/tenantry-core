@@ -4,9 +4,7 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Tenantry.EfCore.Internal;
 
@@ -41,14 +39,14 @@ internal abstract class TenantIsolation
                 if (keyType is null)
                 {
                     keyType = key;
-                    keyTypeEntity = entityType.ClrType.Name;
+                    keyTypeEntity = entityType.DisplayName();
                 }
                 else if (key != keyType)
                 {
                     throw new TenantIsolationViolationException(
                         TenantIsolationViolationKind.ModelConfiguration,
                         entityType.ClrType.Name,
-                        $"Entity '{entityType.ClrType.Name}' implements ITenantEntity<{key.Name}>, but '{keyTypeEntity}' " +
+                        $"Entity '{entityType.DisplayName()}' implements ITenantEntity<{key.Name}>, but '{keyTypeEntity}' " +
                         $"implements ITenantEntity<{keyType.Name}>. An application uses one tenant key type, the one it " +
                         "registers with AddTenantry: use it for every tenant-owned entity.");
                 }
@@ -84,8 +82,6 @@ internal abstract class TenantIsolation
 internal sealed class TenantIsolation<TKey> : TenantIsolation
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    private static readonly EfCoreIsolationOptions DefaultOptions = new();
-
     public override Type KeyType => typeof(TKey);
 
     public override bool IsTenantEntity(Type type) => typeof(ITenantEntity<TKey>).IsAssignableFrom(type);
@@ -231,98 +227,10 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
             Expression.AndAlso(existing.Body, ParameterReplacer.Replace(tenant.Body, tenant.Parameters[0], existing.Parameters[0])),
             existing.Parameters);
 
-    public override void SavingChanges(DbContext context)
-    {
-        var services = ApplicationServices.Find(context);
-        var tenantContext = ApplicationServices.TenantContext<TKey>(context);
-        var logger = TenantIsolationLog.Find(services) ?? NullLogger.Instance;
+    public override void SavingChanges(DbContext context) => TenantWriteGuard<TKey>.Check(context);
 
-        if (!tenantContext.HasTenant)
-        {
-            HandleMissingTenant(context, services?.GetService<EfCoreIsolationOptions>() ?? DefaultOptions, logger);
-            return;
-        }
-
-        TenantWriteIsolationApplier.Apply(context.ChangeTracker.Entries(), tenantContext, violation =>
-        {
-            TenantIsolationLog.IsolationViolation(
-                logger,
-                violation.TypeName,
-                violation.OffendingTenantId,
-                violation.ExpectedTenantId);
-        });
-    }
-
-    private static void HandleMissingTenant(DbContext context, EfCoreIsolationOptions options, ILogger logger)
-    {
-        var scopedWrites = context.ChangeTracker.Entries()
-            .Where(entry => entry.Entity is ITenantEntity<TKey> &&
-                            entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
-            .ToList();
-
-        // A save that writes no tenant-owned entity (e.g. a host-level catalogue) needs no tenant.
-        if (scopedWrites.Count == 0)
-        {
-            return;
-        }
-
-        var entityTypes = string.Join(", ", scopedWrites.Select(entry => entry.Metadata.ClrType.Name).Distinct());
-
-        switch (options.OnMissingTenant)
-        {
-            case MissingTenantBehavior.Warn:
-                TenantIsolationLog.WriteWithoutTenant(logger, entityTypes);
-                break;
-
-            case MissingTenantBehavior.Allow:
-                break;
-
-            default:
-                throw new TenantNotResolvedException(
-                    $"SaveChanges is writing tenant-scoped entities ({entityTypes}) without a resolved tenant. " +
-                    "Run the write while a tenant is current (app.UseTenantry() for requests, " +
-                    "ITenantScopeFactory.RunInScopeAsync or CreateScope elsewhere), or set " +
-                    "EfCoreIsolationOptions.OnMissingTenant to Allow or Warn for maintenance code that deliberately " +
-                    "writes across tenants.");
-        }
-
-        // Even when unscoped writes are allowed, a new row must name its tenant: an unowned row is never
-        // visible through the tenant filter and belongs to no one.
-        var unowned = scopedWrites.FirstOrDefault(entry =>
-            entry.State == EntityState.Added &&
-            TenantOwnership.IsUnstamped(((ITenantEntity<TKey>)entry.Entity).TenantId));
-
-        if (unowned is not null)
-        {
-            throw new TenantNotResolvedException(
-                $"A new '{unowned.Metadata.ClrType.Name}' is being saved without a resolved tenant and without a " +
-                "TenantId. Set TenantId explicitly or save it while its tenant is current.");
-        }
-    }
-
-    // A tenant-owned UPDATE or DELETE that affects no row is either an ordinary concurrency conflict or an attempt to
-    // write another tenant's row with a forged TenantId. The two cannot be told apart without another query, so EF
-    // Core's DbUpdateConcurrencyException is left as it is and logged here. Logging never replaces that exception.
-    public override void WriteMatchedNoRow(ConcurrencyExceptionEventData eventData)
-    {
-        if (eventData.Context is not { } context ||
-            ApplicationServices.Find(context) is not { } services ||
-            TenantIsolationLog.Find(services) is not { } logger)
-        {
-            return;
-        }
-
-        var tenantContext = services.GetService<ITenantContext<TKey>>();
-        var tenantId = tenantContext is { HasTenant: true } ? tenantContext.CurrentTenantId?.ToString() : null;
-
-        foreach (var entry in eventData.Entries)
-        {
-            if (entry.Entity is ITenantEntity<TKey>)
-            {
-                TenantIsolationLog.WriteMatchedNoRow(logger, entry.State.ToString(), entry.Entity.GetType().Name, tenantId);
-            }
-        }
-    }
+    public override void WriteMatchedNoRow(ConcurrencyExceptionEventData eventData) =>
+        TenantWriteGuard<TKey>.WriteMatchedNoRow(eventData);
 
     private sealed class ParameterReplacer(ParameterExpression source, Expression replacement) : ExpressionVisitor
     {

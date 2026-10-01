@@ -46,8 +46,8 @@ public class GuidTestDbContext(DbContextOptions<GuidTestDbContext> options) : Db
 }
 
 /// <summary>
-/// A mapped entity that does not implement ITenantEntity — used to ensure the isolation applier
-/// and validator skip non-tenant-scoped types.
+/// A mapped entity that does not implement ITenantEntity — used to ensure the write guard skips
+/// non-tenant-owned types.
 /// </summary>
 public class NonTenant
 {
