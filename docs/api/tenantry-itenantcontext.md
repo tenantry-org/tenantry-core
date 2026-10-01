@@ -5,12 +5,12 @@ Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 Provides read-only access to the currently resolved tenant for the active request scope. Registered as a singleton backed by `AsyncLocal<T>` — the value is per-async-context (effectively per HTTP request) rather than per-instance.
 
 ```csharp
-public interface ITenantContext<out TKey> where TKey : IEquatable<out TKey>, IParsable<out TKey>
+public interface ITenantContext<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) for constraints.
 
 ## Properties
 
@@ -19,10 +19,10 @@ public interface ITenantContext<out TKey> where TKey : IEquatable<out TKey>, IPa
 The currently resolved tenant, or `null` if no tenant has been resolved (e.g. before the middleware has run, or on anonymous endpoints).
 
 ```csharp
-ITenantDescriptor<out TKey>? CurrentTenant { get; }
+ITenantDescriptor<TKey>? CurrentTenant { get; }
 ```
 
-Value: [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md)
+Value: [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md)
 
 ### `CurrentTenantId`
 
@@ -43,3 +43,29 @@ bool HasTenant { get; }
 ```
 
 Value: `bool`
+
+## Methods
+
+### `GetCurrentTenant<TTenant>()`
+
+The current tenant as `TTenant`, the type your tenant store returns, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) if no tenant is current. Equivalent to `CurrentTenant?.As<TTenant>()`.
+
+```csharp
+TTenant? GetCurrentTenant<TTenant>() where TTenant : class, ITenantDescriptor<TKey>
+```
+
+Type parameters:
+
+- `TTenant`: Your tenant type.
+
+Returns: `TTenant`
+
+Exceptions:
+
+- `InvalidOperationException`: The current tenant is not a `TTenant`: the tenant store returns another type.
+
+A default interface method: a mock of [`ITenantContext<TKey>`](tenantry-itenantcontext.md) (NSubstitute, Moq) intercepts it and returns [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) unless it is configured too, so code under test with a mocked context can read `CurrentTenant?.As<TTenant>()` instead, or tests can use a real context ([`ITenantContextSetter<TKey>.Use`](tenantry-itenantcontextsetter.md)).
+
+```csharp
+app.MapGet("/plan", (ITenantContext<Guid> tenants) => tenants.GetCurrentTenant<AppTenant>()?.Plan);
+```

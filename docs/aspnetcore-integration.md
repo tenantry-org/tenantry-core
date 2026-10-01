@@ -3,11 +3,13 @@
 `Tenantry.AspNetCore` turns an incoming HTTP request into a resolved tenant. It adds, to the builder of
 `AddTenantry<TKey>(...)`:
 
-- Tenant **resolvers** (header, subdomain, route, claim, query string, custom) — see [Tenant resolution](tenant-resolution.md).
+- Tenant **resolvers** (header, subdomain, host, route, claim, query string, custom) — see [Tenant resolution](tenant-resolution.md).
 - **Access validation** and endpoint metadata — see [Access control](access-control.md).
-- `ConfigureResolution(...)` — whether endpoints need a tenant, and the [status codes](#status-codes) of rejections.
+- `ConfigureResolution(...)` — whether endpoints need a tenant, the [status codes](#status-codes) of rejections, and
+  the [events](#events) raised when a request's tenant is made current or a request is rejected.
 
 and `app.UseTenantry()`, the resolution middleware, which also checks the registration when the application starts.
+Its logs, traces and metrics are described in [Diagnostics](diagnostics.md).
 
 ## Registration
 
@@ -39,6 +41,10 @@ request, and throws `InvalidOperationException` if:
 - **no resolver** is registered, or
 - **no store** is registered (you forgot `UseInMemoryStore`/`UseStore`).
 
+The other way round, a web application that registers request resolution but never calls `app.UseTenantry()`
+fails to start: without the middleware, no request would have a tenant, and endpoints marked `RequireTenant()`
+would run without one. A host that serves no requests (a worker) is not checked.
+
 A second store registration, and `AddTenantry` with another tenant key type, throw where they are made. This
 converts a class of silent runtime bugs into an immediate, descriptive startup failure.
 
@@ -51,37 +57,38 @@ app.UseTenantry();
 
 For each request, the middleware:
 
-1. Tries each registered resolver **in registration order** and takes the **first non-null** raw id.
-2. If no resolver produced an id:
+1. Tries each registered resolver **in registration order** and takes the **first** identifier one returns (a
+   resolver that returns `null` or an empty string has none).
+2. If no resolver produced an identifier:
    - if a tenant is **required** for this request (see [Access control](access-control.md)), rejects it
      (`400 Bad Request`) and stops;
    - otherwise continues the pipeline with **no** tenant context.
-3. Parses the raw id with `TKey.TryParse`. An id that does not parse, or parses to the key type's default
-   (`Guid.Empty`, `0`), is not a tenant: a request that requires a tenant is rejected (`400 Bad Request`).
-4. Looks the id up via `ITenantStore<TKey>.GetTenantAsync`. If `null`, a request that requires a tenant is
+3. Finds the tenant the identifier names, with `ITenantStoreAccessor<TKey>.FindByIdentifierAsync`, which calls your
+   store's `FindByIdentifierAsync` (by default: parse the identifier as `TKey` and look the id up) and serves it from
+   the cache with [`CacheTenants`](tenant-stores.md#caching). If none, a request that requires a tenant is
    rejected (`404 Not Found`, or the access-denied response when access validators are configured).
-5. Runs any [access validators](access-control.md). If access is denied, a request that requires a tenant is
-   rejected (`403 Forbidden`).
-6. Makes the tenant current (`ITenantContextSetter.Use`) for the remainder of the request and adds `TenantId`/
-   `TenantName` to the logging scope for log correlation. The tenant is restored when the request ends.
+4. Runs the [access validators](access-control.md), in the order they were added. If one refuses, a request that
+   requires a tenant is rejected (`403 Forbidden`).
+5. Makes the tenant current (`ITenantContextSetter.Use`) for the remainder of the request, tags the request's
+   trace span `tenant.id` and opens a log scope with `TenantId`, and raises [`OnResolved`](#events). The tenant is
+   restored when the request ends.
 
-A request to an endpoint that does **not** require a tenant is never rejected: when its identifier is not
-valid, names no tenant, or names one an access validator refuses, it continues without a tenant, as if it had no
-identifier. So a `www.` host or a stale header does not break your login and health endpoints, and a caller
-learns nothing about which tenants exist.
+A request to an endpoint that does **not** require a tenant is never rejected: when its identifier names no
+tenant, or names one an access validator refuses, it continues without a tenant, as if it had no identifier. So a
+`www.` host or a stale header does not break your login and health endpoints, and a caller learns nothing about
+which tenants exist.
 
-The store is resolved from the **request's** service scope, so a scoped, `DbContext`-backed store
-works correctly.
+Resolvers and access validators added by type (`UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()`) are
+created in the **request's** service scope, so they can depend on a scoped `DbContext`. The store is resolved from a scope of `ITenantStoreAccessor<TKey>`'s own for each lookup.
 
 ### Status codes
 
 | Situation (on an endpoint that requires a tenant) | Default status | Option |
 |---------------------------------------------------|----------------|--------|
-| No resolver produced an id | `400 Bad Request` | `MissingTenantStatusCode` |
-| The id does not parse, or is the key type's default | `400 Bad Request` | `InvalidTenantStatusCode` |
-| The id is not in the store | `404 Not Found` | `TenantNotFoundStatusCode` |
+| No resolver produced an identifier | `400 Bad Request` | `MissingTenantStatusCode` |
+| The identifier names no tenant (with the default lookup: it does not parse, is the key type's default, or is not in the store) | `404 Not Found` | `TenantNotFoundStatusCode` |
 | An access validator refused the tenant (including a suspended tenant your validator refuses) | `403 Forbidden` | `AccessDeniedStatusCode` |
-| The id is not in the store, **and access validators are configured** | same as access denied | `AccessDeniedStatusCode` |
+| The identifier names no tenant, **and access validators are configured** | same as access denied | `AccessDeniedStatusCode` |
 
 With access validators, a tenant that does not exist gets exactly the response of one the caller may not use,
 so an authenticated user of one tenant cannot probe for others. Change the codes with `ConfigureResolution`:
@@ -98,9 +105,49 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 ```
 
 A rejection's body is empty unless an `IProblemDetailsService` is registered (`builder.Services.AddProblemDetails()`),
-in which case it is `application/problem+json` with the status, a title (`Tenant required`, `Invalid tenant`,
-`Tenant not found`, `Tenant access denied`) and a short detail. The body never repeats the identifier the request
-sent. Customise the problem details as usual, with `AddProblemDetails(options => options.CustomizeProblemDetails = …)`.
+in which case it is `application/problem+json` with the status, a title (`Tenant required`, `Tenant not found`,
+`Tenant access denied`) and a short detail. The body never repeats the identifier the request sent. Customise the
+problem details as usual, with `AddProblemDetails(options => options.CustomizeProblemDetails = …)`, or write a
+response of your own in [`OnRejected`](#events).
+
+## Events
+
+`ConfigureResolution` sets two handlers:
+
+- `OnResolved` runs when a request's tenant has been made current, before the rest of the pipeline, with the
+  request and the tenant: to add the tenant to your own telemetry, say. Changes it makes to ambient state, such as
+  `CultureInfo.CurrentCulture` or an `AsyncLocal`, reach the rest of the pipeline only if made before its first
+  `await` (an `async` method's changes do not flow back to its caller); for a per-tenant culture, use
+  `UseRequestLocalization` with a culture provider that reads `ITenantContext<TKey>`. To refuse a tenant, use an
+  [access validator](access-control.md#validating-tenant-access).
+- `OnRejected` runs when an endpoint that requires a tenant rejects a request, before Tenantry writes its response.
+  It is told the `Reason` (`Missing`, `NotFound` or `AccessDenied`), the `StatusCode` Tenantry would send, the
+  `Identifier` the request sent and, for `AccessDenied`, the refused `Tenant`. Change `StatusCode`, or write your
+  own response and call `HandleResponse()`, so Tenantry writes none:
+
+```csharp
+using Tenantry.AspNetCore;
+
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
+    .UseStore<EfCoreTenantStore>()
+    .RequireTenantByDefault()
+    .ConfigureResolution(o => o.OnRejected = context =>
+    {
+        // A browser that asks for a workspace that does not exist goes to the marketing site.
+        if (context.Reason == TenantRejectionReason.NotFound)
+        {
+            context.HttpContext.Response.Redirect("https://example.com/");
+            context.HandleResponse();
+        }
+
+        return Task.CompletedTask;
+    }));
+```
+
+`Reason` is the real reason, for your logs: with access validators, an unknown tenant's `StatusCode` is the
+access-denied one, so a caller cannot tell it from a refused tenant. Keep that in a response of your own, and do
+not repeat `Identifier`, which is request input, without encoding it.
 
 ## Pipeline ordering
 
@@ -117,6 +164,12 @@ Two ordering rules matter:
   `WebApplication` adds routing automatically and places it early, so for minimal APIs and controllers
   this generally just works. If you build a custom pipeline, ensure `UseRouting()` precedes
   `UseTenantry()`.
+
+Getting either wrong does not fail, so the middleware watches for it: when routing chooses an endpoint with
+Tenantry's metadata after the middleware ran, or the authentication middleware runs after it and signs in a user
+whose claim `ResolveFromClaim` would have read, it logs a warning once ([event ids](diagnostics.md#logs) 1007 and
+1008). A user signed in by other code after the middleware, such as authorization with a scheme that is not the
+default, is not seen by `ResolveFromClaim` either, and is not warned about: make that scheme the default.
 
 A typical order:
 

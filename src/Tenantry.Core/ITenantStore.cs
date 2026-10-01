@@ -1,3 +1,5 @@
+using Tenantry.Internal;
+
 namespace Tenantry;
 
 /// <summary>
@@ -37,4 +39,30 @@ public interface ITenantStore<TKey>
     /// </summary>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the tenant a request's identifier names, or <c>null</c> if it names none. An identifier is what a
+    /// resolver reads from a request: the tenant's id, or a name your store maps to a tenant, such as a subdomain
+    /// (<c>acme</c>), a slug in a route or a custom domain (<c>app.acme.com</c>).
+    /// </summary>
+    /// <param name="identifier">The identifier, as the resolver returned it.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
+    /// <remarks>
+    /// By default the identifier is the tenant's id: it is parsed as <typeparamref name="TKey"/> with the invariant
+    /// culture and looked up with <see cref="GetTenantAsync"/>, and an identifier that does not parse, or parses to
+    /// the key type's default (<see cref="Guid.Empty"/>, <c>0</c>) or an empty string, names no tenant. Implement it
+    /// to resolve tenants by another name, for example a <see cref="Guid"/>-keyed store whose tenants have slugs. A
+    /// store that wraps another (to log, say) must forward it to the inner store: otherwise it gets this default,
+    /// which never reaches the inner store's own mapping.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// public async ValueTask&lt;ITenantDescriptor&lt;Guid&gt;?&gt; FindByIdentifierAsync(string identifier, CancellationToken ct) =&gt;
+    ///     await db.Tenants.SingleOrDefaultAsync(t =&gt; t.Slug == identifier, ct);
+    /// </code>
+    /// </example>
+    ValueTask<ITenantDescriptor<TKey>?> FindByIdentifierAsync(string identifier, CancellationToken cancellationToken = default) =>
+        TenantIds.TryParse<TKey>(identifier, out var tenantId)
+            ? GetTenantAsync(tenantId, cancellationToken)
+            : ValueTask.FromResult<ITenantDescriptor<TKey>?>(null);
 }

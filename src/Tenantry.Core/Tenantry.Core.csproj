@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Tenantry.Core.Tests"/>
     <InternalsVisibleTo Include="Tenantry.EfCore.Tests"/>
   </ItemGroup>
 

@@ -7,8 +7,8 @@ using Tenantry.Internal;
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
-/// Tenantry's core features on <see cref="ITenantBuilder{TKey}"/>: the tenant store and per-tenant connection
-/// strings.
+/// Tenantry's core features on <see cref="ITenantBuilder{TKey}"/>: the tenant store, its cache and per-tenant
+/// connection strings.
 /// </summary>
 public static class TenantryTenantBuilderExtensions
 {
@@ -56,6 +56,69 @@ public static class TenantryTenantBuilderExtensions
 
         TenantStores.ThrowIfRegistered<TKey>(builder.Services);
         builder.Services.AddScoped(factory);
+        return builder;
+    }
+
+    /// <summary>
+    /// Caches the tenants Tenantry reads from the tenant store, so a request does not ask the store for its tenant
+    /// each time. <see cref="ITenantStoreCache{TKey}"/> then removes a tenant that changes (<c>AddTenantry</c> always
+    /// registers it, so code that invalidates runs with caching off too).
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="configure">Sets how long a tenant is cached, or <see langword="null"/> for the default (5 minutes).</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// The cache serves Tenantry's own lookups: <c>app.UseTenantry()</c>'s, and <see cref="ITenantStoreAccessor{TKey}"/>'s,
+    /// which <see cref="ITenantScopeFactory{TKey}.RunInScopeAsync(TKey, Func{ITenantScope{TKey}, CancellationToken, Task}, CancellationToken)"/>
+    /// and background work use. It keeps each tenant the store finds, by the id or identifier it was looked up with,
+    /// in memory for <see cref="TenantStoreCacheOptions.Duration"/>. A lookup that finds no tenant is not cached, so a
+    /// tenant added to the store is found at once; <see cref="ITenantStore{TKey}.GetAllTenantsAsync"/> is never
+    /// cached. Code that injects <see cref="ITenantStore{TKey}"/> reads the store itself.
+    /// </para>
+    /// <para>
+    /// A tenant that changes (is suspended, say, which an access validator reads) is served as it was until its entry
+    /// expires: call <see cref="ITenantStoreCache{TKey}.Invalidate"/> when you change it. Each instance of the
+    /// application has its own cache. Calling it again configures the same options. It reads the time from a
+    /// registered <see cref="TimeProvider"/>, if there is one.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="TenantStoreCacheOptions.Duration"/> is not positive.</exception>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
+    ///     .ResolveFromSubdomain()
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .CacheTenants(o =&gt; o.Duration = TimeSpan.FromMinutes(1)));
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> CacheTenants<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Action<TenantStoreCacheOptions>? configure = null)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var services = builder.Services;
+        var options = services
+            .FirstOrDefault(d => d.ServiceType == typeof(TenantStoreCacheOptions) && !d.IsKeyedService)
+            ?.ImplementationInstance as TenantStoreCacheOptions;
+
+        if (options is null)
+        {
+            options = new TenantStoreCacheOptions();
+            services.AddSingleton(options);
+        }
+
+        configure?.Invoke(options);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.Duration, TimeSpan.Zero, "options.Duration");
+
+        services.TryAddSingleton(sp => new TenantStoreCache<TKey>(
+            sp.GetRequiredService<TenantStoreCacheOptions>(),
+            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+        services.Replace(ServiceDescriptor.Singleton<ITenantStoreCache<TKey>>(sp => sp.GetRequiredService<TenantStoreCache<TKey>>()));
+
         return builder;
     }
 

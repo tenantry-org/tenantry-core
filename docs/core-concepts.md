@@ -12,8 +12,8 @@ where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
 
 - `IEquatable<TKey>` lets EF Core translate `tenantId == currentTenantId` into SQL for the query filter.
-- `IParsable<TKey>` lets resolvers turn the raw `string` from a header/route/claim into a `TKey` via
-  `TKey.TryParse`.
+- `IParsable<TKey>` lets Tenantry turn text, such as the identifier a request carries in a header, route or
+  claim, into a `TKey`, with the invariant culture.
 
 `Guid`, `int`, `long`, `string`, and most numeric types satisfy this. Choose one type and use it
 everywhere — the same `TKey` flows through your entities, store, `DbContext`, and registration. An application
@@ -22,18 +22,18 @@ has one key type: calling `AddTenantry` with a second one throws, and an entity 
 unisolated.
 
 The key type's default value (`Guid.Empty`, `0`, and for `string` keys `null` or an empty string) means "no
-tenant" to Tenantry, so no tenant may have it: making such a tenant current throws `ArgumentException`, and the
-middleware treats such an identifier as invalid.
+tenant" to Tenantry, so no tenant may have it: making such a tenant current throws `ArgumentException`, and an
+identifier that parses to it names no tenant.
 
 ## `ITenantDescriptor<TKey>` — a resolved tenant
 
 A descriptor is the minimal description of a tenant:
 
 ```csharp no-compile
-public interface ITenantDescriptor<out TKey>
+public interface ITenantDescriptor<out TKey> : ITenantDescriptor
 {
     TKey TenantId { get; }   // used for data isolation
-    string Name { get; }     // human-readable display name
+    string Name { get; }     // human-readable display name (declared on ITenantDescriptor)
 }
 ```
 
@@ -45,11 +45,40 @@ using Tenantry;
 new TenantDescriptor<Guid> { TenantId = id, Name = "Acme" };
 ```
 
-You can implement `ITenantDescriptor<TKey>` on your own type to carry extra metadata (subscription
-tier, connection string, feature flags…). Your [tenant store](tenant-stores.md) returns whatever
-implementation you like; Tenantry only ever reads `TenantId` and `Name`. That includes status: Tenantry
-has no notion of an active or suspended tenant, so keep yours on your descriptor type and check it where
-work starts (see [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
+### Your own tenant type
+
+Implement `ITenantDescriptor<TKey>` on your own type to carry what your application knows about a tenant (its
+plan, region, connection string, feature flags…), and return it from your [tenant store](tenant-stores.md).
+Tenantry only ever reads `TenantId` and `Name`. That includes status: Tenantry has no notion of an active or
+suspended tenant, so keep yours on your tenant type and check it where work starts (see
+[Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
+
+```csharp no-compile
+public class AppTenant : ITenantDescriptor<Guid>
+{
+    public Guid TenantId { get; set; }
+    public string Name { get; set; } = "";
+    public string Plan { get; set; } = "";
+    public string ConnectionString { get; set; } = "";
+    public bool IsSuspended { get; set; }
+}
+```
+
+Every delegate and service that receives a tenant receives it as `ITenantDescriptor<TKey>`. Read your own
+properties with `As<TTenant>()`, and the current tenant with `GetCurrentTenant<TTenant>()`:
+
+```csharp
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromHeader("X-Tenant-Id")
+    .UseStore<EfCoreTenantStore>()
+    .UseConnectionStrings(o => o.GetConnectionString = t => t.As<AppTenant>().ConnectionString)
+    .ValidateTenantAccess((http, t) => !t.As<AppTenant>().IsSuspended));
+
+app.MapGet("/plan", (ITenantContext<Guid> tenants) => tenants.GetCurrentTenant<AppTenant>()?.Plan);
+```
+
+Both throw `InvalidOperationException`, naming both types, if the tenant is not of the type you ask for: the store
+returns another one.
 
 ## `ITenantEntity<TKey>` — a tenant-owned entity
 
@@ -75,11 +104,13 @@ This is the read-only view of "who is the tenant right now", and the type you in
 services, and your `DbContext`:
 
 ```csharp no-compile
-public interface ITenantContext<out TKey>
+public interface ITenantContext<TKey>
 {
     ITenantDescriptor<TKey>? CurrentTenant { get; }  // null if none resolved
     bool HasTenant { get; }                          // true if a tenant is active
     TKey? CurrentTenantId { get; }                   // CurrentTenant?.TenantId, or default(TKey)
+    TTenant? GetCurrentTenant<TTenant>()             // CurrentTenant?.As<TTenant>()
+        where TTenant : class, ITenantDescriptor<TKey>;
 }
 ```
 

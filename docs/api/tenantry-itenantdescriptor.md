@@ -1,16 +1,12 @@
-# `ITenantDescriptor<TKey>` interface
+# `ITenantDescriptor` interface
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-Represents a resolved tenant.
+A tenant, without its identifier type: the base of [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md), for code that does not need the tenant's id, such as [`TenantDescriptorExtensions.As<TTenant>`](tenantry-tenantdescriptorextensions.md).
 
 ```csharp
-public interface ITenantDescriptor<out TKey> where TKey : IEquatable<out TKey>, IParsable<out TKey>
+public interface ITenantDescriptor
 ```
-
-## Type parameters
-
-- `TKey`: The type used for tenant identifiers (e.g. `Guid`, [string](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/reference-types), [int](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/integral-numeric-types)). Must implement `IEquatable<T>` so EF Core can translate equality checks to SQL, and `IParsable<TSelf>` so middleware can parse the raw string value from HTTP headers/routes.
 
 Derived types: [`TenantDescriptor<TKey>`](tenantry-tenantdescriptor.md).
 
@@ -25,13 +21,3 @@ string Name { get; }
 ```
 
 Value: `string`
-
-### `TenantId`
-
-Unique tenant identifier used for data isolation.
-
-```csharp
-TKey TenantId { get; }
-```
-
-Value: `TKey`

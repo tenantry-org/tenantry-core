@@ -121,6 +121,7 @@ public sealed class FilterCompositionTests : IDisposable
 
         db.Model.FindEntityType(typeof(Item))!.GetDeclaredQueryFilters().Should().ContainSingle().Which.Key.Should().BeNull();
         logger.Messages.Should().ContainSingle(message => message.Contains("'Item' has an unnamed query filter"));
+        logger.Events.Should().ContainSingle(e => e.Id == 2004).Which.Name.Should().Be("TenantFilterMerged");
     }
 #endif
 
@@ -209,6 +210,8 @@ public sealed class FilterCompositionTests : IDisposable
     {
         public List<string> Messages { get; } = [];
 
+        public List<EventId> Events { get; } = [];
+
         public ILogger CreateLogger(string categoryName) => this;
 
         public void Dispose()
@@ -225,6 +228,7 @@ public sealed class FilterCompositionTests : IDisposable
             lock (Messages)
             {
                 Messages.Add(formatter(state, exception));
+                Events.Add(eventId);
             }
         }
     }

@@ -35,7 +35,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="configure">Sets the base domain and the subdomains that are not tenants (<c>www</c> by default), or <see langword="null"/> for the defaults.</param>
+    /// <param name="configure">Sets the base domains and the subdomains that are not tenants (<c>www</c> by default), or <see langword="null"/> for the defaults.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> ResolveFromSubdomain<TKey>(
         this ITenantBuilder<TKey> builder,
@@ -46,6 +46,37 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
         configure?.Invoke(options);
 
         return builder.UseResolver(new SubdomainTenantResolver(options));
+    }
+
+    /// <summary>
+    /// Resolves the tenant from the request's host name, such as <c>app.acme.com</c>, for tenants with domains of
+    /// their own, as <see cref="HostTenantResolver"/> describes. Your tenant store's
+    /// <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/> maps the host name to a tenant.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="configure">Sets the domains whose hosts are not tenants (<c>localhost</c> by default), or <see langword="null"/> for the defaults.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// It resolves every host that is not an IP address or excluded, so resolvers added after it never run for those
+    /// hosts: add it last. Exclude your own domain, so its hosts do not ask the store for a tenant on every request.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// tenant
+    ///     .ResolveFromSubdomain(o =&gt; o.BaseDomains.Add("example.com"))   // acme.example.com
+    ///     .ResolveFromHost(o =&gt; o.ExcludedDomains.Add("example.com"));   // app.acme.com
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> ResolveFromHost<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Action<HostTenantResolverOptions>? configure = null)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        HostTenantResolverOptions options = new();
+        configure?.Invoke(options);
+
+        return builder.UseResolver(new HostTenantResolver(options));
     }
 
     /// <summary>
@@ -103,8 +134,8 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     }
 
     /// <summary>
-    /// Registers a custom <see cref="ITenantResolver"/> implementation, created through dependency injection as
-    /// a singleton.
+    /// Registers a custom <see cref="ITenantResolver"/> implementation, created through dependency injection in each
+    /// request's scope, so it can depend on scoped services such as a <c>DbContext</c>.
     /// </summary>
     /// <typeparam name="TResolver">The resolver type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
@@ -117,7 +148,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Add(TenantResolutionRegistration.Instance);
-        builder.Services.AddSingleton<ITenantResolver, TResolver>();
+        builder.Services.AddScoped<ITenantResolver, TResolver>();
         return builder;
     }
 
@@ -170,7 +201,8 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
         builder.ConfigureResolution(options => options.RequireTenantByDefault = true);
 
     /// <summary>
-    /// Configures how requests are treated: whether they need a tenant, and the status code of each rejection.
+    /// Configures how requests are treated: whether they need a tenant, the status code of each rejection, and the
+    /// events raised when a request's tenant is made current or a request is rejected.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
@@ -178,7 +210,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> ConfigureResolution<TKey>(
         this ITenantBuilder<TKey> builder,
-        Action<TenantResolutionOptions> configure)
+        Action<TenantResolutionOptions<TKey>> configure)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -212,7 +244,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="validator">Returns <see langword="true"/> when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with <see cref="TenantResolutionOptions.AccessDeniedStatusCode"/>, and any other runs without one.</param>
+    /// <param name="validator">Returns <see langword="true"/> when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with <see cref="TenantResolutionOptions{TKey}.AccessDeniedStatusCode"/>, and any other runs without one.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> ValidateTenantAccess<TKey>(
         this ITenantBuilder<TKey> builder,
@@ -231,7 +263,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="validator">Returns <see langword="true"/> when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with <see cref="TenantResolutionOptions.AccessDeniedStatusCode"/>, and any other runs without one. It receives the request's cancellation token.</param>
+    /// <param name="validator">Returns <see langword="true"/> when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with <see cref="TenantResolutionOptions{TKey}.AccessDeniedStatusCode"/>, and any other runs without one. It receives the request's cancellation token.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> ValidateTenantAccess<TKey>(
         this ITenantBuilder<TKey> builder,
@@ -242,7 +274,27 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(validator);
 
         TenantResolutionMiddlewareConfigurator<TKey>.Register(builder.Services);
-        builder.Services.Configure<TenantAccessOptions<TKey>>(options => options.Validators.Add(validator));
+        builder.Services.AddSingleton<ITenantAccessValidator<TKey>>(new DelegateTenantAccessValidator<TKey>(validator));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds an access validator of type <typeparamref name="TValidator"/>, created in each request's scope, so it can
+    /// depend on scoped services such as a <c>DbContext</c>. Every validator must allow a request before its tenant is
+    /// made current.
+    /// </summary>
+    /// <typeparam name="TValidator">The validator type, which implements <see cref="ITenantAccessValidator{TKey}"/> for the application's tenant key type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first.</returns>
+    /// <exception cref="InvalidOperationException"><typeparamref name="TValidator"/> does not implement <see cref="ITenantAccessValidator{TKey}"/> for the builder's key type.</exception>
+    public static ITenantBuilder ValidateTenantAccess<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>(
+        this ITenantBuilder builder)
+        where TValidator : class
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Add(new TenantAccessValidatorRegistration<TValidator>());
         return builder;
     }
 }

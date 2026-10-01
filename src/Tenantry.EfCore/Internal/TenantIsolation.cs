@@ -98,7 +98,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
         {
             // Fail now, naming the missing registration, rather than on the first query.
             ApplicationServices.TenantContext<TKey>(services);
-            logger = services.GetService<ILogger<TenantModelCustomizer>>();
+            logger = TenantIsolationLog.Find(services);
         }
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes().ToList())
@@ -168,11 +168,11 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
         }
 
         builder.HasQueryFilter(Combine(unnamed, tenantFilter));
-        logger?.LogInformation(
-            "Entity '{EntityType}' has an unnamed query filter, so Tenantry merged its tenant filter into it: " +
-            "IgnoreQueryFilters([TenantryQueryFilters.Tenant]) cannot remove the tenant filter alone for it. Name the " +
-            "entity's filter to keep the two apart",
-            entityType.ClrType.Name);
+
+        if (logger is not null)
+        {
+            TenantIsolationLog.TenantFilterMerged(logger, entityType.ClrType.Name);
+        }
 #else
         _ = logger;
         builder.HasQueryFilter(entityType.GetQueryFilter() is { } existing ? Combine(existing, tenantFilter) : tenantFilter);
@@ -235,7 +235,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
     {
         var services = ApplicationServices.Find(context);
         var tenantContext = ApplicationServices.TenantContext<TKey>(context);
-        var logger = (ILogger?)services?.GetService<ILogger<TenantSaveChangesInterceptor>>() ?? NullLogger.Instance;
+        var logger = TenantIsolationLog.Find(services) ?? NullLogger.Instance;
 
         if (!tenantContext.HasTenant)
         {
@@ -245,9 +245,8 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
 
         TenantWriteIsolationApplier.Apply(context.ChangeTracker.Entries(), tenantContext, violation =>
         {
-            logger.LogError(
-                "Tenant isolation violation: entity '{EntityType}' belongs to tenant '{OffendingTenantId}' " +
-                "but the current tenant is '{ExpectedTenantId}'. Aborting SaveChanges",
+            TenantIsolationLog.IsolationViolation(
+                logger,
                 violation.TypeName,
                 violation.OffendingTenantId,
                 violation.ExpectedTenantId);
@@ -272,10 +271,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
         switch (options.OnMissingTenant)
         {
             case MissingTenantBehavior.Warn:
-                logger.LogWarning(
-                    "SaveChanges is writing tenant-scoped entities ({EntityTypes}) without a resolved tenant. " +
-                    "Updates and deletes are not tenant-checked (EfCoreIsolationOptions.OnMissingTenant = Warn)",
-                    entityTypes);
+                TenantIsolationLog.WriteWithoutTenant(logger, entityTypes);
                 break;
 
             case MissingTenantBehavior.Allow:
@@ -311,7 +307,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
     {
         if (eventData.Context is not { } context ||
             ApplicationServices.Find(context) is not { } services ||
-            services.GetService<ILogger<TenantSaveChangesInterceptor>>() is not { } logger)
+            TenantIsolationLog.Find(services) is not { } logger)
         {
             return;
         }
@@ -323,12 +319,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
         {
             if (entry.Entity is ITenantEntity<TKey>)
             {
-                logger.LogWarning(
-                    "A {State} of tenant-scoped entity '{EntityType}' in tenant '{TenantId}' matched no row. " +
-                    "The row does not exist, belongs to another tenant, or was changed concurrently",
-                    entry.State,
-                    entry.Entity.GetType().Name,
-                    tenantId);
+                TenantIsolationLog.WriteMatchedNoRow(logger, entry.State.ToString(), entry.Entity.GetType().Name, tenantId);
             }
         }
     }

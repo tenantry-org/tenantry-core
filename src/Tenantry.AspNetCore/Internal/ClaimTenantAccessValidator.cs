@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 
@@ -65,7 +66,7 @@ internal static class ClaimTenantAccessValidator
     private static bool TryParseTenantId<TKey>(string value, out TKey? tenantId)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
-        if (TKey.TryParse(value, null, out TKey? parsedTenantId))
+        if (TKey.TryParse(value, CultureInfo.InvariantCulture, out TKey? parsedTenantId))
         {
             tenantId = parsedTenantId;
             return true;

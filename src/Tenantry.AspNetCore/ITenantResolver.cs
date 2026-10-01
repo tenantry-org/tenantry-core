@@ -3,20 +3,21 @@ using Microsoft.AspNetCore.Http;
 namespace Tenantry.AspNetCore;
 
 /// <summary>
-/// Extracts a tenant identifier from an HTTP request.
-/// Multiple resolvers can be registered; the middleware tries them in priority order
-/// and uses the first non-null result.
+/// Reads a tenant identifier from an HTTP request: the tenant's id, or a name the tenant store maps to a tenant, such
+/// as a subdomain or a host name (see <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/>).
+/// Multiple resolvers can be registered; the middleware tries them in registration order
+/// and uses the first identifier one returns.
 /// </summary>
 public interface ITenantResolver
 {
     /// <summary>
-    /// Attempts to extract a tenant ID from the current request.
+    /// Attempts to read a tenant identifier from the current request.
     /// </summary>
     /// <param name="context">The current HTTP context.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
-    /// The resolved tenant ID string, or <c>null</c> if this resolver cannot
-    /// determine the tenant from the current request.
+    /// The identifier, or <see langword="null"/> (or an empty string) if this resolver cannot determine the tenant
+    /// from the current request. Return it as the request carries it: the tenant store finds the tenant it names.
     /// </returns>
     ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default);
 }

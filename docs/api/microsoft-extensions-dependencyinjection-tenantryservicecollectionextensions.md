@@ -33,7 +33,7 @@ Exceptions:
 
 - `InvalidOperationException`: Tenantry is already registered with another tenant key type.
 
-The core services are the ambient tenant ([`ITenantContext<TKey>`](tenantry-itenantcontext.md) and [`ITenantContextSetter<TKey>`](tenantry-itenantcontextsetter.md)), [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md) and [`ITenantStoreAccessor<TKey>`](tenantry-itenantstoreaccessor.md), all singletons. They serve web applications, workers and console tools alike; the ASP.NET Core features come from the Tenantry.AspNetCore package.
+The core services are the ambient tenant ([`ITenantContext<TKey>`](tenantry-itenantcontext.md) and [`ITenantContextSetter<TKey>`](tenantry-itenantcontextsetter.md)), [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md), [`ITenantStoreAccessor<TKey>`](tenantry-itenantstoreaccessor.md) and [`ITenantStoreCache<TKey>`](tenantry-itenantstorecache.md), all singletons. They serve web applications, workers and console tools alike; the ASP.NET Core features come from the Tenantry.AspNetCore package.
 
 Calling it again adds to the same registration, so a library can call it to make sure Tenantry is registered. An application uses one tenant key type: calling it with another throws.
 

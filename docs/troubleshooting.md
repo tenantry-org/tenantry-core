@@ -15,6 +15,12 @@ resolver or a store, or did not register Tenantry's request resolution at all.
 In a worker or console app, `ITenantStoreAccessor` and `ITenantScopeFactory.RunInScopeAsync` throw the same "has no
 tenant store" error; a hosted service that depends on the accessor throws it as the host starts.
 
+## Startup fails with "app.UseTenantry() is not in the request pipeline"
+
+You registered request resolution (a `ResolveFrom…` or `UseResolver` method in `AddTenantry`) but never called
+`app.UseTenantry()`, so no request would have a tenant. Add it after `app.UseAuthentication()` and before your
+endpoints (see [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)).
+
 ## Registration fails with "A tenant store is already registered" or "already registered with tenant key type"
 
 An application has one store and one tenant key type. Remove the second `UseStore`/`UseInMemoryStore` (or the
@@ -125,9 +131,18 @@ for every query: read the tenant through the context instead, or leave the tenan
 ## Claim-based resolution or validation never matches
 
 - `UseTenantry()` runs **before** `UseAuthentication()`, so `HttpContext.User` is empty when the
-  resolver/validator runs. Move `UseTenantry()` after `UseAuthentication()`.
+  resolver/validator runs. Move `UseTenantry()` after `UseAuthentication()`. For `ResolveFromClaim`, the middleware
+  logs this once (event 1008, see [Diagnostics](diagnostics.md#logs)).
+- The endpoint authenticates with a scheme that is not the default one (`[Authorize(AuthenticationSchemes = …)]`):
+  its user is signed in by authorization, after `UseTenantry()`. Make that scheme the default.
 - The claim type does not match (`ResolveFromClaim("tenant_id")` vs. the actual claim name).
-- The claim value does not parse to your `TKey` (e.g. a non-GUID string for a `Guid` key).
+- The claim value does not name a tenant: `ValidateTenantAccessByClaim` compares tenant ids, and a resolved
+  claim is looked up like any identifier (e.g. a non-GUID string for a `Guid` key names no tenant).
+
+## `RequireTenant()` has no effect
+
+The middleware ran before routing chose the endpoint, so it saw no endpoint metadata. It logs this once (event
+1007); call `app.UseRouting()` before `app.UseTenantry()`.
 
 ## Route-value resolution returns null
 
@@ -137,8 +152,25 @@ automatic; in a custom pipeline, ensure `UseRouting()` precedes `UseTenantry()`.
 ## Subdomain resolution returns null on localhost
 
 Without a base domain, `ResolveFromSubdomain` requires at least three dot-separated host segments, so `localhost`
-and `acme.localhost` resolve to `null`. Set it for development:
-`tenant.ResolveFromSubdomain(o => o.BaseDomain = "localhost")` resolves `acme.localhost` to `acme`.
+and `acme.localhost` resolve to `null`. Add one for development:
+`tenant.ResolveFromSubdomain(o => o.BaseDomains.Add("localhost"))` resolves `acme.localhost` to `acme`.
+
+## Subdomains resolve, but name no tenant (`404`)
+
+With `Guid` or `int` keys, `acme` is not a tenant id: the default `FindByIdentifierAsync` parses the identifier as
+the key type, so it names no tenant. Implement `FindByIdentifierAsync` in your store to map slugs (see
+[Identifiers other than the id](tenant-resolution.md#identifiers-other-than-the-id)).
+
+## A suspended tenant is still served
+
+With `CacheTenants`, the cached tenant is served until its entry expires. Call `ITenantStoreCache<TKey>.Invalidate`
+when you change a tenant (see [Caching](tenant-stores.md#caching)).
+
+## Requests have no `tenant.id` tag or `TenantId` log scope
+
+The tag is on the request's trace span, which exists only with tracing (OpenTelemetry's ASP.NET Core
+instrumentation, for example). The scope needs a logging provider that records scopes (`IncludeScopes`). Both are
+added only to requests that resolve a tenant. See [Diagnostics](diagnostics.md).
 
 ## Background/queued work loses the tenant
 

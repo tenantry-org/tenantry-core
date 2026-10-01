@@ -119,30 +119,19 @@ public sealed class MiddlewareTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Request_WithInvalidTenantIdFormat_Returns400()
+    public async Task Request_WithAnIdentifierThatDoesNotParse_IsNotFound()
     {
-        // Use int as TKey so that "not-a-number" fails TryParse
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-
-        builder.Services.AddTenantry<int>(tenant =>
-        {
-            tenant.ResolveFromHeader("X-Tenant-Id");
-            tenant.RequireTenantByDefault();
-            tenant.UseInMemoryStore([new TenantDescriptor<int> { TenantId = 1, Name = "Test" }]);
-        });
-
-        await using var app = builder.Build();
-        app.UseTenantry();
-        app.MapGet("/tenant", (ITenantContext<int> ctx) => ctx.CurrentTenantId.ToString());
-        await app.StartAsync();
-
+        // With the default FindByIdentifierAsync, an identifier is a tenant id: "not-a-number" names no int tenant.
+        await using var app = await StartAsync<int>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .RequireTenantByDefault()
+            .UseInMemoryStore([new TenantDescriptor<int> { TenantId = 1, Name = "Test" }]));
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "not-a-number");
 
         var response = await client.GetAsync("/tenant");
 
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
         (await response.Content.ReadAsStringAsync()).Should().BeEmpty();
     }
 
@@ -791,8 +780,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
     [Fact]
     public async Task Middleware_WhenNoTenantAndNotRequired_WithDebugLogging_ContinuesWithoutTenant()
     {
-        // Enables Debug logging so the IsEnabled(Debug) guard in the middleware is true,
-        // covering the debug log branch at lines 85-90 of TenantResolutionMiddleware.
+        // Enables Debug logging, so the middleware's debug messages are written.
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.SetMinimumLevel(LogLevel.Debug);
@@ -823,8 +811,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
     [Fact]
     public async Task Middleware_WhenTenantResolved_WithDebugLogging_SetsTenantContext()
     {
-        // Enables Debug logging so the IsEnabled(Debug) guard is true,
-        // covering the debug log branch at lines 145-151 of TenantResolutionMiddleware.
+        // Enables Debug logging, so the middleware's debug messages are written.
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.SetMinimumLevel(LogLevel.Debug);
@@ -857,7 +844,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
     public async Task Middleware_WhenNoEndpointMatched_UsesDefaultTenantRequirement()
     {
         // A request to an unmapped path has no endpoint — context.GetEndpoint() returns null.
-        // This exercises the null-endpoint branch in IsTenantRequired (line 165-167).
+        // The middleware then applies the default requirement.
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
 
@@ -902,7 +889,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Request_WithTheKeyTypesDefaultId_OnAnEndpointThatRequiresATenant_Returns400()
+    public async Task Request_WithTheKeyTypesDefaultId_OnAnEndpointThatRequiresATenant_IsNotFound()
     {
         // A tenant stored with the default id is never served: Tenantry reserves it for "no tenant".
         await using var app = await StartAsync<Guid>(tenant => tenant
@@ -914,20 +901,24 @@ public sealed class MiddlewareTests : IAsyncDisposable
 
         var response = await client.GetAsync("/tenant");
 
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task AnEmptyIdentifierFromACustomResolver_IsInvalid()
+    public async Task AnEmptyIdentifierFromACustomResolver_IsNoIdentifier_SoTheNextResolverIsTried()
     {
-        // The built-in resolvers never return "", but a custom one can: like Guid.Empty, it cannot be a tenant id.
+        // The built-in resolvers never return "", but a custom one can.
         await using var app = await StartAsync<string>(tenant => tenant
             .UseResolver(new EmptyResolver())
+            .ResolveFromHeader("X-Tenant-Id")
             .RequireTenantByDefault()
             .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }]));
         using var client = app.GetTestClient();
 
         (await client.GetAsync("/tenant")).StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
+        (await client.GetStringAsync("/tenant")).Should().Be("acme");
     }
 
     private sealed class EmptyResolver : ITenantResolver
@@ -950,7 +941,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         foreach (var (header, status, title) in new[]
                  {
                      ((string?)null, 400, "Tenant required"),
-                     (identifier, 400, "Invalid tenant"),
+                     (identifier, 404, "Tenant not found"),
                      ("31337", 404, "Tenant not found"),
                  })
         {
@@ -1035,11 +1026,10 @@ public sealed class MiddlewareTests : IAsyncDisposable
             .ConfigureResolution(options =>
             {
                 options.MissingTenantStatusCode = 401;
-                options.InvalidTenantStatusCode = 422;
                 options.TenantNotFoundStatusCode = 410;
             }));
 
-        foreach (var (header, status) in new[] { ((string?)null, 401), ("x", 422), ("2", 410) })
+        foreach (var (header, status) in new[] { ((string?)null, 401), ("x", 410), ("2", 410) })
         {
             using var client = app.GetTestClient();
             if (header is not null)

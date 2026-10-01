@@ -25,10 +25,10 @@ builder.Services.AddTenantry<Guid>(tenant =>
 });
 ```
 
-With this on, a request that does not resolve a tenant gets `400 Bad Request`, and one whose tenant is invalid,
-unknown or refused is rejected too ([status codes](aspnetcore-integration.md#status-codes)). Individual endpoints
-opt out with `AllowMissingTenant()`. On an endpoint that does not require a tenant, a request whose tenant is
-invalid, unknown or refused continues without one.
+With this on, a request that does not resolve a tenant gets `400 Bad Request`, and one whose tenant is unknown or
+refused is rejected too ([status codes](aspnetcore-integration.md#status-codes)). Individual endpoints opt out with
+`AllowMissingTenant()`. On an endpoint that does not require a tenant, a request whose tenant is unknown or refused
+continues without one.
 
 ### Per-endpoint
 
@@ -84,27 +84,58 @@ This passes when any `tenant_id` claim on `HttpContext.User` matches the resolve
 - a single claim holding a **JSON array** (`tenant_id: ["acme","globex"]`, or numbers
   `[1,2]` for numeric keys).
 
-Each candidate value is parsed with `TKey.TryParse` and compared with the resolved tenant id.
-Requires `UseTenantry()` to run after `UseAuthentication()`.
+Each candidate value is parsed as `TKey`, with the invariant culture, and compared with the resolved tenant's id:
+the claims list tenant ids, not other identifiers such as slugs. Requires `UseTenantry()` to run after
+`UseAuthentication()`.
 
 ### Custom validators
 
-Add synchronous or asynchronous validators with full access to the `HttpContext` and the resolved
-tenant:
+A validator that needs your services, such as a `DbContext` that lists each user's memberships, is a class that
+implements `ITenantAccessValidator<TKey>`. `ValidateTenantAccess<TValidator>()` creates it in each request's scope:
+
+```csharp
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
+using Tenantry;
+using Tenantry.AspNetCore;
+
+public sealed class MembershipValidator(AppDbContext db) : ITenantAccessValidator<Guid>
+{
+    public async ValueTask<bool> ValidateAsync(HttpContext http, ITenantDescriptor<Guid> tenant, CancellationToken ct) =>
+        await db.Set<Membership>().AnyAsync(
+            m => m.UserId == http.User.FindFirstValue("sub") && m.TenantId == tenant.TenantId, ct);
+}
+
+public sealed class Membership
+{
+    public int Id { get; set; }
+    public string? UserId { get; set; }
+    public Guid TenantId { get; set; }
+}
+```
+
+```csharp
+tenant.ValidateTenantAccess<MembershipValidator>();
+```
+
+`ValidateTenantAccess<TValidator>()` has a type parameter of its own, so it returns the builder without its key
+type: call it last in a chain.
+
+A validator that needs only the request and the tenant can be a delegate, synchronous or asynchronous:
 
 ```csharp
 // synchronous
-tenant.ValidateTenantAccess((http, tenantDescriptor) =>
-    !http.Request.Headers.ContainsKey("X-Block-Access"));
+tenant.ValidateTenantAccess((http, t) => !http.Request.Headers.ContainsKey("X-Block-Access"));
 
-// asynchronous
-tenant.ValidateTenantAccess(async (http, tenantDescriptor, ct) =>
-    await _entitlements.CanAccessAsync(http.User, tenantDescriptor.TenantId, ct));
+// asynchronous: it receives the request's cancellation token
+tenant.ValidateTenantAccess(async (http, t, ct) =>
+    await http.RequestServices.GetRequiredService<Entitlements>().CanAccessAsync(http.User, t.TenantId, ct));
 ```
 
 ### Combining validators: AND vs OR
 
-Multiple validators added directly are combined with logical **AND** — every one must pass:
+Multiple validators are combined with logical **AND** — every one must pass, in the order they were added, and the
+first that refuses stops the rest:
 
 ```csharp
 tenant.ValidateTenantAccessByClaim("tenant_id");           // must hold the claim …
@@ -126,11 +157,15 @@ a string; it does not read the JSON-array form that `ValidateTenantAccessByClaim
 
 Your store returns suspended tenants too (see
 [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)), so refuse them with a
-validator that reads the status from your own descriptor type:
+validator that reads the status from your own tenant type (see
+[Your own tenant type](core-concepts.md#your-own-tenant-type)):
 
 ```csharp
-tenant.ValidateTenantAccess((http, t) => t is Tenant { IsActive: true });
+tenant.ValidateTenantAccess((http, t) => !t.As<AppTenant>().IsSuspended);
 ```
+
+With [`CacheTenants`](tenant-stores.md#caching), a tenant you suspend is served from the cache until its entry
+expires: call `ITenantStoreCache<TKey>.Invalidate` when you suspend it.
 
 Access validators run only in the HTTP middleware. `ITenantScopeFactory`, `ITenantContextSetter.Use` and
 background jobs never call them, so background work must check the tenant's status itself.
@@ -145,7 +180,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
     tenant.UseStore<EfCoreTenantStore>();
     tenant.RequireTenantByDefault();             // no anonymous tenant access
     tenant.ValidateTenantAccessByClaim("tenant_id"); // caller must be entitled to the tenant
-    tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true }); // and it must be active
+    tenant.ValidateTenantAccess((_, t) => !t.As<AppTenant>().IsSuspended); // and it must be active
 });
 ```
 

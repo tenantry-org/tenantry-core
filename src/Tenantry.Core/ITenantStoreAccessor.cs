@@ -25,6 +25,14 @@ public interface ITenantStoreAccessor<TKey>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     ValueTask<ITenantDescriptor<TKey>?> GetTenantAsync(TKey tenantId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns the tenant an identifier names, or <c>null</c> if it names none, with the store's
+    /// <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/>.
+    /// </summary>
+    /// <param name="identifier">The identifier: the tenant's id, or a name the store maps to a tenant.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
+    ValueTask<ITenantDescriptor<TKey>?> FindByIdentifierAsync(string identifier, CancellationToken cancellationToken = default);
+
     /// <summary>Returns all tenants in the store.</summary>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default);

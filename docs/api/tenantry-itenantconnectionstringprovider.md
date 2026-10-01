@@ -14,7 +14,7 @@ public interface ITenantConnectionStringProvider<TKey> where TKey : IEquatable<T
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) for constraints.
 
 Derived types: [`TenantConnectionStringProvider<TKey>`](tenantry-tenantconnectionstringprovider.md).
 
@@ -30,7 +30,7 @@ string Get(ITenantDescriptor<TKey> tenant)
 
 Parameters:
 
-- `tenant` [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md): The tenant whose connection string to return.
+- `tenant` [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md): The tenant whose connection string to return.
 
 Returns: `string`
 
@@ -48,7 +48,7 @@ ValueTask<string> GetAsync(ITenantDescriptor<TKey> tenant, CancellationToken can
 
 Parameters:
 
-- `tenant` [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md): The tenant whose connection string to return.
+- `tenant` [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md): The tenant whose connection string to return.
 - `cancellationToken` `CancellationToken`: Cancels the lookup.
 
 Returns: `ValueTask<string>`

@@ -17,7 +17,7 @@ public interface ITenantScopeFactory<TKey> where TKey : IEquatable<TKey>, IParsa
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) for constraints.
 
 ## Methods
 
@@ -31,7 +31,7 @@ ITenantScope<TKey> CreateScope(ITenantDescriptor<TKey> tenant)
 
 Parameters:
 
-- `tenant` [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md): The tenant to activate.
+- `tenant` [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md): The tenant to activate.
 
 Returns: [`ITenantScope<TKey>`](tenantry-itenantscope.md): The scope. Dispose it (`using` or `await using`) to dispose its services and restore the tenant that was current before it was created.
 

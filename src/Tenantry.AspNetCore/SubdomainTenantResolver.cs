@@ -1,4 +1,3 @@
-using System.Net;
 using Microsoft.AspNetCore.Http;
 
 namespace Tenantry.AspNetCore;
@@ -9,20 +8,21 @@ namespace Tenantry.AspNetCore;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Without <see cref="SubdomainTenantResolverOptions.BaseDomain"/>, the first label of a host with at least
+/// Without <see cref="SubdomainTenantResolverOptions.BaseDomains"/>, the first label of a host with at least
 /// three labels is the tenant: <c>acme.example.com</c> resolves to <c>acme</c>, and <c>example.com</c>,
-/// <c>localhost</c> and <c>acme.localhost</c> resolve nothing. With it, only a host of exactly one label followed
-/// by the base domain resolves: with <c>example.com</c>, <c>acme.example.com</c> resolves to <c>acme</c>, while
+/// <c>localhost</c> and <c>acme.localhost</c> resolve nothing. With them, only a host of exactly one label followed
+/// by a base domain resolves: with <c>example.com</c>, <c>acme.example.com</c> resolves to <c>acme</c>, while
 /// <c>example.com</c>, <c>other.org</c> and <c>x.acme.example.com</c> resolve nothing.
 /// </para>
 /// <para>
 /// A subdomain in <see cref="SubdomainTenantResolverOptions.IgnoredSubdomains"/> (<c>www</c> by default) and a
-/// host that is an IP address resolve nothing.
+/// host that is an IP address resolve nothing. The subdomain is returned in lower case, as host names are compared
+/// without regard to case, and an international domain name is compared and returned in its ASCII form (<c>xn--…</c>).
 /// </para>
 /// </remarks>
 public sealed class SubdomainTenantResolver : ITenantResolver
 {
-    private readonly string? _baseDomainSuffix;
+    private readonly string[] _baseDomainSuffixes;
     private readonly HashSet<string> _ignoredSubdomains;
 
     /// <summary>
@@ -36,41 +36,47 @@ public sealed class SubdomainTenantResolver : ITenantResolver
     /// <summary>
     /// Creates a resolver with the given options, copied when it is created.
     /// </summary>
-    /// <param name="options">The base domain and the subdomains to ignore.</param>
+    /// <param name="options">The base domains and the subdomains to ignore.</param>
     public SubdomainTenantResolver(SubdomainTenantResolverOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var baseDomain = options.BaseDomain?.Trim().Trim('.');
-        _baseDomainSuffix = string.IsNullOrEmpty(baseDomain) ? null : "." + baseDomain;
-        _ignoredSubdomains = new HashSet<string>(options.IgnoredSubdomains, StringComparer.OrdinalIgnoreCase);
+        _baseDomainSuffixes = [.. HostNames.Domains(options.BaseDomains).Select(domain => "." + domain)];
+        _ignoredSubdomains = new HashSet<string>(HostNames.Domains(options.IgnoredSubdomains), StringComparer.Ordinal);
     }
 
     /// <inheritdoc />
     public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default)
     {
-        var subdomain = Subdomain(context.Request.Host.Host);
+        var subdomain = Subdomain(HostNames.Of(context));
 
         return new ValueTask<string?>(
             string.IsNullOrWhiteSpace(subdomain) || _ignoredSubdomains.Contains(subdomain) ? null : subdomain);
     }
 
-    private string? Subdomain(string host)
+    private string? Subdomain(string? host)
     {
-        if (string.IsNullOrEmpty(host) || IPAddress.TryParse(host, out _))
+        if (host is null)
         {
             return null;
         }
 
-        if (_baseDomainSuffix is not null)
+        if (_baseDomainSuffixes.Length > 0)
         {
-            if (!host.EndsWith(_baseDomainSuffix, StringComparison.OrdinalIgnoreCase))
+            foreach (var suffix in _baseDomainSuffixes)
             {
-                return null;
+                if (host.EndsWith(suffix, StringComparison.Ordinal) && host.Length > suffix.Length)
+                {
+                    var label = host[..^suffix.Length];
+
+                    if (!label.Contains('.'))
+                    {
+                        return label;
+                    }
+                }
             }
 
-            var label = host[..^_baseDomainSuffix.Length];
-            return label.Contains('.') ? null : label;
+            return null;
         }
 
         var labels = host.Split('.');
@@ -84,12 +90,12 @@ public sealed class SubdomainTenantResolver : ITenantResolver
 public sealed class SubdomainTenantResolverOptions
 {
     /// <summary>
-    /// The domain whose subdomains are tenants, such as <c>example.com</c> for <c>acme.example.com</c>, or
-    /// <c>localhost</c> for <c>acme.localhost</c> in development. When set, only a host of exactly one label
-    /// followed by this domain resolves a tenant. When not set, the first label of any host with at least three
+    /// The domains whose subdomains are tenants, such as <c>example.com</c> for <c>acme.example.com</c>, and
+    /// <c>localhost</c> for <c>acme.localhost</c> in development. When set, only a host of exactly one label followed
+    /// by one of them resolves a tenant. When empty (the default), the first label of any host with at least three
     /// labels is the tenant.
     /// </summary>
-    public string? BaseDomain { get; set; }
+    public ISet<string> BaseDomains { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Subdomains that are never tenants, compared without regard to case. Contains <c>www</c> by default; add

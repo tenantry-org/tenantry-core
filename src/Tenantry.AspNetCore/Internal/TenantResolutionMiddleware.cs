@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,206 +16,228 @@ namespace Tenantry.AspNetCore.Internal;
 /// </typeparam>
 /// <remarks>
 /// <para>
-/// Registered via <c>app.UseTenantry()</c>. Resolvers are tried in registration order; the first non-null result
-/// wins. The resolved tenant ID is added to the logging scope for structured log correlation.
+/// Registered via <c>app.UseTenantry()</c>. Resolvers, created in the request's scope, are tried in registration
+/// order, and the first identifier one returns is looked up with <see cref="ITenantStoreAccessor{TKey}"/> (through
+/// the cache, with <c>CacheTenants</c>). The access validators, also from the request's scope, must all allow the
+/// tenant. The tenant is then current for the rest of the request, which is tagged <c>tenant.id</c> and logged with a
+/// <c>TenantId</c> scope.
 /// </para>
 /// <para>
 /// An endpoint that needs a tenant rejects a request without a usable one, with the status code from
-/// <see cref="TenantResolutionOptions"/> and, when an <see cref="IProblemDetailsService"/> is registered, a problem
-/// details body. Any other endpoint runs without a tenant: a request whose identifier is not valid, names no tenant,
-/// or names one an access validator refuses is treated as one without an identifier, so it tells a caller nothing
-/// about which tenants exist.
+/// <see cref="TenantResolutionOptions{TKey}"/> and, when an <see cref="IProblemDetailsService"/> is registered, a
+/// problem details body. Any other endpoint runs without a tenant: a request whose identifier names no tenant, or names
+/// one an access validator refuses, is treated as one without an identifier, so it tells a caller nothing about which
+/// tenants exist.
 /// </para>
 /// </remarks>
 internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     private readonly RequestDelegate _next;
-    private readonly IEnumerable<ITenantResolver> _resolvers;
+    private readonly ITenantStoreAccessor<TKey> _tenants;
     private readonly ITenantContextSetter<TKey> _tenantContext;
-    private readonly TenantResolutionOptions _options;
-    private readonly TenantAccessOptions<TKey> _access;
-    private readonly ILogger<TenantResolutionMiddleware<TKey>> _logger;
+    private readonly TenantResolutionOptions<TKey> _options;
+    private readonly TenantResolutionMetrics _metrics;
+    private readonly ILogger _logger;
+    private readonly bool _hasValidators;
+    private int _warnedBeforeRouting;
+    private int _warnedBeforeAuthentication;
 
-    /// <summary>
-    /// Creates the middleware used to resolve the current tenant from each HTTP request.
-    /// </summary>
-    /// <param name="next">The next middleware delegate in the request pipeline.</param>
-    /// <param name="resolvers">The tenant resolvers evaluated in registration order.</param>
-    /// <param name="tenantContext">Makes the resolved tenant current.</param>
-    /// <param name="options">Whether requests need a tenant, and the status codes of rejections.</param>
-    /// <param name="access">The access validators.</param>
-    /// <param name="logger">The logger used for tenant resolution diagnostics and warnings.</param>
     public TenantResolutionMiddleware(
         RequestDelegate next,
-        IEnumerable<ITenantResolver> resolvers,
+        ITenantStoreAccessor<TKey> tenants,
         ITenantContextSetter<TKey> tenantContext,
-        IOptions<TenantResolutionOptions> options,
-        IOptions<TenantAccessOptions<TKey>> access,
-        ILogger<TenantResolutionMiddleware<TKey>> logger)
+        IOptions<TenantResolutionOptions<TKey>> options,
+        TenantResolutionMetrics metrics,
+        ILoggerFactory loggerFactory,
+        IServiceProvider services)
     {
         _next = next;
-        _resolvers = resolvers;
+        _tenants = tenants;
         _tenantContext = tenantContext;
         _options = options.Value;
-        _access = access.Value;
-        _logger = logger;
+        _metrics = metrics;
+        _logger = loggerFactory.CreateLogger(TenantResolutionLog.Category);
+
+        // Without IServiceProviderIsService, validators are assumed to exist: an unknown tenant then gets the
+        // access-denied response, which hides which tenants exist either way.
+        _hasValidators = services.GetService<IServiceProviderIsService>()?.IsService(typeof(ITenantAccessValidator<TKey>)) ?? true;
     }
 
     /// <summary>
     /// Attempts to resolve and set the current tenant, then continues the pipeline.
     /// </summary>
-    /// <remarks>
-    /// <paramref name="tenantStore"/> is resolved from the request scope, allowing
-    /// implementations backed by a scoped DbContext to work correctly.
-    /// </remarks>
-    public async Task InvokeAsync(HttpContext context, ITenantStore<TKey> tenantStore)
+    public async Task InvokeAsync(HttpContext context)
     {
-        string? rawTenantId = null;
-
-        foreach (var resolver in _resolvers)
-        {
-            rawTenantId = await resolver.ResolveAsync(context, context.RequestAborted);
-            if (rawTenantId is not null)
-            {
-                break;
-            }
-        }
-
+        // Captured first: the resolution's own activity is the current one while it runs.
+        var requestActivity = Activity.Current;
+        var endpointWasNull = context.GetEndpoint() is null;
         var required = IsTenantRequired(context);
+        var resolution = await ResolveAsync(context);
 
-        if (rawTenantId is null)
+        _metrics.Record(resolution.Result, rejected: required && resolution.Result != ResolutionResult.Resolved);
+
+        if (resolution.Tenant is { } tenant && resolution.Result == ResolutionResult.Resolved)
         {
-            if (required)
-            {
-                _logger.LogWarning(
-                    "No tenant resolved from request {Method} {Path}. Tenant resolution is required. Returning {StatusCode}",
-                    context.Request.Method,
-                    context.Request.Path,
-                    _options.MissingTenantStatusCode);
+            var tenantId = TenantryHttpTelemetry.Format(tenant.TenantId);
+            requestActivity?.SetTag(TenantryHttpTelemetry.TenantIdTag, tenantId);
 
-                await RejectAsync(
-                    context,
-                    _options.MissingTenantStatusCode,
-                    "Tenant required",
-                    "This endpoint requires a tenant, and the request does not identify one.");
-                return;
+            using var current = _tenantContext.Use(tenant);
+            using var logScope = _logger.BeginScope(new TenantLogScope(tenantId));
+
+            TenantResolutionLog.TenantResolved(_logger, tenantId, context.Request.Method, context.Request.Path);
+
+            if (_options.OnResolved is { } onResolved)
+            {
+                await onResolved(new TenantResolvedContext<TKey>(context, tenant));
             }
 
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug("No tenant resolved from request {Method} {Path}. Continuing without tenant context",
-                    context.Request.Method,
-                    context.Request.Path);
-            }
-
-            await _next(context);
+            await NextAsync(context, endpointWasNull, resolution);
             return;
         }
 
-        // A default id (Guid.Empty, 0) or an empty string means "no tenant" to Tenantry, so no tenant can have it.
-        if (!TKey.TryParse(rawTenantId, null, out var tenantId)
-            || tenantId is string { Length: 0 }
-            || EqualityComparer<TKey>.Default.Equals(tenantId, default!))
+        if (resolution.Result == ResolutionResult.AccessDenied)
         {
-            if (required)
-            {
-                _logger.LogWarning("Tenant ID '{RawTenantId}' is not a valid {TKeyType}. Returning {StatusCode}",
-                    rawTenantId,
-                    typeof(TKey).Name,
-                    _options.InvalidTenantStatusCode);
-
-                await RejectAsync(
-                    context,
-                    _options.InvalidTenantStatusCode,
-                    "Invalid tenant",
-                    "The request's tenant identifier is not valid.");
-                return;
-            }
-
-            LogContinuingWithoutTenant(context, "is not a valid tenant id");
-            await _next(context);
-            return;
-        }
-
-        var tenant = await tenantStore.GetTenantAsync(tenantId, context.RequestAborted);
-
-        if (tenant is null)
-        {
-            if (!required)
-            {
-                LogContinuingWithoutTenant(context, "names no tenant");
-                await _next(context);
-                return;
-            }
-
-            _logger.LogWarning("Tenant '{TenantId}' not found in store", tenantId);
-
-            // With access validators, a tenant that does not exist gets the same response as one the caller may
-            // not use, so a caller cannot find out which tenants exist.
-            if (_access.Validators.Count > 0)
-            {
-                await RejectAccessDeniedAsync(context);
-                return;
-            }
-
-            await RejectAsync(
-                context,
-                _options.TenantNotFoundStatusCode,
-                "Tenant not found",
-                "The request's tenant does not exist.");
-            return;
-        }
-
-        if (_access.Validators.Count > 0 && !await IsTenantAccessAllowed(context, tenant, context.RequestAborted))
-        {
-            _logger.LogWarning(
-                "Tenant access denied for request {Method} {Path}. User '{User}' is not authorised for tenant '{TenantId}'",
+            TenantResolutionLog.TenantAccessDenied(
+                _logger,
                 context.Request.Method,
                 context.Request.Path,
                 context.User.Identity?.Name ?? "(anonymous)",
-                tenant.TenantId);
+                TenantryHttpTelemetry.Format(resolution.Tenant!.TenantId));
+        }
 
-            if (required)
-            {
-                await RejectAccessDeniedAsync(context);
-                return;
-            }
-
-            LogContinuingWithoutTenant(context, "names a tenant the request may not use");
-            await _next(context);
+        if (required)
+        {
+            await RejectAsync(context, resolution);
             return;
         }
 
-        using var _ = _tenantContext.Use(tenant);
-        using var logScope = _logger.BeginScope(new Dictionary<string, object>
+        switch (resolution.Result)
         {
-            ["TenantId"] = tenant.TenantId.ToString()!,
-            ["TenantName"] = tenant.Name,
-        });
-
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            _logger.LogDebug("Tenant '{TenantId}' resolved for {Method} {Path}",
-                tenant.TenantId,
-                context.Request.Method,
-                context.Request.Path);
+            case ResolutionResult.Missing:
+                TenantResolutionLog.NoTenantIdentifier(_logger, context.Request.Method, context.Request.Path);
+                break;
+            case ResolutionResult.NotFound:
+                TenantResolutionLog.ContinuingWithoutTenant(_logger, context.Request.Method, context.Request.Path, "names no tenant");
+                break;
+            default:
+                TenantResolutionLog.ContinuingWithoutTenant(
+                    _logger,
+                    context.Request.Method,
+                    context.Request.Path,
+                    "names a tenant the request may not use");
+                break;
         }
 
-        await _next(context);
+        await NextAsync(context, endpointWasNull, resolution);
     }
 
-    private void LogContinuingWithoutTenant(HttpContext context, string reason)
+    private async ValueTask<Resolution> ResolveAsync(HttpContext context)
     {
-        if (_logger.IsEnabled(LogLevel.Debug))
+        using var activity = TenantryHttpTelemetry.ActivitySource.StartActivity(TenantryHttpTelemetry.ResolveActivityName);
+
+        var resolution = await FindTenantAsync(context);
+
+        if (activity is not null)
         {
-            _logger.LogDebug(
-                "The tenant identifier of request {Method} {Path} {Reason}. The endpoint does not require a tenant, " +
-                "so it continues without one",
-                context.Request.Method,
-                context.Request.Path,
-                reason);
+            activity.SetTag(TenantryHttpTelemetry.ResultTag, TenantryHttpTelemetry.ResultName(resolution.Result));
+
+            if (resolution is { Result: ResolutionResult.Resolved, Tenant: { } tenant })
+            {
+                activity.SetTag(TenantryHttpTelemetry.TenantIdTag, TenantryHttpTelemetry.Format(tenant.TenantId));
+            }
+        }
+
+        return resolution;
+    }
+
+    private async ValueTask<Resolution> FindTenantAsync(HttpContext context)
+    {
+        var cancellationToken = context.RequestAborted;
+        string? identifier = null;
+        List<ClaimTenantResolver>? claimResolvers = null;
+
+        foreach (var resolver in context.RequestServices.GetServices<ITenantResolver>())
+        {
+            identifier = await resolver.ResolveAsync(context, cancellationToken);
+
+            // An empty identifier is no identifier: the next resolver may have one.
+            if (!string.IsNullOrWhiteSpace(identifier))
+            {
+                break;
+            }
+
+            identifier = null;
+
+            // The authentication middleware has not run yet: a claim resolver could not see the request's user.
+            if (resolver is ClaimTenantResolver claimResolver && context.Features.Get<IAuthenticationFeature>() is null)
+            {
+                (claimResolvers ??= []).Add(claimResolver);
+            }
+        }
+
+        if (identifier is null)
+        {
+            return new Resolution(ResolutionResult.Missing, null, null, claimResolvers);
+        }
+
+        var tenant = await _tenants.FindByIdentifierAsync(identifier, cancellationToken);
+
+        if (tenant is null)
+        {
+            return new Resolution(ResolutionResult.NotFound, identifier, null, null);
+        }
+
+        if (_hasValidators)
+        {
+            foreach (var validator in context.RequestServices.GetServices<ITenantAccessValidator<TKey>>())
+            {
+                if (!await validator.ValidateAsync(context, tenant, cancellationToken))
+                {
+                    return new Resolution(ResolutionResult.AccessDenied, identifier, tenant, null);
+                }
+            }
+        }
+
+        return new Resolution(ResolutionResult.Resolved, identifier, tenant, null);
+    }
+
+    // Runs the rest of the pipeline, then looks for what the request needed and only had later: an endpoint routing
+    // chose after this middleware ran, or a user the authentication middleware signed in after it (it sets
+    // IAuthenticationFeature on every request it runs for, so a user signed in later by other code, such as
+    // authorization with a scheme that is not the default, is not mistaken for it). Each is logged once.
+    private async Task NextAsync(HttpContext context, bool endpointWasNull, Resolution resolution)
+    {
+        await _next(context);
+
+        if (endpointWasNull &&
+            Volatile.Read(ref _warnedBeforeRouting) == 0 &&
+            context.GetEndpoint() is { } endpoint &&
+            HasTenantMetadata(endpoint) &&
+            Interlocked.Exchange(ref _warnedBeforeRouting, 1) == 0)
+        {
+            TenantResolutionLog.TenantryBeforeRouting(_logger, endpoint.DisplayName ?? "(unnamed endpoint)");
+        }
+
+        if (resolution.MissedClaimResolvers is { } claimResolvers &&
+            Volatile.Read(ref _warnedBeforeAuthentication) == 0 &&
+            context.Features.Get<IAuthenticationFeature>() is not null &&
+            context.User.Identity?.IsAuthenticated == true)
+        {
+            foreach (var claimResolver in claimResolvers)
+            {
+                if (await claimResolver.ResolveAsync(context) is not null &&
+                    Interlocked.Exchange(ref _warnedBeforeAuthentication, 1) == 0)
+                {
+                    TenantResolutionLog.TenantryBeforeAuthentication(_logger, context.Request.Method, context.Request.Path);
+                    break;
+                }
+            }
         }
     }
+
+    private static bool HasTenantMetadata(Endpoint endpoint) =>
+        endpoint.Metadata.GetMetadata<RequireTenantAttribute>() is not null ||
+        endpoint.Metadata.GetMetadata<AllowMissingTenantAttribute>() is not null;
 
     private bool IsTenantRequired(HttpContext context)
     {
@@ -226,9 +250,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         for (var i = endpoint.Metadata.Count - 1; i >= 0; i--)
         {
-            var metadata = endpoint.Metadata[i];
-
-            switch (metadata)
+            switch (endpoint.Metadata[i])
             {
                 case AllowMissingTenantAttribute:
                     return false;
@@ -240,41 +262,71 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         return _options.RequireTenantByDefault;
     }
 
-    private async ValueTask<bool> IsTenantAccessAllowed(
-        HttpContext context,
-        ITenantDescriptor<TKey> tenant,
-        CancellationToken cancellationToken)
+    private async Task RejectAsync(HttpContext context, Resolution resolution)
     {
-        foreach (var validator in _access.Validators)
+        var request = context.Request;
+
+        // With access validators, a tenant that does not exist gets the same response as one the caller may not
+        // use, so a caller cannot find out which tenants exist.
+        var (statusCode, title, detail) = resolution.Result switch
         {
-            if (!await validator(context, tenant, cancellationToken))
+            ResolutionResult.Missing => (_options.MissingTenantStatusCode, "Tenant required",
+                "This endpoint requires a tenant, and the request does not identify one."),
+            ResolutionResult.NotFound when !_hasValidators => (_options.TenantNotFoundStatusCode, "Tenant not found",
+                "The request's tenant does not exist."),
+            _ => (_options.AccessDeniedStatusCode, "Tenant access denied", "The request may not use its tenant."),
+        };
+
+        switch (resolution.Result)
+        {
+            case ResolutionResult.Missing:
+                TenantResolutionLog.TenantRequired(_logger, request.Method, request.Path, statusCode);
+                break;
+            case ResolutionResult.NotFound:
+                TenantResolutionLog.TenantNotFound(_logger, resolution.Identifier!, request.Method, request.Path, statusCode);
+                break;
+        }
+
+        var reason = resolution.Result switch
+        {
+            ResolutionResult.Missing => TenantRejectionReason.Missing,
+            ResolutionResult.NotFound => TenantRejectionReason.NotFound,
+            _ => TenantRejectionReason.AccessDenied,
+        };
+
+        TenantRejectedContext<TKey> rejected = new(
+            context,
+            reason,
+            statusCode,
+            resolution.Identifier,
+            resolution.Result == ResolutionResult.AccessDenied ? resolution.Tenant : null);
+
+        if (_options.OnRejected is { } onRejected)
+        {
+            await onRejected(rejected);
+
+            if (rejected.IsHandled)
             {
-                return false;
+                return;
             }
         }
 
-        return true;
-    }
+        context.Response.StatusCode = rejected.StatusCode;
 
-    private Task RejectAccessDeniedAsync(HttpContext context) =>
-        RejectAsync(
-            context,
-            _options.AccessDeniedStatusCode,
-            "Tenant access denied",
-            "The request may not use its tenant.");
-
-    // Never repeats the identifier the request sent.
-    private static async Task RejectAsync(HttpContext context, int statusCode, string title, string detail)
-    {
-        context.Response.StatusCode = statusCode;
-
+        // Never repeats the identifier the request sent.
         if (context.RequestServices.GetService<IProblemDetailsService>() is { } problemDetails)
         {
             await problemDetails.TryWriteAsync(new ProblemDetailsContext
             {
                 HttpContext = context,
-                ProblemDetails = new ProblemDetails { Status = statusCode, Title = title, Detail = detail },
+                ProblemDetails = new ProblemDetails { Status = rejected.StatusCode, Title = title, Detail = detail },
             });
         }
     }
+
+    private sealed record Resolution(
+        ResolutionResult Result,
+        string? Identifier,
+        ITenantDescriptor<TKey>? Tenant,
+        List<ClaimTenantResolver>? MissedClaimResolvers);
 }

@@ -16,7 +16,7 @@ builder.Services.AddProblemDetails();
 // Every Tenantry builder method used here is trimming- and Native AOT-safe.
 builder.Services.AddTenantry<string>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
-    .ResolveFromSubdomain(options => options.BaseDomain = "localhost")   // acme.localhost:5268
+    .ResolveFromSubdomain(options => options.BaseDomains.Add("localhost")) // acme.localhost:5268
     .UseInMemoryStore(
     [
         new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },

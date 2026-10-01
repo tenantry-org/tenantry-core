@@ -1,0 +1,116 @@
+using System.Collections.Concurrent;
+using AwesomeAssertions;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Tenantry;
+
+namespace Tenantry.EfCore.Tests.Interceptor;
+
+/// <summary>
+/// The isolation's log messages have stable event ids under the category <c>Tenantry.EfCore</c>, so applications can
+/// alert on them: an isolation violation above all.
+/// </summary>
+public sealed class IsolationLogTests : IAsyncDisposable
+{
+    private readonly SqliteConnection _connection = DbContextFactory.CreateSharedConnection();
+    // The test tenant is per async flow, so each test sets it in its own.
+    private readonly TestTenantContext _tenant = TestTenantContext.Empty();
+    private readonly Recorder _logs = new();
+
+    [Fact]
+    public async Task AnIsolationViolation_IsLoggedAsEvent2001()
+    {
+        _tenant.As("acme");
+        await using var db = await CreateAsync();
+        db.Orders.Add(new Order { Description = "Acme order" });
+        await db.SaveChangesAsync();
+        var id = db.Orders.Single().Id;
+        db.ChangeTracker.Clear();
+
+        _tenant.As("globex");
+        Order forged = new() { Id = id, TenantId = "acme", Description = "Forged" };
+        db.Orders.Attach(forged);
+        db.Entry(forged).State = EntityState.Modified;
+
+        await db.Invoking(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+
+        var entry = _logs.Entries.Should().ContainSingle(e => e.EventId.Id == 2001).Subject;
+        entry.Should().BeEquivalentTo(new { Category = "Tenantry.EfCore", Level = LogLevel.Error });
+        entry.EventId.Name.Should().Be("TenantIsolationViolation");
+        entry.Message.Should().Contain("'acme'").And.Contain("'globex'");
+    }
+
+    [Fact]
+    public async Task AWriteWithoutATenant_UnderWarn_IsLoggedAsEvent2002()
+    {
+        _tenant.As("acme");
+        await using var db = await CreateAsync(new EfCoreIsolationOptions { OnMissingTenant = MissingTenantBehavior.Warn });
+        Order order = new() { Description = "Acme order" };
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+
+        _tenant.AsNone();
+        order.Description = "Changed";
+        await db.SaveChangesAsync();
+
+        _logs.Entries.Should().ContainSingle(e => e.EventId.Id == 2002)
+            .Which.Should().BeEquivalentTo(new { Category = "Tenantry.EfCore", Level = LogLevel.Warning });
+    }
+
+    [Fact]
+    public async Task AWriteThatMatchesNoRow_IsLoggedAsEvent2003()
+    {
+        _tenant.As("acme");
+        await using var db = await CreateAsync();
+        Order missing = new() { Id = 404, TenantId = "acme", Description = "Not there" };
+        db.Orders.Attach(missing);
+        db.Entry(missing).State = EntityState.Modified;
+
+        await db.Invoking(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+        _logs.Entries.Should().ContainSingle(e => e.EventId.Id == 2003)
+            .Which.Should().BeEquivalentTo(new { Category = "Tenantry.EfCore", Level = LogLevel.Warning });
+    }
+
+    public async ValueTask DisposeAsync() => await _connection.DisposeAsync();
+
+    private async Task<TestDbContext> CreateAsync(EfCoreIsolationOptions? isolation = null)
+    {
+        var services = DbContextFactory.Services<string>(
+            _tenant,
+            isolation,
+            collection => collection.AddLogging(logging => logging.AddProvider(_logs)));
+        TestDbContext db = new(new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(services)
+            .UseTenantry()
+            .Options);
+        await db.Database.EnsureCreatedAsync();
+        return db;
+    }
+
+    private sealed class Recorder : ILoggerProvider
+    {
+        public ConcurrentQueue<Entry> Entries { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
+
+        public void Dispose()
+        {
+        }
+
+        public sealed record Entry(string Category, EventId EventId, LogLevel Level, string Message);
+
+        private sealed class Logger(Recorder recorder, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                recorder.Entries.Enqueue(new Entry(category, eventId, logLevel, formatter(state, exception)));
+        }
+    }
+}

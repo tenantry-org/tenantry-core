@@ -4,9 +4,9 @@ Namespace: `Tenantry.AspNetCore` · Package: `Tenantry.AspNetCore` · [API refer
 
 Resolves the tenant from the subdomain of the request host. For example, `acme.app.example.com` resolves to `acme`.
 
-Without [`SubdomainTenantResolverOptions.BaseDomain`](tenantry-aspnetcore-subdomaintenantresolveroptions.md), the first label of a host with at least three labels is the tenant: `acme.example.com` resolves to `acme`, and `example.com`, `localhost` and `acme.localhost` resolve nothing. With it, only a host of exactly one label followed by the base domain resolves: with `example.com`, `acme.example.com` resolves to `acme`, while `example.com`, `other.org` and `x.acme.example.com` resolve nothing.
+Without [`SubdomainTenantResolverOptions.BaseDomains`](tenantry-aspnetcore-subdomaintenantresolveroptions.md), the first label of a host with at least three labels is the tenant: `acme.example.com` resolves to `acme`, and `example.com`, `localhost` and `acme.localhost` resolve nothing. With them, only a host of exactly one label followed by a base domain resolves: with `example.com`, `acme.example.com` resolves to `acme`, while `example.com`, `other.org` and `x.acme.example.com` resolve nothing.
 
-A subdomain in [`SubdomainTenantResolverOptions.IgnoredSubdomains`](tenantry-aspnetcore-subdomaintenantresolveroptions.md) (`www` by default) and a host that is an IP address resolve nothing.
+A subdomain in [`SubdomainTenantResolverOptions.IgnoredSubdomains`](tenantry-aspnetcore-subdomaintenantresolveroptions.md) (`www` by default) and a host that is an IP address resolve nothing. The subdomain is returned in lower case, as host names are compared without regard to case, and an international domain name is compared and returned in its ASCII form (`xn--…`).
 
 ```csharp
 public sealed class SubdomainTenantResolver : ITenantResolver
@@ -34,13 +34,13 @@ public SubdomainTenantResolver(SubdomainTenantResolverOptions options)
 
 Parameters:
 
-- `options` [`SubdomainTenantResolverOptions`](tenantry-aspnetcore-subdomaintenantresolveroptions.md): The base domain and the subdomains to ignore.
+- `options` [`SubdomainTenantResolverOptions`](tenantry-aspnetcore-subdomaintenantresolveroptions.md): The base domains and the subdomains to ignore.
 
 ## Methods
 
 ### `ResolveAsync(HttpContext, CancellationToken)`
 
-Attempts to extract a tenant ID from the current request.
+Attempts to read a tenant identifier from the current request.
 
 ```csharp
 public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default)
@@ -51,4 +51,4 @@ Parameters:
 - `context` `HttpContext`: The current HTTP context.
 - `cancellationToken` `CancellationToken`: Cancellation token.
 
-Returns: `ValueTask<string>`: The resolved tenant ID string, or `null` if this resolver cannot determine the tenant from the current request.
+Returns: `ValueTask<string>`: The identifier, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) (or an empty string) if this resolver cannot determine the tenant from the current request. Return it as the request carries it: the tenant store finds the tenant it names.

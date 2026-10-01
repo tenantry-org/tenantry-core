@@ -13,16 +13,17 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 
 1. **[Getting started](getting-started.md)** — install the packages and build a tenant-aware app end to end.
 2. **[Core concepts](core-concepts.md)** — the tenant key, `ITenantDescriptor`, `ITenantContext` vs. `ITenantScope`, and the `AsyncLocal` model that ties them together.
-3. **[Tenant stores](tenant-stores.md)** — the in-memory store, writing a custom `ITenantStore`, and service lifetimes.
-4. **[ASP.NET Core integration](aspnetcore-integration.md)** — `AddTenantry`, the resolution middleware, pipeline ordering, and HTTP status codes.
-5. **[Tenant resolution](tenant-resolution.md)** — header, subdomain, route, claim, and query-string resolvers, resolver ordering, and custom resolvers.
+3. **[Tenant stores](tenant-stores.md)** — the in-memory store, writing a custom `ITenantStore`, service lifetimes, and caching tenants.
+4. **[ASP.NET Core integration](aspnetcore-integration.md)** — `AddTenantry`, the resolution middleware, pipeline ordering, HTTP status codes, and resolution events.
+5. **[Tenant resolution](tenant-resolution.md)** — header, subdomain, host, route, claim, and query-string resolvers, resolver ordering, custom resolvers, and identifiers other than the tenant id.
 6. **[Access control](access-control.md)** — requiring tenants per-endpoint or globally, access validators, and claim-based validation.
 7. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, the isolation policy, the optional base context, pooling, a database per tenant, migrations, and admin/cross-tenant queries.
 8. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantry` for console apps, worker services, and background jobs.
-9. **[AOT & trimming](aot-and-trimming.md)** — exactly what is supported, per package, and why EF Core differs.
-10. **[Compatibility](compatibility.md)** — supported .NET and EF Core versions, databases, and dependency ranges.
-11. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.
-12. **[API reference](api/README.md)** — every public type and member, generated from the XML documentation comments.
+9. **[Diagnostics](diagnostics.md)** — log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.
+10. **[AOT & trimming](aot-and-trimming.md)** — exactly what is supported, per package, and why EF Core differs.
+11. **[Compatibility](compatibility.md)** — supported .NET and EF Core versions, databases, and dependency ranges.
+12. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.
+13. **[API reference](api/README.md)** — every public type and member, generated from the XML documentation comments.
 
 ## How the pieces fit together
 
@@ -40,7 +41,7 @@ The flow on an ASP.NET Core request:
 HTTP request
    │
    ▼
-UseTenantry()  ──►  resolver(s) extract a raw id  ──►  parse to TKey  ──►  ITenantStore looks it up
+UseTenantry()  ──►  resolver(s) extract an identifier  ──►  ITenantStore finds the tenant it names (cached, optionally)
    │                                                                              │
    │                                          (optional) access validators run    │
    ▼                                                                              ▼

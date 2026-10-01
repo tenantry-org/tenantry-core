@@ -12,7 +12,7 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey> where TKey : 
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) for constraints.
 
 ## Methods
 
@@ -26,7 +26,7 @@ IDisposable Use(ITenantDescriptor<TKey> tenant)
 
 Parameters:
 
-- `tenant` [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md): The tenant to make current.
+- `tenant` [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md): The tenant to make current.
 
 Returns: `IDisposable`: A handle that restores the previously current tenant on disposal.
 

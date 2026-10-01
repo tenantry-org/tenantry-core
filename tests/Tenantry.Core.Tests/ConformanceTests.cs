@@ -17,6 +17,7 @@ public sealed class ConformanceTests
         builder.Services.AddTenantry<string>(tenant =>
         {
             tenant.UseStore<ScopedTenantStore>();
+            tenant.CacheTenants();
             tenant.UseConnectionStrings(options => options.GetConnectionString = t => $"Database=app_{t.TenantId}");
         });
 

@@ -187,12 +187,13 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 |-------|----------------|
 | [Getting started](docs/getting-started.md) | Install, your first tenant-aware app, end to end |
 | [Core concepts](docs/core-concepts.md) | Tenant key, descriptor, context vs. scope, the `AsyncLocal` model |
-| [Tenant stores](docs/tenant-stores.md) | In-memory and custom stores, service lifetimes |
-| [ASP.NET Core integration](docs/aspnetcore-integration.md) | Registration, middleware, pipeline ordering, status codes |
-| [Tenant resolution](docs/tenant-resolution.md) | Header, subdomain, route, claim, query-string, and custom resolvers |
+| [Tenant stores](docs/tenant-stores.md) | In-memory and custom stores, service lifetimes, caching tenants |
+| [ASP.NET Core integration](docs/aspnetcore-integration.md) | Registration, middleware, pipeline ordering, status codes, events |
+| [Tenant resolution](docs/tenant-resolution.md) | Header, subdomain, host, route, claim, query-string, and custom resolvers; slugs and custom domains |
 | [Access control](docs/access-control.md) | Requiring tenants, access validators, claim-based validation |
 | [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
 | [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantry` in console apps, workers, and background jobs |
+| [Diagnostics](docs/diagnostics.md) | Log event ids, the `tenant.id` trace tag and log scope, the resolution metric |
 | [AOT & trimming](docs/aot-and-trimming.md) | What is supported, per package, and why |
 | [Compatibility](docs/compatibility.md) | Supported .NET and EF Core versions, databases, and dependency ranges |
 | [Troubleshooting](docs/troubleshooting.md) | Common pitfalls and how to diagnose them |

@@ -12,9 +12,24 @@ public interface ITenantStoreAccessor<TKey> where TKey : IEquatable<TKey>, IPars
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) for constraints.
 
 ## Methods
+
+### `FindByIdentifierAsync(string, CancellationToken)`
+
+Returns the tenant an identifier names, or `null` if it names none, with the store's [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md).
+
+```csharp
+ValueTask<ITenantDescriptor<TKey>?> FindByIdentifierAsync(string identifier, CancellationToken cancellationToken = default)
+```
+
+Parameters:
+
+- `identifier` `string`: The identifier: the tenant's id, or a name the store maps to a tenant.
+- `cancellationToken` `CancellationToken`: Cancels the lookup.
+
+Returns: `ValueTask<ITenantDescriptor<TKey>>`
 
 ### `GetAllTenantsAsync(CancellationToken)`
 

@@ -1,4 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Metrics;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -23,31 +26,80 @@ internal sealed class TenantResolutionMiddlewareConfigurator<TKey> : ITenantReso
     {
         services.AddOptions();
         services.TryAddSingleton<ITenantResolutionMiddlewareConfigurator>(new TenantResolutionMiddlewareConfigurator<TKey>());
+        services.TryAddSingleton(sp => new TenantResolutionMetrics(sp.GetService<IMeterFactory>()));
+        services.TryAddSingleton<TenantryPipeline>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupFilter, TenantryPipelineCheck>());
     }
 
     // Checks the registration when the pipeline is built, so a web application fails as it starts.
     public IApplicationBuilder Use(IApplicationBuilder app)
     {
         var services = app.ApplicationServices;
+        var serviceTypes = services.GetService<IServiceProviderIsService>();
 
-        if (!services.GetServices<ITenantResolver>().Any())
+        // Checked without resolving the resolvers, which may be scoped.
+        if (serviceTypes?.IsService(typeof(ITenantResolver)) == false)
         {
             throw new InvalidOperationException(
                 $"app.UseTenantry() has no tenant resolvers for tenant key type '{typeof(TKey).Name}'. Add at least one " +
                 "in AddTenantry, such as tenant.ResolveFromHeader(...), tenant.ResolveFromRouteValue(...), " +
-                "tenant.ResolveFromClaim(...), tenant.ResolveFromSubdomain() or tenant.UseResolver(...).");
+                "tenant.ResolveFromClaim(...), tenant.ResolveFromSubdomain(), tenant.ResolveFromHost() or " +
+                "tenant.UseResolver(...).");
         }
 
         // Checked without resolving the store, which may be scoped and create a DbContext.
-        if (services.GetService<IServiceProviderIsService>()?.IsService(typeof(ITenantStore<TKey>)) == false)
+        if (serviceTypes?.IsService(typeof(ITenantStore<TKey>)) == false)
         {
             throw new InvalidOperationException(
                 $"app.UseTenantry() has no tenant store for ITenantStore<{typeof(TKey).Name}>. Register one in " +
                 "AddTenantry, with tenant.UseStore<TStore>() or tenant.UseInMemoryStore(...).");
         }
 
+        services.GetRequiredService<TenantryPipeline>().HasMiddleware = true;
+
         return app.UseMiddleware<TenantResolutionMiddleware<TKey>>();
     }
+}
+
+/// <summary>
+/// Records that <c>app.UseTenantry()</c> added the middleware to the application's pipeline.
+/// </summary>
+internal sealed class TenantryPipeline
+{
+    private volatile bool _hasMiddleware;
+
+    public bool HasMiddleware
+    {
+        get => _hasMiddleware;
+        set => _hasMiddleware = value;
+    }
+}
+
+/// <summary>
+/// Fails the web application's start when Tenantry resolves requests but <c>app.UseTenantry()</c> is not in the
+/// pipeline: every request would run without a tenant, including on endpoints that require one.
+/// </summary>
+/// <remarks>
+/// The host runs startup filters when it builds the request pipeline, after the application configured it, so the
+/// check sees every <c>UseTenantry()</c> call, in a branch too. A host that serves no requests builds no pipeline,
+/// and is not checked.
+/// </remarks>
+internal sealed class TenantryPipelineCheck(TenantryPipeline pipeline) : IStartupFilter
+{
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) =>
+        app =>
+        {
+            next(app);
+
+            if (!pipeline.HasMiddleware)
+            {
+                throw new InvalidOperationException(
+                    "Tenantry is registered to resolve requests to tenants (AddTenantry with a ResolveFrom... or " +
+                    "UseResolver method), but app.UseTenantry() is not in the request pipeline, so no request would " +
+                    "have a tenant, and endpoints that require one would run without it. Call app.UseTenantry() " +
+                    "after app.UseAuthentication() and before the endpoints.");
+            }
+        };
 }
 
 /// <summary>
@@ -61,4 +113,26 @@ internal sealed class TenantResolutionRegistration : ITenantRegistration
     public void Apply<TKey>(ITenantBuilder<TKey> tenant)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         TenantResolutionMiddlewareConfigurator<TKey>.Register(tenant.Services);
+}
+
+/// <summary>
+/// Registers an access validator type for the builder's key type, created in each request's scope.
+/// </summary>
+internal sealed class TenantAccessValidatorRegistration<
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator> : ITenantRegistration
+    where TValidator : class
+{
+    public void Apply<TKey>(ITenantBuilder<TKey> tenant)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        if (!typeof(ITenantAccessValidator<TKey>).IsAssignableFrom(typeof(TValidator)))
+        {
+            throw new InvalidOperationException(
+                $"{typeof(TValidator).Name} does not implement ITenantAccessValidator<{typeof(TKey).Name}>, the access " +
+                $"validator of this application's tenant key type '{typeof(TKey).Name}'.");
+        }
+
+        TenantResolutionMiddlewareConfigurator<TKey>.Register(tenant.Services);
+        tenant.Services.TryAddEnumerable(ServiceDescriptor.Scoped(typeof(ITenantAccessValidator<TKey>), typeof(TValidator)));
+    }
 }

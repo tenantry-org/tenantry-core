@@ -2,17 +2,17 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-Default implementation of [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md).
+Default implementation of [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md).
 
 ```csharp
-public class TenantDescriptor<TKey> : ITenantDescriptor<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
+public class TenantDescriptor<TKey> : ITenantDescriptor<TKey>, ITenantDescriptor where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) for constraints.
 
-Implements [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md).
+Implements [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md), [`ITenantDescriptor`](tenantry-itenantdescriptor.md).
 
 ## Properties
 

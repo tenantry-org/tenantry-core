@@ -12,7 +12,7 @@ public sealed class TenantConnectionStringOptions<TKey> where TKey : IEquatable<
 
 ## Type parameters
 
-- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor.md) for constraints.
+- `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) for constraints.
 
 ## Properties
 

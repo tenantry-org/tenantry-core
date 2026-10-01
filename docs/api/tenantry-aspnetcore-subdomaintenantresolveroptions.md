@@ -10,15 +10,15 @@ public sealed class SubdomainTenantResolverOptions
 
 ## Properties
 
-### `BaseDomain`
+### `BaseDomains`
 
-The domain whose subdomains are tenants, such as `example.com` for `acme.example.com`, or `localhost` for `acme.localhost` in development. When set, only a host of exactly one label followed by this domain resolves a tenant. When not set, the first label of any host with at least three labels is the tenant.
+The domains whose subdomains are tenants, such as `example.com` for `acme.example.com`, and `localhost` for `acme.localhost` in development. When set, only a host of exactly one label followed by one of them resolves a tenant. When empty (the default), the first label of any host with at least three labels is the tenant.
 
 ```csharp
-public string? BaseDomain { get; set; }
+public ISet<string> BaseDomains { get; }
 ```
 
-Value: `string`
+Value: `ISet<string>`
 
 ### `IgnoredSubdomains`
 

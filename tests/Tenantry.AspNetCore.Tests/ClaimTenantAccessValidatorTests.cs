@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using AwesomeAssertions;
 using Tenantry;
@@ -38,6 +39,30 @@ public sealed class ClaimTenantAccessValidatorTests
         var allowed = await ClaimTenantAccessValidator.ValidateAsync(context, tenant, "tenant_ids");
 
         allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ParsesClaimValues_WithTheInvariantCulture()
+    {
+        var context = CreateContext(new Claim("tenant_ids", "-5"), new Claim("tenant_ids", "[-6]"));
+
+        // A culture whose negative sign is not '-' cannot parse "-5"; claims are parsed regardless of it.
+        var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        culture.NumberFormat.NegativeSign = "~";
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = culture;
+
+        try
+        {
+            (await ClaimTenantAccessValidator.ValidateAsync(context, new TenantDescriptor<int> { TenantId = -5, Name = "A" }, "tenant_ids"))
+                .Should().BeTrue();
+            (await ClaimTenantAccessValidator.ValidateAsync(context, new TenantDescriptor<int> { TenantId = -6, Name = "B" }, "tenant_ids"))
+                .Should().BeTrue();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]

@@ -115,7 +115,7 @@ string TypePage(Item type)
     AppendDocumentation(page, type);
 
     var syntax = type.Syntax;
-    if (syntax?.Content is { } signature) AppendCode(page, signature);
+    if (syntax?.Content is { } signature) AppendCode(page, WithoutVarianceInConstraints(signature));
 
     if (syntax?.TypeParameters is { Count: > 0 } typeParameters)
     {
@@ -221,6 +221,16 @@ static void AppendLine(StringBuilder page, string text)
 {
     page.AppendLine();
     page.AppendLine(text.Trim());
+}
+
+// docfx repeats a type parameter's variance where a constraint names it (where TKey : IEquatable<out TKey>), which
+// is not C#: the variance belongs on the declaration only.
+static string WithoutVarianceInConstraints(string signature)
+{
+    var where = signature.IndexOf(" where ", StringComparison.Ordinal);
+    return where < 0
+        ? signature
+        : signature[..where] + Regex.Replace(signature[where..], @"(?<=[<,]\s*)(?:in|out)\s+", "");
 }
 
 static void AppendCode(StringBuilder page, string code)

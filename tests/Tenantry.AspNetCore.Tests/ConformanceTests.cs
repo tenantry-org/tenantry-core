@@ -33,14 +33,22 @@ public sealed class ConformanceTests
             tenant.ResolveFromRouteValue();
             tenant.ResolveFromSubdomain();
             tenant.ResolveFromQueryString();
+            tenant.ResolveFromHost();
             tenant.UseResolver<NoTenantResolver>();
             tenant.UseResolver(new NoTenantResolver());
             tenant.UseResolver(_ => new NoTenantResolver());
             tenant.UseStore<ScopedTenantStore>();
+            tenant.CacheTenants();
             tenant.UseConnectionStrings(options => options.GetConnectionString = t => $"Database=app_{t.TenantId}");
             tenant.RequireTenantByDefault();
+            tenant.ConfigureResolution(options =>
+            {
+                options.OnResolved = _ => Task.CompletedTask;
+                options.OnRejected = _ => Task.CompletedTask;
+            });
             tenant.ValidateTenantAccess((_, _) => true);
             tenant.ValidateTenantAccess((_, _, _) => ValueTask.FromResult(true));
+            tenant.ValidateTenantAccess<ScopedValidator>();
         });
 
         await using var app = builder.Build();
@@ -59,6 +67,13 @@ public sealed class ConformanceTests
         (await client.GetStringAsync("/tenant")).Should().Be("acme");
 
         await app.StopAsync();
+    }
+
+    // A validator with a scoped dependency, as one that reads a DbContext has.
+    private sealed class ScopedValidator(ScopedTenantStore.Session session) : ITenantAccessValidator<string>
+    {
+        public ValueTask<bool> ValidateAsync(HttpContext context, ITenantDescriptor<string> tenant, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(session is not null);
     }
 
     private sealed class NoTenantResolver : ITenantResolver

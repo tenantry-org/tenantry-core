@@ -31,7 +31,6 @@ public static class Ambient
     public static ModelBuilder modelBuilder = null!;
     public static Message message = null!;
     public static Queue<Guid> queue = new();
-    public static Entitlements _entitlements = null!;
 
     public static void WithTenant<TKey>(Action<ITenantBuilder<TKey>> configure)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
@@ -58,6 +57,9 @@ public sealed class TenantList : List<ITenantDescriptor<Guid>>, IEnumerable<ITen
 
     public ValueTask<IReadOnlyList<ITenantDescriptor<Guid>>> GetAllTenantsAsync(CancellationToken ct = default) =>
         ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<Guid>>>(this);
+
+    public ValueTask<ITenantDescriptor<Guid>?> FindByIdentifierAsync(string identifier, CancellationToken ct = default) =>
+        ValueTask.FromResult<ITenantDescriptor<Guid>?>(null);
 }
 
 public sealed record Message(Guid TenantId, string Description);
@@ -78,6 +80,25 @@ public class Order : TenantEntity<Guid>
     public string Description { get; set; } = "";
     public string Reference { get; set; } = "";
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>An application's own tenant type, with what it knows about each tenant.</summary>
+public class AppTenant : ITenantDescriptor<Guid>
+{
+    public Guid TenantId { get; set; }
+    public string Name { get; set; } = "";
+    public string Slug { get; set; } = "";
+    public string? CustomDomain { get; set; }
+    public string Plan { get; set; } = "";
+    public string Region { get; set; } = "";
+    public string ConnectionString { get; set; } = "";
+    public bool IsSuspended { get; set; }
+}
+
+/// <summary>The catalog database, which lists the tenants.</summary>
+public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbContext(options)
+{
+    public DbSet<AppTenant> Tenants => Set<AppTenant>();
 }
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)

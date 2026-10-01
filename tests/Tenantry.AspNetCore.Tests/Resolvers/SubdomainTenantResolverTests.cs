@@ -49,7 +49,7 @@ public sealed class SubdomainTenantResolverTests
     [Fact]
     public async Task SubdomainPlusLocalhost_WithoutABaseDomain_ReturnsNull()
     {
-        // "acme.localhost" has only 2 segments; BaseDomain = "localhost" resolves it (below).
+        // "acme.localhost" has only 2 segments; a base domain of "localhost" resolves it (below).
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost("acme.localhost");
 
@@ -110,7 +110,7 @@ public sealed class SubdomainTenantResolverTests
         SubdomainTenantResolver resolver = new(options);
 
         options.IgnoredSubdomains.Add("acme");
-        options.BaseDomain = "other.org";
+        options.BaseDomains.Add("other.org");
 
         (await resolver.ResolveAsync(ContextWithHost("acme.example.com"))).Should().Be("acme");
     }
@@ -127,7 +127,8 @@ public sealed class SubdomainTenantResolverTests
 
     [Theory]
     [InlineData("acme.example.com", "acme")]
-    [InlineData("ACME.Example.COM", "ACME")]
+    [InlineData("ACME.Example.COM", "acme")]
+    [InlineData("acme.example.com.", "acme")]
     [InlineData("example.com", null)]
     [InlineData("www.example.com", null)]
     [InlineData("x.acme.example.com", null)]
@@ -136,7 +137,9 @@ public sealed class SubdomainTenantResolverTests
     [InlineData("acme.example.com.evil.org", null)]
     public async Task BaseDomain_OnlyAHostOfOneLabelUnderIt_ResolvesATenant(string host, string? expected)
     {
-        SubdomainTenantResolver resolver = new(new SubdomainTenantResolverOptions { BaseDomain = "example.com" });
+        SubdomainTenantResolverOptions options = new();
+        options.BaseDomains.Add("example.com");
+        SubdomainTenantResolver resolver = new(options);
 
         (await resolver.ResolveAsync(ContextWithHost(host))).Should().Be(expected);
     }
@@ -144,9 +147,50 @@ public sealed class SubdomainTenantResolverTests
     [Fact]
     public async Task BaseDomain_Localhost_ResolvesSubdomainsInDevelopment()
     {
-        SubdomainTenantResolver resolver = new(new SubdomainTenantResolverOptions { BaseDomain = ".localhost." });
+        SubdomainTenantResolverOptions options = new();
+        options.BaseDomains.Add(".localhost.");
+        SubdomainTenantResolver resolver = new(options);
 
         (await resolver.ResolveAsync(ContextWithHost("acme.localhost"))).Should().Be("acme");
         (await resolver.ResolveAsync(ContextWithHost("localhost"))).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("münchen.de")]
+    [InlineData("xn--mnchen-3ya.de")]
+    public async Task AnInternationalBaseDomain_MatchesInEitherForm_AndTheSubdomainIsAscii(string baseDomain)
+    {
+        SubdomainTenantResolverOptions options = new();
+        options.BaseDomains.Add(baseDomain);
+        SubdomainTenantResolver resolver = new(options);
+
+        (await resolver.ResolveAsync(ContextWithHost("acme.münchen.de"))).Should().Be("acme");
+        (await resolver.ResolveAsync(ContextWithHost("acme.xn--mnchen-3ya.de"))).Should().Be("acme");
+        (await resolver.ResolveAsync(ContextWithHost("bücher.münchen.de"))).Should().Be("xn--bcher-kva");
+
+        options.IgnoredSubdomains.Add("Bücher");
+        (await new SubdomainTenantResolver(options).ResolveAsync(ContextWithHost("bücher.münchen.de"))).Should().BeNull();
+        (await new SubdomainTenantResolver(options).ResolveAsync(ContextWithHost("xn--bcher-kva.münchen.de"))).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("acme.example.com", "acme")]
+    [InlineData("globex.example.co.uk", "globex")]
+    [InlineData("initech.localhost", "initech")]
+    [InlineData("acme.app.example.com", "acme")]
+    [InlineData("app.example.com", "app")]
+    [InlineData("acme.other.org", null)]
+    [InlineData("example.co.uk", null)]
+    public async Task BaseDomains_EachResolvesItsSubdomains(string host, string? expected)
+    {
+        SubdomainTenantResolverOptions options = new();
+        options.BaseDomains.Add("example.com");
+        options.BaseDomains.Add("example.co.uk");
+        options.BaseDomains.Add("app.example.com");
+        options.BaseDomains.Add("localhost");
+        options.BaseDomains.Add(" ");
+        SubdomainTenantResolver resolver = new(options);
+
+        (await resolver.ResolveAsync(ContextWithHost(host))).Should().Be(expected);
     }
 }

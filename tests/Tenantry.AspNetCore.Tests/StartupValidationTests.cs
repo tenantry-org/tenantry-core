@@ -57,6 +57,8 @@ public sealed class StartupValidationTests
 
         app.UseTenantry();
         await app.StartAsync();
+
+        app.Lifetime.ApplicationStarted.IsCancellationRequested.Should().BeTrue();
         await app.StopAsync();
     }
 

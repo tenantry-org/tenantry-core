@@ -1,17 +1,26 @@
 # Tenant stores
 
-A tenant store answers "which tenants exist, and what are their details?" The resolution middleware
-calls it with a parsed `TKey` and expects back an `ITenantDescriptor<TKey>` (or `null` if there is no
-such tenant). It lists every tenant that exists, suspended ones included; whether a tenant may be served
-is decided elsewhere (see [Suspended and inactive tenants](#suspended-and-inactive-tenants)).
+A tenant store answers "which tenants exist, and what are their details?" It returns an
+`ITenantDescriptor<TKey>` for a tenant id, or for an identifier a request carries (or `null` if there is no such
+tenant), and lists every tenant that exists, suspended ones included; whether a tenant may be served is decided
+elsewhere (see [Suspended and inactive tenants](#suspended-and-inactive-tenants)).
 
 ```csharp no-compile
 public interface ITenantStore<TKey>
 {
     ValueTask<ITenantDescriptor<TKey>?> GetTenantAsync(TKey tenantId, CancellationToken ct = default);
     ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken ct = default);
+
+    // Implemented for you: parses the identifier as a TKey and calls GetTenantAsync.
+    ValueTask<ITenantDescriptor<TKey>?> FindByIdentifierAsync(string identifier, CancellationToken ct = default);
 }
 ```
+
+The request middleware finds a request's tenant with `FindByIdentifierAsync`. Implement it when requests name
+tenants by something other than their id, such as a subdomain slug or a custom domain with `Guid` keys: see
+[Identifiers other than the id](tenant-resolution.md#identifiers-other-than-the-id). A store that wraps another (to
+log, say) must forward `FindByIdentifierAsync` too: otherwise it gets the default, which never reaches the inner
+store's own mapping.
 
 Exactly one store may be registered: a second `UseStore`/`UseInMemoryStore` throws. A web application must
 register one: `app.UseTenantry()` checks at startup and throws a clear `InvalidOperationException` if none is
@@ -20,7 +29,8 @@ see [Non-HTTP hosts](non-http-hosts.md). `ITenantStoreAccessor` and `ITenantScop
 need one, and say so if it is missing.
 
 Singletons such as hosted services should read tenants through `ITenantStoreAccessor<TKey>`, which
-resolves the store from a fresh scope on each call, rather than injecting a scoped store directly.
+resolves the store from a fresh scope on each call, rather than injecting a scoped store directly. The request
+middleware reads tenants through it too.
 
 ## In-memory store
 
@@ -68,11 +78,10 @@ tenant.UseStore(sp => new EfCoreTenantStore(sp.GetRequiredService<AppDbContext>(
 ```
 
 > **Lifetimes.** `UseInMemoryStore` registers a **singleton**; `UseStore<T>()` and `UseStore(factory)`
-> register **scoped**. Scoped is the right default for stores that depend on a scoped `DbContext`: the
-> resolution middleware resolves the store from the request's service scope, so a store sharing the
-> request's `DbContext` works correctly. If your store is stateless and cheap, that is fine; if it does
-> a database round-trip per request and you want caching, add an `IMemoryCache`/`HybridCache` layer
-> inside your implementation.
+> register **scoped**. Scoped is the right default for stores that depend on a scoped `DbContext`:
+> `ITenantStoreAccessor<TKey>`, which the request middleware and background work use, resolves the store from a
+> scope of its own for each lookup. If a lookup is a database round trip you would rather not make on every
+> request, [cache the tenants](#caching).
 
 ## Suspended and inactive tenants
 
@@ -104,6 +113,8 @@ Decide whether a tenant may be served where its work starts:
   tenant.ValidateTenantAccess((http, t) => t is Tenant { IsActive: true });
   ```
 
+  With [caching](#caching), invalidate a tenant when you suspend it, or it is served until its entry expires.
+
 - **Background work:** access validators run only in the HTTP middleware, never for
   `ITenantScopeFactory` or background jobs, so check the descriptor yourself:
 
@@ -131,10 +142,41 @@ tenant is resolved. Keep the tenant registry global. See the
 [`EfCoreWeb` sample](../samples/Tenantry.Samples.EfCoreWeb) for a complete example with a `Tenant`
 entity, an `EfCoreTenantStore`, and seeded data.
 
-## Caching considerations
+## Caching
 
-The middleware calls `GetTenantAsync` once per request. If that is a database hit you would rather not
-take every request, cache inside your store implementation — Tenantry deliberately does not impose a
-caching strategy. Remember to invalidate on tenant changes (rename, suspend, delete): an access
-validator reads the status from the descriptor your store returns, so a stale cached descriptor keeps a
-suspended tenant served.
+The middleware looks the request's tenant up on every request. To serve requests without asking the store each
+time, cache the tenants:
+
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
+    .UseStore<EfCoreTenantStore>()
+    .CacheTenants(o => o.Duration = TimeSpan.FromMinutes(1)));   // 5 minutes by default
+```
+
+`CacheTenants` keeps each tenant the store finds, in memory, for the duration, by the id or identifier it was
+looked up with. It serves Tenantry's own lookups: the request middleware's and `ITenantStoreAccessor<TKey>`'s
+(which `ITenantScopeFactory.RunInScopeAsync` and Tenantry.Pro's jobs and messages use). A lookup that finds no
+tenant is not cached, so a tenant you add is found at once, and `GetAllTenantsAsync` is never cached. Code that
+injects `ITenantStore<TKey>` itself reads the store.
+
+When a tenant changes (it is suspended, renamed or deleted, or its slug changes), remove it from the cache, or it
+is served as it was until its entry expires: an access validator reads the status from the cached descriptor.
+
+```csharp
+app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, ITenantStoreCache<string> cache) =>
+{
+    var t = await db.Tenants.SingleOrDefaultAsync(t => t.TenantId == id);
+    if (t is null) return Results.NotFound();
+
+    t.IsActive = false;
+    await db.SaveChangesAsync();
+    cache.Invalidate(id);   // by its id and every identifier it was found by
+    return Results.NoContent();
+});
+```
+
+`AddTenantry` always registers `ITenantStoreCache<TKey>`, so this code runs with caching off too, when there is
+nothing to remove. Each instance of the application has its own cache, so `Invalidate` clears this instance's copy;
+other instances serve theirs until it expires. Keep the duration as short as that staleness allows. The cache reads the time from
+a registered `TimeProvider`, so tests can control expiry.

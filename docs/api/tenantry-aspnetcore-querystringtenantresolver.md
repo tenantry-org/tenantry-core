@@ -32,7 +32,7 @@ Intended for local development and testing convenience only. Do not enable in pr
 
 ### `ResolveAsync(HttpContext, CancellationToken)`
 
-Attempts to extract a tenant ID from the current request.
+Attempts to read a tenant identifier from the current request.
 
 ```csharp
 public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default)
@@ -43,4 +43,4 @@ Parameters:
 - `context` `HttpContext`: The current HTTP context.
 - `cancellationToken` `CancellationToken`: Cancellation token.
 
-Returns: `ValueTask<string>`: The resolved tenant ID string, or `null` if this resolver cannot determine the tenant from the current request.
+Returns: `ValueTask<string>`: The identifier, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) (or an empty string) if this resolver cannot determine the tenant from the current request. Return it as the request carries it: the tenant store finds the tenant it names.

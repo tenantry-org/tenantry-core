@@ -10,12 +10,12 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
 
 ## Methods
 
-### `ConfigureResolution<TKey>(ITenantBuilder<TKey>, Action<TenantResolutionOptions>)`
+### `ConfigureResolution<TKey>(ITenantBuilder<TKey>, Action<TenantResolutionOptions<TKey>>)`
 
-Configures how requests are treated: whether they need a tenant, and the status code of each rejection.
+Configures how requests are treated: whether they need a tenant, the status code of each rejection, and the events raised when a request's tenant is made current or a request is rejected.
 
 ```csharp
-public static ITenantBuilder<TKey> ConfigureResolution<TKey>(this ITenantBuilder<TKey> builder, Action<TenantResolutionOptions> configure) where TKey : IEquatable<TKey>, IParsable<TKey>
+public static ITenantBuilder<TKey> ConfigureResolution<TKey>(this ITenantBuilder<TKey> builder, Action<TenantResolutionOptions<TKey>> configure) where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
 
 Type parameters:
@@ -25,7 +25,7 @@ Type parameters:
 Parameters:
 
 - `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `configure` `Action<TenantResolutionOptions>`: Sets the options.
+- `configure` `Action<TenantResolutionOptions<TKey>>`: Sets the options.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
@@ -85,6 +85,33 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
+### `ResolveFromHost<TKey>(ITenantBuilder<TKey>, Action<HostTenantResolverOptions>?)`
+
+Resolves the tenant from the request's host name, such as `app.acme.com`, for tenants with domains of their own, as [`HostTenantResolver`](tenantry-aspnetcore-hosttenantresolver.md) describes. Your tenant store's [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md) maps the host name to a tenant.
+
+```csharp
+public static ITenantBuilder<TKey> ResolveFromHost<TKey>(this ITenantBuilder<TKey> builder, Action<HostTenantResolverOptions>? configure = null) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `configure` `Action<HostTenantResolverOptions>`: Sets the domains whose hosts are not tenants (`localhost` by default), or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for the defaults.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+It resolves every host that is not an IP address or excluded, so resolvers added after it never run for those hosts: add it last. Exclude your own domain, so its hosts do not ask the store for a tenant on every request.
+
+```csharp
+tenant
+    .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))   // acme.example.com
+    .ResolveFromHost(o => o.ExcludedDomains.Add("example.com"));   // app.acme.com
+```
+
 ### `ResolveFromQueryString<TKey>(ITenantBuilder<TKey>, string)`
 
 Resolves the tenant from a query string parameter.
@@ -140,13 +167,13 @@ Type parameters:
 Parameters:
 
 - `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `configure` `Action<SubdomainTenantResolverOptions>`: Sets the base domain and the subdomains that are not tenants (`www` by default), or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for the defaults.
+- `configure` `Action<SubdomainTenantResolverOptions>`: Sets the base domains and the subdomains that are not tenants (`www` by default), or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for the defaults.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
 ### `UseResolver<TResolver>(ITenantBuilder)`
 
-Registers a custom [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md) implementation, created through dependency injection as a singleton.
+Registers a custom [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md) implementation, created through dependency injection in each request's scope, so it can depend on scoped services such as a `DbContext`.
 
 ```csharp
 public static ITenantBuilder UseResolver<TResolver>(this ITenantBuilder builder) where TResolver : class, ITenantResolver
@@ -219,6 +246,28 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
+### `ValidateTenantAccess<TValidator>(ITenantBuilder)`
+
+Adds an access validator of type `TValidator`, created in each request's scope, so it can depend on scoped services such as a `DbContext`. Every validator must allow a request before its tenant is made current.
+
+```csharp
+public static ITenantBuilder ValidateTenantAccess<TValidator>(this ITenantBuilder builder) where TValidator : class
+```
+
+Type parameters:
+
+- `TValidator`: The validator type, which implements [`ITenantAccessValidator<TKey>`](tenantry-aspnetcore-itenantaccessvalidator.md) for the application's tenant key type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder`](tenantry-itenantbuilder.md): The tenant builder.
+
+Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first.
+
+Exceptions:
+
+- `InvalidOperationException`: `TValidator` does not implement [`ITenantAccessValidator<TKey>`](tenantry-aspnetcore-itenantaccessvalidator.md) for the builder's key type.
+
 ### `ValidateTenantAccess<TKey>(ITenantBuilder<TKey>, Func<HttpContext, ITenantDescriptor<TKey>, bool>)`
 
 Adds a synchronous tenant access validator. Every validator must allow a request before its tenant is made current.
@@ -234,7 +283,7 @@ Type parameters:
 Parameters:
 
 - `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `validator` `Func<HttpContext, ITenantDescriptor<TKey>, bool>`: Returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with [`TenantResolutionOptions.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md), and any other runs without one.
+- `validator` `Func<HttpContext, ITenantDescriptor<TKey>, bool>`: Returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md), and any other runs without one.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
@@ -253,6 +302,6 @@ Type parameters:
 Parameters:
 
 - `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `validator` `Func<HttpContext, ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>>`: Returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with [`TenantResolutionOptions.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md), and any other runs without one. It receives the request's cancellation token.
+- `validator` `Func<HttpContext, ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>>`: Returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md), and any other runs without one. It receives the request's cancellation token.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.

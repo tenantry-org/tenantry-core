@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Tenantry.Internal;
 
 /// <summary>
@@ -13,6 +15,23 @@ internal static class TenantIds
     public static bool IsUnset<TKey>(TKey? tenantId)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         tenantId is null or string { Length: 0 } || EqualityComparer<TKey>.Default.Equals(tenantId, default!);
+
+    /// <summary>
+    /// Parses <paramref name="text"/> as a tenant id with the invariant culture. Returns false for text that does not
+    /// parse and for the ids Tenantry reserves for "no tenant".
+    /// </summary>
+    public static bool TryParse<TKey>(string? text, out TKey tenantId)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        if (TKey.TryParse(text, CultureInfo.InvariantCulture, out var parsed) && !IsUnset(parsed))
+        {
+            tenantId = parsed;
+            return true;
+        }
+
+        tenantId = default!;
+        return false;
+    }
 
     public static void ThrowIfUnset<TKey>(ITenantDescriptor<TKey> tenant, string paramName)
         where TKey : IEquatable<TKey>, IParsable<TKey>

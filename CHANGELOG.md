@@ -68,14 +68,45 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 - `TenantNotFoundException`, a `TenantNotResolvedException` that carries the `TenantId` that was looked up.
   `RunInScopeAsync` throws it for an id the store does not have, so a queue consumer can tell a message for a
   deleted tenant from code that runs without a tenant.
-- `TenantResolutionOptions` is public, configured with `tenant.ConfigureResolution(o => …)`: the status codes of
-  each rejection (`MissingTenantStatusCode`, `InvalidTenantStatusCode`, `TenantNotFoundStatusCode`,
-  `AccessDeniedStatusCode`) and `RequireTenantByDefault`.
+- `TenantResolutionOptions<TKey>` is public, configured with `tenant.ConfigureResolution(o => …)`: the status codes
+  of each rejection (`MissingTenantStatusCode`, `TenantNotFoundStatusCode`, `AccessDeniedStatusCode`),
+  `RequireTenantByDefault`, and two events: `OnResolved`, when a request's tenant is made current, and
+  `OnRejected`, when a request is rejected, which is told the reason (`Missing`, `NotFound`, `AccessDenied`), the
+  identifier and the refused tenant, and can change the status code or write its own response (a redirect) with
+  `HandleResponse()`.
 - Rejections are written as problem details (`application/problem+json`) when an `IProblemDetailsService` is
   registered (`builder.Services.AddProblemDetails()`).
-- `ResolveFromSubdomain(o => …)` takes a `BaseDomain` (only `<tenant>.<base domain>` resolves, and
+- `ResolveFromSubdomain(o => …)` takes `BaseDomains` (only `<tenant>.<base domain>` resolves, and
   `acme.localhost` works in development with `localhost`) and `IgnoredSubdomains` (`www` by default); a host that
-  is an IP address resolves nothing.
+  is an IP address resolves nothing, and the subdomain is returned in lower case.
+- Identifiers: a resolver returns an identifier, and `ITenantStore<TKey>.FindByIdentifierAsync` finds the tenant it
+  names. By default it parses the identifier as the key type, with the invariant culture, and calls
+  `GetTenantAsync`, so existing stores need no change; a store implements it to map slugs or custom domains to
+  `Guid` or `int` tenants. `ITenantStoreAccessor<TKey>.FindByIdentifierAsync` calls it from a scope of its own,
+  and the middleware finds request tenants through it. `ResolveFromHost(o => o.ExcludedDomains.Add(…))` resolves the
+  request's host name, for tenants with domains of their own (`localhost` is excluded by default). Both host
+  resolvers compare and return international domain names in their ASCII form.
+- `tenant.CacheTenants(o => o.Duration = …)` caches the tenants Tenantry reads (the middleware's and
+  `ITenantStoreAccessor`'s lookups, by id and by identifier) in memory, 5 minutes by default, with no new
+  dependency; `ITenantStoreCache<TKey>.Invalidate(id)` and `InvalidateAll()` remove them when a tenant changes
+  (`AddTenantry` always registers it, as Tenantry.Pro does `IConnectionStringCache`). A lookup that finds no tenant is
+  not cached. It reads the time from a registered `TimeProvider`.
+- `ITenantAccessValidator<TKey>` and `tenant.ValidateTenantAccess<TValidator>()`: an access validator created in
+  each request's scope, so it can use a `DbContext`. The delegate overloads remain; all run in the order they
+  were added.
+- Your own tenant type: `tenant.As<AppTenant>()` reads a tenant as the type your store returns, in any delegate
+  that receives one (connection strings, access validators, Tenantry.Pro's selectors), and
+  `ITenantContext<TKey>.GetCurrentTenant<AppTenant>()` reads the current one. Both throw an error naming both
+  types when the store returns another type.
+- Diagnostics (`docs/diagnostics.md`): the middleware's and the EF Core isolation's log messages have stable
+  event ids (1001–1008 under `Tenantry.AspNetCore`, 2001–2004 under `Tenantry.EfCore`; 2001 is an isolation
+  violation), written with `[LoggerMessage]`. While a request's tenant is current, its trace span is tagged
+  `tenant.id` and a log scope with `TenantId` is open (the names Tenantry.Pro's jobs and messages use). The
+  `Tenantry.AspNetCore` activity source has a `Tenantry.ResolveTenant` span, and its meter counts requests by
+  result in `tenantry.resolutions`.
+- When routing chooses an endpoint with Tenantry's metadata after the middleware ran, or the authentication
+  middleware runs after it and signs in a user whose claim `ResolveFromClaim` reads, the middleware logs a warning
+  once.
 - `CurrentTenantConnectionString<TKey>`, the current tenant's connection string.
 - `TenantIsolationViolationException.Kind` (`EntityWrite`, `BulkUpdate`, `TenantDatabaseMismatch`,
   `ModelConfiguration`), and the tenant ids on a database-per-tenant mismatch, which were empty.
@@ -88,7 +119,8 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 
 - **Breaking:** the API reshape in [Upgrading from 0.4](#upgrading-from-04). There is one entry point and one
   builder, so every builder method chains (`tenant => tenant.ResolveFromHeader(…).UseStore<T>().UseConnectionStrings(…)`),
-  and `UseResolver<TResolver>()` returns the builder without its key type (call it last).
+  and `UseResolver<TResolver>()` returns the builder without its key type (call it last). It creates the resolver
+  in each request's scope, so it can depend on scoped services.
 - **Breaking:** an application registers one store and one tenant key type. A second `UseStore`/`UseInMemoryStore`
   (or an `ITenantStore<TKey>` registered directly), and `AddTenantry` with another key type, throw.
 - **Breaking:** `app.UseTenantry()` checks the registration when the pipeline is built (a resolver and a store,
@@ -97,15 +129,28 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   depends on it fails as the host starts.
 - **Breaking:** the resolution middleware no longer echoes the request's identifier, and a rejection's body is
   empty (or problem details, above) instead of plain text. An endpoint that does not require a tenant is never
-  rejected: a request whose identifier is invalid, names no tenant, or names one an access validator refuses
-  continues without a tenant, so `www.` hosts and health probes no longer get `404`. With access validators, a
-  tenant that does not exist gets the access-denied response, so a caller cannot tell which tenants exist.
+  rejected: a request whose identifier names no tenant, or names one an access validator refuses, continues
+  without a tenant, so `www.` hosts and health probes no longer get `404`. With access validators, a tenant that
+  does not exist gets the access-denied response, so a caller cannot tell which tenants exist. An identifier that
+  does not parse as the key type names no tenant (`404`, not `400`), and a resolver that returns an empty string
+  has no identifier, so the next resolver is tried. The store is read through `ITenantStoreAccessor`, in a scope
+  of its own, not the request's.
+- **Breaking:** a web application that registers request resolution but does not call `app.UseTenantry()` fails to
+  start, instead of running every endpoint, those that require a tenant included, without one.
+- **Breaking:** `ITenantDescriptor<TKey>` derives from a new non-generic `ITenantDescriptor`, which holds `Name`
+  (`As<TTenant>()` extends it), so an explicit implementation is written `string ITenantDescriptor.Name`.
+  `ITenantStoreAccessor<TKey>` has a new member, `FindByIdentifierAsync`, which a hand-written implementation or fake
+  must add. `ITenantContext<TKey>` is no longer covariant in `TKey` (variance never applied: the constraints rule out
+  every conversion), so it can declare `GetCurrentTenant<TTenant>()`.
+- **Breaking:** the request's log scope holds only `TenantId` (formatted with the invariant culture), not
+  `TenantName`, and the middleware and the EF Core isolation log under the categories `Tenantry.AspNetCore` and
+  `Tenantry.EfCore` instead of their internal type names.
 - **Breaking:** a new entity that names another tenant is always rejected with
   `TenantIsolationViolationException` (it was silently moved to the current tenant unless `DetectSpoofedWrites`
   was on). The stamp goes through EF Core, so `ITenantEntity.TenantId` needs only a getter.
 - **Breaking:** the key type's default (`Guid.Empty`, `0`, an empty string) is reserved for "no tenant":
   `ITenantContextSetter.Use`, `ITenantScopeFactory.CreateScope` and `RunInScopeAsync` throw `ArgumentException` for
-  it, and the middleware treats it as an invalid identifier. It could write but never read its own rows.
+  it, and an identifier that parses to it names no tenant. It could write but never read its own rows.
 - `TenantNotResolvedException`'s default message names every way to make a tenant current, not only
   `app.UseTenantry()`, and the EF Core error for a write without a tenant names `RunInScopeAsync`.
 - The packages depend on each other from this release up to the next minor (`[0.5.0, 0.6.0)`) instead of exactly:
@@ -139,6 +184,14 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 
 ### Fixed
 
+- The middleware and `ValidateTenantAccessByClaim` parsed identifiers and claim values with the current culture, so
+  a numeric id could parse differently, or not at all, on a server with another culture. They use the invariant
+  culture, as Tenantry.Pro's jobs and messages do.
+- The API reference repeated a type parameter's variance in its constraints (`where TKey : IEquatable<out TKey>`),
+  which is not C#.
+- The documented asynchronous access validator used a field (`_entitlements`) that a top-level `Program.cs` cannot
+  have; the docs now show a validator class with its own dependencies, and a delegate that resolves its service
+  from the request.
 - A tenant could add rows to another tenant's owned collection (`OwnsMany`): attaching a stub of the other tenant's
   owner, with its own or no `TenantId`, and adding an owned entity saved it, and the owner's tenant then read the
   row, because EF Core reads owned rows through their owner without a tenant filter and does not write an owner
