@@ -1,68 +1,13 @@
 <Project>
 
+  <Import Project="eng/common/Build.props" />
+
+  <!-- This repository's own settings. Projects under src/, tests/ and samples/ add their folder's Directory.Build.props. -->
   <PropertyGroup>
-    <LangVersion>14</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <Authors>Tenantry Contributors</Authors>
     <RepositoryUrl>https://github.com/tenantry-org/tenantry-core</RepositoryUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <!-- CI builds are deterministic: PDBs and SourceLink record /_/ instead of the runner's source path -->
-    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
-    <!--
-      The .NET 11 preview lane (scripts/test-net11.sh, and the net11-preview CI job) builds with
-      -p:IncludeNet11=true, which adds net11.0 to src and test projects. Packages ship net8.0-net10.0 until
-      .NET 11 is released. The lane's net11.0 package groups use this release candidate.
-    -->
-    <Net11PreviewVersion>11.0.0-rc.1.26425.128</Net11PreviewVersion>
+    <!-- The README each package carries -->
+    <TenantryPackageReadme>$(MSBuildThisFileDirectory)README.md</TenantryPackageReadme>
   </PropertyGroup>
-
-  <!-- Src projects: net8.0;net9.0;net10.0 + XML docs + MinVer -->
-  <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('/src/'))">
-    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-    <TargetFrameworks Condition="'$(IncludeNet11)' == 'true'">$(TargetFrameworks);net11.0</TargetFrameworks>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-    <EnableAotAnalyzer>true</EnableAotAnalyzer>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <MinVerTagPrefix>v</MinVerTagPrefix>
-  </PropertyGroup>
-
-  <!-- Test projects: net8.0;net9.0;net10.0 — validate all supported TFMs -->
-  <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('/tests/'))">
-    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-    <TargetFrameworks Condition="'$(IncludeNet11)' == 'true'">$(TargetFrameworks);net11.0</TargetFrameworks>
-    <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
-    <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-  </PropertyGroup>
-
-  <!-- Sample projects: net10.0 only, no docs. NOT test projects — they must not be
-       picked up by `dotnet test` (they have no test SDK, so testhost would be missing). -->
-  <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('/samples/'))">
-    <TargetFramework>net10.0</TargetFramework>
-    <IsPackable>false</IsPackable>
-    <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <!-- Keep the lock file out of the default items, so SDKs that copy *.json to the output (Worker) don't ship it -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);packages.lock.json</DefaultItemExcludes>
-  </PropertyGroup>
-
-  <ItemGroup Condition="'$(ExcludeFromCodeCoverage)' == 'true'">
-    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage" />
-  </ItemGroup>
-
-  <!-- MinVer + root README for src projects only -->
-  <ItemGroup Condition="$(MSBuildProjectFullPath.Contains('/src/'))">
-    <PackageReference Include="MinVer" Version="8.0.0" PrivateAssets="All" />
-    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath=""/>
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="README.md" />
-  </ItemGroup>
 
 </Project>

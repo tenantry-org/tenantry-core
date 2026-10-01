@@ -16,10 +16,16 @@ dotnet build   Tenantry.slnx -c Release
 dotnet test    Tenantry.slnx -c Release
 ```
 
+Package versions for `src/` and `tests/` are set centrally, in `Directory.Packages.props` and, for those Tenantry
+Pro also uses, `eng/common/Packages.props`; each sample declares its own, as an application copied from it would.
 Test and sample projects commit a `packages.lock.json`, and CI restores with `--locked-mode`, so it fails
-when a lock file is stale. When you change a package version in a test or sample project, run
-`dotnet restore Tenantry.slnx` and commit the lock files it rewrites. `src/` projects have no lock files; the
-version ranges their packages declare are checked by `scripts/check-package-ranges.cs` instead.
+when a lock file is stale. When you change a package version, run `dotnet restore Tenantry.slnx` and commit the
+lock files it rewrites. `src/` projects have no lock files; the version ranges their packages declare are checked
+by `scripts/check-package-ranges.cs` instead.
+
+The build settings, scripts and package versions that `eng/common/shared-files.txt` lists are shared with the
+Tenantry Pro repository, which copies them from here, so they hold nothing specific to this repository. CI also
+builds on Windows.
 
 ## Checks your PR must pass
 
@@ -33,7 +39,7 @@ CI runs the same gates that block a release — make sure these hold locally bef
    from forks because secrets aren't available there — it runs after merge.)
 5. **AOT publish succeeds** for the AOT sample (`dotnet publish samples/Tenantry.Samples.Aot -c Release`).
 6. **The packages pass both package checks**, which CI runs after packing the `src/` projects.
-   `dotnet run scripts/check-package-ranges.cs -- artifacts` checks that every dependency has its
+   `dotnet run scripts/check-package-ranges.cs -- artifacts --siblings minor` checks that every dependency has its
    intended range, and
    `scripts/check-package-consumer.sh artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'`
    has a stand-in application restore them from an empty cache with package source mapping, build for

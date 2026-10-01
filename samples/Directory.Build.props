@@ -1,0 +1,20 @@
+<Project>
+
+  <!--
+    Samples: net10.0 (a sample may set its own TargetFramework), not packed. Shared with Tenantry Pro
+    (eng/common/shared-files.txt). Not test projects: `dotnet test` over the solution would otherwise try to run them
+    (they have no test host). Each sample declares its own package versions, as an application copied from it would,
+    so they do not use central package management.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Keep the lock file out of the default items, so SDKs that copy *.json to the output (Worker) don't ship it -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);packages.lock.json</DefaultItemExcludes>
+  </PropertyGroup>
+
+</Project>

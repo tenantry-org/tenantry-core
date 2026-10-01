@@ -17,47 +17,6 @@
     </ItemGroup>
   </Target>
 
-  <!--
-    The latest dependency lane (scripts/test-latest-dependencies.sh, run weekly by dependency-lanes.yml). A package
-    declared with a version range ("[8.0.31, 9.0.0)") normally resolves to the lowest version the graph allows,
-    which the committed lock files record and CI tests (scripts/check-dependency-floors.cs checks every floor is
-    among them). With LatestDependencies=true, restore instead takes the newest release a consumer can get: in
-    the floor's major for a bounded range ("8.*"), and overall for a minimum-only range ("[8.0.0, )" becomes
-    "*"); a prerelease floor also allows prereleases ("0.*-*"). Exact versions are
-    left alone, and the lane writes its own lock files.
-  -->
-  <Target Name="FloatRangesToLatest" BeforeTargets="CollectPackageReferences" Condition="'$(LatestDependencies)' == 'true'">
-    <ItemGroup>
-      <_RangeToFloat Include="@(PackageReference)"
-                     Condition="$([System.String]::Copy('%(PackageReference.Version)').Trim().StartsWith('['))"
-                     Floor="$([System.Text.RegularExpressions.Regex]::Replace('%(PackageReference.Version)', '^\s*\[\s*([^,\]\s]+).*$', '$1'))" />
-      <_RangeToFloat Update="@(_RangeToFloat)"
-                     Major="$([System.Text.RegularExpressions.Regex]::Replace('%(Floor)', '^(\d+)\..*$', '$1'))" />
-      <_RangeToFloat Update="@(_RangeToFloat)"
-                     Open="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Version)', ',\s*\)\s*$'))"
-                     Prerelease="$([System.String]::Copy('%(Floor)').Contains('-'))" />
-      <_RangeToFloat Update="@(_RangeToFloat)" Latest="%(Major).*" Condition="'%(Open)' != 'true' and '%(Prerelease)' != 'true'" />
-      <_RangeToFloat Update="@(_RangeToFloat)" Latest="%(Major).*-*" Condition="'%(Open)' != 'true' and '%(Prerelease)' == 'true'" />
-      <_RangeToFloat Update="@(_RangeToFloat)" Latest="*" Condition="'%(Open)' == 'true' and '%(Prerelease)' != 'true'" />
-      <_RangeToFloat Update="@(_RangeToFloat)" Latest="*-*" Condition="'%(Open)' == 'true' and '%(Prerelease)' == 'true'" />
-      <PackageReference Remove="@(_RangeToFloat)" />
-      <PackageReference Include="@(_RangeToFloat)" Version="%(_RangeToFloat.Latest)" />
-      <_RangeToFloat Remove="@(_RangeToFloat)" />
-    </ItemGroup>
-  </Target>
-
-  <!--
-    Package pruning (.NET 10 SDK) drops a package that a shared framework also provides, such as
-    Microsoft.Extensions.DependencyInjection.Abstractions under Microsoft.AspNetCore.App. In the latest lane an ASP.NET
-    Core project would then compile against the framework's older copy while a project it references compiled
-    against the lane's newer package (CS1705). Only for those projects, the lane keeps the newer package, as the
-    runtime does.
-  -->
-  <Target Name="KeepNewerPackagesOverAspNetCore" BeforeTargets="_GenerateRestoreProjectSpec;_GenerateProjectRestoreGraphPerFramework"
-          Condition="'$(LatestDependencies)' == 'true' and '@(FrameworkReference->WithMetadataValue('Identity', 'Microsoft.AspNetCore.App'))' != ''">
-    <PropertyGroup>
-      <RestoreEnablePackagePruning>false</RestoreEnablePackagePruning>
-    </PropertyGroup>
-  </Target>
+  <Import Project="eng/common/Build.targets" />
 
 </Project>

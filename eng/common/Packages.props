@@ -1,0 +1,64 @@
+<Project>
+
+  <!--
+    Package versions both repositories use, imported by each one's Directory.Packages.props (central package
+    management, for src and tests; samples declare their own versions). Core is the source (see Build.props), and its
+    Dependabot maintains the ones with a single exact version; Pro's ignores them.
+
+    A version range ("[8.0.31, 9.0.0)") is what a package publishes: its floor is the oldest version supported, which
+    some test must resolve (scripts/check-dependency-floors.cs). A per-framework band stays in its framework's major.
+    Microsoft.Extensions.* take a minimum only (see scripts/check-package-ranges.cs).
+  -->
+  <ItemGroup>
+    <PackageVersion Include="MinVer" Version="8.0.0" />
+
+    <!-- Test tooling -->
+    <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="NSubstitute" Version="5.3.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="[8.0.31, 9.0.0)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="[8.0.31, 9.0.0)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="[8.0.31, 9.0.0)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[8.0.0, )" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="[8.0.0, )" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[8.0.4, 9.0.0)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="[9.0.20, 10.0.0)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="[9.0.20, 10.0.0)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="[9.0.20, 10.0.0)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[9.0.0, )" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="[9.0.0, )" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[9.0.0, 10.0.0)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="[10.0.12, 11.0.0)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="[10.0.12, 11.0.0)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="[10.0.12, 11.0.0)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[10.0.0, )" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="[10.0.0, )" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+  <!-- The .NET 11 preview lane only (IncludeNet11) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="[$(Net11PreviewVersion), 12.0.0)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="[$(Net11PreviewVersion), 12.0.0)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="[$(Net11PreviewVersion), 12.0.0)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[$(Net11PreviewVersion), )" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="[$(Net11PreviewVersion), )" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.1.1" />
+  </ItemGroup>
+
+</Project>

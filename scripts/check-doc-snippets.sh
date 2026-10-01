@@ -8,11 +8,9 @@
 #   scripts/check-doc-snippets.sh artifacts 'Tenantry.Pro' 'Tenantry.Pro.*'
 #
 # The first pattern names a package whose version the project references. In Tenantry.Pro, the project also
-# references Tenantry core at the version the repository builds against; to check against an unreleased core, put
-# its packages in the folder too, add their patterns, and set TENANTRY_CORE_VERSION:
-#
-#   TENANTRY_CORE_VERSION=0.5.0-dev scripts/check-doc-snippets.sh packages 'Tenantry.Pro' 'Tenantry.Pro.*' \
-#     'Tenantry.Core' 'Tenantry.AspNetCore' 'Tenantry.EfCore'
+# references Tenantry core at the version the repository builds against (TenantryCoreVersion). To check against an
+# unreleased core, set TENANTRY_CORE_PACKAGES to a folder of its packages and TenantryCoreVersion to their version,
+# as scripts/pack-local-core.sh prints them.
 #
 # scripts/doc-snippets.cs extracts the blocks (how each is wrapped is described there) and eng/doc-snippets holds
 # the project they build in. Mark a block that is not meant to compile with ```csharp no-compile.
@@ -47,6 +45,9 @@ cp "$repo/global.json" "$work"/
   echo '  <packageSources>'
   echo '    <clear />'
   echo "    <add key=\"local\" value=\"$packages\" />"
+  if [[ -n "${TENANTRY_CORE_PACKAGES:-}" ]]; then
+    echo "    <add key=\"tenantry-core\" value=\"$TENANTRY_CORE_PACKAGES\" />"
+  fi
   echo '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />'
   echo '  </packageSources>'
   echo '  <packageSourceMapping>'
@@ -55,6 +56,13 @@ cp "$repo/global.json" "$work"/
     echo "      <package pattern=\"$pattern\" />"
   done
   echo '    </packageSource>'
+  if [[ -n "${TENANTRY_CORE_PACKAGES:-}" ]]; then
+    echo '    <packageSource key="tenantry-core">'
+    for pattern in Tenantry.Core Tenantry.EfCore Tenantry.AspNetCore; do
+      echo "      <package pattern=\"$pattern\" />"
+    done
+    echo '    </packageSource>'
+  fi
   echo '    <packageSource key="nuget.org">'
   echo '      <package pattern="*" />'
   echo '    </packageSource>'

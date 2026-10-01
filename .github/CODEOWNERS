@@ -5,3 +5,6 @@
 /.github/               @olliejm
 /src/                   @olliejm
 Directory.Build.props   @olliejm
+Directory.Packages.props @olliejm
+/eng/                   @olliejm
+/scripts/               @olliejm

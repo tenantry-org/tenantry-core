@@ -124,7 +124,7 @@ jobs:
 
       - name: Check package dependency ranges
         # Fails on a floating or open-ended dependency (see the rules in the script)
-        run: dotnet run scripts/check-package-ranges.cs -- ./artifacts
+        run: dotnet run scripts/check-package-ranges.cs -- ./artifacts --siblings minor
 
       - name: Check the API reference
         # docs/api is generated from the XML documentation comments; a change to the public API or its comments

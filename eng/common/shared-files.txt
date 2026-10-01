@@ -1,0 +1,24 @@
+# The files Tenantry Pro takes unchanged from Tenantry Core, which keeps them. Change one here, in Core, then run
+# scripts/sync-shared-files.sh in Pro to copy them; Pro's CI fails when its copies differ from Core's master.
+.editorconfig
+dotnet-tools.json
+global.json
+eng/api-docs/docfx.json
+eng/common/Build.props
+eng/common/Build.targets
+eng/common/Packages.props
+eng/common/shared-files.txt
+eng/package-consumer/PackageLoadCheck.cs
+samples/Directory.Build.props
+scripts/api-docs.cs
+scripts/check-dependabot.cs
+scripts/check-dependency-floors.cs
+scripts/check-doc-snippets.sh
+scripts/check-package-consumer.sh
+scripts/check-package-ranges.cs
+scripts/doc-snippets.cs
+scripts/generate-api-docs.sh
+scripts/sync-shared-files.sh
+scripts/test-latest-dependencies.sh
+src/Directory.Build.props
+tests/Directory.Build.props

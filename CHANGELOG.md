@@ -181,6 +181,8 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   every tenant's database, such as Tenantry.Pro's migrations, skip them. The sample now keeps them in the
   store and refuses them with a validator (`403`); see "Suspended and inactive tenants" in
   `docs/tenant-stores.md`. Nothing checks a tenant's status for you in background work.
+- `Tenantry.EfCore` no longer depends on `Microsoft.Extensions.DependencyInjection.Abstractions` itself: EF Core
+  and `Tenantry.Core` bring it, EF Core at the same minimum as before.
 
 ### Fixed
 

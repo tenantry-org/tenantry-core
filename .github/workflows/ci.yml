@@ -22,6 +22,28 @@ jobs:
       # SonarCloud analyses pushes to master and pull requests; a manual run on a branch is neither.
       run_sonar: ${{ github.event_name != 'workflow_dispatch' }}
 
+  # Windows, where paths use backslashes: restore and build only (the tests need Docker with Linux containers).
+  windows-build:
+    name: Build on Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # MinVer needs full history
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Tenantry.slnx --locked-mode
+
+      - name: Build
+        run: dotnet build Tenantry.slnx -c Release --no-restore
+
   # The .NET 11 preview lane (scripts/test-net11.sh): net11.0 builds and tests against the release candidate.
   # It does not block: a release candidate can break things GA fixes, so a failure here is a warning to
   # investigate, not a merge gate.

@@ -1,0 +1,34 @@
+<Project>
+
+  <!-- Packages: every supported target framework, XML docs, trimming, MinVer. Shared with Tenantry Pro (eng/common/shared-files.txt). -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(IncludeNet11)' == 'true'">$(TargetFrameworks);net11.0</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <!-- The .NET analysers' recommended rules, as warnings (errors, with TreatWarningsAsErrors); exceptions in .editorconfig.
+         Pinned, not latest, which follows the SDK: the .NET 11 SDK's level also turns on code-style rules. Raise it deliberately. -->
+    <AnalysisLevel>10.0-recommended</AnalysisLevel>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Release tags are v-prefixed (v1.2.3), as release.yml expects -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="All" />
+    <!-- Empty PackagePath packs to the package root preserving the filename. PackagePath="LICENSE"
+         would NOT work: with no file extension NuGet treats it as a directory and packs to LICENSE/LICENSE,
+         which fails NU5030 ("license file 'LICENSE' does not exist in the package"). -->
+    <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="" />
+    <None Include="$(TenantryPackageReadme)" Pack="true" PackagePath="README.md" />
+  </ItemGroup>
+
+</Project>

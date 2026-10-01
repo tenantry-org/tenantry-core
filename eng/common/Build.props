@@ -1,0 +1,31 @@
+<Project>
+
+  <!--
+    Settings shared by Tenantry Core and Tenantry Pro, imported by each repository's Directory.Build.props. Core is the
+    source: Pro copies the files eng/common/shared-files.txt lists with scripts/sync-shared-files.sh, and its CI fails
+    when they differ from Core's.
+  -->
+  <PropertyGroup>
+    <LangVersion>14</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Authors>Tenantry Contributors</Authors>
+    <!-- CI builds are deterministic: PDBs and SourceLink record /_/ instead of the runner's source path -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <!--
+      The .NET 11 preview lane (scripts/test-net11.sh, and the net11-preview CI job) builds with
+      -p:IncludeNet11=true, which adds net11.0 to src and test projects. Packages ship net8.0-net10.0 until
+      .NET 11 is released. The lane's net11.0 package groups use this release candidate.
+    -->
+    <Net11PreviewVersion>11.0.0-rc.1.26425.128</Net11PreviewVersion>
+    <!-- The latest dependency lane floats central versions (see Build.targets) -->
+    <CentralPackageFloatingVersionsEnabled Condition="'$(LatestDependencies)' == 'true'">true</CentralPackageFloatingVersionsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(ExcludeFromCodeCoverage)' == 'true'">
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage" />
+  </ItemGroup>
+
+</Project>

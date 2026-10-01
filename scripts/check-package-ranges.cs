@@ -1,25 +1,34 @@
 // Fails if any packed dependency lacks its intended version range. Usage, after dotnet pack:
 //
-//   dotnet run scripts/check-package-ranges.cs -- <directory containing the .nupkg files>
+//   dotnet run scripts/check-package-ranges.cs -- <directory containing the .nupkg files> --siblings exact|minor
 //
 // The rules:
-//   - A dependency on another package from the same directory (a sibling from this release) must take this release
-//     up to the next minor: [x.y.z, x.(y+1).0). The packages share no internals, and a minor release in 0.x may
-//     break (in 1.x a major would), so a consumer can update one of them within the minor.
-//   - Microsoft.Extensions.*, Microsoft.Data.SqlClient, MySqlConnector, Azure.Identity and Microsoft.Identity.Client
-//     take a minimum only (">= x.y.z", no upper bound). Microsoft ships every Microsoft.Extensions major for every
-//     supported framework and keeps it compatible, and current Azure SDKs need Microsoft.Extensions 10.x even on
-//     net8.0, so a cap would stop consumers restoring. The drivers are uncapped by the EF Core providers
-//     themselves, and the identity packages are only security floors. A Microsoft.Extensions.* minimum must be the
+//   - A dependency on another package from the same directory (a sibling from this release) must be exact, [x.y.z],
+//     with --siblings exact (Tenantry Pro: its packages share internals, so they work only as a set from one
+//     release), or take this release up to the next minor, [x.y.z, x.(y+1).0), with --siblings minor (Tenantry Core:
+//     its packages share no internals, so a consumer can update one of them within the minor; a minor release in 0.x
+//     may break). Directory.Build.targets packs project references that way.
+//   - Microsoft.Extensions.* take a minimum only (">= x.y.z", no upper bound). Microsoft ships every
+//     Microsoft.Extensions major for every supported framework and keeps it compatible, and current Azure SDKs need
+//     Microsoft.Extensions 10.x even on net8.0, so a cap would stop consumers restoring. The minimum must be the
 //     target framework's own major (net8.0 needs 8.x or later, not 10.x).
-//   - Every other dependency must be bounded to one major version: [a.b.c, (a+1).0.0). Microsoft.AspNetCore.*,
-//     Microsoft.EntityFrameworkCore* and Npgsql must also match the target framework's major version (net10.0
-//     depends on 10.x), because each framework's build is compiled against that major.
+//   - Every other dependency must be bounded below its next breaking version: [a.b.c, (a+1).0.0), or for a 0.x
+//     package, where a minor release may break (SemVer), [0.b.c, 0.(b+1).0) (Tenantry Core in beta). Microsoft.AspNetCore.*
+//     and Microsoft.EntityFrameworkCore* must also match the target framework's major version (net10.0 depends on
+//     10.x), because each framework's build is compiled against that major.
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
-var directory = args.Length > 0 ? args[0] : "artifacts";
+var siblingsOption = Array.IndexOf(args, "--siblings");
+var siblingRule = siblingsOption >= 0 && siblingsOption + 1 < args.Length ? args[siblingsOption + 1] : null;
+if (siblingRule is not ("exact" or "minor"))
+{
+    Console.Error.WriteLine("Usage: dotnet run scripts/check-package-ranges.cs -- <package directory> --siblings exact|minor");
+    return 2;
+}
+
+var directory = args.Where((_, index) => index != siblingsOption && index != siblingsOption + 1).FirstOrDefault() ?? "artifacts";
 var packages = Directory.GetFiles(directory, "*.nupkg")
     .Where(path => !path.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase))
     .Select(ReadPackage)
@@ -39,7 +48,7 @@ foreach (var package in packages)
     foreach (var dependency in package.Dependencies)
     {
         var problem = siblings.Contains(dependency.Id)
-            ? CheckSibling(dependency, package.Version)
+            ? CheckSibling(dependency, package.Version, siblingRule)
             : IsMinimumOnly(dependency.Id)
                 ? CheckMinimum(dependency)
                 : CheckBand(dependency);
@@ -77,8 +86,15 @@ Console.WriteLine(failures.Count == 0
 
 return failures.Count == 0 ? 0 : 1;
 
-static string? CheckSibling(Dependency dependency, string packageVersion)
+static string? CheckSibling(Dependency dependency, string packageVersion, string rule)
 {
+    if (rule == "exact")
+    {
+        return dependency.Version == $"[{packageVersion}]"
+            ? null
+            : $"expected exactly [{packageVersion}], because packages from the same release are used together";
+    }
+
     var release = Regex.Match(packageVersion, @"^(?<major>\d+)\.(?<minor>\d+)\.");
     var expected = $"[{packageVersion}, {release.Groups["major"].Value}.{int.Parse(release.Groups["minor"].Value) + 1}.0)";
 
@@ -97,24 +113,22 @@ static string? CheckBand(Dependency dependency)
     }
 
     var major = Major(match.Groups["min"].Value);
-    if (match.Groups["max"].Value != $"{major + 1}.0.0")
+    var nextBreaking = NextBreaking(match.Groups["min"].Value);
+    if (match.Groups["max"].Value != nextBreaking)
     {
-        return $"expected the upper bound {major + 1}.0.0 (the next major version)";
+        return $"expected the upper bound {nextBreaking} (the next breaking version)";
     }
 
     var frameworkMajor = Regex.Match(dependency.Framework, @"^net(?<major>\d+)\.\d+$");
     var followsFramework = dependency.Id.StartsWith("Microsoft.AspNetCore.", StringComparison.OrdinalIgnoreCase)
-        || dependency.Id.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
-        || dependency.Id.Equals("Npgsql", StringComparison.OrdinalIgnoreCase);
+        || dependency.Id.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase);
 
     return followsFramework && frameworkMajor.Success && int.Parse(frameworkMajor.Groups["major"].Value) != major
         ? $"expected version {frameworkMajor.Groups["major"].Value}.x to match the target framework"
         : null;
 }
 
-static bool IsMinimumOnly(string id) =>
-    id.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase)
-    || id is "Microsoft.Data.SqlClient" or "MySqlConnector" or "Azure.Identity" or "Microsoft.Identity.Client";
+static bool IsMinimumOnly(string id) => id.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase);
 
 static string? CheckMinimum(Dependency dependency)
 {
@@ -132,6 +146,13 @@ static string? CheckMinimum(Dependency dependency)
 }
 
 static int Major(string version) => int.Parse(version.Split('.', '-')[0]);
+
+// The first version that may break a dependant: the next major, or in 0.x the next minor.
+static string NextBreaking(string version)
+{
+    var parts = version.Split('.', '-');
+    return parts[0] == "0" ? $"0.{int.Parse(parts[1]) + 1}.0" : $"{int.Parse(parts[0]) + 1}.0.0";
+}
 
 static Package ReadPackage(string path)
 {

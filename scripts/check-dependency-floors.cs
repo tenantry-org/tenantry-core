@@ -5,13 +5,14 @@
 //
 // A range ("[8.0.31, 9.0.0)") tells consumers the oldest version that works: its floor. NuGet resolves a range
 // to the lowest version the graph allows, but a test graph can lift it (a test's own provider package can
-// need a newer EF Core), and then the floor is promised without ever being tested. For each range declared in
-// src, per target framework, this reads the committed test lock files (which CI restores in locked mode) and
-// requires at least one test project that includes that src project to resolve exactly the floor.
-// Ranges set through an MSBuild property (our own packages, the .NET 11 preview) are not checked.
+// need a newer EF Core), and then the floor is promised without ever being tested. For each range a src project
+// depends on, per target framework (its central version in Directory.Packages.props, as MSBuild evaluates it for
+// that framework), this reads the committed test lock files (which CI restores in locked mode) and requires at
+// least one test project that includes that src project to resolve exactly the floor. Our own packages and the
+// .NET 11 preview are not checked.
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 
 string[] defaultFrameworks = ["net8.0", "net9.0", "net10.0"];
 
@@ -19,24 +20,21 @@ var floors = new List<(string Project, string Package, string Framework, string 
 foreach (var path in Directory.EnumerateFiles("src", "*.csproj", SearchOption.AllDirectories))
 {
     var project = Path.GetFileNameWithoutExtension(path);
-    foreach (var reference in XDocument.Load(path).Descendants().Where(element => element.Name.LocalName == "PackageReference"))
+    foreach (var framework in defaultFrameworks)
     {
-        var id = (string?)reference.Attribute("Include");
-        var version = ((string?)reference.Attribute("Version"))?.Trim();
-        if (id is null || version is null || !version.StartsWith('[') || version.Contains("$(")) continue;
+        var items = Evaluate(path, framework);
+        var central = items.GetProperty("PackageVersion").EnumerateArray()
+            .ToDictionary(item => item.GetProperty("Identity").GetString()!, item => Metadata(item, "Version"), StringComparer.OrdinalIgnoreCase);
 
-        var floor = Regex.Match(version, @"^\[\s*([^,\]\s]+)").Groups[1].Value;
-        var condition = (string?)reference.Attribute("Condition") ?? (string?)reference.Parent?.Attribute("Condition");
-        var framework = condition is null ? null : Regex.Match(condition, @"'\$\(TargetFramework\)'\s*==\s*'([^']+)'").Groups[1].Value;
-        if (condition is not null && string.IsNullOrEmpty(framework))
+        foreach (var reference in items.GetProperty("PackageReference").EnumerateArray())
         {
-            Console.Error.WriteLine($"{path}: {id} has a condition this check does not understand: {condition}");
-            return 1;
-        }
+            if (Metadata(reference, "IsImplicitlyDefined") == "true") continue;
 
-        foreach (var target in framework is null ? defaultFrameworks : [framework])
-        {
-            if (defaultFrameworks.Contains(target)) floors.Add((project, id, target, floor));
+            var id = reference.GetProperty("Identity").GetString()!;
+            var version = (Metadata(reference, "VersionOverride") ?? Metadata(reference, "Version") ?? central.GetValueOrDefault(id))?.Trim();
+            if (version is null || !version.StartsWith('[') || id.StartsWith("Tenantry.", StringComparison.OrdinalIgnoreCase)) continue;
+
+            floors.Add((project, id, framework, Regex.Match(version, @"^\[\s*([^,\]\s]+)").Groups[1].Value));
         }
     }
 }
@@ -91,3 +89,21 @@ if (failures.Count > 0)
 
 Console.WriteLine($"Every floor is tested: {floors.Distinct().Count()} ranges across {graphs.Count} test graphs.");
 return 0;
+
+// The project's package references and central versions, as MSBuild evaluates them for one target framework.
+static JsonElement Evaluate(string project, string framework)
+{
+    using var process = Process.Start(new ProcessStartInfo("dotnet",
+        ["msbuild", project, "-getItem:PackageReference", "-getItem:PackageVersion", $"-p:TargetFramework={framework}", "-nologo"])
+    {
+        RedirectStandardOutput = true,
+    })!;
+    var output = process.StandardOutput.ReadToEnd();
+    process.WaitForExit();
+    if (process.ExitCode != 0) throw new InvalidOperationException($"Evaluating {project} for {framework} failed:\n{output}");
+
+    return JsonDocument.Parse(output).RootElement.GetProperty("Items").Clone();
+}
+
+static string? Metadata(JsonElement item, string name) =>
+    item.TryGetProperty(name, out var value) && value.GetString() is { Length: > 0 } text ? text : null;

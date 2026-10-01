@@ -5,43 +5,28 @@
          the .NET 11 preview lane, which runs the SQL Server and PostgreSQL tests only. -->
     <TargetFrameworks>net10.0</TargetFrameworks>
     <TargetFrameworks Condition="'$(IncludeNet11)' == 'true'">net10.0;net11.0</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AwesomeAssertions" Version="9.4.0" />
-    <PackageReference Include="coverlet.collector" Version="10.0.1" />
-    <PackageReference Include="Testcontainers.MsSql" Version="4.15.0" />
-    <PackageReference Include="Testcontainers.PostgreSql" Version="4.15.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
-    <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="[10.0.12, 11.0.0)" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="[10.0.12, 11.0.0)" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <!-- Oracle's provider: Pomelo has no EF Core 10 release. -->
-    <PackageReference Include="MySql.EntityFrameworkCore" Version="10.0.9" />
-    <PackageReference Include="Testcontainers.MySql" Version="4.15.0" />
+    <PackageReference Include="MySql.EntityFrameworkCore" />
+    <PackageReference Include="Testcontainers.MySql" />
     <ProjectReference Include="..\..\samples\Tenantry.Samples.SecureApi\Tenantry.Samples.SecureApi.csproj" />
   </ItemGroup>
 
   <!-- The .NET 11 preview lane: no MySQL provider exists for EF Core 11 yet, and the SecureApi sample is net10.0. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="[$(Net11PreviewVersion), 12.0.0)" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(Net11PreviewVersion)" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="[$(Net11PreviewVersion), 12.0.0)" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.1.1" />
     <Compile Remove="Providers/MySqlProviderTests.cs" />
     <Compile Remove="SecureApiTests.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
