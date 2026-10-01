@@ -225,7 +225,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         {
             foreach (var claimResolver in claimResolvers)
             {
-                if (await claimResolver.ResolveAsync(context) is not null &&
+                if (await claimResolver.ResolveAsync(context, context.RequestAborted) is not null &&
                     Interlocked.Exchange(ref _warnedBeforeAuthentication, 1) == 0)
                 {
                     TenantResolutionLog.TenantryBeforeAuthentication(_logger, context.Request.Method, context.Request.Path);

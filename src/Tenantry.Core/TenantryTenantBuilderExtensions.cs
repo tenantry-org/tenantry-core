@@ -112,7 +112,7 @@ public static class TenantryTenantBuilderExtensions
         }
 
         configure?.Invoke(options);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.Duration, TimeSpan.Zero, "options.Duration");
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.Duration, TimeSpan.Zero);
 
         services.TryAddSingleton(sp => new TenantStoreCache<TKey>(
             sp.GetRequiredService<TenantStoreCacheOptions>(),

@@ -128,12 +128,9 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
 
         public void RemoveWhere(Func<TLookup, Entry, bool> predicate)
         {
-            foreach (var pair in Entries)
+            foreach (var pair in Entries.Where(pair => predicate(pair.Key, pair.Value)))
             {
-                if (predicate(pair.Key, pair.Value))
-                {
-                    Entries.TryRemove(pair);
-                }
+                Entries.TryRemove(pair);
             }
         }
     }
