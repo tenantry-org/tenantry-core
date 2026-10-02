@@ -1,0 +1,30 @@
+# Tenantry Core's API, namespaces and packages that no longer exist, which the README, the docs, the samples and the
+# src projects must not name (scripts/check-removed-names.cs). Shared with Tenantry Pro, whose docs use Core's API;
+# Pro lists its own in eng/removed-names.txt. One name per line, then optionally " => " and what replaces it.
+
+AddTenantryCore => AddTenantry
+IAspNetCoreTenantBuilder => ITenantBuilder
+Tenantry.Core.Exceptions => the Tenantry namespace
+Tenantry.Core.Stores => the Tenantry namespace
+Tenantry.Core.Extensions => Microsoft.Extensions.DependencyInjection (no using needed)
+Tenantry.AspNetCore.Extensions => Microsoft.AspNetCore.Builder (no using needed)
+Tenantry.EfCore.Extensions => Microsoft.EntityFrameworkCore (no using needed)
+Tenantry.AspNetCore.Attributes => Tenantry.AspNetCore
+Tenantry.AspNetCore.Resolution => Tenantry.AspNetCore
+Tenantry.Core.MissingTenantBehavior => Tenantry.EfCore.MissingTenantBehavior
+ITenantServiceScope => ITenantScope, which ITenantScopeFactory creates
+ITenantScoped => ITenantEntity
+TenantScoped => TenantEntity
+ITenantStoreAccessor => ITenantLookup
+ITenantConnectionStringResolver => ITenantConnectionStringProvider, or CurrentTenantConnectionString for the current tenant
+TenantConnectionStringResolver => ITenantConnectionStringProvider, or CurrentTenantConnectionString for the current tenant
+AddTenantConnectionStrings => tenant.UseConnectionStrings
+DetectSpoofedWrites
+EntityTypeName => TenantIsolationViolationException.TypeName
+MultiTenantDbContext => options.UseTenantry() on a plain DbContext
+ITenantAwareDbContext => options.UseTenantry() on a plain DbContext
+ApplyTenantFilters => options.UseTenantry()
+AddTenantInterceptors => options.UseTenantry()
+AddEfCoreIsolation => tenant.ConfigureEfCoreIsolation
+AddTenantDbContextPool => tenant.AddDbContextPerTenantDatabase
+__TenantryFilter__ => TenantryQueryFilters.Tenant

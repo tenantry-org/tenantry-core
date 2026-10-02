@@ -5,7 +5,7 @@ using Tenantry.Internal;
 namespace Tenantry.Core.Tests;
 
 /// <summary>
-/// <c>CacheTenants</c>: the tenants Tenantry reads through <see cref="ITenantStoreAccessor{TKey}"/>, by id and by
+/// <c>CacheTenants</c>: the tenants Tenantry reads through <see cref="ITenantLookup{TKey}"/>, by id and by
 /// identifier, are kept for the configured duration, and <see cref="ITenantStoreCache{TKey}"/> removes them.
 /// </summary>
 public sealed class TenantStoreCacheTests
@@ -19,7 +19,7 @@ public sealed class TenantStoreCacheTests
     public async Task ATenant_IsReadFromTheStoreOnce_UntilItExpires()
     {
         await using var provider = Build(o => o.Duration = TimeSpan.FromMinutes(2));
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
 
         (await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken)).Should().BeSameAs(Acme);
         (await tenants.FindByIdentifierAsync("ACME", TestContext.Current.CancellationToken)).Should().BeSameAs(Acme);
@@ -41,7 +41,7 @@ public sealed class TenantStoreCacheTests
     public async Task ALookupThatFindsNoTenant_IsNotCached_AndTheListOfTenantsNeverIs()
     {
         await using var provider = Build();
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
 
         (await tenants.GetTenantAsync("initech", TestContext.Current.CancellationToken)).Should().BeNull();
         (await tenants.GetTenantAsync("initech", TestContext.Current.CancellationToken)).Should().BeNull();
@@ -58,7 +58,7 @@ public sealed class TenantStoreCacheTests
     public async Task Invalidate_RemovesTheTenant_ByItsIdAndEveryIdentifier_AndNoOther()
     {
         await using var provider = Build();
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
         var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
 
         foreach (var lookup in new[] { "acme", "ACME", "globex" })
@@ -83,7 +83,7 @@ public sealed class TenantStoreCacheTests
     public async Task InvalidateAll_RemovesEveryTenant()
     {
         await using var provider = Build();
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
 
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
         await tenants.FindByIdentifierAsync("globex", TestContext.Current.CancellationToken);
@@ -98,7 +98,7 @@ public sealed class TenantStoreCacheTests
     public async Task ATenantInvalidatedWhileTheStoreReadsIt_IsNotCached()
     {
         await using var provider = Build();
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
         var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
 
         foreach (var read in new Func<ValueTask<ITenantDescriptor<string>?>>[]
@@ -128,7 +128,7 @@ public sealed class TenantStoreCacheTests
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store));
         await using var provider = services.BuildServiceProvider();
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
 
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
@@ -154,7 +154,7 @@ public sealed class TenantStoreCacheTests
             .UseStore(_ => _store)
             .CacheTenants(o => o.Duration = TimeSpan.FromSeconds(30)));
         await using var provider = services.BuildServiceProvider();
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
 
         services.Should().ContainSingle(d => d.ServiceType == typeof(TenantStoreCacheOptions));
         services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantStoreCache<string>));
@@ -188,7 +188,7 @@ public sealed class TenantStoreCacheTests
     public async Task AnEndlessDuration_NeverExpires()
     {
         await using var provider = Build(o => o.Duration = TimeSpan.MaxValue);
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
 
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
         _time.Advance(TimeSpan.FromDays(3650));

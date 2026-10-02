@@ -26,10 +26,10 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 ```
 
 `AddTenantry` registers `ITenantContext<TKey>` and `ITenantContextSetter<TKey>` (the same `AsyncLocal`
-singleton used by the web layer), plus the `ITenantScopeFactory<TKey>` and `ITenantStoreAccessor<TKey>`
+singleton used by the web layer), plus the `ITenantScopeFactory<TKey>` and `ITenantLookup<TKey>`
 singletons described below, and lets you compose stores and isolation.
 
-`ITenantStoreAccessor` needs a store: creating it without one throws `InvalidOperationException` naming
+`ITenantLookup` needs a store: creating it without one throws `InvalidOperationException` naming
 `UseStore` and `UseInMemoryStore`, so a hosted service that depends on it fails as the host starts, not on its first
 tenant. `ITenantScopeFactory.RunInScopeAsync` looks tenants up too, and throws the same error. A host that only
 creates scopes for tenants it already has (`CreateScope`), or makes them current with `ITenantContextSetter`
@@ -43,7 +43,7 @@ scope it creates is a fresh dependency-injection scope (so a fresh `DbContext`) 
 ```csharp
 using Tenantry;
 
-public sealed class InvoiceWorker(ITenantScopeFactory<Guid> scopes, ITenantStoreAccessor<Guid> tenants)
+public sealed class InvoiceWorker(ITenantScopeFactory<Guid> scopes, ITenantLookup<Guid> tenants)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -102,10 +102,10 @@ await using var scope = scopes.CreateScope(tenant);
 
 ### Reading tenants from a singleton
 
-Use `ITenantStoreAccessor<TKey>` rather than injecting `ITenantStore<TKey>` into a hosted service. A
+Use `ITenantLookup<TKey>` rather than injecting `ITenantStore<TKey>` into a hosted service. A
 store registered with `UseStore` is scoped and may depend on a `DbContext`; a singleton that captures it
 fails scope validation in Development and shares one store instance for the life of the app in
-Production. The accessor resolves the store from a fresh scope on each call, whatever its lifetime.
+Production. The lookup resolves the store from a fresh scope on each call, whatever its lifetime.
 
 ### Lower level: `ITenantContextSetter.Use`
 

@@ -8,6 +8,7 @@ eng/common/Build.props
 eng/common/Build.targets
 eng/common/Packages.props
 eng/common/coverage.settings.xml
+eng/common/removed-names.txt
 eng/common/shared-files.txt
 eng/package-consumer/PackageLoadCheck.cs
 samples/Directory.Build.props
@@ -17,6 +18,7 @@ scripts/check-dependency-floors.cs
 scripts/check-doc-snippets.sh
 scripts/check-package-consumer.sh
 scripts/check-package-ranges.cs
+scripts/check-removed-names.cs
 scripts/doc-snippets.cs
 scripts/generate-api-docs.sh
 scripts/sync-shared-files.sh

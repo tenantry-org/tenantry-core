@@ -16,7 +16,7 @@ namespace Tenantry;
 /// <list type="bullet">
 /// <item><description>
 /// You already hold the tenant (for example while iterating
-/// <see cref="ITenantStoreAccessor{TKey}.GetAllTenantsAsync"/>):
+/// <see cref="ITenantLookup{TKey}.GetAllTenantsAsync"/>):
 /// <c>await using var scope = scopes.CreateScope(tenant);</c>
 /// </description></item>
 /// <item><description>
@@ -49,7 +49,7 @@ public interface ITenantScopeFactory<TKey>
     ITenantScope<TKey> CreateScope(ITenantDescriptor<TKey> tenant);
 
     /// <summary>
-    /// Looks the tenant up with <see cref="ITenantStoreAccessor{TKey}"/>, then runs
+    /// Looks the tenant up with <see cref="ITenantLookup{TKey}"/>, then runs
     /// <paramref name="work"/> inside a new scope for it (see <see cref="CreateScope"/>). The scope is
     /// disposed when the work completes or throws. The caller's current tenant is never changed.
     /// </summary>

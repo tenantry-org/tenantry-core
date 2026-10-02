@@ -6,7 +6,7 @@ namespace Tenantry.Internal;
 /// Default <see cref="ITenantScopeFactory{TKey}"/>.
 /// </summary>
 /// <remarks>
-/// The store accessor is resolved on the first <c>RunInScopeAsync</c>, not when the factory is created:
+/// The tenant lookup is resolved on the first <c>RunInScopeAsync</c>, not when the factory is created:
 /// <see cref="CreateScope"/> takes a tenant the caller already has, so a host that only creates scopes needs no
 /// store.
 /// </remarks>
@@ -17,10 +17,10 @@ internal sealed class TenantScopeFactory<TKey>(
     : ITenantScopeFactory<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    private ITenantStoreAccessor<TKey>? _tenants;
+    private ITenantLookup<TKey>? _tenants;
 
     // A race resolves the singleton twice, which returns the same instance.
-    private ITenantStoreAccessor<TKey> Tenants => _tenants ??= services.GetRequiredService<ITenantStoreAccessor<TKey>>();
+    private ITenantLookup<TKey> Tenants => _tenants ??= services.GetRequiredService<ITenantLookup<TKey>>();
 
     /// <inheritdoc />
     /// <remarks>

@@ -126,7 +126,7 @@ Print("Admin", $"IgnoreQueryFilters() sees ALL {total} order(s) across every ten
 // Hosted services use ITenantScopeFactory: each scope is a fresh DI scope (so a fresh DbContext) with
 // the tenant active, and disposing it restores "no tenant", so nothing carries over between tenants.
 var scopes = host.Services.GetRequiredService<ITenantScopeFactory<Guid>>();
-var tenants = host.Services.GetRequiredService<ITenantStoreAccessor<Guid>>();
+var tenants = host.Services.GetRequiredService<ITenantLookup<Guid>>();
 
 foreach (var tenant in await tenants.GetAllTenantsAsync())
 {

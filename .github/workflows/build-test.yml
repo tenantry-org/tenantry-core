@@ -53,6 +53,10 @@ jobs:
         # Its list of banded packages (version ranges, per-framework versions) must match the project files
         run: dotnet run scripts/check-dependabot.cs
 
+      - name: Check for removed names
+        # The README, docs, samples and src name no API or package that no longer exists (eng/common/removed-names.txt)
+        run: dotnet run scripts/check-removed-names.cs
+
       - name: Restore
         # Locked: fails if a test or sample project's packages.lock.json is out of date
         run: dotnet restore Tenantry.slnx --locked-mode

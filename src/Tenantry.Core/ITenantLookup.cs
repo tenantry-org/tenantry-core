@@ -10,12 +10,12 @@ namespace Tenantry;
 /// <remarks>
 /// A store registered with <c>UseStore</c> is scoped, and may depend on scoped services such as a
 /// <c>DbContext</c>. Injecting it into a singleton would capture one instance for the life of the
-/// application (and fails scope validation in Development). Singletons take this accessor instead, which
+/// application (and fails scope validation in Development). Singletons take this lookup instead, which
 /// is correct whatever the store's lifetime. Registered as a singleton by <c>AddTenantry</c>. Creating it throws
 /// <see cref="InvalidOperationException"/> when no store is registered, so a hosted service that depends on it fails
 /// as the host starts.
 /// </remarks>
-public interface ITenantStoreAccessor<TKey>
+public interface ITenantLookup<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     /// <summary>

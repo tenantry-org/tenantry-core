@@ -28,7 +28,7 @@ public sealed class ServiceRegistrationTests
 
         services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantScopeFactory<string>))
             .Which.Lifetime.Should().Be(ServiceLifetime.Singleton);
-        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantStoreAccessor<string>))
+        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantLookup<string>))
             .Which.Lifetime.Should().Be(ServiceLifetime.Singleton);
     }
 

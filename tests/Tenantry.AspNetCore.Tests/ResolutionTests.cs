@@ -352,7 +352,7 @@ public sealed class ResolutionTests
 
         TenantResolutionMiddleware<string> middleware = new(
             _ => Task.CompletedTask,
-            provider.GetRequiredService<ITenantStoreAccessor<string>>(),
+            provider.GetRequiredService<ITenantLookup<string>>(),
             provider.GetRequiredService<ITenantContextSetter<string>>(),
             provider.GetRequiredService<IOptions<TenantResolutionOptions<string>>>(),
             provider.GetRequiredService<TenantResolutionMetrics>(),

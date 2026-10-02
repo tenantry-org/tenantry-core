@@ -53,12 +53,12 @@ public sealed class TenantIdentifierTests
     }
 
     [Fact]
-    public async Task TheAccessor_FindsTenantsWithTheStoresOwnMapping()
+    public async Task TheLookup_FindsTenantsWithTheStoresOwnMapping()
     {
         ServiceCollection services = new();
         services.AddTenantry<Guid>(tenant => tenant.UseStore<SlugStore>());
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        var tenants = provider.GetRequiredService<ITenantStoreAccessor<Guid>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<Guid>>();
 
         (await tenants.FindByIdentifierAsync("acme", TestContext.Current.CancellationToken))!.TenantId.Should().Be(SlugStore.Acme);
         (await tenants.FindByIdentifierAsync(SlugStore.Acme.ToString(), TestContext.Current.CancellationToken)).Should().BeNull("this store maps slugs only");
@@ -66,13 +66,13 @@ public sealed class TenantIdentifierTests
     }
 
     [Fact]
-    public async Task TheAccessor_RequiresAnIdentifier()
+    public async Task TheLookup_RequiresAnIdentifier()
     {
         ServiceCollection services = new();
         services.AddTenantry<Guid>(tenant => tenant.UseStore<SlugStore>());
         await using var provider = services.BuildServiceProvider();
 
-        await provider.GetRequiredService<ITenantStoreAccessor<Guid>>()
+        await provider.GetRequiredService<ITenantLookup<Guid>>()
             .Invoking(t => t.FindByIdentifierAsync(null!).AsTask())
             .Should().ThrowAsync<ArgumentNullException>();
     }

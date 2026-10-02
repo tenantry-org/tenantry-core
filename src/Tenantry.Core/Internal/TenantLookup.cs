@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Tenantry.Internal;
 
 /// <summary>
-/// Default <see cref="ITenantStoreAccessor{TKey}"/>. Creates a scope for each call and resolves the
+/// Default <see cref="ITenantLookup{TKey}"/>. Creates a scope for each call and resolves the
 /// <see cref="ITenantStore{TKey}"/> from it, so the store's own lifetime is honoured. With <c>CacheTenants</c>, a
 /// tenant it finds in the cache needs no scope.
 /// </summary>
@@ -11,13 +11,13 @@ namespace Tenantry.Internal;
 /// It checks when it is created that a store is registered, so a hosted service that depends on it fails as the host
 /// starts rather than on its first tenant. The scope factory resolves it on its first lookup.
 /// </remarks>
-internal sealed class TenantStoreAccessor<TKey> : ITenantStoreAccessor<TKey>
+internal sealed class TenantLookup<TKey> : ITenantLookup<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     private readonly IServiceScopeFactory _serviceScopes;
     private readonly TenantStoreCache<TKey>? _cache;
 
-    public TenantStoreAccessor(IServiceScopeFactory serviceScopes, IServiceProvider services)
+    public TenantLookup(IServiceScopeFactory serviceScopes, IServiceProvider services)
     {
         // Checked without resolving the store, which may be scoped and create a DbContext.
         if (services.GetService<IServiceProviderIsService>()?.IsService(typeof(ITenantStore<TKey>)) == false)

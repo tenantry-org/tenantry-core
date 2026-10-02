@@ -25,10 +25,10 @@ store's own mapping.
 Exactly one store may be registered: a second `UseStore`/`UseInMemoryStore` throws. A web application must
 register one: `app.UseTenantry()` checks at startup and throws a clear `InvalidOperationException` if none is
 registered. A non-HTTP host may create every scope from a descriptor it already holds and never need a store —
-see [Non-HTTP hosts](non-http-hosts.md). `ITenantStoreAccessor` and `ITenantScopeFactory.RunInScopeAsync` do
+see [Non-HTTP hosts](non-http-hosts.md). `ITenantLookup` and `ITenantScopeFactory.RunInScopeAsync` do
 need one, and say so if it is missing.
 
-Singletons such as hosted services should read tenants through `ITenantStoreAccessor<TKey>`, which
+Singletons such as hosted services should read tenants through `ITenantLookup<TKey>`, which
 resolves the store from a fresh scope on each call, rather than injecting a scoped store directly. The request
 middleware reads tenants through it too.
 
@@ -79,7 +79,7 @@ tenant.UseStore(sp => new EfCoreTenantStore(sp.GetRequiredService<AppDbContext>(
 
 > **Lifetimes.** `UseInMemoryStore` registers a **singleton**; `UseStore<T>()` and `UseStore(factory)`
 > register **scoped**. Scoped is the right default for stores that depend on a scoped `DbContext`:
-> `ITenantStoreAccessor<TKey>`, which the request middleware and background work use, resolves the store from a
+> `ITenantLookup<TKey>`, which the request middleware and background work use, resolves the store from a
 > scope of its own for each lookup. If a lookup is a database round trip you would rather not make on every
 > request, [cache the tenants](#caching).
 
@@ -155,7 +155,7 @@ builder.Services.AddTenantry<string>(tenant => tenant
 ```
 
 `CacheTenants` keeps each tenant the store finds, in memory, for the duration, by the id or identifier it was
-looked up with. It serves Tenantry's own lookups: the request middleware's and `ITenantStoreAccessor<TKey>`'s
+looked up with. It serves Tenantry's own lookups: the request middleware's and `ITenantLookup<TKey>`'s
 (which `ITenantScopeFactory.RunInScopeAsync` and Tenantry.Pro's jobs and messages use). A lookup that finds no
 tenant is not cached, so a tenant you add is found at once, and `GetAllTenantsAsync` is never cached. Code that
 injects `ITenantStore<TKey>` itself reads the store.

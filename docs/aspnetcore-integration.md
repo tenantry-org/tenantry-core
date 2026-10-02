@@ -24,7 +24,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 ```
 
 There is one `AddTenantry`, in `Tenantry.Core`, for every kind of host. It registers the core services
-(`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`, `ITenantScopeFactory<TKey>`, `ITenantStoreAccessor<TKey>`),
+(`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`, `ITenantScopeFactory<TKey>`, `ITenantLookup<TKey>`),
 and its builder, `ITenantBuilder<TKey>`, gains the ASP.NET Core methods above when `Tenantry.AspNetCore` is
 referenced; the first one you call registers the middleware's services. Every builder method returns the
 builder, so calls chain in any order (with two exceptions: `UseResolver<TResolver>()`, and Tenantry.EfCore's
@@ -63,7 +63,7 @@ For each request, the middleware:
    - if a tenant is **required** for this request (see [Access control](access-control.md)), rejects it
      (`400 Bad Request`) and stops;
    - otherwise continues the pipeline with **no** tenant context.
-3. Finds the tenant the identifier names, with `ITenantStoreAccessor<TKey>.FindByIdentifierAsync`, which calls your
+3. Finds the tenant the identifier names, with `ITenantLookup<TKey>.FindByIdentifierAsync`, which calls your
    store's `FindByIdentifierAsync` (by default: parse the identifier as `TKey` and look the id up) and serves it from
    the cache with [`CacheTenants`](tenant-stores.md#caching). If none, a request that requires a tenant is
    rejected (`404 Not Found`, or the access-denied response when access validators are configured).
@@ -79,7 +79,7 @@ tenant, or names one an access validator refuses, it continues without a tenant,
 which tenants exist.
 
 Resolvers and access validators added by type (`UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()`) are
-created in the **request's** service scope, so they can depend on a scoped `DbContext`. The store is resolved from a scope of `ITenantStoreAccessor<TKey>`'s own for each lookup.
+created in the **request's** service scope, so they can depend on a scoped `DbContext`. The store is resolved from a scope of `ITenantLookup<TKey>`'s own for each lookup.
 
 ### Status codes
 

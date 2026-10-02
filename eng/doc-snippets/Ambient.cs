@@ -45,9 +45,9 @@ public static class Ambient
         Task.CompletedTask;
 }
 
-/// <summary>A list of tenants for either key type, which also reads like a store accessor.</summary>
+/// <summary>A list of tenants for either key type, which also reads like a tenant lookup.</summary>
 public sealed class TenantList : List<ITenantDescriptor<Guid>>, IEnumerable<ITenantDescriptor<string>>,
-    ITenantStoreAccessor<Guid>
+    ITenantLookup<Guid>
 {
     IEnumerator<ITenantDescriptor<string>> IEnumerable<ITenantDescriptor<string>>.GetEnumerator() =>
         Enumerable.Empty<ITenantDescriptor<string>>().GetEnumerator();

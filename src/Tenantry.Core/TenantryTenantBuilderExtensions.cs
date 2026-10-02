@@ -70,7 +70,7 @@ public static class TenantryTenantBuilderExtensions
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
     /// <para>
-    /// The cache serves Tenantry's own lookups: <c>app.UseTenantry()</c>'s, and <see cref="ITenantStoreAccessor{TKey}"/>'s,
+    /// The cache serves Tenantry's own lookups: <c>app.UseTenantry()</c>'s, and <see cref="ITenantLookup{TKey}"/>'s,
     /// which <see cref="ITenantScopeFactory{TKey}.RunInScopeAsync(TKey, Func{ITenantScope{TKey}, CancellationToken, Task}, CancellationToken)"/>
     /// and background work use. It keeps each tenant the store finds, by the id or identifier it was looked up with,
     /// in memory for <see cref="TenantStoreCacheOptions.Duration"/>. A lookup that finds no tenant is not cached, so a

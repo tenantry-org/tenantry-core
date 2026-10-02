@@ -170,7 +170,7 @@ validators are configured).
 ## Identifiers other than the id
 
 With `Guid` or `int` keys, a subdomain, a slug in a route or a custom domain is not the tenant's id. Implement
-`FindByIdentifierAsync` in your store to map it: the middleware, and `ITenantStoreAccessor<TKey>`, call it with the
+`FindByIdentifierAsync` in your store to map it: the middleware, and `ITenantLookup<TKey>`, call it with the
 identifier a resolver returned.
 
 ```csharp

@@ -41,7 +41,7 @@ builder.Services.AddTenantry<string>(tenant =>
 using var host = builder.Build();
 
 var scopes = host.Services.GetRequiredService<ITenantScopeFactory<string>>();
-var tenants = await host.Services.GetRequiredService<ITenantStoreAccessor<string>>().GetAllTenantsAsync();
+var tenants = await host.Services.GetRequiredService<ITenantLookup<string>>().GetAllTenantsAsync();
 
 foreach (var tenant in tenants)
 {

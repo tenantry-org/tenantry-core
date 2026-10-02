@@ -27,7 +27,7 @@ public static class TenantryServiceCollectionExtensions
     /// <para>
     /// The core services are the ambient tenant (<see cref="ITenantContext{TKey}"/> and
     /// <see cref="ITenantContextSetter{TKey}"/>), <see cref="ITenantScopeFactory{TKey}"/>,
-    /// <see cref="ITenantStoreAccessor{TKey}"/> and <see cref="ITenantStoreCache{TKey}"/>, all singletons. They serve web applications, workers and console
+    /// <see cref="ITenantLookup{TKey}"/> and <see cref="ITenantStoreCache{TKey}"/>, all singletons. They serve web applications, workers and console
     /// tools alike; the ASP.NET Core features come from the Tenantry.AspNetCore package.
     /// </para>
     /// <para>
@@ -69,7 +69,7 @@ public static class TenantryServiceCollectionExtensions
         services.TryAddSingleton<AmbientTenantContext<TKey>>();
         services.TryAddSingleton<ITenantContext<TKey>>(sp => sp.GetRequiredService<AmbientTenantContext<TKey>>());
         services.TryAddSingleton<ITenantContextSetter<TKey>>(sp => sp.GetRequiredService<AmbientTenantContext<TKey>>());
-        services.TryAddSingleton<ITenantStoreAccessor<TKey>, TenantStoreAccessor<TKey>>();
+        services.TryAddSingleton<ITenantLookup<TKey>, TenantLookup<TKey>>();
         services.TryAddSingleton<ITenantScopeFactory<TKey>, TenantScopeFactory<TKey>>();
         services.TryAddSingleton<ITenantStoreCache<TKey>>(NoTenantStoreCache<TKey>.Instance);
 

@@ -100,7 +100,7 @@ public sealed class EfCoreTenantStoreTests(SqlServerFixture sqlServer) : IAsyncL
     {
         // Tools that maintain every tenant's database (migrations, provisioning) enumerate the store.
         using var scope = _app.Services.CreateScope();
-        var tenants = await scope.ServiceProvider.GetRequiredService<ITenantStoreAccessor<string>>()
+        var tenants = await scope.ServiceProvider.GetRequiredService<ITenantLookup<string>>()
             .GetAllTenantsAsync(TestContext.Current.CancellationToken);
 
         tenants.Select(t => t.TenantId).Should().BeEquivalentTo("acme", "inactive");

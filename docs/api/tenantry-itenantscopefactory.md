@@ -6,7 +6,7 @@ Opens tenant scopes for work that runs outside an HTTP request: hosted services,
 
 Registered as a singleton by `AddTenantry`, so hosted services can take it as a constructor dependency. There are two ways to use it:
 
-- You already hold the tenant (for example while iterating [`ITenantStoreAccessor<TKey>.GetAllTenantsAsync`](tenantry-itenantstoreaccessor.md)): `await using var scope = scopes.CreateScope(tenant);`
+- You already hold the tenant (for example while iterating [`ITenantLookup<TKey>.GetAllTenantsAsync`](tenantry-itenantlookup.md)): `await using var scope = scopes.CreateScope(tenant);`
 - You only have its id (for example from a queue message): `await scopes.RunInScopeAsync(tenantId, async (scope, ct) => { … }, ct);`
 
 There is deliberately no `CreateScopeAsync(tenantId)`. The tenant is held in an `AsyncLocal<T>`, and changes an [async](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/async) method makes to one never reach its caller, so a scope opened inside an asynchronous lookup would not be active for the code that awaited it. [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md) does the lookup and then runs your work inside the scope instead.
@@ -41,7 +41,7 @@ Exceptions:
 
 ### `RunInScopeAsync(TKey, Func<ITenantScope<TKey>, CancellationToken, Task>, CancellationToken)`
 
-Looks the tenant up with [`ITenantStoreAccessor<TKey>`](tenantry-itenantstoreaccessor.md), then runs `work` inside a new scope for it (see [`ITenantScopeFactory<TKey>.CreateScope`](tenantry-itenantscopefactory.md)). The scope is disposed when the work completes or throws. The caller's current tenant is never changed.
+Looks the tenant up with [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), then runs `work` inside a new scope for it (see [`ITenantScopeFactory<TKey>.CreateScope`](tenantry-itenantscopefactory.md)). The scope is disposed when the work completes or throws. The caller's current tenant is never changed.
 
 ```csharp
 Task RunInScopeAsync(TKey tenantId, Func<ITenantScope<TKey>, CancellationToken, Task> work, CancellationToken cancellationToken = default)
@@ -64,7 +64,7 @@ Exceptions:
 
 ### `RunInScopeAsync<TResult>(TKey, Func<ITenantScope<TKey>, CancellationToken, Task<TResult>>, CancellationToken)`
 
-Looks the tenant up with [`ITenantStoreAccessor<TKey>`](tenantry-itenantstoreaccessor.md), then runs `work` inside a new scope for it (see [`ITenantScopeFactory<TKey>.CreateScope`](tenantry-itenantscopefactory.md)). The scope is disposed when the work completes or throws. The caller's current tenant is never changed.
+Looks the tenant up with [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), then runs `work` inside a new scope for it (see [`ITenantScopeFactory<TKey>.CreateScope`](tenantry-itenantscopefactory.md)). The scope is disposed when the work completes or throws. The caller's current tenant is never changed.
 
 ```csharp
 Task<TResult> RunInScopeAsync<TResult>(TKey tenantId, Func<ITenantScope<TKey>, CancellationToken, Task<TResult>> work, CancellationToken cancellationToken = default)

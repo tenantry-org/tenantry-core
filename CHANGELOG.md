@@ -22,6 +22,7 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 | `ITenantScope<TKey>.BeginScope(tenant)` | `ITenantContextSetter<TKey>.Use(tenant)` |
 | `ITenantServiceScope<TKey>` (what `ITenantScopeFactory` creates) | `ITenantScope<TKey>` |
 | `ITenantScoped<TKey>` / `TenantScoped<TKey>` | `ITenantEntity<TKey>` (get-only `TenantId`) / `TenantEntity<TKey>` |
+| `ITenantStoreAccessor<TKey>` | `ITenantLookup<TKey>` |
 | `ITenantConnectionStringResolver<TKey>.Resolve(tenant)` / `ResolveAsync(tenant)` | `ITenantConnectionStringProvider<TKey>.Get(tenant)` / `GetAsync(tenant)` |
 | `ITenantConnectionStringResolver<TKey>.Resolve()` / `ResolveAsync()` (current tenant) | `CurrentTenantConnectionString<TKey>.Get()` / `GetAsync()` |
 | `services.AddTenantConnectionStrings<TKey>(…)` | `tenant.UseConnectionStrings(…)` inside `AddTenantry` |
@@ -82,12 +83,12 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 - Identifiers: a resolver returns an identifier, and `ITenantStore<TKey>.FindByIdentifierAsync` finds the tenant it
   names. By default it parses the identifier as the key type, with the invariant culture, and calls
   `GetTenantAsync`, so existing stores need no change; a store implements it to map slugs or custom domains to
-  `Guid` or `int` tenants. `ITenantStoreAccessor<TKey>.FindByIdentifierAsync` calls it from a scope of its own,
+  `Guid` or `int` tenants. `ITenantLookup<TKey>.FindByIdentifierAsync` calls it from a scope of its own,
   and the middleware finds request tenants through it. `ResolveFromHost(o => o.ExcludedDomains.Add(…))` resolves the
   request's host name, for tenants with domains of their own (`localhost` is excluded by default). Both host
   resolvers compare and return international domain names in their ASCII form.
 - `tenant.CacheTenants(o => o.Duration = …)` caches the tenants Tenantry reads (the middleware's and
-  `ITenantStoreAccessor`'s lookups, by id and by identifier) in memory, 5 minutes by default, with no new
+  `ITenantLookup`'s lookups, by id and by identifier) in memory, 5 minutes by default, with no new
   dependency; `ITenantStoreCache<TKey>.Invalidate(id)` and `InvalidateAll()` remove them when a tenant changes
   (`AddTenantry` always registers it, as Tenantry.Pro does `IConnectionStringCache`). A lookup that finds no tenant is
   not cached. It reads the time from a registered `TimeProvider`.
@@ -125,7 +126,7 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   (or an `ITenantStore<TKey>` registered directly), and `AddTenantry` with another key type, throw.
 - **Breaking:** `app.UseTenantry()` checks the registration when the pipeline is built (a resolver and a store,
   and a Tenantry-worded error when `AddTenantry` registered no request resolution), in place of the hosted service
-  that checked at startup. Creating `ITenantStoreAccessor` without a store throws, so a worker's hosted service that
+  that checked at startup. Creating `ITenantLookup` without a store throws, so a worker's hosted service that
   depends on it fails as the host starts.
 - **Breaking:** the resolution middleware no longer echoes the request's identifier, and a rejection's body is
   empty (or problem details, above) instead of plain text. An endpoint that does not require a tenant is never
@@ -133,13 +134,13 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   without a tenant, so `www.` hosts and health probes no longer get `404`. With access validators, a tenant that
   does not exist gets the access-denied response, so a caller cannot tell which tenants exist. An identifier that
   does not parse as the key type names no tenant (`404`, not `400`), and a resolver that returns an empty string
-  has no identifier, so the next resolver is tried. The store is read through `ITenantStoreAccessor`, in a scope
+  has no identifier, so the next resolver is tried. The store is read through `ITenantLookup`, in a scope
   of its own, not the request's.
 - **Breaking:** a web application that registers request resolution but does not call `app.UseTenantry()` fails to
   start, instead of running every endpoint, those that require a tenant included, without one.
 - **Breaking:** `ITenantDescriptor<TKey>` derives from a new non-generic `ITenantDescriptor`, which holds `Name`
   (`As<TTenant>()` extends it), so an explicit implementation is written `string ITenantDescriptor.Name`.
-  `ITenantStoreAccessor<TKey>` has a new member, `FindByIdentifierAsync`, which a hand-written implementation or fake
+  `ITenantLookup<TKey>` has a new member, `FindByIdentifierAsync`, which a hand-written implementation or fake
   must add. `ITenantContext<TKey>` is no longer covariant in `TKey` (variance never applied: the constraints rule out
   every conversion), so it can declare `GetCurrentTenant<TTenant>()`.
 - **Breaking:** the request's log scope holds only `TenantId` (formatted with the invariant culture), not

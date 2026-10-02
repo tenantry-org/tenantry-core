@@ -17,7 +17,7 @@ namespace Tenantry.AspNetCore.Internal;
 /// <remarks>
 /// <para>
 /// Registered via <c>app.UseTenantry()</c>. Resolvers, created in the request's scope, are tried in registration
-/// order, and the first identifier one returns is looked up with <see cref="ITenantStoreAccessor{TKey}"/> (through
+/// order, and the first identifier one returns is looked up with <see cref="ITenantLookup{TKey}"/> (through
 /// the cache, with <c>CacheTenants</c>). The access validators, also from the request's scope, must all allow the
 /// tenant. The tenant is then current for the rest of the request, which is tagged <c>tenant.id</c> and logged with a
 /// <c>TenantId</c> scope.
@@ -33,7 +33,7 @@ namespace Tenantry.AspNetCore.Internal;
 internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     private readonly RequestDelegate _next;
-    private readonly ITenantStoreAccessor<TKey> _tenants;
+    private readonly ITenantLookup<TKey> _tenants;
     private readonly ITenantContextSetter<TKey> _tenantContext;
     private readonly TenantResolutionOptions<TKey> _options;
     private readonly TenantResolutionMetrics _metrics;
@@ -44,7 +44,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
     public TenantResolutionMiddleware(
         RequestDelegate next,
-        ITenantStoreAccessor<TKey> tenants,
+        ITenantLookup<TKey> tenants,
         ITenantContextSetter<TKey> tenantContext,
         IOptions<TenantResolutionOptions<TKey>> options,
         TenantResolutionMetrics metrics,

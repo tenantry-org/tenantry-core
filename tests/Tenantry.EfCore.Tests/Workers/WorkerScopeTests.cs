@@ -39,7 +39,7 @@ public sealed class WorkerScopeTests : IDisposable
         await CreateSchemaAsync(services);
         var scopes = services.GetRequiredService<ITenantScopeFactory<string>>();
 
-        foreach (var tenant in await services.GetRequiredService<ITenantStoreAccessor<string>>().GetAllTenantsAsync(TestContext.Current.CancellationToken))
+        foreach (var tenant in await services.GetRequiredService<ITenantLookup<string>>().GetAllTenantsAsync(TestContext.Current.CancellationToken))
         {
             await using var scope = scopes.CreateScope(tenant);
             await using var db = Orders(scope, pooled);

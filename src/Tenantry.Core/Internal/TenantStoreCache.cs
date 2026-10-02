@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 namespace Tenantry.Internal;
 
 /// <summary>
-/// The cache <c>CacheTenants</c> puts in front of the tenant store: <see cref="ITenantStoreAccessor{TKey}"/>, and
+/// The cache <c>CacheTenants</c> puts in front of the tenant store: <see cref="ITenantLookup{TKey}"/>, and
 /// so the request middleware, read tenants through it. It keeps tenants the store found, by the id or identifier
 /// they were looked up with, for <see cref="TenantStoreCacheOptions.Duration"/>; a lookup that finds no tenant is
 /// not cached, so a new tenant is found at once.

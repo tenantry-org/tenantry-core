@@ -12,8 +12,8 @@ resolver or a store, or did not register Tenantry's request resolution at all.
   `UseResolver(...)`.
 - Add exactly one store: `tenant.UseInMemoryStore(...)` or `tenant.UseStore<T>()`.
 
-In a worker or console app, `ITenantStoreAccessor` and `ITenantScopeFactory.RunInScopeAsync` throw the same "has no
-tenant store" error; a hosted service that depends on the accessor throws it as the host starts.
+In a worker or console app, `ITenantLookup` and `ITenantScopeFactory.RunInScopeAsync` throw the same "has no
+tenant store" error; a hosted service that depends on the lookup throws it as the host starts.
 
 ## Startup fails with "app.UseTenantry() is not in the request pipeline"
 
