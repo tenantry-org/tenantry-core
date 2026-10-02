@@ -121,6 +121,4 @@ notes.MapDelete("/{id:int}", async (int id, NotesDbContext db, CancellationToken
         ? Results.NoContent()
         : Results.NotFound());
 
-app.Run();
-
-public partial class Program;
+await app.RunAsync();

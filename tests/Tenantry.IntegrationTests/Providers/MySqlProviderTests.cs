@@ -1,21 +1,32 @@
 using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
+#if NET10_0_OR_GREATER
 using MySql.Data.MySqlClient;
+#else
+using MySqlConnector;
+#endif
 using Testcontainers.MySql;
+
+[assembly: AssemblyFixture(typeof(Tenantry.IntegrationTests.Providers.MySqlFixture))]
 
 namespace Tenantry.IntegrationTests.Providers;
 
 // The MySQL fixture and test classes, kept in one file so a target framework without a MySQL provider
 // for its EF Core version (the net11.0 preview lane) can leave them out.
 
+/// <summary>MySQL through Pomelo's provider on EF Core 8 and 9, and Oracle's on EF Core 10, which Pomelo does not support.</summary>
 public sealed class MySqlFixture : DatabaseFixture
 {
     protected override IDatabaseContainer Container { get; } =
         // Root, because the database-per-tenant tests create a database per tenant.
-        new MySqlBuilder("mysql:8.4").WithUsername("root").Build();
+        new MySqlBuilder(ContainerImages.MySql).WithUsername("root").Build();
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
+#if NET10_0_OR_GREATER
         options.UseMySQL(ConnectionString);
+#else
+        options.UseMySql(ConnectionString, new MySqlServerVersion(new Version(8, 4, 0)));
+#endif
 
     public override string WithDatabase(string database) =>
         new MySqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString;
@@ -23,11 +34,8 @@ public sealed class MySqlFixture : DatabaseFixture
     public override string Quote(string identifier) => $"`{identifier}`";
 }
 
-public sealed class MySqlWriteIsolationTests(MySqlFixture fixture)
-    : ProviderWriteIsolationTests(fixture), IClassFixture<MySqlFixture>;
+public sealed class MySqlWriteIsolationTests(MySqlFixture fixture) : ProviderWriteIsolationTests(fixture);
 
-public sealed class MySqlPooledDatabasePerTenantTests(MySqlFixture fixture)
-    : ProviderPooledDatabasePerTenantTests(fixture), IClassFixture<MySqlFixture>;
+public sealed class MySqlPooledDatabasePerTenantTests(MySqlFixture fixture) : ProviderPooledDatabasePerTenantTests(fixture);
 
-public sealed class MySqlPooledGuardTests(MySqlFixture fixture)
-    : ProviderPooledGuardTests(fixture), IClassFixture<MySqlFixture>;
+public sealed class MySqlPooledGuardTests(MySqlFixture fixture) : ProviderPooledGuardTests(fixture);

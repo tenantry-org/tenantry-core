@@ -12,7 +12,7 @@ public sealed class HeaderTenantResolverTests
         DefaultHttpContext context = new();
         context.Request.Headers["X-Tenant-Id"] = "acme";
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("acme");
     }
@@ -23,7 +23,7 @@ public sealed class HeaderTenantResolverTests
         HeaderTenantResolver resolver = new("X-Tenant-Id");
         DefaultHttpContext context = new();
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -35,7 +35,7 @@ public sealed class HeaderTenantResolverTests
         DefaultHttpContext context = new();
         context.Request.Headers["X-Tenant-Id"] = "   ";
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -47,7 +47,7 @@ public sealed class HeaderTenantResolverTests
         DefaultHttpContext context = new();
         context.Request.Headers["X-Tenant-Id"] = "  acme  ";
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("acme");
     }
@@ -59,7 +59,7 @@ public sealed class HeaderTenantResolverTests
         DefaultHttpContext context = new();
         context.Request.Headers["X-Custom-Tenant"] = "globex";
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("globex");
     }

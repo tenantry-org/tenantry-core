@@ -19,7 +19,7 @@ public sealed class InterceptorStampingTests
         db.Orders.Add(order);
 
         // Act
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Assert
         order.TenantId.Should().Be("acme");
@@ -40,7 +40,7 @@ public sealed class InterceptorStampingTests
         thrown.Which.Kind.Should().Be(TenantIsolationViolationKind.EntityWrite);
         thrown.Which.OffendingTenantId.Should().Be("attacker");
         thrown.Which.ExpectedTenantId.Should().Be("acme");
-        (await db.Orders.IgnoreQueryFilters().CountAsync()).Should().Be(0);
+        (await db.Orders.IgnoreQueryFilters().CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class InterceptorStampingTests
         db.Orders.AddRange(orders);
 
         // Act
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Assert
         orders.Should().AllSatisfy(o => o.TenantId.Should().Be("globex"));

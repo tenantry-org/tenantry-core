@@ -25,7 +25,7 @@ public sealed class SecureApiTests : IAsyncLifetime
         SigningKey = SigningKey,
     };
 
-    public Task InitializeAsync()
+    public ValueTask InitializeAsync()
     {
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
         {
@@ -34,10 +34,10 @@ public sealed class SecureApiTests : IAsyncLifetime
             host.UseSetting("ConnectionStrings:Notes", $"Data Source={_databasePath}");
         });
 
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _factory.DisposeAsync();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
@@ -47,7 +47,7 @@ public sealed class SecureApiTests : IAsyncLifetime
     [Fact]
     public async Task AnonymousRequest_IsRejectedWith401()
     {
-        var response = await Client(token: null, tenant: "acme").GetAsync("/notes");
+        var response = await Client(token: null, tenant: "acme").GetAsync("/notes", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -55,7 +55,7 @@ public sealed class SecureApiTests : IAsyncLifetime
     [Fact]
     public async Task SelectingATenantTheCallerDoesNotBelongTo_IsRejectedWith403()
     {
-        var response = await Client(Token("alice", "acme"), tenant: "globex").GetAsync("/notes");
+        var response = await Client(Token("alice", "acme"), tenant: "globex").GetAsync("/notes", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -63,7 +63,7 @@ public sealed class SecureApiTests : IAsyncLifetime
     [Fact]
     public async Task RequestWithoutATenant_IsRejectedWith400()
     {
-        var response = await Client(Token("alice", "acme"), tenant: null).GetAsync("/notes");
+        var response = await Client(Token("alice", "acme"), tenant: null).GetAsync("/notes", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -73,8 +73,8 @@ public sealed class SecureApiTests : IAsyncLifetime
     {
         // The access validator (the token's tenant claims) makes a tenant that does not exist look like one the
         // caller may not use, so a caller cannot find out which tenants exist.
-        var unknown = await Client(Token("alice", "acme", "initech"), tenant: "initech").GetAsync("/notes");
-        var notTheirs = await Client(Token("alice", "acme"), tenant: "globex").GetAsync("/notes");
+        var unknown = await Client(Token("alice", "acme", "initech"), tenant: "initech").GetAsync("/notes", TestContext.Current.CancellationToken);
+        var notTheirs = await Client(Token("alice", "acme"), tenant: "globex").GetAsync("/notes", TestContext.Current.CancellationToken);
 
         unknown.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         notTheirs.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -83,7 +83,7 @@ public sealed class SecureApiTests : IAsyncLifetime
     [Fact]
     public async Task HealthEndpoint_NeedsNeitherAuthenticationNorTenant()
     {
-        var response = await Client(token: null, tenant: null).GetAsync("/health");
+        var response = await Client(token: null, tenant: null).GetAsync("/health", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -95,23 +95,23 @@ public sealed class SecureApiTests : IAsyncLifetime
         var acme = Client(token, "acme");
         var globex = Client(token, "globex");
 
-        (await acme.PostAsJsonAsync("/notes", new CreateNote("acme plan"))).StatusCode.Should().Be(HttpStatusCode.Created);
-        (await globex.PostAsJsonAsync("/notes", new CreateNote("globex plan"))).StatusCode.Should().Be(HttpStatusCode.Created);
+        (await acme.PostAsJsonAsync("/notes", new CreateNote("acme plan"), cancellationToken: TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.Created);
+        (await globex.PostAsJsonAsync("/notes", new CreateNote("globex plan"), cancellationToken: TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.Created);
 
-        (await acme.GetFromJsonAsync<List<NoteResponse>>("/notes"))!.Select(n => n.Text).Should().Equal("acme plan");
-        (await globex.GetFromJsonAsync<List<NoteResponse>>("/notes"))!.Select(n => n.Text).Should().Equal("globex plan");
+        (await acme.GetFromJsonAsync<List<NoteResponse>>("/notes", cancellationToken: TestContext.Current.CancellationToken))!.Select(n => n.Text).Should().Equal("acme plan");
+        (await globex.GetFromJsonAsync<List<NoteResponse>>("/notes", cancellationToken: TestContext.Current.CancellationToken))!.Select(n => n.Text).Should().Equal("globex plan");
     }
 
     [Fact]
     public async Task DeletingAnotherTenantsNote_FindsNothingAndLeavesItInPlace()
     {
         var created = await (await Client(Token("alice", "acme"), "acme")
-            .PostAsJsonAsync("/notes", new CreateNote("acme secret"))).Content.ReadFromJsonAsync<NoteResponse>();
+            .PostAsJsonAsync("/notes", new CreateNote("acme secret"), cancellationToken: TestContext.Current.CancellationToken)).Content.ReadFromJsonAsync<NoteResponse>(cancellationToken: TestContext.Current.CancellationToken);
 
-        var response = await Client(Token("mallory", "globex"), "globex").DeleteAsync($"/notes/{created!.Id}");
+        var response = await Client(Token("mallory", "globex"), "globex").DeleteAsync($"/notes/{created!.Id}", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await Client(Token("alice", "acme"), "acme").GetFromJsonAsync<List<NoteResponse>>("/notes"))!
+        (await Client(Token("alice", "acme"), "acme").GetFromJsonAsync<List<NoteResponse>>("/notes", cancellationToken: TestContext.Current.CancellationToken))!
             .Select(n => n.Id).Should().Contain(created.Id);
     }
 

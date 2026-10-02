@@ -29,7 +29,7 @@ public sealed class ConformanceTests
             scope.ServiceProvider.GetRequiredService<CurrentTenantConnectionString<string>>().Get()
                 .Should().Be("Database=app_acme");
             return Task.CompletedTask;
-        });
+        }, TestContext.Current.CancellationToken);
         await Conformance.StartAndStopAsync(host);
     }
 }

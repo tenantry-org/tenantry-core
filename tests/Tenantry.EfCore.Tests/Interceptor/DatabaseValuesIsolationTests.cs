@@ -25,7 +25,7 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
         var forged = db.Attach(new Order { Id = acmeOrderId, TenantId = "globex" });
 
         forged.GetDatabaseValues().Should().BeNull();
-        (await forged.GetDatabaseValuesAsync()).Should().BeNull();
+        (await forged.GetDatabaseValuesAsync(TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
         forged.Description.Should().Be("forged");
 
         db.Attach(forged);
-        await db.Entry(forged).ReloadAsync();
+        await db.Entry(forged).ReloadAsync(TestContext.Current.CancellationToken);
 
         db.Entry(forged).State.Should().Be(EntityState.Detached);
         forged.Description.Should().Be("forged");
@@ -59,7 +59,7 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
 
         var conflict = (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>()).Which;
 
-        (await conflict.Entries.Should().ContainSingle().Which.GetDatabaseValuesAsync()).Should().BeNull();
+        (await conflict.Entries.Should().ContainSingle().Which.GetDatabaseValuesAsync(TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]
@@ -68,12 +68,12 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
         var orderId = await SeedOrderAsync("acme", "stored");
 
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
-        var order = await db.Orders.SingleAsync(o => o.Id == orderId);
+        var order = await db.Orders.SingleAsync(o => o.Id == orderId, cancellationToken: TestContext.Current.CancellationToken);
         order.Description = "changed";
 
-        (await db.Entry(order).GetDatabaseValuesAsync())!["Description"].Should().Be("stored");
+        (await db.Entry(order).GetDatabaseValuesAsync(TestContext.Current.CancellationToken))!["Description"].Should().Be("stored");
 
-        await db.Entry(order).ReloadAsync();
+        await db.Entry(order).ReloadAsync(TestContext.Current.CancellationToken);
 
         order.Description.Should().Be("stored");
         db.Entry(order).State.Should().Be(EntityState.Unchanged);
@@ -96,7 +96,7 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
         await using (var seed = await DbContextFactory.CreateContextAsync(_tenant.AsNone(), _connection))
         {
             seed.NonTenants.Add(new NonTenant { Id = 1, Name = "catalogue" });
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
@@ -111,12 +111,12 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
         await using (var seed = await CreateAsync(_tenant.As("acme")))
         {
             seed.Customers.Add(new Customer { Id = 1, Address = new Address { City = "acme city" }, Phones = { new Phone { Id = 1, Number = "acme phone" } } });
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using (var own = await CreateAsync(_tenant.As("acme")))
         {
-            var customer = await own.Customers.SingleAsync();
+            var customer = await own.Customers.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             own.Entry(customer.Address!).GetDatabaseValues()!["City"].Should().Be("acme city");
             own.Entry(customer.Phones[0]).GetDatabaseValues()!["Number"].Should().Be("acme phone");
         }
@@ -135,7 +135,7 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
         await using (var seed = await CreateAsync(_tenant.As("acme")))
         {
             seed.Add(new PremiumCustomer { Id = 2, Level = "gold" });
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using var db = await CreateAsync(_tenant.As("globex"));

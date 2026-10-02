@@ -17,7 +17,7 @@ public sealed class SubdomainTenantResolverTests
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost("acme.app.example.com");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("acme");
     }
@@ -28,7 +28,7 @@ public sealed class SubdomainTenantResolverTests
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost("localhost");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -41,7 +41,7 @@ public sealed class SubdomainTenantResolverTests
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost("app.com");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -53,7 +53,7 @@ public sealed class SubdomainTenantResolverTests
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost("acme.localhost");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -64,7 +64,7 @@ public sealed class SubdomainTenantResolverTests
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost("");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -78,7 +78,7 @@ public sealed class SubdomainTenantResolverTests
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost(".example.com");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -88,7 +88,7 @@ public sealed class SubdomainTenantResolverTests
     [InlineData("WWW.example.com")]
     public async Task Www_IsIgnoredByDefault(string host)
     {
-        (await new SubdomainTenantResolver().ResolveAsync(ContextWithHost(host))).Should().BeNull();
+        (await new SubdomainTenantResolver().ResolveAsync(ContextWithHost(host), TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]
@@ -99,8 +99,8 @@ public sealed class SubdomainTenantResolverTests
         options.IgnoredSubdomains.Remove("www");
         SubdomainTenantResolver resolver = new(options);
 
-        (await resolver.ResolveAsync(ContextWithHost("api.example.com"))).Should().BeNull();
-        (await resolver.ResolveAsync(ContextWithHost("www.example.com"))).Should().Be("www");
+        (await resolver.ResolveAsync(ContextWithHost("api.example.com"), TestContext.Current.CancellationToken)).Should().BeNull();
+        (await resolver.ResolveAsync(ContextWithHost("www.example.com"), TestContext.Current.CancellationToken)).Should().Be("www");
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public sealed class SubdomainTenantResolverTests
         options.IgnoredSubdomains.Add("acme");
         options.BaseDomains.Add("other.org");
 
-        (await resolver.ResolveAsync(ContextWithHost("acme.example.com"))).Should().Be("acme");
+        (await resolver.ResolveAsync(ContextWithHost("acme.example.com"), TestContext.Current.CancellationToken)).Should().Be("acme");
     }
 
     [Theory]
@@ -122,7 +122,7 @@ public sealed class SubdomainTenantResolverTests
     public async Task IpAddressHost_ReturnsNull(string host)
     {
         // Load balancers and Kubernetes probes address a pod by IP.
-        (await new SubdomainTenantResolver().ResolveAsync(ContextWithHost(host))).Should().BeNull();
+        (await new SubdomainTenantResolver().ResolveAsync(ContextWithHost(host), TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Theory]
@@ -141,7 +141,7 @@ public sealed class SubdomainTenantResolverTests
         options.BaseDomains.Add("example.com");
         SubdomainTenantResolver resolver = new(options);
 
-        (await resolver.ResolveAsync(ContextWithHost(host))).Should().Be(expected);
+        (await resolver.ResolveAsync(ContextWithHost(host), TestContext.Current.CancellationToken)).Should().Be(expected);
     }
 
     [Fact]
@@ -151,8 +151,8 @@ public sealed class SubdomainTenantResolverTests
         options.BaseDomains.Add(".localhost.");
         SubdomainTenantResolver resolver = new(options);
 
-        (await resolver.ResolveAsync(ContextWithHost("acme.localhost"))).Should().Be("acme");
-        (await resolver.ResolveAsync(ContextWithHost("localhost"))).Should().BeNull();
+        (await resolver.ResolveAsync(ContextWithHost("acme.localhost"), TestContext.Current.CancellationToken)).Should().Be("acme");
+        (await resolver.ResolveAsync(ContextWithHost("localhost"), TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Theory]
@@ -164,13 +164,13 @@ public sealed class SubdomainTenantResolverTests
         options.BaseDomains.Add(baseDomain);
         SubdomainTenantResolver resolver = new(options);
 
-        (await resolver.ResolveAsync(ContextWithHost("acme.münchen.de"))).Should().Be("acme");
-        (await resolver.ResolveAsync(ContextWithHost("acme.xn--mnchen-3ya.de"))).Should().Be("acme");
-        (await resolver.ResolveAsync(ContextWithHost("bücher.münchen.de"))).Should().Be("xn--bcher-kva");
+        (await resolver.ResolveAsync(ContextWithHost("acme.münchen.de"), TestContext.Current.CancellationToken)).Should().Be("acme");
+        (await resolver.ResolveAsync(ContextWithHost("acme.xn--mnchen-3ya.de"), TestContext.Current.CancellationToken)).Should().Be("acme");
+        (await resolver.ResolveAsync(ContextWithHost("bücher.münchen.de"), TestContext.Current.CancellationToken)).Should().Be("xn--bcher-kva");
 
         options.IgnoredSubdomains.Add("Bücher");
-        (await new SubdomainTenantResolver(options).ResolveAsync(ContextWithHost("bücher.münchen.de"))).Should().BeNull();
-        (await new SubdomainTenantResolver(options).ResolveAsync(ContextWithHost("xn--bcher-kva.münchen.de"))).Should().BeNull();
+        (await new SubdomainTenantResolver(options).ResolveAsync(ContextWithHost("bücher.münchen.de"), TestContext.Current.CancellationToken)).Should().BeNull();
+        (await new SubdomainTenantResolver(options).ResolveAsync(ContextWithHost("xn--bcher-kva.münchen.de"), TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Theory]
@@ -191,6 +191,6 @@ public sealed class SubdomainTenantResolverTests
         options.BaseDomains.Add(" ");
         SubdomainTenantResolver resolver = new(options);
 
-        (await resolver.ResolveAsync(ContextWithHost(host))).Should().Be(expected);
+        (await resolver.ResolveAsync(ContextWithHost(host), TestContext.Current.CancellationToken)).Should().Be(expected);
     }
 }

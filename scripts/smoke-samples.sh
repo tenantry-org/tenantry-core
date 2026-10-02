@@ -28,7 +28,7 @@ samples=(
 )
 
 listed=$(printf '%s\n' "${samples[@]}" | cut -d'|' -f1 | sort)
-present=$(cd "$repo/samples" && ls -d */ | tr -d / | sort)
+present=$(cd "$repo/samples" && for dir in ./*/; do dir="${dir%/}"; echo "${dir#./}"; done | sort)
 if [[ "$listed" != "$present" ]]; then
   echo "scripts/smoke-samples.sh lists different samples from samples/:" >&2
   diff <(echo "$listed") <(echo "$present") >&2 || true
@@ -48,12 +48,13 @@ export DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development DOTNET_
 # Waits up to the deadline for the process to exit (returns its exit code) or, with a pattern, for the pattern to
 # appear in the log (returns 0). Returns 124 at the deadline.
 wait_for() { # <log> [pattern]
+  local log="$1" pattern="${2:-}"
   for _ in $(seq 1 $((deadline_seconds * 4))); do
-    if [[ -n "${2:-}" ]] && grep -q "$2" "$1"; then
+    if [[ -n "$pattern" ]] && grep -q "$pattern" "$log"; then
       return 0
     fi
     if ! kill -0 "$pid" 2>/dev/null; then
-      [[ -n "${2:-}" ]] && return 1
+      [[ -n "$pattern" ]] && return 1
       wait "$pid"
       return
     fi

@@ -18,7 +18,7 @@ public sealed class RouteValueTenantResolverTests
         RouteValueTenantResolver resolver = new();
         var context = ContextWithRouteValue("tenant", "acme");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("acme");
     }
@@ -29,7 +29,7 @@ public sealed class RouteValueTenantResolverTests
         RouteValueTenantResolver resolver = new();
         DefaultHttpContext context = new();
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -40,7 +40,7 @@ public sealed class RouteValueTenantResolverTests
         RouteValueTenantResolver resolver = new();
         var context = ContextWithRouteValue("tenant", "   ");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -51,7 +51,7 @@ public sealed class RouteValueTenantResolverTests
         RouteValueTenantResolver resolver = new("org");
         var context = ContextWithRouteValue("org", "globex");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("globex");
     }

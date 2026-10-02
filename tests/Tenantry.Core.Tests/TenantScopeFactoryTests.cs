@@ -17,17 +17,17 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
 
     private ITenantContextSetter<string> Ambient => _services.GetRequiredService<ITenantContextSetter<string>>();
 
-    public Task InitializeAsync()
+    public ValueTask InitializeAsync()
     {
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store));
         services.AddScoped<DisposalProbe>();
         _services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
 
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
-    public async Task DisposeAsync() => await _services.DisposeAsync();
+    public async ValueTask DisposeAsync() => await _services.DisposeAsync();
 
     // [1] The tenant is active for the code that created the scope, and for services resolved from it.
     [Fact]
@@ -153,7 +153,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
                 Ambient.CurrentTenantId.Should().Be("acme");
                 scope.ServiceProvider.GetRequiredService<ITenantContext<string>>().CurrentTenantId.Should().Be("acme");
                 scope.Tenant.Name.Should().Be("Stored acme", "the descriptor comes from the store");
-            });
+            }, TestContext.Current.CancellationToken);
 
             Ambient.CurrentTenantId.Should().Be("old");
         }
@@ -167,9 +167,9 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
         _store.Yield = true;
 
         Task<string> Run(string id, int delay) =>
-            Scopes.RunInScopeAsync(id, async (scope, _) =>
+            Scopes.RunInScopeAsync(id, async (scope, ct) =>
             {
-                await Task.Delay(delay);
+                await Task.Delay(delay, ct);
                 return $"{id}:{Ambient.CurrentTenantId}/{scope.Tenant.TenantId}";
             });
 
@@ -182,7 +182,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     [Fact]
     public async Task RunInScopeAsync_ReturnsTheWorksResult()
     {
-        var name = await Scopes.RunInScopeAsync("acme", (scope, _) => Task.FromResult(scope.Tenant.Name));
+        var name = await Scopes.RunInScopeAsync("acme", (scope, _) => Task.FromResult(scope.Tenant.Name), TestContext.Current.CancellationToken);
 
         name.Should().Be("Stored acme");
     }
@@ -345,7 +345,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     {
         var scope = Scopes.CreateScope(Tenant("acme"));
 
-        await Task.Run(() => scope.DisposeAsync().AsTask());
+        await Task.Run(() => scope.DisposeAsync().AsTask(), TestContext.Current.CancellationToken);
         await scope.DisposeAsync();
 
         Ambient.HasTenant.Should().BeFalse();

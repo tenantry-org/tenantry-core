@@ -32,11 +32,11 @@ public sealed class ResolutionTests
             .UseStore<SlugStore>());
         using var client = app.GetTestClient();
 
-        (await client.GetStringAsync("http://acme.example.com/tenant")).Should().Be(SlugStore.Acme.ToString());
-        (await client.GetStringAsync("http://APP.acme.com/tenant")).Should().Be(SlugStore.Acme.ToString());
-        (await client.GetStringAsync("http://www.example.com/tenant")).Should().Be("(none)");
-        (await client.GetStringAsync("http://example.com/tenant")).Should().Be("(none)");
-        (await client.GetStringAsync($"http://{SlugStore.Acme}.example.com/tenant")).Should().Be("(none)", "this store maps slugs, not ids");
+        (await client.GetStringAsync("http://acme.example.com/tenant", TestContext.Current.CancellationToken)).Should().Be(SlugStore.Acme.ToString());
+        (await client.GetStringAsync("http://APP.acme.com/tenant", TestContext.Current.CancellationToken)).Should().Be(SlugStore.Acme.ToString());
+        (await client.GetStringAsync("http://www.example.com/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync("http://example.com/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync($"http://{SlugStore.Acme}.example.com/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)", "this store maps slugs, not ids");
 
         // The application's own hosts never reach the store.
         SlugStore.Lookups.Should().Equal("acme", "app.acme.com", SlugStore.Acme.ToString());
@@ -75,8 +75,8 @@ public sealed class ResolutionTests
         using var client = app.GetTestClient();
 
         // The endpoint's own scoped service is the one the resolver and the validator were given.
-        var first = await client.GetStringAsync("/scoped");
-        var second = await client.GetStringAsync("/scoped");
+        var first = await client.GetStringAsync("/scoped", TestContext.Current.CancellationToken);
+        var second = await client.GetStringAsync("/scoped", TestContext.Current.CancellationToken);
 
         first.Should().MatchRegex("^acme [0-9a-f-]{36} same same$");
         second.Should().MatchRegex("^acme [0-9a-f-]{36} same same$");
@@ -177,15 +177,15 @@ public sealed class ResolutionTests
             services => services.AddProblemDetails());
         using var client = app.GetTestClient();
 
-        var missing = await client.GetAsync("/tenant");
+        var missing = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
         missing.StatusCode.Should().Be(HttpStatusCode.Redirect);
         missing.Headers.Location!.ToString().Should().Be("/welcome");
-        (await missing.Content.ReadAsStringAsync()).Should().BeEmpty("the handler wrote the response");
+        (await missing.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().BeEmpty("the handler wrote the response");
 
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "initech");
-        var unknown = await client.GetAsync("/tenant");
+        var unknown = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
         unknown.StatusCode.Should().Be(HttpStatusCode.Gone);
-        (await unknown.Content.ReadAsStringAsync()).Should().Contain("\"status\":410").And.Contain("Tenant not found");
+        (await unknown.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Contain("\"status\":410").And.Contain("Tenant not found");
     }
 
     [Fact]
@@ -216,10 +216,10 @@ public sealed class ResolutionTests
         builder.Services.AddTenantry<string>(tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme]));
         using var host = builder.Build();
 
-        await host.StartAsync();
+        await host.StartAsync(TestContext.Current.CancellationToken);
 
         host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested.Should().BeTrue();
-        await host.StopAsync();
+        await host.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -236,8 +236,8 @@ public sealed class ResolutionTests
         using var client = app.GetTestClient();
 
         // The endpoint requires a tenant, but the middleware ran before routing chose it, so it ran without one.
-        (await client.GetStringAsync("/required")).Should().Be("(none)");
-        (await client.GetStringAsync("/required")).Should().Be("(none)");
+        (await client.GetStringAsync("/required", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync("/required", TestContext.Current.CancellationToken)).Should().Be("(none)");
 
         logs.For(1007).Should().ContainSingle().Which.Message.Should().Contain("/required").And.Contain("app.UseRouting()");
     }
@@ -257,8 +257,8 @@ public sealed class ResolutionTests
         await using var _ = app;
         using var client = app.GetTestClient();
 
-        (await client.GetStringAsync("/required")).Should().Be("acme");
-        (await client.GetAsync("/nowhere")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await client.GetStringAsync("/required", TestContext.Current.CancellationToken)).Should().Be("acme");
+        (await client.GetAsync("/nowhere", TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         logs.For(1007).Should().BeEmpty();
         logs.For(1008).Should().BeEmpty();
@@ -279,8 +279,8 @@ public sealed class ResolutionTests
         await using var _ = app;
         using var client = app.GetTestClient();
 
-        (await client.GetStringAsync("/tenant")).Should().Be("(none)");
-        (await client.GetStringAsync("/tenant")).Should().Be("(none)");
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
 
         logs.For(1008).Should().ContainSingle().Which.Message.Should().Contain("app.UseAuthentication() before app.UseTenantry()");
     }
@@ -313,8 +313,8 @@ public sealed class ResolutionTests
         await using var _ = app;
         using var client = app.GetTestClient();
 
-        (await client.GetStringAsync("/other-scheme")).Should().Be("(none)");
-        (await client.GetStringAsync("/sign-in")).Should().Be("signed in");
+        (await client.GetStringAsync("/other-scheme", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync("/sign-in", TestContext.Current.CancellationToken)).Should().Be("signed in");
 
         logs.For(1008).Should().BeEmpty();
     }
@@ -336,7 +336,7 @@ public sealed class ResolutionTests
         await using var _ = app;
         using var client = app.GetTestClient();
 
-        (await client.GetStringAsync("/sign-in")).Should().Be("signed in");
+        (await client.GetStringAsync("/sign-in", TestContext.Current.CancellationToken)).Should().Be("signed in");
 
         logs.For(1008).Should().BeEmpty("no authentication middleware ran, so none ran too late");
     }

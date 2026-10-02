@@ -27,7 +27,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
-        var updated = await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "bulk"));
+        var updated = await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "bulk"), cancellationToken: TestContext.Current.CancellationToken);
 
         updated.Should().Be(1);
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "bulk")]);
@@ -39,7 +39,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
-        var deleted = await db.Orders.ExecuteDeleteAsync();
+        var deleted = await db.Orders.ExecuteDeleteAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         deleted.Should().Be(1);
         Rows().Should().BeEquivalentTo([("acme", "acme order")]);
@@ -51,8 +51,8 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.AsNone(), _connection);
 
-        var updated = await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "bulk"));
-        var deleted = await db.Orders.ExecuteDeleteAsync();
+        var updated = await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "bulk"), cancellationToken: TestContext.Current.CancellationToken);
+        var deleted = await db.Orders.ExecuteDeleteAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         (updated, deleted).Should().Be((0, 0));
         Rows().Should().HaveCount(2);
@@ -201,21 +201,21 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
-        await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, "Description"), "by name"));
+        await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, "Description"), "by name"), cancellationToken: TestContext.Current.CancellationToken);
         Rows().Should().BeEquivalentTo([("acme", "by name"), ("globex", "globex order")]);
 
         await db.Orders
             .Select(o => new { Order = o, o.TenantId })
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Order.Description, x => x.TenantId + " projected"));
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Order.Description, x => x.TenantId + " projected"), cancellationToken: TestContext.Current.CancellationToken);
         Rows().Should().BeEquivalentTo([("acme", "acme projected"), ("globex", "globex order")]);
 
         await db.Orders
             .Join(db.Orders, a => a.Id, b => b.Id, (a, b) => new { a, Owner = b.TenantId })
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.a.Description, x => x.Owner + " joined"));
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.a.Description, x => x.Owner + " joined"), cancellationToken: TestContext.Current.CancellationToken);
         Rows().Should().BeEquivalentTo([("acme", "acme joined"), ("globex", "globex order")]);
 
         var column = nameof(Order.Description);
-        await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, column), "captured"));
+        await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => EF.Property<string>(o, column), "captured"), cancellationToken: TestContext.Current.CancellationToken);
         Rows().Should().BeEquivalentTo([("acme", "captured"), ("globex", "globex order")]);
     }
 
@@ -225,7 +225,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
-        await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, o => o.TenantId));
+        await db.Orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, o => o.TenantId), cancellationToken: TestContext.Current.CancellationToken);
 
         Rows().Should().BeEquivalentTo([("acme", "acme"), ("globex", "globex order")]);
     }
@@ -237,7 +237,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
-        var deleted = await db.Orders.IgnoreQueryFilters().ExecuteDeleteAsync();
+        var deleted = await db.Orders.IgnoreQueryFilters().ExecuteDeleteAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         deleted.Should().Be(2);
         Rows().Should().BeEmpty();
@@ -250,7 +250,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
         await SeedAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
-        var deleted = await db.Database.ExecuteSqlRawAsync("DELETE FROM Orders WHERE TenantId = 'acme'");
+        var deleted = await db.Database.ExecuteSqlRawAsync("DELETE FROM Orders WHERE TenantId = 'acme'", cancellationToken: TestContext.Current.CancellationToken);
 
         deleted.Should().Be(1);
         Rows().Should().BeEquivalentTo([("globex", "globex order")]);

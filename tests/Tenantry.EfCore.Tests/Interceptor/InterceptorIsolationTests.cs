@@ -20,18 +20,18 @@ public sealed class InterceptorIsolationTests
 
         db.Orders.Add(new Order { Description = "Acme order 1" });
         db.Orders.Add(new Order { Description = "Acme order 2" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         ctx.As("globex");
         db.Orders.Add(new Order { Description = "Globex order" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Act
         ctx.As("acme");
-        var acmeOrders = await db.Orders.AsNoTracking().ToListAsync();
+        var acmeOrders = await db.Orders.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         ctx.As("globex");
-        var globexOrders = await db.Orders.AsNoTracking().ToListAsync();
+        var globexOrders = await db.Orders.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         acmeOrders.Should().HaveCount(2).And.AllSatisfy(o => o.TenantId.Should().Be("acme"));
@@ -48,14 +48,14 @@ public sealed class InterceptorIsolationTests
         ctx.As("acme");
         await using var db = await DbContextFactory.CreateContextAsync(ctx, conn);
         db.Orders.Add(new Order { Description = "Acme order" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         ctx.As("globex");
         db.Orders.Add(new Order { Description = "Globex order" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Act — explicit opt-in to bypass filters
-        var allOrders = await db.Orders.IgnoreQueryFilters().AsNoTracking().ToListAsync();
+        var allOrders = await db.Orders.IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         allOrders.Should().HaveCount(2);

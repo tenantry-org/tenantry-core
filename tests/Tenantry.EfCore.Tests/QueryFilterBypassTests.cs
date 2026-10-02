@@ -36,10 +36,10 @@ public sealed class QueryFilterBypassTests
         await using (conn)
         {
             ctx.As("acme");
-            var acmeCount = await db.Orders.CountAsync();
+            var acmeCount = await db.Orders.CountAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             ctx.As("globex");
-            var globexCount = await db.Orders.CountAsync();
+            var globexCount = await db.Orders.CountAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             acmeCount.Should().Be(2);
             globexCount.Should().Be(1);
@@ -57,7 +57,7 @@ public sealed class QueryFilterBypassTests
             var orders = await db.Orders
                 .Where(o => o.Description != string.Empty)
                 .AsNoTracking()
-                .ToListAsync();
+                .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             orders.Should().HaveCount(2).And.AllSatisfy(o => o.TenantId.Should().Be("acme"));
         }
@@ -73,7 +73,7 @@ public sealed class QueryFilterBypassTests
             ctx.As("acme");
             var groupCount = await db.Orders
                 .GroupBy(o => o.TenantId)
-                .CountAsync();
+                .CountAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             // Only one tenant group visible
             groupCount.Should().Be(1);
@@ -90,7 +90,7 @@ public sealed class QueryFilterBypassTests
             ctx.As("acme");
             var descriptions = await db.Orders
                 .Select(o => o.Description)
-                .ToListAsync();
+                .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             descriptions.Should().HaveCount(2)
                 .And.NotContain("Globex X");

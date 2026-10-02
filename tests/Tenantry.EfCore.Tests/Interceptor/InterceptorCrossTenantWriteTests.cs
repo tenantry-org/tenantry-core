@@ -19,7 +19,7 @@ public sealed class InterceptorCrossTenantWriteTests
 
         Order order = new() { Description = "Acme order" };
         db.Orders.Add(order);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var savedId = order.Id;
 
         // Clear the change tracker so we can Attach a different object with the same key.
@@ -83,7 +83,7 @@ public sealed class InterceptorCrossTenantWriteTests
 
         Order order = new() { Description = "Acme order" };
         db.Orders.Add(order);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         order.Description = "Updated description";
 

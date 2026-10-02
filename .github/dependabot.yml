@@ -29,6 +29,7 @@ updates:
       - dependency-name: "Microsoft.Extensions.DependencyInjection.Abstractions"
       - dependency-name: "Microsoft.Extensions.Hosting"
       - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
+      - dependency-name: "Pomelo.EntityFrameworkCore.MySql"
       - dependency-name: "Tenantry.AspNetCore"
       - dependency-name: "Tenantry.Core"
       - dependency-name: "Tenantry.EfCore"

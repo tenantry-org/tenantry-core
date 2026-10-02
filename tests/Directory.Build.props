@@ -11,6 +11,11 @@
     <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- xUnit.net v3 test projects are executables; a support library sets OutputType back to Library -->
+    <OutputType>Exe</OutputType>
+    <!-- Run through VSTest (xunit.runner.visualstudio): `dotnet test` on the .NET 10 SDK refuses Microsoft Testing
+         Platform applications unless global.json opts into its own mode -->
+    <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
   </PropertyGroup>
 
   <!-- The test tooling, in every test project (a support library sets IsTestProject to false) -->
@@ -18,7 +23,7 @@
     <PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <Using Include="Xunit" />
   </ItemGroup>

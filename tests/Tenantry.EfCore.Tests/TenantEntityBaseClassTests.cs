@@ -36,15 +36,15 @@ public sealed class TenantEntityBaseClassTests
         var tenant = TestTenantContext.For("acme");
         await using var connection = DbContextFactory.CreateSharedConnection();
         await using InvoicesContext db = new(DbContextFactory.Options<InvoicesContext>(tenant, connection));
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
 
         db.Invoices.Add(new Invoice { Description = "test" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.ChangeTracker.Clear();
 
-        (await db.Invoices.SingleAsync()).TenantId.Should().Be("acme");
+        (await db.Invoices.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).TenantId.Should().Be("acme");
         tenant.As("globex");
-        (await db.Invoices.CountAsync()).Should().Be(0);
+        (await db.Invoices.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
     }
 
     private sealed class InvoicesContext(DbContextOptions<InvoicesContext> options) : DbContext(options)

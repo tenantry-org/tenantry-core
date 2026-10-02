@@ -24,7 +24,7 @@ public sealed class TenantIdentifierTests
         try
         {
             int.TryParse("-5", null, out _).Should().BeFalse("the test's culture must not parse the identifier");
-            (await store.FindByIdentifierAsync("-5"))!.Name.Should().Be("Negative");
+            (await store.FindByIdentifierAsync("-5", TestContext.Current.CancellationToken))!.Name.Should().Be("Negative");
         }
         finally
         {
@@ -40,7 +40,7 @@ public sealed class TenantIdentifierTests
     {
         CountingStore store = new([new TenantDescriptor<Guid> { TenantId = Guid.Empty, Name = "Empty" }]);
 
-        (await ((ITenantStore<Guid>)store).FindByIdentifierAsync(identifier)).Should().BeNull();
+        (await ((ITenantStore<Guid>)store).FindByIdentifierAsync(identifier, TestContext.Current.CancellationToken)).Should().BeNull();
         store.Lookups.Should().Be(0);
     }
 
@@ -49,7 +49,7 @@ public sealed class TenantIdentifierTests
     {
         ITenantStore<string> store = new InMemoryTenantStore<string>([new TenantDescriptor<string> { TenantId = "", Name = "Empty" }]);
 
-        (await store.FindByIdentifierAsync("")).Should().BeNull();
+        (await store.FindByIdentifierAsync("", TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]
@@ -60,9 +60,9 @@ public sealed class TenantIdentifierTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var tenants = provider.GetRequiredService<ITenantStoreAccessor<Guid>>();
 
-        (await tenants.FindByIdentifierAsync("acme"))!.TenantId.Should().Be(SlugStore.Acme);
-        (await tenants.FindByIdentifierAsync(SlugStore.Acme.ToString())).Should().BeNull("this store maps slugs only");
-        (await tenants.FindByIdentifierAsync("globex")).Should().BeNull();
+        (await tenants.FindByIdentifierAsync("acme", TestContext.Current.CancellationToken))!.TenantId.Should().Be(SlugStore.Acme);
+        (await tenants.FindByIdentifierAsync(SlugStore.Acme.ToString(), TestContext.Current.CancellationToken)).Should().BeNull("this store maps slugs only");
+        (await tenants.FindByIdentifierAsync("globex", TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]

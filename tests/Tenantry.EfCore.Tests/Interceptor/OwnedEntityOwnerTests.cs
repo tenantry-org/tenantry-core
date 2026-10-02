@@ -103,7 +103,7 @@ public sealed class OwnedEntityOwnerTests : IDisposable
         }
 
         await using var acme = await CreateAsync(_tenant.As("acme"));
-        (await acme.Customers.AsNoTracking().SingleAsync()).Address.Should().BeNull();
+        (await acme.Customers.AsNoTracking().SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).Address.Should().BeNull();
     }
 
     [Fact]
@@ -113,15 +113,15 @@ public sealed class OwnedEntityOwnerTests : IDisposable
 
         await using (var db = await CreateAsync(_tenant.As("acme")))
         {
-            var customer = await db.Customers.SingleAsync();
+            var customer = await db.Customers.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             customer.Phones.Add(new Phone { Number = "second acme phone" });
             customer.Address = new Address { City = "Springfield" };
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         (await PhonesOfAcmeCustomerAsync()).Should().BeEquivalentTo("acme phone", "second acme phone");
         await using var acme = await CreateAsync(_tenant.As("acme"));
-        var saved = await acme.Customers.AsNoTracking().SingleAsync();
+        var saved = await acme.Customers.AsNoTracking().SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         saved.Address!.City.Should().Be("Springfield");
         saved.Address.TenantId.Should().Be("acme");
         saved.Phones.Should().OnlyContain(phone => phone.TenantId == "acme");

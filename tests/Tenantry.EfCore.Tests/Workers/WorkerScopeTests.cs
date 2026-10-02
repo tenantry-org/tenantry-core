@@ -39,12 +39,12 @@ public sealed class WorkerScopeTests : IDisposable
         await CreateSchemaAsync(services);
         var scopes = services.GetRequiredService<ITenantScopeFactory<string>>();
 
-        foreach (var tenant in await services.GetRequiredService<ITenantStoreAccessor<string>>().GetAllTenantsAsync())
+        foreach (var tenant in await services.GetRequiredService<ITenantStoreAccessor<string>>().GetAllTenantsAsync(TestContext.Current.CancellationToken))
         {
             await using var scope = scopes.CreateScope(tenant);
             await using var db = Orders(scope, pooled);
             db.Orders.Add(new Order { Description = $"{tenant.TenantId} sweep" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         (await ReadAsAsync(services, "acme", pooled)).Should().Equal("acme:acme sweep");
@@ -87,7 +87,7 @@ public sealed class WorkerScopeTests : IDisposable
         foreach (var tenant in Tenants)
         {
             await using var scope = scopes.CreateScope(tenant);
-            await scope.ServiceProvider.GetRequiredService<PooledOrdersContext>().Orders.CountAsync();
+            await scope.ServiceProvider.GetRequiredService<PooledOrdersContext>().Orders.CountAsync(cancellationToken: TestContext.Current.CancellationToken);
         }
 
         // The old Pro scope left the last tenant active here, so this write would have been stamped "globex".

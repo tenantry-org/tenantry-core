@@ -124,7 +124,7 @@ public sealed class TenantContextSetterTests
             var handle = tenantContext.Use(Tenant("acme"));
 
             // The child flow inherits the tenantContext and closes it. Its restore only affects the child's own flow.
-            await Task.Run(handle.Dispose);
+            await Task.Run(handle.Dispose, TestContext.Current.CancellationToken);
             tenantContext.CurrentTenantId.Should().Be("acme", "a child flow cannot change the caller's ambient tenant");
 
             handle.Dispose();
@@ -141,7 +141,7 @@ public sealed class TenantContextSetterTests
 
         using (var handle = tenantContext.Use(Tenant("acme")))
         {
-            await Task.Run(handle.Dispose);
+            await Task.Run(handle.Dispose, TestContext.Current.CancellationToken);
         }
 
         tenantContext.HasTenant.Should().BeFalse();
@@ -154,7 +154,7 @@ public sealed class TenantContextSetterTests
         var outer = tenantContext.Use(Tenant("acme"));
         var inner = tenantContext.Use(Tenant("globex"));
 
-        await Task.Run(outer.Dispose);
+        await Task.Run(outer.Dispose, TestContext.Current.CancellationToken);
         tenantContext.CurrentTenantId.Should().Be("globex");
 
         inner.Dispose();
@@ -172,7 +172,7 @@ public sealed class TenantContextSetterTests
         using (tenantContext.Use(Tenant("acme")))
         {
             var inner = tenantContext.Use(Tenant("globex"));
-            await Task.Run(inner.Dispose);
+            await Task.Run(inner.Dispose, TestContext.Current.CancellationToken);
 
             inner.Dispose();
 

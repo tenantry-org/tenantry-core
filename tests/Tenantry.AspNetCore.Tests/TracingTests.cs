@@ -37,7 +37,7 @@ public sealed class TracingTests
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", () => "ok");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
 
         // A culture whose negative sign is not '-': the tag is formatted with the invariant culture regardless.
@@ -51,10 +51,10 @@ public sealed class TracingTests
             using (HttpRequestMessage request = new(HttpMethod.Get, "/tenant"))
             {
                 request.Headers.Add("X-Tenant-Id", "-1234567");
-                (await client.SendAsync(request)).EnsureSuccessStatusCode();
+                (await client.SendAsync(request, TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
             }
 
-            (await client.GetAsync("/tenant")).EnsureSuccessStatusCode();
+            (await client.GetAsync("/tenant", TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         }
         finally
         {

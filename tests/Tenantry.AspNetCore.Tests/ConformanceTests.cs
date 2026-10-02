@@ -60,13 +60,13 @@ public sealed class ConformanceTests
             Conformance.ResolveEveryTenantryService(builder.Services, scope.ServiceProvider);
         }
 
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        (await client.GetStringAsync("/tenant")).Should().Be("acme");
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("acme");
 
-        await app.StopAsync();
+        await app.StopAsync(TestContext.Current.CancellationToken);
     }
 
     // A validator with a scoped dependency, as one that reads a DbContext has.

@@ -40,8 +40,9 @@ the rows an `UPDATE` or `DELETE` matched. The write-isolation suite runs against
 | Database | EF Core provider | .NET |
 |----------|------------------|------|
 | SQLite | `Microsoft.EntityFrameworkCore.Sqlite` | 8, 9, 10 |
-| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` | 10 |
-| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` | 10 |
+| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` | 8, 9, 10 |
+| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` | 8, 9, 10 |
+| MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` | 8, 9 |
 | MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) | 10 |
 
 Details and caveats are in [Tested providers](efcore-integration.md#tested-providers).

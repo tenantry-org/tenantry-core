@@ -84,9 +84,9 @@ public sealed class TenantWriteGuardTests
 
         // Save first so the entity exists in the database
         db.Orders.Add(new Order { TenantId = "acme", Description = "original" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var order = await db.Orders.FirstAsync();
+        var order = await db.Orders.FirstAsync(cancellationToken: TestContext.Current.CancellationToken);
         order.Description = "updated";
         // State is now Modified
 
@@ -106,10 +106,10 @@ public sealed class TenantWriteGuardTests
 
         // Save an acme order
         db.Orders.Add(new Order { TenantId = "acme", Description = "original" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Manually corrupt TenantId to simulate a cross-tenant mutation attempt
-        var order = await db.Orders.FirstAsync();
+        var order = await db.Orders.FirstAsync(cancellationToken: TestContext.Current.CancellationToken);
         order.TenantId = "globex";
 
         var act = () => TenantWriteGuard<string>.Check(db);
@@ -127,9 +127,9 @@ public sealed class TenantWriteGuardTests
         var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
         db.Orders.Add(new Order { TenantId = "acme", Description = "to delete" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var order = await db.Orders.FirstAsync();
+        var order = await db.Orders.FirstAsync(cancellationToken: TestContext.Current.CancellationToken);
         order.TenantId = "globex"; // Corrupt before delete
         db.Orders.Remove(order);
 
@@ -168,13 +168,13 @@ public sealed class TenantWriteGuardTests
 
         // Save an acme order so it exists in the DB and is tracked
         db.Orders.Add(new Order { TenantId = "acme", Description = "original" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
 
         // Detach the tracked entity and re-attach a new instance with the same key but
         // a different TenantId. Attach sets the entry to Unchanged which exercises the
         // "non-target state" branch.
-        var saved = await db.Orders.FirstAsync();
+        var saved = await db.Orders.FirstAsync(cancellationToken: TestContext.Current.CancellationToken);
         db.Entry(saved).State = EntityState.Detached;
 
         var attachedWithWrongTenant = new Order { Id = saved.Id, TenantId = "globex", Description = saved.Description };

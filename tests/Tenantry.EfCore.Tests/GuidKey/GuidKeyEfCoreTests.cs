@@ -25,18 +25,18 @@ public sealed class GuidKeyEfCoreTests
         await using GuidTestDbContext db = await DbContextFactory.CreateGuidContextAsync(ctx, conn);
         db.Orders.Add(new GuidOrder { Description = "Acme order 1" });
         db.Orders.Add(new GuidOrder { Description = "Acme order 2" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         ctx.As(globex);
         db.Orders.Add(new GuidOrder { Description = "Globex order" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Act
         ctx.As(acme);
-        List<GuidOrder> acmeOrders = await db.Orders.AsNoTracking().ToListAsync();
+        List<GuidOrder> acmeOrders = await db.Orders.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         ctx.As(globex);
-        List<GuidOrder> globexOrders = await db.Orders.AsNoTracking().ToListAsync();
+        List<GuidOrder> globexOrders = await db.Orders.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         acmeOrders.Should().HaveCount(2).And.AllSatisfy(o => o.TenantId.Should().Be(acme));
@@ -56,13 +56,13 @@ public sealed class GuidKeyEfCoreTests
         {
             GuidOrder order = new() { Description = "Acme order" };
             seed.Orders.Add(order);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             acmeOrderId = order.Id;
         }
 
         await using GuidTestDbContext db = await DbContextFactory.CreateGuidContextAsync(ctx.As(globex), conn);
 
-        (await db.Attach(new GuidOrder { Id = acmeOrderId, TenantId = globex }).GetDatabaseValuesAsync()).Should().BeNull();
+        (await db.Attach(new GuidOrder { Id = acmeOrderId, TenantId = globex }).GetDatabaseValuesAsync(TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class GuidKeyEfCoreTests
             db.Orders.Add(order);
 
             // Act
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             // Assert — interceptor must have stamped the Guid TenantId
             order.TenantId.Should().Be(tenantId);
@@ -101,10 +101,10 @@ public sealed class GuidKeyEfCoreTests
         ctx.As(acme);
         await using GuidTestDbContext db = await DbContextFactory.CreateGuidContextAsync(ctx, conn);
         db.Orders.Add(new GuidOrder { Description = "Acme order" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Load the entity, then switch tenant
-        GuidOrder acmeOrder = await db.Orders.IgnoreQueryFilters().FirstAsync();
+        GuidOrder acmeOrder = await db.Orders.IgnoreQueryFilters().FirstAsync(cancellationToken: TestContext.Current.CancellationToken);
         ctx.As(globex);
         acmeOrder.Description = "Tampered by globex";
 
@@ -127,7 +127,7 @@ public sealed class GuidKeyEfCoreTests
             await DbContextFactory.CreateIsolatedGuidContextAsync(acmeCtx);
 
         acmeDb.Orders.Add(new GuidOrder { Description = "Acme order" });
-        await acmeDb.SaveChangesAsync();
+        await acmeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Seed globex
         GuidTestTenantContext globexCtx = new();
@@ -136,7 +136,7 @@ public sealed class GuidKeyEfCoreTests
             await DbContextFactory.CreateIsolatedGuidContextAsync(globexCtx);
 
         globexDb.Orders.Add(new GuidOrder { Description = "Globex order" });
-        await globexDb.SaveChangesAsync();
+        await globexDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Act — query both tenants concurrently
         Task<List<GuidOrder>> acmeTask = Task.Run(async () =>

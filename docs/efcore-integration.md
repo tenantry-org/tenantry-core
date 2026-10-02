@@ -344,13 +344,15 @@ contexts with a database per tenant.
 | Database | EF Core provider | Framework | Status |
 |----------|------------------|-----------|--------|
 | SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 8, 9, 10 | Tested (unit suite) |
-| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 10.0.12 | .NET 10 | Tested |
-| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 | .NET 10 | Tested |
+| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 8.0.31, 9.0.20, 10.0.12 | .NET 8, 9, 10 | Tested |
+| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.4, 9.0.0, 10.0.3 | .NET 8, 9, 10 | Tested |
+| MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` 8.0.2, 9.0.0 | .NET 8, 9 | Tested |
 | MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
-| MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | — | Not tested (no EF Core 10 release) |
+| MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | .NET 10 | Not tested (no EF Core 10 release) |
 
-Real-database runs currently cover .NET 10 only. If you use a MySQL connector option that reports
-*changed* rather than *matched* rows (for example `UseAffectedRows=true`), an update that changes no
+Each framework runs the suite with its own EF Core version; MariaDB is not tested.
+
+If you use a MySQL connector option that reports *changed* rather than *matched* rows (for example `UseAffectedRows=true`), an update that changes no
 values reports zero rows and EF Core raises a false concurrency failure; keep the default.
 
 ## What is and isn't isolated

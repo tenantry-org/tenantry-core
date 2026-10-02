@@ -10,7 +10,7 @@ namespace Tenantry.AspNetCore.Tests;
 /// <summary>
 /// Tests the full TenantResolutionMiddleware pipeline via TestServer.
 /// </summary>
-public sealed class MiddlewareTests : IAsyncDisposable
+public sealed partial class MiddlewareTests : IAsyncDisposable
 {
     private readonly WebApplication _app;
     private readonly HttpClient _client;
@@ -42,8 +42,8 @@ public sealed class MiddlewareTests : IAsyncDisposable
     {
         _client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await _client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await _client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("acme");
@@ -59,10 +59,10 @@ public sealed class MiddlewareTests : IAsyncDisposable
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "unknown-corp");
 
-        var response = await client.GetAsync("/tenant");
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
-        (await response.Content.ReadAsStringAsync()).Should().BeEmpty();
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().BeEmpty();
     }
 
     [Fact]
@@ -71,10 +71,10 @@ public sealed class MiddlewareTests : IAsyncDisposable
         using var client = _app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "unknown-corp");
 
-        var response = await client.GetAsync("/tenant");
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
-        (await response.Content.ReadAsStringAsync()).Should().Be("(none)");
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("(none)");
     }
 
     [Fact]
@@ -82,8 +82,8 @@ public sealed class MiddlewareTests : IAsyncDisposable
     {
         using var client = _app.GetTestClient();
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("(none)");
@@ -108,11 +108,11 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
         body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
@@ -129,10 +129,10 @@ public sealed class MiddlewareTests : IAsyncDisposable
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "not-a-number");
 
-        var response = await client.GetAsync("/tenant");
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
-        (await response.Content.ReadAsStringAsync()).Should().BeEmpty();
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().BeEmpty();
     }
 
     [Fact]
@@ -142,11 +142,11 @@ public sealed class MiddlewareTests : IAsyncDisposable
         // The second request must NOT see the first request's tenant (AsyncLocal cleared in finally).
         using var client = _app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
-        await client.GetAsync("/tenant");
+        await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
 
         using var client2 = _app.GetTestClient();
-        var response = await client2.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client2.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         body.Should().Be("(none)");
     }
@@ -173,13 +173,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await client.GetAsync("/tenant?tenantId=globex");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant?tenantId=globex", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         body.Should().Be("acme");
     }
@@ -204,12 +204,12 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
 
-        var response = await client.GetAsync("/tenant?tenantId=acme");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant?tenantId=acme", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         body.Should().Be("acme");
     }
@@ -233,13 +233,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
 
         // No header, no query string
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("(none)");
@@ -265,11 +265,11 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
         body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
@@ -304,13 +304,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("acme");
@@ -346,13 +346,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
         body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
@@ -393,13 +393,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
         body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
@@ -433,13 +433,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
         body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
@@ -473,13 +473,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("acme");
@@ -514,13 +514,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("globex");
@@ -554,13 +554,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<int> ctx) => ctx.CurrentTenantId.ToString());
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "2");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("2");
@@ -595,13 +595,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<int> ctx) => ctx.CurrentTenantId.ToString());
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "2");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
         body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
@@ -637,13 +637,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         });
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Forbidden);
         body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
@@ -668,11 +668,11 @@ public sealed class MiddlewareTests : IAsyncDisposable
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)")
             .RequireTenant();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
         body.Should().BeEmpty("without IProblemDetailsService the rejection has no body");
@@ -698,11 +698,11 @@ public sealed class MiddlewareTests : IAsyncDisposable
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)")
             .AllowMissingTenant();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("(none)");
@@ -731,15 +731,15 @@ public sealed class MiddlewareTests : IAsyncDisposable
         group.MapGet("/optional", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)")
             .AllowMissingTenant();
 
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
 
-        var requiredResponse = await client.GetAsync("/group/required");
+        var requiredResponse = await client.GetAsync("/group/required", TestContext.Current.CancellationToken);
         requiredResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
 
-        var optionalResponse = await client.GetAsync("/group/optional");
-        var optionalBody = await optionalResponse.Content.ReadAsStringAsync();
+        var optionalResponse = await client.GetAsync("/group/optional", TestContext.Current.CancellationToken);
+        var optionalBody = await optionalResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         optionalResponse.IsSuccessStatusCode.Should().BeTrue();
         optionalBody.Should().Be("(none)");
@@ -765,12 +765,12 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapControllers();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        var requiredResponse = await client.GetAsync("/tenant-requirement/required");
-        var optionalResponse = await client.GetAsync("/tenant-requirement/optional");
-        var optionalBody = await optionalResponse.Content.ReadAsStringAsync();
+        var requiredResponse = await client.GetAsync("/tenant-requirement/required", TestContext.Current.CancellationToken);
+        var optionalResponse = await client.GetAsync("/tenant-requirement/optional", TestContext.Current.CancellationToken);
+        var optionalBody = await optionalResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         requiredResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
         optionalResponse.IsSuccessStatusCode.Should().BeTrue();
@@ -797,12 +797,12 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         // No tenant header — no tenant resolved, not required
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("(none)");
@@ -828,13 +828,13 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await client.GetAsync("/tenant");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("acme");
@@ -861,11 +861,11 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         // Request to an unmapped path — no endpoint, no tenant header
-        var response = await client.GetAsync("/unmapped-path-that-has-no-endpoint");
+        var response = await client.GetAsync("/unmapped-path-that-has-no-endpoint", TestContext.Current.CancellationToken);
 
         // Middleware defers to default (not required), framework returns 404
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
@@ -882,10 +882,10 @@ public sealed class MiddlewareTests : IAsyncDisposable
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", identifier);
 
-        var response = await client.GetAsync("/tenant");
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
-        (await response.Content.ReadAsStringAsync()).Should().Be("(none)");
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("(none)");
     }
 
     [Fact]
@@ -899,7 +899,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", Guid.Empty.ToString());
 
-        var response = await client.GetAsync("/tenant");
+        var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
     }
@@ -915,10 +915,10 @@ public sealed class MiddlewareTests : IAsyncDisposable
             .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }]));
         using var client = app.GetTestClient();
 
-        (await client.GetAsync("/tenant")).StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        (await client.GetAsync("/tenant", TestContext.Current.CancellationToken)).StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
 
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
-        (await client.GetStringAsync("/tenant")).Should().Be("acme");
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("acme");
     }
 
     private sealed class EmptyResolver : ITenantResolver
@@ -951,8 +951,8 @@ public sealed class MiddlewareTests : IAsyncDisposable
                 client.DefaultRequestHeaders.TryAddWithoutValidation("X-Tenant-Id", header);
             }
 
-            var response = await client.GetAsync("/tenant");
-            var body = await response.Content.ReadAsStringAsync();
+            var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
+            var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
             ((int)response.StatusCode).Should().Be(status);
             response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
@@ -961,7 +961,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
             problem.GetProperty("title").GetString().Should().Be(title);
             if (header is not null)
             {
-                System.Text.RegularExpressions.Regex.Replace(body, "\"traceId\":\"[^\"]*\"", "")
+                TraceId().Replace(body, "")
                     .Should().NotContain(header).And.NotContain("script");
             }
         }
@@ -986,7 +986,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
             var body = await response.Content.ReadAsStringAsync();
 
             // Every response has its own trace id.
-            return (response.StatusCode, System.Text.RegularExpressions.Regex.Replace(body, "\"traceId\":\"[^\"]*\"", ""));
+            return (response.StatusCode, TraceId().Replace(body, ""));
         }
 
         var denied = await Get("acme");
@@ -1009,10 +1009,10 @@ public sealed class MiddlewareTests : IAsyncDisposable
             using var client = app.GetTestClient();
             client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
 
-            var response = await client.GetAsync("/tenant");
+            var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
 
             response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
-            (await response.Content.ReadAsStringAsync()).Should().Be("(none)");
+            (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("(none)");
         }
     }
 
@@ -1037,7 +1037,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
                 client.DefaultRequestHeaders.Add("X-Tenant-Id", header);
             }
 
-            ((int)(await client.GetAsync("/tenant")).StatusCode).Should().Be(status);
+            ((int)(await client.GetAsync("/tenant", TestContext.Current.CancellationToken)).StatusCode).Should().Be(status);
         }
     }
 
@@ -1056,7 +1056,7 @@ public sealed class MiddlewareTests : IAsyncDisposable
             using var client = app.GetTestClient();
             client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
 
-            (await client.GetAsync("/tenant")).StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+            (await client.GetAsync("/tenant", TestContext.Current.CancellationToken)).StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
         }
     }
 
@@ -1077,6 +1077,10 @@ public sealed class MiddlewareTests : IAsyncDisposable
         await app.StartAsync();
         return app;
     }
+
+    // A problem response's trace id, which differs between responses
+    [System.Text.RegularExpressions.GeneratedRegex("\"traceId\":\"[^\"]*\"")]
+    private static partial System.Text.RegularExpressions.Regex TraceId();
 
     public async ValueTask DisposeAsync()
     {

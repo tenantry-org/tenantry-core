@@ -16,6 +16,14 @@ dotnet build   Tenantry.slnx -c Release
 dotnet test    Tenantry.slnx -c Release
 ```
 
+The tests use xUnit.net v3 and run through VSTest. `tests/Tenantry.IntegrationTests` needs **Docker**: it runs
+against SQL Server, PostgreSQL and MySQL containers, one per database for each target framework's run, one framework
+at a time (the image versions are in `Providers/ContainerImages.cs`). Without Docker, run the other tests with
+
+```bash
+dotnet test Tenantry.slnx -c Release --filter "Category!=Integration"
+```
+
 Package versions for `src/` and `tests/` are set centrally, in `Directory.Packages.props` and, for those Tenantry
 Pro also uses, `eng/common/Packages.props`; each sample declares its own, as an application copied from it would.
 Test and sample projects commit a `packages.lock.json`, and CI restores with `--locked-mode`, so it fails

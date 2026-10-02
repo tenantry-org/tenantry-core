@@ -26,10 +26,10 @@ public sealed class TenantModelCheckTests : IDisposable
     {
         await using var db = await CreateAsync<EntityAddedLastContext>();
         db.Set<LateItem>().Add(new LateItem());
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _tenant.As("globex");
 
-        (await db.Set<LateItem>().CountAsync()).Should().Be(0);
+        (await db.Set<LateItem>().CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
     }
 
     [Fact]
@@ -38,13 +38,13 @@ public sealed class TenantModelCheckTests : IDisposable
         await using var db = await CreateAsync<SharedTypeContext>();
         db.Set<LateItem>("CurrentItems").Add(new LateItem());
         db.Set<LateItem>("ArchivedItems").Add(new LateItem());
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.ChangeTracker.Clear();
 
-        (await db.Set<LateItem>("ArchivedItems").CountAsync()).Should().Be(1);
+        (await db.Set<LateItem>("ArchivedItems").CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(1);
         _tenant.As("globex");
-        (await db.Set<LateItem>("CurrentItems").CountAsync()).Should().Be(0);
-        (await db.Set<LateItem>("ArchivedItems").CountAsync()).Should().Be(0);
+        (await db.Set<LateItem>("CurrentItems").CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
+        (await db.Set<LateItem>("ArchivedItems").CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
     }
 
     [Fact]
@@ -52,12 +52,12 @@ public sealed class TenantModelCheckTests : IDisposable
     {
         await using var db = await CreateAsync<KeylessContext>();
         db.Items.Add(new Item { Name = "acme item" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _tenant.As("globex");
         db.Items.Add(new Item { Name = "globex item" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        (await db.ItemNames.Select(view => view.Name).ToListAsync()).Should().Equal("globex item");
+        (await db.ItemNames.Select(view => view.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal("globex item");
         db.Model.FindEntityType(typeof(ItemName))!.FindProperty(nameof(ItemName.TenantId))!.IsConcurrencyToken.Should().BeFalse();
     }
 
@@ -71,21 +71,21 @@ public sealed class TenantModelCheckTests : IDisposable
         var tenants = provider.GetRequiredService<ITenantContextSetter<int>>();
         await using var scope = provider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IntKeyContext>();
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
 
         using (tenants.Use(new TenantDescriptor<int> { TenantId = 1, Name = "one" }))
         {
             db.Items.Add(new IntItem());
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         using (tenants.Use(new TenantDescriptor<int> { TenantId = 2, Name = "two" }))
         {
-            (await db.Items.CountAsync()).Should().Be(0);
+            (await db.Items.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
         }
 
-        (await db.Items.CountAsync()).Should().Be(0, "no tenant is current");
-        (await db.Items.IgnoreQueryFilters().SingleAsync()).TenantId.Should().Be(1);
+        (await db.Items.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0, "no tenant is current");
+        (await db.Items.IgnoreQueryFilters().SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).TenantId.Should().Be(1);
     }
 
     [Fact]
@@ -101,14 +101,14 @@ public sealed class TenantModelCheckTests : IDisposable
     {
         await using var db = new ContributedContext(Options<ContributedContext>(services =>
             services.AddSingleton<ITenantModelContributor, LateItemContributor>()));
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
         db.Set<LateItem>().Add(new LateItem());
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         db.Model.FindEntityType(typeof(LateItem))!.GetTableName().Should().Be("ContributedItems");
-        (await db.Set<LateItem>().CountAsync()).Should().Be(1);
+        (await db.Set<LateItem>().CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(1);
         _tenant.As("globex");
-        (await db.Set<LateItem>().CountAsync()).Should().Be(0);
+        (await db.Set<LateItem>().CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
     }
 
     [Theory]
@@ -201,14 +201,14 @@ public sealed class TenantModelCheckTests : IDisposable
     {
         await using var db = await CreateAsync<HierarchyContext>();
         db.Animals.Add(new Dog { Name = "acme dog" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _tenant.As("globex");
         db.Animals.Add(new Dog { Name = "globex dog" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.ChangeTracker.Clear();
 
-        (await db.Dogs.Select(dog => dog.Name).ToListAsync()).Should().Equal("globex dog");
-        (await db.Animals.Select(animal => animal.Name).ToListAsync()).Should().Equal("globex dog");
+        (await db.Dogs.Select(dog => dog.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal("globex dog");
+        (await db.Animals.Select(animal => animal.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal("globex dog");
     }
 
     [Fact]
@@ -227,12 +227,12 @@ public sealed class TenantModelCheckTests : IDisposable
         await using var db = await CreateAsync<OwnedContext>();
         await SeedCustomerAsync(db);
 
-        var customer = await db.Customers.SingleAsync();
+        var customer = await db.Customers.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         customer.Addresses.Should().ContainSingle().Which.TenantId.Should().Be("acme");
 
         _tenant.As("globex");
         db.ChangeTracker.Clear();
-        (await db.Customers.ToListAsync()).Should().BeEmpty();
+        (await db.Customers.ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeEmpty();
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public sealed class TenantModelCheckTests : IDisposable
         await db.Awaiting(context => context.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
         _tenant.As("acme");
         db.ChangeTracker.Clear();
-        (await db.Customers.SingleAsync()).Addresses.Should().ContainSingle().Which.Street.Should().Be("acme street");
+        (await db.Customers.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).Addresses.Should().ContainSingle().Which.Street.Should().Be("acme street");
     }
 
     [Fact]

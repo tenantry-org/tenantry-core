@@ -82,7 +82,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
             _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
         db.Orders.Add(new Order { TenantId = "acme", Description = "seeded" });
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         CountRows().Should().Be(1);
     }
@@ -111,7 +111,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
             _tenant.AsNone(), _connection, new EfCoreIsolationOptions { OnMissingTenant = behavior });
 
         db.Orders.Update(new Order { Id = acmeOrderId, TenantId = "acme", Description = "maintenance" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         ReadRow(acmeOrderId).Should().Be(("acme", "maintenance"));
     }

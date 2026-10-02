@@ -56,10 +56,10 @@ public sealed class StartupValidationTests
             .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }]));
 
         app.UseTenantry();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         app.Lifetime.ApplicationStarted.IsCancellationRequested.Should().BeTrue();
-        await app.StopAsync();
+        await app.StopAsync(TestContext.Current.CancellationToken);
     }
 
     private static WebApplication Build(Action<ITenantBuilder<string>>? configure)

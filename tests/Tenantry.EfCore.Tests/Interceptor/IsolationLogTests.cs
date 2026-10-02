@@ -24,7 +24,7 @@ public sealed class IsolationLogTests : IAsyncDisposable
         _tenant.As("acme");
         await using var db = await CreateAsync();
         db.Orders.Add(new Order { Description = "Acme order" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var id = db.Orders.Single().Id;
         db.ChangeTracker.Clear();
 
@@ -48,11 +48,11 @@ public sealed class IsolationLogTests : IAsyncDisposable
         await using var db = await CreateAsync(new EfCoreIsolationOptions { OnMissingTenant = MissingTenantBehavior.Warn });
         Order order = new() { Description = "Acme order" };
         db.Orders.Add(order);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _tenant.AsNone();
         order.Description = "Changed";
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _logs.Entries.Should().ContainSingle(e => e.EventId.Id == 2002)
             .Which.Should().BeEquivalentTo(new { Category = "Tenantry.EfCore", Level = LogLevel.Warning });

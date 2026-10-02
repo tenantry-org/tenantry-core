@@ -51,7 +51,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
-        var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId);
+        var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId, cancellationToken: TestContext.Current.CancellationToken);
 
         _tenant.As("globex");
         order.TenantId = "globex";
@@ -69,7 +69,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
-        var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId);
+        var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId, cancellationToken: TestContext.Current.CancellationToken);
 
         _tenant.As("globex");
         db.Orders.Remove(order);
@@ -84,7 +84,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
     {
         var acmeOrderId = await SeedAcmeOrderAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
-        var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId);
+        var order = await db.Orders.SingleAsync(o => o.Id == acmeOrderId, cancellationToken: TestContext.Current.CancellationToken);
 
         order.TenantId = "globex";
 
@@ -113,7 +113,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         db.Orders.Update(new Order { Id = acmeOrderId, TenantId = "acme", Description = "updated" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         ReadRow(acmeOrderId).Should().Be(("acme", "updated"));
     }
@@ -125,7 +125,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("acme"), _connection);
 
         db.Orders.Remove(new Order { Id = acmeOrderId, TenantId = "acme" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         ReadRow(acmeOrderId).Should().BeNull();
     }
@@ -152,7 +152,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
         {
             GuidOrder order = new() { Description = "acme order" };
             seed.Orders.Add(order);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             acmeOrderId = order.Id;
         }
 
@@ -163,7 +163,7 @@ public sealed class InterceptorPersistedOwnershipTests : IDisposable
             .Should().ThrowAsync<DbUpdateConcurrencyException>();
         tenant.As(acme);
         await using var check = await DbContextFactory.CreateGuidContextAsync(tenant, connection);
-        (await check.Orders.SingleAsync(o => o.Id == acmeOrderId)).Description.Should().Be("acme order");
+        (await check.Orders.SingleAsync(o => o.Id == acmeOrderId, cancellationToken: TestContext.Current.CancellationToken)).Description.Should().Be("acme order");
     }
 
     private async Task<int> SeedAcmeOrderAsync()

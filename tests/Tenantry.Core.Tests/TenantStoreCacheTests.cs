@@ -21,18 +21,18 @@ public sealed class TenantStoreCacheTests
         await using var provider = Build(o => o.Duration = TimeSpan.FromMinutes(2));
         var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
 
-        (await tenants.GetTenantAsync("acme")).Should().BeSameAs(Acme);
-        (await tenants.FindByIdentifierAsync("ACME")).Should().BeSameAs(Acme);
+        (await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken)).Should().BeSameAs(Acme);
+        (await tenants.FindByIdentifierAsync("ACME", TestContext.Current.CancellationToken)).Should().BeSameAs(Acme);
         _time.Advance(TimeSpan.FromMinutes(2) - TimeSpan.FromTicks(1));
-        (await tenants.GetTenantAsync("acme")).Should().BeSameAs(Acme);
-        (await tenants.FindByIdentifierAsync("ACME")).Should().BeSameAs(Acme);
+        (await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken)).Should().BeSameAs(Acme);
+        (await tenants.FindByIdentifierAsync("ACME", TestContext.Current.CancellationToken)).Should().BeSameAs(Acme);
 
         _store.Reads.Should().Equal("id:acme", "identifier:ACME");
         _store.Scopes.Should().Be(2, "a cached tenant needs no scope");
 
         _time.Advance(TimeSpan.FromTicks(1));
-        (await tenants.GetTenantAsync("acme")).Should().BeSameAs(Acme);
-        (await tenants.FindByIdentifierAsync("ACME")).Should().BeSameAs(Acme);
+        (await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken)).Should().BeSameAs(Acme);
+        (await tenants.FindByIdentifierAsync("ACME", TestContext.Current.CancellationToken)).Should().BeSameAs(Acme);
 
         _store.Reads.Should().Equal("id:acme", "identifier:ACME", "id:acme", "identifier:ACME");
     }
@@ -43,12 +43,12 @@ public sealed class TenantStoreCacheTests
         await using var provider = Build();
         var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
 
-        (await tenants.GetTenantAsync("initech")).Should().BeNull();
-        (await tenants.GetTenantAsync("initech")).Should().BeNull();
-        (await tenants.FindByIdentifierAsync("initech")).Should().BeNull();
-        (await tenants.FindByIdentifierAsync("initech")).Should().BeNull();
-        (await tenants.GetAllTenantsAsync()).Should().HaveCount(2);
-        (await tenants.GetAllTenantsAsync()).Should().HaveCount(2);
+        (await tenants.GetTenantAsync("initech", TestContext.Current.CancellationToken)).Should().BeNull();
+        (await tenants.GetTenantAsync("initech", TestContext.Current.CancellationToken)).Should().BeNull();
+        (await tenants.FindByIdentifierAsync("initech", TestContext.Current.CancellationToken)).Should().BeNull();
+        (await tenants.FindByIdentifierAsync("initech", TestContext.Current.CancellationToken)).Should().BeNull();
+        (await tenants.GetAllTenantsAsync(TestContext.Current.CancellationToken)).Should().HaveCount(2);
+        (await tenants.GetAllTenantsAsync(TestContext.Current.CancellationToken)).Should().HaveCount(2);
 
         _store.Reads.Should().Equal(
             "id:initech", "id:initech", "identifier:initech", "identifier:initech", "all", "all");
@@ -63,8 +63,8 @@ public sealed class TenantStoreCacheTests
 
         foreach (var lookup in new[] { "acme", "ACME", "globex" })
         {
-            await tenants.GetTenantAsync(lookup);
-            await tenants.FindByIdentifierAsync(lookup);
+            await tenants.GetTenantAsync(lookup, TestContext.Current.CancellationToken);
+            await tenants.FindByIdentifierAsync(lookup, TestContext.Current.CancellationToken);
         }
 
         _store.Reads.Clear();
@@ -72,8 +72,8 @@ public sealed class TenantStoreCacheTests
 
         foreach (var lookup in new[] { "acme", "ACME", "globex" })
         {
-            await tenants.GetTenantAsync(lookup);
-            await tenants.FindByIdentifierAsync(lookup);
+            await tenants.GetTenantAsync(lookup, TestContext.Current.CancellationToken);
+            await tenants.FindByIdentifierAsync(lookup, TestContext.Current.CancellationToken);
         }
 
         _store.Reads.Should().Equal("id:acme", "identifier:acme", "id:ACME", "identifier:ACME");
@@ -85,11 +85,11 @@ public sealed class TenantStoreCacheTests
         await using var provider = Build();
         var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
 
-        await tenants.GetTenantAsync("acme");
-        await tenants.FindByIdentifierAsync("globex");
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
+        await tenants.FindByIdentifierAsync("globex", TestContext.Current.CancellationToken);
         provider.GetRequiredService<ITenantStoreCache<string>>().InvalidateAll();
-        await tenants.GetTenantAsync("acme");
-        await tenants.FindByIdentifierAsync("globex");
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
+        await tenants.FindByIdentifierAsync("globex", TestContext.Current.CancellationToken);
 
         _store.Reads.Should().Equal("id:acme", "identifier:globex", "id:acme", "identifier:globex");
     }
@@ -110,7 +110,7 @@ public sealed class TenantStoreCacheTests
             _store.Reads.Clear();
             _store.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var reading = read().AsTask();
-            await _store.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await _store.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
             cache.Invalidate("acme");
             _store.Gate.SetResult();
@@ -130,10 +130,10 @@ public sealed class TenantStoreCacheTests
         await using var provider = services.BuildServiceProvider();
         var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
 
-        await tenants.GetTenantAsync("acme");
-        await tenants.GetTenantAsync("acme");
-        await tenants.FindByIdentifierAsync("acme");
-        await tenants.FindByIdentifierAsync("acme");
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
+        await tenants.FindByIdentifierAsync("acme", TestContext.Current.CancellationToken);
+        await tenants.FindByIdentifierAsync("acme", TestContext.Current.CancellationToken);
 
         _store.Reads.Should().HaveCount(4);
 
@@ -161,9 +161,9 @@ public sealed class TenantStoreCacheTests
         provider.GetRequiredService<ITenantStoreCache<string>>().Should().BeSameAs(provider.GetRequiredService<TenantStoreCache<string>>());
         provider.GetRequiredService<TenantStoreCacheOptions>().Duration.Should().Be(TimeSpan.FromSeconds(30));
 
-        await tenants.GetTenantAsync("acme");
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
         _time.Advance(TimeSpan.FromSeconds(30));
-        await tenants.GetTenantAsync("acme");
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
 
         _store.Reads.Should().HaveCount(2);
     }
@@ -190,9 +190,9 @@ public sealed class TenantStoreCacheTests
         await using var provider = Build(o => o.Duration = TimeSpan.MaxValue);
         var tenants = provider.GetRequiredService<ITenantStoreAccessor<string>>();
 
-        await tenants.GetTenantAsync("acme");
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
         _time.Advance(TimeSpan.FromDays(3650));
-        await tenants.GetTenantAsync("acme");
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
 
         _store.Reads.Should().ContainSingle();
     }

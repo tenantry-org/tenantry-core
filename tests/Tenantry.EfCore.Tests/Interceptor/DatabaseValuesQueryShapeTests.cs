@@ -40,7 +40,7 @@ public sealed class DatabaseValuesQueryShapeTests : IDisposable
         var noTracking = ignore.Arguments[0].Should().BeAssignableTo<MethodCallExpression>().Subject;
         noTracking.Method.Name.Should().Be(nameof(EntityFrameworkQueryableExtensions.AsNoTracking));
         noTracking.Arguments[0].Should().BeAssignableTo<EntityQueryRootExpression>()
-            .Which.EntityType.ClrType.Should().Be(typeof(Order));
+            .Which.EntityType.ClrType.Should().Be<Order>();
 
         DatabaseValuesQuery.FindIgnoreQueryFilters(select, Isolation()).Should().BeSameAs(ignore);
     }

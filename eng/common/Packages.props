@@ -20,7 +20,7 @@
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
-    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.v3" Version="4.0.1" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
   </ItemGroup>
 
@@ -31,6 +31,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[8.0.0, )" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="[8.0.0, )" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[8.0.4, 9.0.0)" />
+    <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="[8.0.2, 9.0.0)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
@@ -40,6 +41,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[9.0.0, )" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="[9.0.0, )" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[9.0.0, 10.0.0)" />
+    <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="[9.0.0, 10.0.0)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">

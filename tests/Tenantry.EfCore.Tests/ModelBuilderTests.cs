@@ -36,21 +36,21 @@ public sealed class ModelBuilderTests
         await using var conn = DbContextFactory.CreateSharedConnection();
 
         await using MixedDbContext db = new(DbContextFactory.Options<MixedDbContext>(ctx, conn));
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
 
         // Seed products (no tenant scope needed)
         db.Products.AddRange(
             new NonTenantedProduct { Name = "Widget" },
             new NonTenantedProduct { Name = "Gadget" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         // Query from acme scope
         ctx.As("acme");
-        var acmeView = await db.Products.AsNoTracking().ToListAsync();
+        var acmeView = await db.Products.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Query from globex scope
         ctx.As("globex");
-        var globexView = await db.Products.AsNoTracking().ToListAsync();
+        var globexView = await db.Products.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Both scopes see all products — no filter was applied
         acmeView.Should().HaveCount(2);
@@ -64,17 +64,17 @@ public sealed class ModelBuilderTests
         await using var conn = DbContextFactory.CreateSharedConnection();
 
         await using MixedDbContext db = new(DbContextFactory.Options<MixedDbContext>(ctx, conn));
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
 
         ctx.As("acme");
         db.Orders.Add(new Order { Description = "Acme order" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         ctx.As("globex");
-        var globexOrders = await db.Orders.AsNoTracking().ToListAsync();
+        var globexOrders = await db.Orders.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         globexOrders.Should().BeEmpty(); // filter applied, globex sees nothing
         ctx.As("acme");
-        (await db.Orders.AsNoTracking().ToListAsync()).Should().ContainSingle();
+        (await db.Orders.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().ContainSingle();
     }
 }

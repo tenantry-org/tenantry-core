@@ -22,22 +22,22 @@ public sealed class NonPublicTenantIdSetterTests : IDisposable
         {
             db.Private.Add(new PrivateSetterNote("acme note"));
             db.InitOnly.Add(new InitOnlyNote { Text = "acme note" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using (var db = await CreateAsync(_tenant.As("globex")))
         {
             db.Private.Add(new PrivateSetterNote("globex note"));
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            (await db.Private.SingleAsync()).Should().Match<PrivateSetterNote>(n => n.TenantId == "globex" && n.Text == "globex note");
-            (await db.InitOnly.CountAsync()).Should().Be(0);
+            (await db.Private.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Match<PrivateSetterNote>(n => n.TenantId == "globex" && n.Text == "globex note");
+            (await db.InitOnly.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
         }
 
         await using (var db = await CreateAsync(_tenant.As("acme")))
         {
-            (await db.Private.SingleAsync()).TenantId.Should().Be("acme");
-            (await db.InitOnly.SingleAsync()).TenantId.Should().Be("acme");
+            (await db.Private.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).TenantId.Should().Be("acme");
+            (await db.InitOnly.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).TenantId.Should().Be("acme");
         }
     }
 
@@ -47,12 +47,12 @@ public sealed class NonPublicTenantIdSetterTests : IDisposable
         await using (var db = await CreateAsync(_tenant.As("acme")))
         {
             db.Private.Add(new PrivateSetterNote("acme note"));
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using (var db = await CreateAsync(_tenant.As("acme")))
         {
-            var note = await db.Private.SingleAsync();
+            var note = await db.Private.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             note.Text = "changed as globex";
             _tenant.As("globex");
 

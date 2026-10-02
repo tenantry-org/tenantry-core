@@ -69,6 +69,6 @@ internal sealed class ScopedTenantStore(ScopedTenantStore.Session session) : ITe
     /// <summary>The store's scoped dependency; register it with <c>AddScoped</c>.</summary>
     public sealed class Session
     {
-        public bool Open => true;
+        public bool Open { get; } = true;
     }
 }

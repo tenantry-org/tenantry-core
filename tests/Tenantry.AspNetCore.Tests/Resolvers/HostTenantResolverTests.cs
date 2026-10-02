@@ -24,7 +24,7 @@ public sealed class HostTenantResolverTests
     [InlineData("notlocalhost", "notlocalhost")]
     public async Task ResolvesTheHostName_InLowerCase_WithoutPortOrTrailingDot_ButNotLocalhost(string host, string? expected)
     {
-        (await new HostTenantResolver().ResolveAsync(ContextWithHost(host))).Should().Be(expected);
+        (await new HostTenantResolver().ResolveAsync(ContextWithHost(host), TestContext.Current.CancellationToken)).Should().Be(expected);
     }
 
     [Theory]
@@ -43,7 +43,7 @@ public sealed class HostTenantResolverTests
         options.ExcludedDomains.Add(".Example.com ");
         HostTenantResolver resolver = new(options);
 
-        (await resolver.ResolveAsync(ContextWithHost(host))).Should().Be(expected);
+        (await resolver.ResolveAsync(ContextWithHost(host), TestContext.Current.CancellationToken)).Should().Be(expected);
     }
 
     [Theory]
@@ -51,7 +51,7 @@ public sealed class HostTenantResolverTests
     [InlineData("app.xn--mnchen-3ya.de")]
     public async Task AnInternationalDomainName_ResolvesInItsAsciiForm(string host)
     {
-        (await new HostTenantResolver().ResolveAsync(ContextWithHost(host))).Should().Be("app.xn--mnchen-3ya.de");
+        (await new HostTenantResolver().ResolveAsync(ContextWithHost(host), TestContext.Current.CancellationToken)).Should().Be("app.xn--mnchen-3ya.de");
     }
 
     [Theory]
@@ -63,8 +63,8 @@ public sealed class HostTenantResolverTests
         options.ExcludedDomains.Add(excluded);
         HostTenantResolver resolver = new(options);
 
-        (await resolver.ResolveAsync(ContextWithHost("www.münchen.de"))).Should().BeNull();
-        (await resolver.ResolveAsync(ContextWithHost("www.xn--mnchen-3ya.de"))).Should().BeNull();
+        (await resolver.ResolveAsync(ContextWithHost("www.münchen.de"), TestContext.Current.CancellationToken)).Should().BeNull();
+        (await resolver.ResolveAsync(ContextWithHost("www.xn--mnchen-3ya.de"), TestContext.Current.CancellationToken)).Should().BeNull();
     }
 
     [Fact]
@@ -75,6 +75,6 @@ public sealed class HostTenantResolverTests
 
         options.ExcludedDomains.Add("acme.com");
 
-        (await resolver.ResolveAsync(ContextWithHost("app.acme.com"))).Should().Be("app.acme.com");
+        (await resolver.ResolveAsync(ContextWithHost("app.acme.com"), TestContext.Current.CancellationToken)).Should().Be("app.acme.com");
     }
 }

@@ -28,7 +28,7 @@ public sealed class TenantConnectionStringProviderTests
             };
         });
 
-        (await Provider(services).GetAsync(Acme)).Should().Be("async acme");
+        (await Provider(services).GetAsync(Acme, TestContext.Current.CancellationToken)).Should().Be("async acme");
         Provider(services).Get(Acme).Should().Be("sync", "the synchronous method uses the synchronous delegate");
     }
 
@@ -37,7 +37,7 @@ public sealed class TenantConnectionStringProviderTests
     {
         using var services = Build(options => options.GetConnectionString = t => $"sync {t.TenantId}");
 
-        (await Provider(services).GetAsync(Acme)).Should().Be("sync acme");
+        (await Provider(services).GetAsync(Acme, TestContext.Current.CancellationToken)).Should().Be("sync acme");
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public sealed class TenantConnectionStringProviderTests
         using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
         {
             current.Get().Should().Be("Database=app_acme");
-            (await current.GetAsync()).Should().Be("Database=app_acme");
+            (await current.GetAsync(TestContext.Current.CancellationToken)).Should().Be("Database=app_acme");
         }
     }
 
@@ -78,7 +78,7 @@ public sealed class TenantConnectionStringProviderTests
 
         var connectionString = await services.GetRequiredService<ITenantScopeFactory<string>>()
             .RunInScopeAsync("acme", (scope, ct) =>
-                scope.ServiceProvider.GetRequiredService<CurrentTenantConnectionString<string>>().GetAsync(ct).AsTask());
+                scope.ServiceProvider.GetRequiredService<CurrentTenantConnectionString<string>>().GetAsync(ct).AsTask(), TestContext.Current.CancellationToken);
 
         connectionString.Should().Be("Database=app_acme");
     }

@@ -104,7 +104,7 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         }
 
         await using var acme = await CreateAsync(_tenant.As("acme"));
-        var customer = await acme.Customers.AsNoTracking().SingleAsync(c => c.Id == 1);
+        var customer = await acme.Customers.AsNoTracking().SingleAsync(c => c.Id == 1, cancellationToken: TestContext.Current.CancellationToken);
         customer.Home!.City.Should().Be("acme home");
         customer.Billing!.City.Should().Be("acme billing");
     }
@@ -152,13 +152,13 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
 
         await using (var db = await CreateAsync(_tenant.As("acme")))
         {
-            var customer = await db.Customers.SingleAsync(c => c.Id == 1);
+            var customer = await db.Customers.SingleAsync(c => c.Id == 1, cancellationToken: TestContext.Current.CancellationToken);
             customer.Phones[0].Number = "changed";
             customer.Phones.Add(new Phone { Id = 2, Number = "added" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             customer.Phones.RemoveAt(0);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         (await AcmePhonesAsync()).Should().Equal("2: added");
@@ -171,9 +171,9 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
 
         await using (var db = await CreateAsync(_tenant.As("acme")))
         {
-            var customer = await db.Customers.SingleAsync(c => c.Id == 1);
+            var customer = await db.Customers.SingleAsync(c => c.Id == 1, cancellationToken: TestContext.Current.CancellationToken);
             customer.Home!.Location!.Street = "acme new street";
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using (var db = await CreateAsync(_tenant.As("globex")))
@@ -186,7 +186,7 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         }
 
         await using var acme = await CreateAsync(_tenant.As("acme"));
-        (await acme.Customers.AsNoTracking().SingleAsync(c => c.Id == 1)).Home!.Location!.Street.Should().Be("acme new street");
+        (await acme.Customers.AsNoTracking().SingleAsync(c => c.Id == 1, cancellationToken: TestContext.Current.CancellationToken)).Home!.Location!.Street.Should().Be("acme new street");
     }
 
     [Fact]
@@ -195,14 +195,14 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         await using (var db = await CreateAsync(_tenant.As("acme")))
         {
             db.Customers.Add(new PremiumCustomer { Id = 2 });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using (var db = await CreateAsync(_tenant.As("acme")))
         {
-            var premium = (PremiumCustomer)await db.Customers.SingleAsync(c => c.Id == 2);
+            var premium = (PremiumCustomer)await db.Customers.SingleAsync(c => c.Id == 2, cancellationToken: TestContext.Current.CancellationToken);
             premium.Perk = new Perk { Name = "acme perk" };
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using (var db = await CreateAsync(_tenant.As("globex")))
@@ -215,7 +215,7 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         }
 
         await using var acme = await CreateAsync(_tenant.As("acme"));
-        ((PremiumCustomer)await acme.Customers.AsNoTracking().SingleAsync(c => c.Id == 2)).Perk!.Name.Should().Be("acme perk");
+        ((PremiumCustomer)await acme.Customers.AsNoTracking().SingleAsync(c => c.Id == 2, cancellationToken: TestContext.Current.CancellationToken)).Perk!.Name.Should().Be("acme perk");
     }
 
     [Fact]
@@ -224,14 +224,14 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         await using (var seed = await CreateAsync(_tenant.AsNone()))
         {
             seed.Catalogues.Add(new Catalogue { Id = 1, Entries = { new Entry { Id = 1, Text = "global" } } });
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using var db = await CreateAsync(_tenant.As("globex"));
         Catalogue stub = new() { Id = 1 };
         db.Attach(stub);
         stub.Entries.Add(new Entry { Id = 2, Text = "added" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.ChangeTracker.Clear();
 
         var entry = db.Entry(new Entry { Id = 1, Text = "changed without its owner" });

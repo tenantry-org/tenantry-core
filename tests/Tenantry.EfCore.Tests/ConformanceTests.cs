@@ -75,7 +75,7 @@ public sealed class ConformanceTests : IDisposable
 
                 (await db.Orders.AsNoTracking().SingleAsync(ct)).TenantId.Should().Be("acme", context.GetType().Name);
             }
-        });
+        }, TestContext.Current.CancellationToken);
         await Conformance.StartAndStopAsync(host);
     }
 

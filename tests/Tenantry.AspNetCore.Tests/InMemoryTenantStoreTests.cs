@@ -16,7 +16,7 @@ public sealed class InMemoryTenantStoreTests
     [Fact]
     public async Task GetTenantAsync_KnownId_ReturnsTenant()
     {
-        var result = await _store.GetTenantAsync("acme");
+        var result = await _store.GetTenantAsync("acme", TestContext.Current.CancellationToken);
 
         result.Should().NotBeNull();
         result.TenantId.Should().Be("acme");
@@ -26,7 +26,7 @@ public sealed class InMemoryTenantStoreTests
     [Fact]
     public async Task GetTenantAsync_UnknownId_ReturnsNull()
     {
-        var result = await _store.GetTenantAsync("unknown");
+        var result = await _store.GetTenantAsync("unknown", TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -34,7 +34,7 @@ public sealed class InMemoryTenantStoreTests
     [Fact]
     public async Task GetAllTenantsAsync_ReturnsAllTenants()
     {
-        var result = await _store.GetAllTenantsAsync();
+        var result = await _store.GetAllTenantsAsync(TestContext.Current.CancellationToken);
 
         result.Should().HaveCount(2);
         result.Select(t => t.TenantId).Should().Contain(["acme", "globex"]);
@@ -46,7 +46,7 @@ public sealed class InMemoryTenantStoreTests
         var id = Guid.NewGuid();
         InMemoryTenantStore<Guid> store = new([new TenantDescriptor<Guid> { TenantId = id, Name = "Test" }]);
 
-        var result = await store.GetTenantAsync(id);
+        var result = await store.GetTenantAsync(id, TestContext.Current.CancellationToken);
 
         result.Should().NotBeNull();
         result.TenantId.Should().Be(id);

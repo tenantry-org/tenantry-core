@@ -12,7 +12,7 @@ public sealed class QueryStringTenantResolverTests
         DefaultHttpContext context = new();
         context.Request.QueryString = new QueryString("?tenantId=acme");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("acme");
     }
@@ -23,7 +23,7 @@ public sealed class QueryStringTenantResolverTests
         QueryStringTenantResolver resolver = new();
         DefaultHttpContext context = new();
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -35,7 +35,7 @@ public sealed class QueryStringTenantResolverTests
         DefaultHttpContext context = new();
         context.Request.QueryString = new QueryString("?tenantId=   ");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -47,7 +47,7 @@ public sealed class QueryStringTenantResolverTests
         DefaultHttpContext context = new();
         context.Request.QueryString = new QueryString("?tenantId=+acme+");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         // URL-decoded " acme " trimmed → "acme"
         result.Should().Be("acme");
@@ -60,7 +60,7 @@ public sealed class QueryStringTenantResolverTests
         DefaultHttpContext context = new();
         context.Request.QueryString = new QueryString("?tid=globex");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("globex");
     }

@@ -42,9 +42,9 @@ public sealed class PooledContextTests : IDisposable
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
-            await db.Database.EnsureCreatedAsync();
+            await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
             db.Orders.Add(new Order { Description = "acme order" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             instanceId = db.ContextId.InstanceId;
         }
 
@@ -54,10 +54,10 @@ public sealed class PooledContextTests : IDisposable
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
 
             db.ContextId.InstanceId.Should().Be(instanceId, "the pooled instance is reused");
-            (await db.Orders.CountAsync()).Should().Be(0);
+            (await db.Orders.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
 
             db.Orders.Add(new Order { Description = "globex order" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         using (tenants.Use(Tenant("acme")))
@@ -65,7 +65,7 @@ public sealed class PooledContextTests : IDisposable
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
 
-            (await db.Orders.Select(o => o.Description).ToListAsync()).Should().Equal("acme order");
+            (await db.Orders.Select(o => o.Description).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal("acme order");
         }
 
         Rows().Should().BeEquivalentTo([("acme", "acme order"), ("globex", "globex order")]);
@@ -82,10 +82,10 @@ public sealed class PooledContextTests : IDisposable
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
-            await db.Database.EnsureCreatedAsync();
+            await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
             Order order = new() { Description = "acme order" };
             db.Orders.Add(order);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             acmeOrderId = order.Id;
         }
 
@@ -113,9 +113,9 @@ public sealed class PooledContextTests : IDisposable
         var factory = services.GetRequiredService<IDbContextFactory<PooledOrdersContext>>();
 
         using (tenants.Use(Tenant("setup")))
-        await using (var db = await factory.CreateDbContextAsync())
+        await using (var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken))
         {
-            await db.Database.EnsureCreatedAsync();
+            await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
         }
 
         var tenantIds = Enumerable.Range(1, 16).Select(i => $"tenant-{i}").ToArray();

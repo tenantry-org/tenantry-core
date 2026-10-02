@@ -78,7 +78,6 @@ using (var scope = app.Services.CreateScope())
 app.MapGet("/products", async (AppDbContext db) =>
 {
     var products = await db.Products
-        .Include(p => p.Category)
         .Select(p => new
         {
             p.Id,
@@ -108,8 +107,6 @@ app.MapGet("/orders", async (AppDbContext db, ITenantContext<string> ctx) =>
         return Results.BadRequest("No tenant resolved.");
 
     var orders = await db.Orders
-        .Include(o => o.Items)
-            .ThenInclude(i => i.Product)
         .Select(o => new
         {
             o.Id,

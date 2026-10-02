@@ -6,11 +6,9 @@ using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;
 
-public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture)
-    : ProviderWriteIsolationTests(fixture), IClassFixture<SqlServerFixture>;
+public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : ProviderWriteIsolationTests(fixture);
 
-public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture)
-    : ProviderWriteIsolationTests(fixture), IClassFixture<PostgreSqlFixture>;
+public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : ProviderWriteIsolationTests(fixture);
 
 /// <summary>
 /// Write-isolation guarantees that depend on the database's behaviour, run against each real provider:
@@ -37,7 +35,11 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
         _tenants = _services.GetRequiredService<ITenantContextSetter<string>>();
     }
 
-    public ValueTask DisposeAsync() => _services.DisposeAsync();
+    public ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        return _services.DisposeAsync();
+    }
 
     [Fact]
     public async Task ForgedDetachedUpdate_MatchesNoRow_AndLeavesTheRowUnchanged()
@@ -191,11 +193,11 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
         {
             using (tenants.Use(Tenant(tenantId)))
             {
-                await using var db = await factory.CreateDbContextAsync();
+                await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
                 db.Orders.Add(new ProviderOrder { Description = "pooled" });
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-                (await db.Orders.Select(o => o.TenantId).Distinct().ToListAsync()).Should().Equal(tenantId);
+                (await db.Orders.Select(o => o.TenantId).Distinct().ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal(tenantId);
             }
         }
     }

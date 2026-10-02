@@ -32,7 +32,7 @@ public sealed class ClaimTenantResolverTests
         ClaimTenantResolver resolver = new();
         var context = ContextWithClaim("tenant_id", "acme");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("acme");
     }
@@ -43,7 +43,7 @@ public sealed class ClaimTenantResolverTests
         ClaimTenantResolver resolver = new();
         var context = ContextWithoutClaim();
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -54,7 +54,7 @@ public sealed class ClaimTenantResolverTests
         ClaimTenantResolver resolver = new();
         var context = ContextWithClaim("tenant_id", "acme", authenticationType: null);
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("acme");
     }
@@ -65,7 +65,7 @@ public sealed class ClaimTenantResolverTests
         ClaimTenantResolver resolver = new();
         var context = ContextWithoutClaim(authenticationType: null);
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -76,7 +76,7 @@ public sealed class ClaimTenantResolverTests
         ClaimTenantResolver resolver = new();
         var context = ContextWithClaim("tenant_id", "   ");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().BeNull();
     }
@@ -87,7 +87,7 @@ public sealed class ClaimTenantResolverTests
         ClaimTenantResolver resolver = new("org_id");
         var context = ContextWithClaim("org_id", "globex");
 
-        var result = await resolver.ResolveAsync(context);
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
 
         result.Should().Be("globex");
     }

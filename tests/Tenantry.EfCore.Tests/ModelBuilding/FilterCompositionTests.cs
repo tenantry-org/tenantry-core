@@ -26,7 +26,7 @@ public sealed class FilterCompositionTests : IDisposable
         await using var db = await CreateAsync<UnnamedFilterContext>();
         await SeedAsync(db);
 
-        (await db.Items.Select(item => item.Name).ToListAsync()).Should().Equal("acme active");
+        (await db.Items.Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal("acme active");
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class FilterCompositionTests : IDisposable
         await using var db = await CreateAsync<UnnamedFilterContext>();
         await SeedAsync(db);
 
-        (await db.Items.IgnoreQueryFilters().Select(item => item.Name).ToListAsync())
+        (await db.Items.IgnoreQueryFilters().Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken))
             .Should().BeEquivalentTo("acme active", "acme deleted", "globex active");
     }
 
@@ -45,7 +45,7 @@ public sealed class FilterCompositionTests : IDisposable
         await using var db = await CreateAsync<ComplexFilterContext>();
         await SeedAsync(db);
 
-        (await db.Items.Select(item => item.Name).ToListAsync()).Should().Equal("acme active");
+        (await db.Items.Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal("acme active");
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class FilterCompositionTests : IDisposable
         await using var db = await CreateAsync<FilterSetTwiceContext>();
         await SeedAsync(db);
 
-        (await db.Items.Select(item => item.Name).ToListAsync()).Should().BeEquivalentTo("acme active", "acme deleted");
+        (await db.Items.Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeEquivalentTo("acme active", "acme deleted");
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class FilterCompositionTests : IDisposable
         await using var db = await CreateAsync<ConfigurationClassContext>();
         await SeedAsync(db);
 
-        (await db.Items.Select(item => item.Name).ToListAsync()).Should().Equal("acme active");
+        (await db.Items.Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal("acme active");
     }
 
     [Fact]
@@ -72,10 +72,10 @@ public sealed class FilterCompositionTests : IDisposable
     {
         await using var db = await CreateAsync<UnnamedFilterContext>();
         db.Items.Add(new Item { Name = "stamped" });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.ChangeTracker.Clear();
 
-        (await db.Items.SingleAsync()).TenantId.Should().Be("acme");
+        (await db.Items.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).TenantId.Should().Be("acme");
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class FilterCompositionTests : IDisposable
         // entity's one filter, so Reload and GetDatabaseValues apply all of it.
         await using var db = await CreateAsync<UnnamedFilterContext>();
         await SeedAsync(db);
-        var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id);
+        var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id, cancellationToken: TestContext.Current.CancellationToken);
 
         db.Attach(new Item { Id = rows["acme active"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
         db.Attach(new Item { Id = rows["acme deleted"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
@@ -98,7 +98,7 @@ public sealed class FilterCompositionTests : IDisposable
     {
         await using var db = await CreateAsync<NamedFilterContext>();
         await SeedAsync(db);
-        var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id);
+        var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id, cancellationToken: TestContext.Current.CancellationToken);
 
         db.Attach(new Item { Id = rows["acme active"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
         db.Attach(new Item { Id = rows["acme deleted"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
@@ -120,10 +120,10 @@ public sealed class FilterCompositionTests : IDisposable
         await using var db = await CreateAsync<NamedFilterContext>();
         await SeedAsync(db);
 
-        (await db.Items.Select(item => item.Name).ToListAsync()).Should().Equal("acme active");
-        (await db.Items.IgnoreQueryFilters([TenantryQueryFilters.Tenant]).Select(item => item.Name).ToListAsync())
+        (await db.Items.Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Equal("acme active");
+        (await db.Items.IgnoreQueryFilters([TenantryQueryFilters.Tenant]).Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken))
             .Should().BeEquivalentTo("acme active", "globex active");
-        (await db.Items.IgnoreQueryFilters(["SoftDelete"]).Select(item => item.Name).ToListAsync())
+        (await db.Items.IgnoreQueryFilters(["SoftDelete"]).Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken))
             .Should().BeEquivalentTo("acme active", "acme deleted");
     }
 

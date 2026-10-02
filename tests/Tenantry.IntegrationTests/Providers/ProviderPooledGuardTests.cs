@@ -47,7 +47,7 @@ public sealed class SqlServerHiLoContext(DbContextOptions<SqlServerHiLoContext> 
 }
 
 public sealed class PostgreSqlPooledHiLoTests(PostgreSqlFixture fixture)
-    : ProviderPooledHiLoTests<PostgreSqlHiLoContext>(fixture), IClassFixture<PostgreSqlFixture>
+    : ProviderPooledHiLoTests<PostgreSqlHiLoContext>(fixture)
 {
     protected override async Task<string> ReadSequenceAsync(string database)
     {
@@ -59,7 +59,7 @@ public sealed class PostgreSqlPooledHiLoTests(PostgreSqlFixture fixture)
 }
 
 public sealed class SqlServerPooledHiLoTests(SqlServerFixture fixture)
-    : ProviderPooledHiLoTests<SqlServerHiLoContext>(fixture), IClassFixture<SqlServerFixture>
+    : ProviderPooledHiLoTests<SqlServerHiLoContext>(fixture)
 {
     protected override async Task<string> ReadSequenceAsync(string database)
     {
@@ -96,7 +96,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
 
     protected abstract Task<string> ReadSequenceAsync(string database);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _services = BuildPool<TContext>(Fixture, _runId, "hilo", _acme, _globex);
 
@@ -110,8 +110,10 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
         }
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
+
         foreach (var tenant in new[] { _acme, _globex })
         {
             using (Ambient.Use(tenant))
@@ -137,15 +139,15 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
 
         using (Ambient.Use(_acme))
         {
-            db = await Factory.CreateDbContextAsync();
+            db = await Factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
 
             if (openedBy == "OpenConnection")
             {
-                await db.Database.OpenConnectionAsync();
+                await db.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
             }
             else if (openedBy == "BeginTransaction")
             {
-                await db.Database.BeginTransactionAsync();
+                await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
             }
         }
 
@@ -171,16 +173,16 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
     {
         using (Ambient.Use(_acme))
         {
-            await using var db = await Factory.CreateDbContextAsync();
+            await using var db = await Factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
 
             if (openConnection)
             {
-                await db.Database.OpenConnectionAsync();
+                await db.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
             }
 
             HiLoItem item = new() { Text = "acme item" };
-            await db.AddAsync(item);
-            await db.SaveChangesAsync();
+            await db.AddAsync(item, TestContext.Current.CancellationToken);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             item.Id.Should().BePositive();
         }
@@ -215,11 +217,9 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
     }
 }
 
-public sealed class SqlServerPooledGuardTests(SqlServerFixture fixture)
-    : ProviderPooledGuardTests(fixture), IClassFixture<SqlServerFixture>;
+public sealed class SqlServerPooledGuardTests(SqlServerFixture fixture) : ProviderPooledGuardTests(fixture);
 
-public sealed class PostgreSqlPooledGuardTests(PostgreSqlFixture fixture)
-    : ProviderPooledGuardTests(fixture), IClassFixture<PostgreSqlFixture>;
+public sealed class PostgreSqlPooledGuardTests(PostgreSqlFixture fixture) : ProviderPooledGuardTests(fixture);
 
 /// <summary>
 /// Database creation, migrations, raw SQL and transactions on a context whose transaction Acme opened, used
@@ -237,7 +237,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
     private IDbContextFactory<ProviderOrdersContext> Factory =>
         _services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>();
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _services = ProviderPooledHiLoTests<ProviderOrdersContext>.BuildPool<ProviderOrdersContext>(
             fixture, _runId, "guard", _acme, _globex);
@@ -254,8 +254,10 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
         }
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
+
         foreach (var tenant in new[] { _acme, _globex })
         {
             using (Ambient.Use(tenant))
@@ -287,8 +289,8 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
 
         using (Ambient.Use(_acme))
         {
-            db = await Factory.CreateDbContextAsync();
-            await db.Database.BeginTransactionAsync();
+            db = await Factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+            await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
         }
 
         Exception? error = null;
@@ -301,16 +303,16 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
                 await (operation switch
                 {
                     "EnsureDeleted" => Task.FromResult(db.Database.EnsureDeleted()),
-                    "EnsureDeletedAsync" => db.Database.EnsureDeletedAsync(),
-                    "EnsureCreated" => db.Database.EnsureCreatedAsync(),
-                    "Migrate" => db.Database.MigrateAsync(),
-                    "GetAppliedMigrations" => db.Database.GetAppliedMigrationsAsync(),
-                    "SqlQueryRaw" => db.Database.SqlQueryRaw<string>(SelectDescriptions()).ToListAsync(),
+                    "EnsureDeletedAsync" => db.Database.EnsureDeletedAsync(TestContext.Current.CancellationToken),
+                    "EnsureCreated" => db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken),
+                    "Migrate" => db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken),
+                    "GetAppliedMigrations" => db.Database.GetAppliedMigrationsAsync(cancellationToken: TestContext.Current.CancellationToken),
+                    "SqlQueryRaw" => db.Database.SqlQueryRaw<string>(SelectDescriptions()).ToListAsync(cancellationToken: TestContext.Current.CancellationToken),
                     "ExecuteUpdate" => db.Orders.IgnoreQueryFilters()
-                        .ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "overwritten by globex")),
-                    "CanConnect" => db.Database.CanConnectAsync(),
-                    "CreateSavepoint" => db.Database.CurrentTransaction!.CreateSavepointAsync("globex"),
-                    "CommitAcmeTransaction" => db.Database.CommitTransactionAsync(),
+                        .ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "overwritten by globex"), cancellationToken: TestContext.Current.CancellationToken),
+                    "CanConnect" => db.Database.CanConnectAsync(TestContext.Current.CancellationToken),
+                    "CreateSavepoint" => db.Database.CurrentTransaction!.CreateSavepointAsync("globex", TestContext.Current.CancellationToken),
+                    "CommitAcmeTransaction" => db.Database.CommitTransactionAsync(TestContext.Current.CancellationToken),
                     _ => throw new ArgumentOutOfRangeException(nameof(operation))
                 });
             }
@@ -343,8 +345,8 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
                 scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
             }
 
-            db = await Factory.CreateDbContextAsync();
-            await db.Database.OpenConnectionAsync();
+            db = await Factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+            await db.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
         }
 
         await using (db)
@@ -385,7 +387,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
 /// Npgsql can supply connections from an <see cref="NpgsqlDataSource"/>, passed to <c>UseNpgsql</c> or registered
 /// in DI. Every lease must still be connected to its tenant's own database.
 /// </summary>
-public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : IClassFixture<PostgreSqlFixture>
+public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture)
 {
     private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
     private readonly TenantDescriptor<string> _acme = new() { TenantId = "acme", Name = "Acme" };
@@ -437,11 +439,11 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : ICl
             {
                 using (ambient.Use(tenant))
                 {
-                    await using var db = await factory.CreateDbContextAsync();
+                    await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
                     databases.Add($"{tenant.TenantId} -> {db.Database.GetDbConnection().Database}");
-                    await db.Database.EnsureCreatedAsync();
+                    await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
                     db.Orders.Add(new ProviderOrder { Description = $"{tenant.TenantId} via {mode}" });
-                    await db.SaveChangesAsync();
+                    await db.SaveChangesAsync(TestContext.Current.CancellationToken);
                 }
             }
         }
@@ -451,8 +453,8 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture) : ICl
             {
                 using (ambient.Use(tenant))
                 {
-                    await using var db = await factory.CreateDbContextAsync();
-                    await db.Database.EnsureDeletedAsync();
+                    await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+                    await db.Database.EnsureDeletedAsync(TestContext.Current.CancellationToken);
                 }
             }
         }

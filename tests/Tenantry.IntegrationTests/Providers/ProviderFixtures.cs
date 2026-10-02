@@ -8,11 +8,19 @@ using Tenantry.EfCore;
 using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
 
+// Every test in this assembly needs Docker: run the others with `dotnet test --filter Category!=Integration`.
+[assembly: Trait("Category", "Integration")]
+
+// One container per database for each framework's test run, shared by every test class (MySQL's is in
+// MySqlProviderTests.cs).
+[assembly: AssemblyFixture(typeof(Tenantry.IntegrationTests.Providers.SqlServerFixture))]
+[assembly: AssemblyFixture(typeof(Tenantry.IntegrationTests.Providers.PostgreSqlFixture))]
+
 namespace Tenantry.IntegrationTests.Providers;
 
 /// <summary>
-/// One database container per provider, shared by every test in a provider's test class. Tests use fresh
-/// tenant ids, so they never need a clean database.
+/// One database container per provider, shared by every test class in the run. Tests use fresh tenant ids or
+/// databases, so they never need a clean database.
 /// </summary>
 public abstract class DatabaseFixture : IAsyncLifetime
 {
@@ -28,7 +36,7 @@ public abstract class DatabaseFixture : IAsyncLifetime
     /// <summary>A quoted identifier for raw SQL: ANSI double quotes, unless the provider uses another style.</summary>
     public virtual string Quote(string identifier) => $"\"{identifier}\"";
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await Container.StartAsync();
 
@@ -37,13 +45,17 @@ public abstract class DatabaseFixture : IAsyncLifetime
         await db.Database.EnsureCreatedAsync();
     }
 
-    public Task DisposeAsync() => Container.DisposeAsync().AsTask();
+    public ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        return Container.DisposeAsync();
+    }
 }
 
 public sealed class SqlServerFixture : DatabaseFixture
 {
     protected override IDatabaseContainer Container { get; } =
-        new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+        new MsSqlBuilder(ContainerImages.SqlServer).Build();
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
         options.UseSqlServer(ConnectionString);
@@ -55,7 +67,7 @@ public sealed class SqlServerFixture : DatabaseFixture
 public sealed class PostgreSqlFixture : DatabaseFixture
 {
     protected override IDatabaseContainer Container { get; } =
-        new PostgreSqlBuilder("postgres:16-alpine").Build();
+        new PostgreSqlBuilder(ContainerImages.PostgreSql).Build();
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
         options.UseNpgsql(ConnectionString);

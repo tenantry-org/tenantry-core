@@ -34,10 +34,10 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
 #if EFCORE10_OR_GREATER
         call.Method.DeclaringType.Should().Be(typeof(EntityFrameworkQueryableExtensions));
         var setters = call.Arguments[1].Should().BeAssignableTo<NewArrayExpression>().Subject;
-        setters.Type.Should().Be(typeof(ITuple[]));
+        setters.Type.Should().Be<ITuple[]>();
         setters.Expressions.Should().HaveCount(2)
             .And.AllSatisfy(setter => setter.Should().BeAssignableTo<NewExpression>()
-                .Which.Type.Should().Be(typeof(Tuple<Delegate, object>)));
+                .Which.Type.Should().Be<Tuple<Delegate, object>>());
 #else
 #if NET9_0
         call.Method.DeclaringType.Should().Be(typeof(EntityFrameworkQueryableExtensions));
@@ -46,7 +46,7 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
 #endif
         var setters = call.Arguments[1].Should().BeAssignableTo<UnaryExpression>()
             .Which.Operand.Should().BeAssignableTo<LambdaExpression>().Subject;
-        setters.Parameters.Should().ContainSingle().Which.Type.Should().Be(typeof(SetPropertyCalls<Order>));
+        setters.Parameters.Should().ContainSingle().Which.Type.Should().Be<SetPropertyCalls<Order>>();
         setters.Body.Should().BeAssignableTo<MethodCallExpression>().Which.Method.Name.Should().Be("SetProperty");
 #endif
     }
@@ -88,7 +88,7 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
         // EF Core 8 and 9 accept a setter lambda that invokes another; the guard reads through the invocation.
         await using var db = await DbContextFactory.CreateContextAsync(TestTenantContext.For("acme"), _connection);
 
-        (await db.Orders.ExecuteUpdateAsync(Invoking(s => s.SetProperty(o => o.Description, "fixed")))).Should().Be(0);
+        (await db.Orders.ExecuteUpdateAsync(Invoking(s => s.SetProperty(o => o.Description, "fixed")), cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
         await db.Awaiting(context => context.Orders.ExecuteUpdateAsync(Invoking(s => s.SetProperty(o => o.TenantId, "other"))))
             .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("ExecuteUpdate cannot set TenantId*");
     }

@@ -50,7 +50,7 @@ public sealed class NonPooledDatabasePerTenantTests() : DatabasePerTenantTests(p
         var db = scope.ServiceProvider.GetRequiredService<SessionNotesContext>();
 
         db.Session.Should().BeSameAs(scope.ServiceProvider.GetRequiredService<NotesSession>());
-        (await db.Notes.CountAsync()).Should().Be(0);
+        (await db.Notes.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
     }
 
     public sealed class NotesSession;
@@ -80,7 +80,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         ["globex"] = new SqliteConnection($"DataSource=pool-globex-{Guid.NewGuid():N};Mode=Memory;Cache=Shared")
     };
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         foreach (var database in _databases.Values)
         {
@@ -96,14 +96,16 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         }
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
+
         foreach (var database in _databases.Values)
         {
             database.Dispose();
         }
 
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     [Fact]
@@ -121,8 +123,8 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
             instances.Add(db.ContextId.InstanceId);
 
             db.Notes.Add(new PooledNote { Text = $"{tenant.TenantId} note" });
-            await db.SaveChangesAsync();
-            seen.Add($"{tenant.TenantId}:{await db.Notes.CountAsync()}");
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            seen.Add($"{tenant.TenantId}:{await db.Notes.CountAsync(cancellationToken: TestContext.Current.CancellationToken)}");
         }
 
         instances.Should().HaveCount(pooled ? 1 : 3, pooled ? "the one pooled instance serves every lease" : "every scope has its own");
@@ -142,14 +144,14 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         {
             await using var db = factory.CreateDbContext();
             db.Notes.Add(new PooledNote { Text = "sync lease" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         using (ambient.Use(Acme))
         {
-            await using var db = await factory.CreateDbContextAsync();
+            await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
             db.Notes.Add(new PooledNote { Text = "async lease" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         RowsIn("globex").Should().Equal("globex:sync lease");
@@ -218,7 +220,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
 
     public static TheoryData<string, string> OpenConnectionCases()
     {
-        TheoryData<string, string> cases = new();
+        TheoryData<string, string> cases = [];
 
         foreach (var openedBy in new[] { "OpenConnection", "BeginTransaction" })
             foreach (var command in new[] { "SaveChangesAsync", "SaveChanges", "CountAsync", "Count", "ExecuteSqlRaw", "ExecuteDelete" })
@@ -248,18 +250,18 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
             await using (var seed = factory.CreateDbContext())
             {
                 seed.Notes.Add(new PooledNote { Text = "acme's own note" });
-                await seed.SaveChangesAsync();
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
 
             db = factory.CreateDbContext();
 
             if (openedBy == "BeginTransaction")
             {
-                await db.Database.BeginTransactionAsync();
+                await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
             }
             else
             {
-                await db.Database.OpenConnectionAsync();
+                await db.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
             }
         }
 
@@ -303,7 +305,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
 
             if (openConnection)
             {
-                await db.Database.OpenConnectionAsync();
+                await db.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
             }
 
             var note = new PooledNote { Text = "added by acme" };
@@ -315,7 +317,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
             }
 
             note.TenantId.Should().BeEmpty();
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         RowsIn("acme").Should().Equal("acme:added by acme");
@@ -357,20 +359,20 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         using (ambient.Use(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
-            var transaction = openedBy == "BeginTransaction" ? await db.Database.BeginTransactionAsync() : null;
+            var transaction = openedBy == "BeginTransaction" ? await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken) : null;
 
             if (transaction is null)
             {
-                await db.Database.OpenConnectionAsync();
+                await db.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
             }
 
             db.Notes.Add(new PooledNote { Text = "inside an open connection" });
-            await db.SaveChangesAsync();
-            (await db.Notes.CountAsync()).Should().Be(1);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            (await db.Notes.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(1);
 
             if (transaction is not null)
             {
-                await transaction.CommitAsync();
+                await transaction.CommitAsync(TestContext.Current.CancellationToken);
             }
         }
 
@@ -391,7 +393,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         {
             await using var seed = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             seed.Notes.Add(new PooledNote { Text = "globex's own note" });
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         using (ambient.Use(Acme))
@@ -445,9 +447,9 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
 
         using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
         {
-            await using (var db = await factory.CreateDbContextAsync())
+            await using (var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken))
             {
-                (await db.Notes.CountAsync()).Should().Be(0);
+                (await db.Notes.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
             }
 
             var sync = () => factory.CreateDbContext();
@@ -487,7 +489,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             db.Notes.Add(new PooledNote { Text = "once" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             db.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()!.Interceptors!
                 .Should().HaveCount(3, "the database guard, and Tenantry's save and query interceptors");
@@ -532,7 +534,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             db.Notes.Add(new PooledNote { Text = "observed" });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         observer.TenantIds.Should().Equal("acme");

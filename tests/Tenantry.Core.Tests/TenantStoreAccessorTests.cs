@@ -17,8 +17,8 @@ public sealed class TenantStoreAccessorTests
         // Resolved from the root provider, as a hosted service would. A captive scoped store would fail scope validation.
         var accessor = provider.GetRequiredService<ITenantStoreAccessor<string>>();
 
-        (await accessor.GetTenantAsync("acme"))!.TenantId.Should().Be("acme");
-        (await accessor.GetAllTenantsAsync()).Select(t => t.TenantId).Should().Equal("acme", "globex");
+        (await accessor.GetTenantAsync("acme", TestContext.Current.CancellationToken))!.TenantId.Should().Be("acme");
+        (await accessor.GetAllTenantsAsync(TestContext.Current.CancellationToken)).Select(t => t.TenantId).Should().Equal("acme", "globex");
 
         ScopedStore.Created.Should().HaveCount(2);
         ScopedStore.Created.Should().OnlyContain(store => store.Disposed);
@@ -31,7 +31,7 @@ public sealed class TenantStoreAccessorTests
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }]));
         await using var provider = services.BuildServiceProvider();
 
-        var tenant = await provider.GetRequiredService<ITenantStoreAccessor<string>>().GetTenantAsync("missing");
+        var tenant = await provider.GetRequiredService<ITenantStoreAccessor<string>>().GetTenantAsync("missing", TestContext.Current.CancellationToken);
 
         tenant.Should().BeNull();
     }

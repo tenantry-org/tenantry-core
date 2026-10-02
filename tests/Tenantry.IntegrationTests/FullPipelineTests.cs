@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 using Tenantry.EfCore;
-using Testcontainers.MsSql;
+using Tenantry.IntegrationTests.Providers;
 
 namespace Tenantry.IntegrationTests;
 
@@ -17,21 +17,18 @@ namespace Tenantry.IntegrationTests;
 /// against a real relational database.
 /// </summary>
 /// <remarks>
-/// xUnit creates a new class instance per [Fact], so each test gets its own fresh
-/// SQL Server container and database — no inter-test data leakage.
+/// xUnit creates a new class instance per [Fact], so each test gets its own database in the run's
+/// SQL Server container — no inter-test data leakage.
 /// </remarks>
-[Trait("Category", "Integration")]
-public sealed class FullPipelineTests : IAsyncLifetime
+public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifetime
 {
-    private readonly MsSqlContainer _sqlServer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly string _connectionString = sqlServer.WithDatabase($"pipeline_{Guid.NewGuid():N}");
 
     private WebApplication _app = null!;
     private HttpClient _client = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        await _sqlServer.StartAsync();
-
         // Force Development so the Developer Exception Page turns unhandled exceptions
         // (isolation violations, NOT NULL failures) into 500s. Without this, the host
         // defaults to Production in CI — no exception handler is registered, and TestServer
@@ -51,7 +48,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
         });
 
         builder.Services.AddDbContext<IntegrationOrderDbContext>(options => options
-            .UseSqlServer(_sqlServer.GetConnectionString())
+            .UseSqlServer(_connectionString)
             .UseTenantry());
 
         _app = builder.Build();
@@ -140,19 +137,19 @@ public sealed class FullPipelineTests : IAsyncLifetime
     {
         using var acmeClient = _app.GetTestClient();
         acmeClient.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
-        var postResponse = await acmeClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Acme Widget"));
+        var postResponse = await acmeClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Acme Widget"), cancellationToken: TestContext.Current.CancellationToken);
         postResponse.IsSuccessStatusCode.Should().BeTrue();
 
-        var created = await postResponse.Content.ReadFromJsonAsync<IntegrationOrderResponse>();
+        var created = await postResponse.Content.ReadFromJsonAsync<IntegrationOrderResponse>(cancellationToken: TestContext.Current.CancellationToken);
         created.Should().NotBeNull();
         created.TenantId.Should().Be("acme");
 
-        var acmeOrders = await acmeClient.GetFromJsonAsync<List<IntegrationOrderResponse>>("/orders");
+        var acmeOrders = await acmeClient.GetFromJsonAsync<List<IntegrationOrderResponse>>("/orders", cancellationToken: TestContext.Current.CancellationToken);
         acmeOrders.Should().HaveCount(1).And.AllSatisfy(o => o.TenantId.Should().Be("acme"));
 
         using var globexClient = _app.GetTestClient();
         globexClient.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
-        var globexOrders = await globexClient.GetFromJsonAsync<List<IntegrationOrderResponse>>("/orders");
+        var globexOrders = await globexClient.GetFromJsonAsync<List<IntegrationOrderResponse>>("/orders", cancellationToken: TestContext.Current.CancellationToken);
         globexOrders.Should().BeEmpty();
     }
 
@@ -162,7 +159,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
         using var client = _app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", "no-such-tenant");
 
-        var response = await client.GetAsync("/orders");
+        var response = await client.GetAsync("/orders", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -172,11 +169,11 @@ public sealed class FullPipelineTests : IAsyncLifetime
     {
         using var acmeSetup = _app.GetTestClient();
         acmeSetup.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
-        await acmeSetup.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Acme Widget"));
+        await acmeSetup.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Acme Widget"), cancellationToken: TestContext.Current.CancellationToken);
 
         using var globexSetup = _app.GetTestClient();
         globexSetup.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
-        await globexSetup.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Globex Gadget"));
+        await globexSetup.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Globex Gadget"), cancellationToken: TestContext.Current.CancellationToken);
 
         using var acmeClient = _app.GetTestClient();
         acmeClient.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
@@ -184,13 +181,13 @@ public sealed class FullPipelineTests : IAsyncLifetime
         globexClient.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
 
         var responses = await Task.WhenAll(
-            acmeClient.GetAsync("/orders"),
-            globexClient.GetAsync("/orders"));
+            acmeClient.GetAsync("/orders", TestContext.Current.CancellationToken),
+            globexClient.GetAsync("/orders", TestContext.Current.CancellationToken));
 
         var acmeOrders =
-            await responses[0].Content.ReadFromJsonAsync<List<IntegrationOrderResponse>>();
+            await responses[0].Content.ReadFromJsonAsync<List<IntegrationOrderResponse>>(cancellationToken: TestContext.Current.CancellationToken);
         var globexOrders =
-            await responses[1].Content.ReadFromJsonAsync<List<IntegrationOrderResponse>>();
+            await responses[1].Content.ReadFromJsonAsync<List<IntegrationOrderResponse>>(cancellationToken: TestContext.Current.CancellationToken);
 
         // AsyncLocal must not have leaked between concurrent async contexts
         acmeOrders.Should().NotBeNull().And.AllSatisfy(o => o.TenantId.Should().Be("acme"));
@@ -209,8 +206,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
         // rejected at the DB layer with a DbUpdateException → 500.
         using var client = _app.GetTestClient();
 
-        var postResponse = await client.PostAsJsonAsync("/orders",
-            new IntegrationCreateOrderRequest("No-tenant order"));
+        var postResponse = await client.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("No-tenant order"), cancellationToken: TestContext.Current.CancellationToken);
 
         postResponse.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
     }
@@ -225,12 +221,12 @@ public sealed class FullPipelineTests : IAsyncLifetime
 
         using var acmeClient = _app.GetTestClient();
         acmeClient.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
-        var acmeLabels = await acmeClient.GetFromJsonAsync<List<string>>("/labels");
+        var acmeLabels = await acmeClient.GetFromJsonAsync<List<string>>("/labels", cancellationToken: TestContext.Current.CancellationToken);
         acmeLabels.Should().ContainSingle().Which.Should().Be("Global notice");
 
         // No tenant header — endpoint still returns data
         using var anonClient = _app.GetTestClient();
-        var anonLabels = await anonClient.GetFromJsonAsync<List<string>>("/labels");
+        var anonLabels = await anonClient.GetFromJsonAsync<List<string>>("/labels", cancellationToken: TestContext.Current.CancellationToken);
         anonLabels.Should().ContainSingle().Which.Should().Be("Global notice");
     }
 
@@ -241,15 +237,15 @@ public sealed class FullPipelineTests : IAsyncLifetime
     {
         using var acmeClient = _app.GetTestClient();
         acmeClient.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
-        await acmeClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Acme Widget"));
+        await acmeClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Acme Widget"), cancellationToken: TestContext.Current.CancellationToken);
 
         using var globexClient = _app.GetTestClient();
         globexClient.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
-        await globexClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Globex Gadget"));
+        await globexClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Globex Gadget"), cancellationToken: TestContext.Current.CancellationToken);
 
         // Admin query — no tenant header, bypasses filter
         using var adminClient = _app.GetTestClient();
-        var allOrders = await adminClient.GetFromJsonAsync<List<IntegrationOrderResponse>>("/orders/all");
+        var allOrders = await adminClient.GetFromJsonAsync<List<IntegrationOrderResponse>>("/orders/all", cancellationToken: TestContext.Current.CancellationToken);
 
         allOrders.Should().HaveCount(2);
         allOrders.Should().Contain(o => o.TenantId == "acme");
@@ -264,8 +260,8 @@ public sealed class FullPipelineTests : IAsyncLifetime
         // Acme creates an order
         using var acmeClient = _app.GetTestClient();
         acmeClient.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
-        var postResponse = await acmeClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Acme Widget"));
-        var order = await postResponse.Content.ReadFromJsonAsync<IntegrationOrderResponse>();
+        var postResponse = await acmeClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Acme Widget"), cancellationToken: TestContext.Current.CancellationToken);
+        var order = await postResponse.Content.ReadFromJsonAsync<IntegrationOrderResponse>(cancellationToken: TestContext.Current.CancellationToken);
         order.Should().NotBeNull();
 
         // Globex tries to delete Acme's order via the admin endpoint.
@@ -273,7 +269,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
         // Interceptor sees Deleted entity with TenantId="acme" but current="globex" → throws.
         using var globexClient = _app.GetTestClient();
         globexClient.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
-        var deleteResponse = await globexClient.DeleteAsync($"/orders/{order.Id}/admin");
+        var deleteResponse = await globexClient.DeleteAsync($"/orders/{order.Id}/admin", TestContext.Current.CancellationToken);
 
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
     }
@@ -286,8 +282,7 @@ public sealed class FullPipelineTests : IAsyncLifetime
         using var acmeClient = _app.GetTestClient();
         acmeClient.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await acmeClient.PostAsJsonAsync("/orders/explicit-tenant",
-            new IntegrationCreateOrderWithTenantRequest("globex", "Spoofed order"));
+        var response = await acmeClient.PostAsJsonAsync("/orders/explicit-tenant", new IntegrationCreateOrderWithTenantRequest("globex", "Spoofed order"), cancellationToken: TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
     }
@@ -312,30 +307,29 @@ public sealed class FullPipelineTests : IAsyncLifetime
         });
 
         builder.Services.AddDbContext<IntegrationOrderDbContext>(options => options
-            .UseSqlServer(_sqlServer.GetConnectionString())
+            .UseSqlServer(_connectionString)
             .UseTenantry());
 
         await using var app = builder.Build();
         app.UseTenantry();
         app.MapGet("/tenant", (ITenantContext<string> ctx) => ctx.CurrentTenantId ?? "(none)");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<IntegrationOrderDbContext>().Database.EnsureCreatedAsync();
+        await scope.ServiceProvider.GetRequiredService<IntegrationOrderDbContext>().Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        var response = await client.GetAsync("/tenant?tenantId=acme");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/tenant?tenantId=acme", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("acme");
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _client.Dispose();
         await _app.DisposeAsync();
-        await _sqlServer.DisposeAsync();
     }
 }
 

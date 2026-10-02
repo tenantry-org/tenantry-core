@@ -6,11 +6,9 @@ using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;
 
-public sealed class SqlServerPooledDatabasePerTenantTests(SqlServerFixture fixture)
-    : ProviderPooledDatabasePerTenantTests(fixture), IClassFixture<SqlServerFixture>;
+public sealed class SqlServerPooledDatabasePerTenantTests(SqlServerFixture fixture) : ProviderPooledDatabasePerTenantTests(fixture);
 
-public sealed class PostgreSqlPooledDatabasePerTenantTests(PostgreSqlFixture fixture)
-    : ProviderPooledDatabasePerTenantTests(fixture), IClassFixture<PostgreSqlFixture>;
+public sealed class PostgreSqlPooledDatabasePerTenantTests(PostgreSqlFixture fixture) : ProviderPooledDatabasePerTenantTests(fixture);
 
 /// <summary>
 /// <c>AddDbContextPerTenantDatabase</c> with a pool against each real provider: one pooled context instance reused across two
@@ -29,7 +27,7 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
 
     private ITenantScopeFactory<string> Scopes => _services.GetRequiredService<ITenantScopeFactory<string>>();
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _services = Build(poolSize: 4);
 
@@ -40,8 +38,10 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
         }
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        GC.SuppressFinalize(this);
+
         foreach (var tenant in new[] { _acme, _globex })
         {
             await using var scope = Scopes.CreateScope(tenant);
@@ -64,8 +64,8 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
             instances.Add(db.ContextId.InstanceId);
 
             db.Orders.Add(new ProviderOrder { Description = $"{tenant.TenantId} {seen.Count}" });
-            await db.SaveChangesAsync();
-            seen.Add($"{tenant.TenantId}:{await db.Orders.CountAsync()}");
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            seen.Add($"{tenant.TenantId}:{await db.Orders.CountAsync(cancellationToken: TestContext.Current.CancellationToken)}");
         }
 
         instances.Should().ContainSingle("one pooled instance serves every lease");
@@ -102,15 +102,15 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
 
         using (ambient.Use(_acme))
         {
-            db = await _services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>().CreateDbContextAsync();
+            db = await _services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>().CreateDbContextAsync(TestContext.Current.CancellationToken);
 
             if (openedBy == "BeginTransaction")
             {
-                await db.Database.BeginTransactionAsync();
+                await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
             }
             else
             {
-                await db.Database.OpenConnectionAsync();
+                await db.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
             }
         }
 

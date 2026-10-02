@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
-using Testcontainers.MsSql;
+using Tenantry.IntegrationTests.Providers;
 
 namespace Tenantry.IntegrationTests;
 
@@ -14,24 +14,22 @@ namespace Tenantry.IntegrationTests;
 /// Proves that the full middleware → EF store → tenant context chain works
 /// against a real SQL Server database — not just an in-memory store.
 /// </summary>
-[Trait("Category", "Integration")]
-public sealed class EfCoreTenantStoreTests : IAsyncLifetime
+/// <remarks>Each test gets its own database in the run's SQL Server container.</remarks>
+public sealed class EfCoreTenantStoreTests(SqlServerFixture sqlServer) : IAsyncLifetime
 {
-    private readonly MsSqlContainer _sqlServer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly string _connectionString = sqlServer.WithDatabase($"store_{Guid.NewGuid():N}");
 
     private WebApplication _app = null!;
     private HttpClient _client = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        await _sqlServer.StartAsync();
-
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
         builder.Services.AddDbContext<EfStoreDbContext>(options =>
-            options.UseSqlServer(_sqlServer.GetConnectionString()));
+            options.UseSqlServer(_connectionString));
 
         builder.Services.AddTenantry<string>(t =>
         {
@@ -68,8 +66,8 @@ public sealed class EfCoreTenantStoreTests : IAsyncLifetime
         // The middleware must resolve "Acme Corp" from the DB, not from in-memory config.
         _client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
 
-        var response = await _client.GetAsync("/me");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await _client.GetAsync("/me", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         response.IsSuccessStatusCode.Should().BeTrue();
         body.Should().Be("\"Acme Corp\""); // Results.Ok serialises as JSON string
@@ -81,7 +79,7 @@ public sealed class EfCoreTenantStoreTests : IAsyncLifetime
         // With an access validator, a tenant that does not exist is refused like one that is not allowed.
         _client.DefaultRequestHeaders.Add("X-Tenant-Id", "not-in-db");
 
-        var response = await _client.GetAsync("/me");
+        var response = await _client.GetAsync("/me", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -92,7 +90,7 @@ public sealed class EfCoreTenantStoreTests : IAsyncLifetime
         // Tenant exists in the DB with IsActive = false: the store returns it and the validator → 403.
         _client.DefaultRequestHeaders.Add("X-Tenant-Id", "inactive");
 
-        var response = await _client.GetAsync("/me");
+        var response = await _client.GetAsync("/me", TestContext.Current.CancellationToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -103,16 +101,15 @@ public sealed class EfCoreTenantStoreTests : IAsyncLifetime
         // Tools that maintain every tenant's database (migrations, provisioning) enumerate the store.
         using var scope = _app.Services.CreateScope();
         var tenants = await scope.ServiceProvider.GetRequiredService<ITenantStoreAccessor<string>>()
-            .GetAllTenantsAsync();
+            .GetAllTenantsAsync(TestContext.Current.CancellationToken);
 
         tenants.Select(t => t.TenantId).Should().BeEquivalentTo("acme", "inactive");
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _client.Dispose();
         await _app.DisposeAsync();
-        await _sqlServer.DisposeAsync();
     }
 }
 
