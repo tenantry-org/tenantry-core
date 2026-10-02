@@ -87,8 +87,31 @@ public sealed class ProviderOrder : ITenantEntity<string>
     public string Description { get; set; } = string.Empty;
 }
 
+// Table-per-type: TenantId is in the ProviderAnimals table, a dog's Detail in ProviderDogs.
+public class ProviderAnimal : ITenantEntity<string>
+{
+    public int Id { get; set; }
+
+    [MaxLength(64)]
+    public string TenantId { get; set; } = string.Empty;
+}
+
+public sealed class ProviderDog : ProviderAnimal
+{
+    [MaxLength(64)]
+    public string Detail { get; set; } = string.Empty;
+}
+
 public sealed class ProviderOrdersContext(DbContextOptions<ProviderOrdersContext> options)
     : DbContext(options)
 {
     public DbSet<ProviderOrder> Orders => Set<ProviderOrder>();
+
+    public DbSet<ProviderAnimal> Animals => Set<ProviderAnimal>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ProviderAnimal>().UseTptMappingStrategy().ToTable("ProviderAnimals");
+        modelBuilder.Entity<ProviderDog>().ToTable("ProviderDogs");
+    }
 }

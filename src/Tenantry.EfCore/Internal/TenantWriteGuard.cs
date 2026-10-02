@@ -16,7 +16,7 @@ namespace Tenantry.EfCore.Internal;
 /// </summary>
 /// <remarks>
 /// A violation is logged (event 2001) and thrown before anything is written. The only query it runs reads the stored
-/// tenant of an owner whose <c>TenantId</c> EF Core does not write after an insert (see <c>CheckOwnerTenant</c>).
+/// tenant of an entity whose <c>TenantId</c> EF Core does not write after an insert (see <c>ConfirmStoredTenant</c>).
 /// </remarks>
 internal sealed class TenantWriteGuard<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -28,19 +28,24 @@ internal sealed class TenantWriteGuard<TKey>
     // The tracked entries by their values of each key an ownership names, built on first use.
     private readonly Dictionary<IKey, Dictionary<KeyValues, EntityEntry>> _byKey = [];
 
-    // Owners whose stored tenant is read before the save, by entity.
-    private readonly Dictionary<object, EntityEntry> _ownersToRead = new(ReferenceEqualityComparer.Instance);
+    // Whether the context's provider is relational: only then is an entity mapped to tables.
+    private readonly bool _isRelational;
 
-    // The entities the save both deletes and adds under one key, found on first use.
-    private HashSet<object>? _sharedIdentities;
+    // Entities whose stored tenant is read before the save, by entity.
+    private readonly Dictionary<object, EntityEntry> _rowsToRead = new(ReferenceEqualityComparer.Instance);
+
+    // The entities the save both deletes and adds under one key, each with whether its pair spans tables, found on
+    // first use.
+    private Dictionary<object, bool>? _sharedIdentities;
 
     // Owned entities whose owner is checked once every new entity is stamped: a new owner's key can include its
     // TenantId, which its owned entities' foreign keys take when it is stamped.
     private readonly List<EntityEntry> _ownedWrites = [];
 
-    private TenantWriteGuard(IReadOnlyList<EntityEntry> entries, TKey tenantId, ILogger logger)
+    private TenantWriteGuard(IReadOnlyList<EntityEntry> entries, TKey tenantId, ILogger logger, bool isRelational)
     {
         _entries = entries;
+        _isRelational = isRelational;
         _tenantId = tenantId;
         _logger = logger;
     }
@@ -55,9 +60,9 @@ internal sealed class TenantWriteGuard<TKey>
             return;
         }
 
-        foreach (var owner in guard._ownersToRead.Values)
+        foreach (var row in guard._rowsToRead.Values)
         {
-            guard.CheckStoredTenant(owner, owner.GetDatabaseValues());
+            guard.CheckStoredTenant(row, row.GetDatabaseValues());
         }
     }
 
@@ -69,13 +74,13 @@ internal sealed class TenantWriteGuard<TKey>
             return;
         }
 
-        foreach (var owner in guard._ownersToRead.Values)
+        foreach (var row in guard._rowsToRead.Values)
         {
-            guard.CheckStoredTenant(owner, await owner.GetDatabaseValuesAsync(cancellationToken));
+            guard.CheckStoredTenant(row, await row.GetDatabaseValuesAsync(cancellationToken));
         }
     }
 
-    // Checks the change tracker, and returns the guard when a tenant is current, with the owners left to read.
+    // Checks the change tracker, and returns the guard when a tenant is current, with the rows left to read.
     private static TenantWriteGuard<TKey>? Begin(DbContext context)
     {
         var services = ApplicationServices.Find(context);
@@ -92,7 +97,7 @@ internal sealed class TenantWriteGuard<TKey>
             return null;
         }
 
-        var guard = new TenantWriteGuard<TKey>(entries, tenantContext.CurrentTenant!.TenantId, logger);
+        var guard = new TenantWriteGuard<TKey>(entries, tenantContext.CurrentTenant!.TenantId, logger, context.Database.IsRelational());
         guard.CheckEntries();
         return guard;
     }
@@ -192,8 +197,20 @@ internal sealed class TenantWriteGuard<TKey>
                 break;
 
             case EntityState.Modified:
+                CheckChanged(entry, entity);
+                break;
+
             case EntityState.Deleted:
                 CheckChanged(entry, entity);
+
+                // A save that deletes an entity and adds one under the same key saves the pair as an UPDATE of what
+                // differs between them, table by table, which for a pair over more than one table can leave out
+                // TenantId's table and so its token. (On one table, the UPDATE carries the deleted one's token.)
+                if (!IsKeyedByTenant(entry) && SharesIdentity(entry, out var spansTables) && spansTables)
+                {
+                    _rowsToRead.TryAdd(entry.Entity, entry);
+                }
+
                 break;
 
             case EntityState.Detached:
@@ -251,6 +268,15 @@ internal sealed class TenantWriteGuard<TKey>
             ownership.Properties.Any(property => entry.Property(property).IsModified))
         {
             _ownedWrites.Add(entry);
+        }
+
+        // An entity mapped to more than one table (TPT, entity splitting) is updated only in the tables whose columns
+        // changed, and only the table with TenantId checks its token, so a change to another table's columns alone
+        // would match the row by its key: its stored tenant is confirmed as well. Keyed by its TenantId, every
+        // table's UPDATE matches it already.
+        if (entry.State == EntityState.Modified && !IsKeyedByTenant(entry) && SpansTables(entry.Metadata))
+        {
+            ConfirmStoredTenant(entry);
         }
     }
 
@@ -316,7 +342,7 @@ internal sealed class TenantWriteGuard<TKey>
             case EntityState.Added or EntityState.Deleted:
                 if (SharesIdentity(owner))
                 {
-                    _ownersToRead.TryAdd(owner.Entity, owner);
+                    _rowsToRead.TryAdd(owner.Entity, owner);
                 }
 
                 return;
@@ -339,30 +365,46 @@ internal sealed class TenantWriteGuard<TKey>
             return;
         }
 
-        if (tenantId.GetAfterSaveBehavior() != PropertySaveBehavior.Save)
+        ConfirmStoredTenant(owner);
+    }
+
+    // Makes the save confirm that an entry's stored row is the current tenant's: its TenantId is written back with its
+    // token, or, when EF Core does not write TenantId after an insert, the row is read before the save.
+    private void ConfirmStoredTenant(EntityEntry entry)
+    {
+        if (entry.Metadata.FindProperty(TenantOwnership.TenantIdProperty)!.GetAfterSaveBehavior() != PropertySaveBehavior.Save)
         {
-            _ownersToRead.TryAdd(owner.Entity, owner);
+            _rowsToRead.TryAdd(entry.Entity, entry);
             return;
         }
 
-        owner.Property(TenantOwnership.TenantIdProperty).IsModified = true;
+        entry.Property(TenantOwnership.TenantIdProperty).IsModified = true;
     }
+
+    private bool SpansTables(IEntityType entityType) =>
+        _isRelational && entityType.GetTableMappings().Select(mapping => mapping.Table).Distinct().Skip(1).Any();
+
+    // Whether the entry's primary key includes its TenantId, so every statement that names the row names its tenant.
+    private static bool IsKeyedByTenant(EntityEntry entry) =>
+        entry.Metadata.FindProperty(TenantOwnership.TenantIdProperty)?.IsPrimaryKey() == true;
 
     // Whether EF Core writes a modified entry's row: only properties saved after an insert are, so one whose only
     // changes are to keys, values the database generates or properties configured not to be saved sends no UPDATE.
     private static bool IsWritten(EntityEntry entry) =>
         entry.Properties.Any(property => property.IsModified && property.Metadata.GetAfterSaveBehavior() == PropertySaveBehavior.Save);
 
-    private bool SharesIdentity(EntityEntry entry)
+    private bool SharesIdentity(EntityEntry entry) => SharesIdentity(entry, out _);
+
+    private bool SharesIdentity(EntityEntry entry, out bool spansTables)
     {
         _sharedIdentities ??= FindSharedIdentities();
-        return _sharedIdentities.Contains(entry.Entity);
+        return _sharedIdentities.TryGetValue(entry.Entity, out spansTables);
     }
 
     // The entities the save both deletes and adds under one key.
-    private HashSet<object> FindSharedIdentities()
+    private Dictionary<object, bool> FindSharedIdentities()
     {
-        HashSet<object> shared = new(ReferenceEqualityComparer.Instance);
+        Dictionary<object, bool> shared = new(ReferenceEqualityComparer.Instance);
         var pairs = _entries
             .Where(entry => entry.State is EntityState.Added or EntityState.Deleted && entry.Metadata.FindPrimaryKey() is not null)
             .GroupBy(entry => (entry.Metadata.GetRootType(), KeyValues.Of(entry, entry.Metadata.FindPrimaryKey()!.Properties)));
@@ -371,29 +413,34 @@ internal sealed class TenantWriteGuard<TKey>
         {
             if (pair.Any(entry => entry.State == EntityState.Added) && pair.Any(entry => entry.State == EntityState.Deleted))
             {
-                shared.UnionWith(pair.Select(entry => entry.Entity));
+                var spansTables = pair.Any(entry => SpansTables(entry.Metadata));
+
+                foreach (var entry in pair)
+                {
+                    shared.TryAdd(entry.Entity, spansTables);
+                }
             }
         }
 
         return shared;
     }
 
-    // An owner's stored values, read through the tenant filter, which Tenantry keeps on EF Core's database-values
+    // An entity's stored values, read through the tenant filter, which Tenantry keeps on EF Core's database-values
     // query: null when no row with its key is the current tenant's.
-    private void CheckStoredTenant(EntityEntry owner, PropertyValues? stored)
+    private void CheckStoredTenant(EntityEntry entry, PropertyValues? stored)
     {
         if (stored?[TenantOwnership.TenantIdProperty] is TKey storedTenantId && TenantOwnership.IsOwnedBy(storedTenantId, _tenantId))
         {
             return;
         }
 
-        var typeName = owner.Entity.GetType().Name;
+        var typeName = entry.Entity.GetType().Name;
         Violation(
-            owner,
+            entry,
             offendingTenantId: null,
-            $"The '{typeName}' that owns entities being saved is not stored for the current tenant '{_tenantId}'. " +
-            "SaveChanges was aborted before anything was written. Save owned entities only through an owner of the " +
-            "current tenant.");
+            $"Tenant isolation violation on entity '{typeName}': no row with its key is stored for the current tenant " +
+            $"'{_tenantId}'. SaveChanges was aborted before anything was written. Change an entity, or the entities it " +
+            "owns, only while its own tenant is current.");
     }
 
     // An ownership's principal: the tracked entry with the dependent's foreign key values in the key the ownership
@@ -418,7 +465,7 @@ internal sealed class TenantWriteGuard<TKey>
             _byKey.Add(key, byValues);
         }
 
-        return byValues.TryGetValue(KeyValues.Of(dependent, ownership.Properties), out var principal)
+        return byValues.TryGetValue(KeyValues.Of(dependent, ownership.Properties, key.Properties), out var principal)
                && ownership.PrincipalEntityType.IsAssignableFrom(principal.Metadata)
             ? principal
             : null;
@@ -469,16 +516,43 @@ internal sealed class TenantWriteGuard<TKey>
     }
 
     // The values of an entry's key properties, compared by value.
+    // Compared as EF Core compares key values, with each key property's comparer (a byte array by its contents).
     private sealed class KeyValues : IEquatable<KeyValues>
     {
         private readonly object?[] _values;
+        private readonly ValueComparer[] _comparers;
 
-        private KeyValues(object?[] values) => _values = values;
+        private KeyValues(object?[] values, ValueComparer[] comparers)
+        {
+            _values = values;
+            _comparers = comparers;
+        }
 
-        public static KeyValues Of(EntityEntry entry, IReadOnlyList<IProperty> properties) =>
-            new([.. properties.Select(property => entry.Property(property.Name).CurrentValue)]);
+        // The values of an entry's properties, compared as the key's values are.
+        public static KeyValues Of(EntityEntry entry, IReadOnlyList<IProperty> properties, IReadOnlyList<IProperty> key) =>
+            new(
+                [.. properties.Select(property => entry.Property(property.Name).CurrentValue)],
+                [.. key.Select(property => property.GetKeyValueComparer())]);
 
-        public bool Equals(KeyValues? other) => other is not null && _values.SequenceEqual(other._values);
+        public static KeyValues Of(EntityEntry entry, IReadOnlyList<IProperty> key) => Of(entry, key, key);
+
+        public bool Equals(KeyValues? other)
+        {
+            if (other is null || other._values.Length != _values.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < _values.Length; i++)
+            {
+                if (!_comparers[i].Equals(_values[i], other._values[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
 
         public override bool Equals(object? obj) => Equals(obj as KeyValues);
 
@@ -486,9 +560,9 @@ internal sealed class TenantWriteGuard<TKey>
         {
             HashCode hash = new();
 
-            foreach (var value in _values)
+            for (var i = 0; i < _values.Length; i++)
             {
-                hash.Add(value);
+                hash.Add(_values[i] is null ? 0 : _comparers[i].GetHashCode(_values[i]));
             }
 
             return hash.ToHashCode();

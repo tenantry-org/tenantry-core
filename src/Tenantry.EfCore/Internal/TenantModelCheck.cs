@@ -8,7 +8,8 @@ namespace Tenantry.EfCore.Internal;
 
 /// <summary>
 /// Checks, once per model, that tenant isolation is in place on every entity type that implements
-/// <see cref="ITenantEntity{TKey}"/>, and throws <see cref="TenantIsolationViolationException"/> when it is not.
+/// <see cref="ITenantEntity{TKey}"/>, and that no other entity type shares their tables, and throws
+/// <see cref="TenantIsolationViolationException"/> when it is not.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -48,6 +49,12 @@ internal static class TenantModelCheck
             foreach (var entityType in model.GetEntityTypes())
             {
                 Verify(entityType, isolation.KeyType);
+            }
+
+            // Only a relational provider maps tables.
+            if (context.Database.IsRelational())
+            {
+                TenantEntityTypes.ThrowIfATenantTableIsShared(model, isolation.KeyType);
             }
         }
 
@@ -213,9 +220,9 @@ internal static class TenantEntityTypes
     /// Throws when Tenantry cannot check the writes of owned type <paramref name="entityType"/> through its owner, under
     /// a tenant-owned owner: when it has no <c>TenantId</c> of its own and its key, or the key a type it owns is owned
     /// through, does not include its owner's key (an <c>UPDATE</c> or <c>DELETE</c> by its own key would match a row
-    /// whatever owner it is stored under); or when it is owned by a tenant-owned type through a key that is neither that
-    /// type's primary key nor includes its <c>TenantId</c> (the owner Tenantry checks by its primary key need not be
-    /// the row its foreign key names).
+    /// whatever owner it is stored under); or when it is owned by a tenant-owned type through a key that neither
+    /// includes nor is part of that type's primary key, nor includes its <c>TenantId</c> (the owner Tenantry checks by
+    /// its primary key need not be the row its foreign key names).
     /// </summary>
     public static void ThrowIfOwnershipIsUnchecked(IReadOnlyEntityType entityType, Type keyType)
     {
@@ -226,17 +233,15 @@ internal static class TenantEntityTypes
 
         var owner = ownership.PrincipalEntityType;
 
-        if (IsTenantEntity(owner.ClrType) &&
-            !ownership.PrincipalKey.IsPrimaryKey() &&
-            !ownership.PrincipalKey.Properties.Any(property => property.Name == TenantOwnership.TenantIdProperty))
+        if (IsTenantEntity(owner.ClrType) && !NamesTheCheckedRow(ownership.PrincipalKey, owner.FindPrimaryKey()))
         {
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.ModelConfiguration,
                 entityType.ClrType.Name,
-                $"Owned entity '{entityType.ClrType.Name}' is owned through a key of '{owner.ClrType.Name}' that is " +
-                "neither its primary key nor includes its TenantId, so Tenantry cannot check that the owner its rows " +
-                $"name is the current tenant's. Own it through the primary key of '{owner.ClrType.Name}', or through a " +
-                "key that includes its TenantId.");
+                $"Owned entity '{entityType.ClrType.Name}' is owned through a key of '{owner.ClrType.Name}' that " +
+                "neither includes nor is part of its primary key, nor includes its TenantId, so Tenantry cannot check " +
+                $"that the owner its rows name is the current tenant's. Own it through the primary key of " +
+                $"'{owner.ClrType.Name}', or through a key that includes its TenantId.");
         }
 
         if (IsTenantEntity(entityType.ClrType))
@@ -260,6 +265,49 @@ internal static class TenantEntityTypes
             "Keep its owner's key in its key (EF Core's default for OwnsMany), or implement " +
             $"ITenantEntity<{keyType.Name}> on it so its rows carry their tenant.");
     }
+
+    /// <summary>
+    /// Throws when an entity type that is neither owned nor tenant-owned is mapped to a table a tenant-owned one is
+    /// (table splitting): it has no tenant filter or <c>TenantId</c>, so its queries would read, and its writes change,
+    /// every tenant's rows of that table. Read from the finished relational model, which maps only real tables.
+    /// </summary>
+    public static void ThrowIfATenantTableIsShared(IModel model, Type keyType)
+    {
+        Dictionary<ITable, string> tenantTables = [];
+
+        // A hierarchy whose root is not tenant-owned fails a check of its own (ThrowIfRootIsNotTenantEntity).
+        foreach (var entityType in model.GetEntityTypes().Where(type => !type.IsOwned() && IsTenantEntity(type.GetRootType().ClrType)))
+        {
+            foreach (var mapping in entityType.GetTableMappings())
+            {
+                tenantTables.TryAdd(mapping.Table, entityType.ClrType.Name);
+            }
+        }
+
+        foreach (var entityType in model.GetEntityTypes().Where(type => !type.IsOwned() && !IsTenantEntity(type.ClrType)))
+        {
+            foreach (var mapping in entityType.GetTableMappings())
+            {
+                if (tenantTables.TryGetValue(mapping.Table, out var tenantEntity))
+                {
+                    throw new TenantIsolationViolationException(
+                        TenantIsolationViolationKind.ModelConfiguration,
+                        entityType.ClrType.Name,
+                        $"Entity '{entityType.ClrType.Name}' shares table '{mapping.Table.Name}' with tenant-owned " +
+                        $"'{tenantEntity}' but is not tenant-owned, so its queries and writes of that table's rows are " +
+                        $"not isolated. Implement ITenantEntity<{keyType.Name}> on it, or map it to a table of its own.");
+                }
+            }
+        }
+    }
+
+    // Whether the row an ownership's principal key names is the one Tenantry checks, by the owner's primary key: the
+    // key includes TenantId (the owned rows' foreign key then names the tenant), includes the primary key (which picks
+    // the row), or is part of it (a key is unique, so the row it picks has that primary key or none does).
+    private static bool NamesTheCheckedRow(IReadOnlyKey principalKey, IReadOnlyKey? primaryKey) =>
+        principalKey.Properties.Any(property => property.Name == TenantOwnership.TenantIdProperty) ||
+        (primaryKey is not null &&
+         (primaryKey.Properties.All(principalKey.Properties.Contains) || principalKey.Properties.All(primaryKey.Properties.Contains)));
 
     // The first owner up an owned type's ownership chain that is not itself owned, as the root of its hierarchy.
     private static IReadOnlyEntityType RootOwner(IReadOnlyEntityType entityType)

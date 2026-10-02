@@ -27,6 +27,10 @@ public sealed class KeyedOwnerTests : IDisposable
         { Shape.OwnedThroughAnAlternateKey, true },
         { Shape.TenantIdNotSavedAfterInsert, false },
         { Shape.TenantIdNotSavedAfterInsert, true },
+        { Shape.OwnedThroughPartOfThePrimaryKey, false },
+        { Shape.OwnedThroughPartOfThePrimaryKey, true },
+        { Shape.OwnedThroughAKeyIncludingThePrimaryKey, false },
+        { Shape.OwnedThroughAKeyIncludingThePrimaryKey, true },
     };
 
     [Theory]
@@ -79,10 +83,10 @@ public sealed class KeyedOwnerTests : IDisposable
             db.Attach(stub);
             stub.Lines.Add(new Line { Id = 2, Text = "from globex" });
 
-            if (shape is Shape.TenantIdInAnAlternateKey or Shape.TenantIdNotSavedAfterInsert)
+            if (IsRead(shape))
             {
                 (await db.Awaiting(d => SaveAsync(d, sync)).Should().ThrowAsync<TenantIsolationViolationException>())
-                    .WithMessage("The 'Order' that owns entities being saved is not stored for the current tenant 'globex'*");
+                    .WithMessage("*'Order': no row with its key is stored for the current tenant 'globex'*");
             }
             else
             {
@@ -124,7 +128,7 @@ public sealed class KeyedOwnerTests : IDisposable
             db.Entry(stub).State = EntityState.Modified;
             stub.Lines.Add(new Line { Id = 2, Text = "from globex" });
 
-            if (shape is Shape.TenantIdInAnAlternateKey or Shape.TenantIdNotSavedAfterInsert)
+            if (IsRead(shape))
             {
                 await db.Awaiting(d => SaveAsync(d, sync)).Should().ThrowAsync<TenantIsolationViolationException>();
             }
@@ -164,7 +168,13 @@ public sealed class KeyedOwnerTests : IDisposable
         TenantIdInThePrimaryKey,
         OwnedThroughAnAlternateKey,
         TenantIdNotSavedAfterInsert,
+        OwnedThroughPartOfThePrimaryKey,
+        OwnedThroughAKeyIncludingThePrimaryKey,
     }
+
+    // The shapes whose owner's stored row is read, as its TenantId is not written after an insert.
+    private static bool IsRead(Shape shape) =>
+        shape is Shape.TenantIdInAnAlternateKey or Shape.TenantIdNotSavedAfterInsert or Shape.OwnedThroughPartOfThePrimaryKey;
 
     private static Task SaveAsync(DbContext db, bool sync)
     {
@@ -198,7 +208,9 @@ public sealed class KeyedOwnerTests : IDisposable
             Shape.TenantIdInAnAlternateKey => new AlternateKeyContext(Options<AlternateKeyContext>(tenant, counter)),
             Shape.TenantIdInThePrimaryKey => new PrimaryKeyContext(Options<PrimaryKeyContext>(tenant, counter)),
             Shape.OwnedThroughAnAlternateKey => new OwnedThroughAlternateKeyContext(Options<OwnedThroughAlternateKeyContext>(tenant, counter)),
-            _ => new TenantIdNotSavedContext(Options<TenantIdNotSavedContext>(tenant, counter)),
+            Shape.TenantIdNotSavedAfterInsert => new TenantIdNotSavedContext(Options<TenantIdNotSavedContext>(tenant, counter)),
+            Shape.OwnedThroughPartOfThePrimaryKey => new PartOfPrimaryKeyContext(Options<PartOfPrimaryKeyContext>(tenant, counter)),
+            _ => new IncludingPrimaryKeyContext(Options<IncludingPrimaryKeyContext>(tenant, counter)),
         };
 
         await db.Database.EnsureCreatedAsync();
@@ -239,6 +251,9 @@ public sealed class KeyedOwnerTests : IDisposable
         [MaxLength(64)]
         public string TenantId { get; set; } = string.Empty;
 
+        [MaxLength(16)]
+        public string Code { get; set; } = string.Empty;
+
         public List<Line> Lines { get; } = [];
     }
 
@@ -262,6 +277,7 @@ public sealed class KeyedOwnerTests : IDisposable
             modelBuilder.Entity<Order>(order =>
             {
                 order.Property(o => o.Id).ValueGeneratedNever();
+                order.Ignore(o => o.Code);
                 order.HasAlternateKey(o => new { o.TenantId, o.Id });
                 order.OwnsMany(o => o.Lines, line =>
                 {
@@ -281,6 +297,7 @@ public sealed class KeyedOwnerTests : IDisposable
             {
                 order.HasKey(o => new { o.TenantId, o.Id });
                 order.Property(o => o.Id).ValueGeneratedNever();
+                order.Ignore(o => o.Code);
                 order.OwnsMany(o => o.Lines, line =>
                 {
                     line.HasKey(l => l.Id);
@@ -296,9 +313,45 @@ public sealed class KeyedOwnerTests : IDisposable
             modelBuilder.Entity<Order>(order =>
             {
                 order.Property(o => o.Id).ValueGeneratedNever();
+                order.Ignore(o => o.Code);
                 order.Property(o => o.TenantId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Ignore);
                 order.OwnsMany(o => o.Lines, line =>
                 {
+                    line.HasKey(l => l.Id);
+                    line.Property(l => l.Id).ValueGeneratedNever();
+                });
+            });
+    }
+
+    // Keyed by (TenantId, Id), owned through the alternate key Id, part of it: the row it names has that primary key.
+    private sealed class PartOfPrimaryKeyContext(DbContextOptions<PartOfPrimaryKeyContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<Order>(order =>
+            {
+                order.HasKey(o => new { o.TenantId, o.Id });
+                order.HasAlternateKey(o => o.Id);
+                order.Property(o => o.Id).ValueGeneratedNever();
+                order.Ignore(o => o.Code);
+                order.OwnsMany(o => o.Lines, line =>
+                {
+                    line.WithOwner().HasForeignKey("OrderId").HasPrincipalKey(o => o.Id);
+                    line.HasKey(l => l.Id);
+                    line.Property(l => l.Id).ValueGeneratedNever();
+                });
+            });
+    }
+
+    // Keyed by Id, owned through the alternate key (Id, Code), which includes it: the row it names is the one with that Id.
+    private sealed class IncludingPrimaryKeyContext(DbContextOptions<IncludingPrimaryKeyContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<Order>(order =>
+            {
+                order.Property(o => o.Id).ValueGeneratedNever();
+                order.OwnsMany(o => o.Lines, line =>
+                {
+                    line.WithOwner().HasForeignKey("OrderId", "OrderCode").HasPrincipalKey(o => new { o.Id, o.Code });
                     line.HasKey(l => l.Id);
                     line.Property(l => l.Id).ValueGeneratedNever();
                 });
@@ -314,6 +367,7 @@ public sealed class KeyedOwnerTests : IDisposable
             modelBuilder.Entity<Order>(order =>
             {
                 order.Property(o => o.Id).ValueGeneratedNever();
+                order.Ignore(o => o.Code);
                 order.OwnsMany(o => o.Lines, line =>
                 {
                     line.WithOwner().HasForeignKey("OrderTenantId", "OrderId").HasPrincipalKey(o => new { o.TenantId, o.Id });

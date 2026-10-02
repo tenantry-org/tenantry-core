@@ -283,7 +283,37 @@ public sealed class TenantModelCheckTests : IDisposable
 
         db.Invoking(context => context.Model)
             .Should().Throw<TenantIsolationViolationException>()
-            .WithMessage("Owned entity 'Note' is owned through a key of 'Account' that is neither its primary key nor includes its TenantId*");
+            .WithMessage("Owned entity 'Note' is owned through a key of 'Account' that neither includes nor is part of its primary key, nor includes its TenantId*");
+    }
+
+    [Fact]
+    public async Task AnEntityThatIsNotTenantOwned_SharingATenantOwnedEntitysTable_FailsOnFirstQuery()
+    {
+        // Table splitting: it would read and change every tenant's rows of that table, with no filter or TenantId.
+        await using var db = new SharedTableContext(DbContextFactory.Options<SharedTableContext>(_tenant, _connection));
+
+        await db.Awaiting(context => context.Set<AccountNote>().ToListAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>()
+            .WithMessage("Entity 'AccountNote' shares table 'Accounts' with tenant-owned 'Account' but is not tenant-owned*");
+    }
+
+    [Fact]
+    public async Task ATenantOwnedEntity_SharingATenantOwnedEntitysTable_IsAllowed()
+    {
+        await using var db = await CreateAsync<TenantSharedTableContext>();
+
+        await db.Awaiting(context => context.Set<TenantAccountNote>().ToListAsync()).Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task TableNamesATenantOwnedTypeDoesNotMapTo_CanBeUsedByOtherEntities()
+    {
+        // An abstract table-per-concrete-type root, and a type mapped to a view, have no table of their own, whatever
+        // their DbSet's name suggests before the model is finished.
+        await using var db = await CreateAsync<UnmappedTableNamesContext>();
+
+        await db.Awaiting(context => context.Set<LegacyPayment>().ToListAsync()).Should().NotThrowAsync();
+        await db.Awaiting(context => context.Set<ArchivedReport>().ToListAsync()).Should().NotThrowAsync();
     }
 
     [Fact]
@@ -497,6 +527,55 @@ public sealed class TenantModelCheckTests : IDisposable
         public List<Note> Notes { get; set; } = [];
     }
 
+    public abstract class Payment : ITenantEntity<string>
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string TenantId { get; set; } = string.Empty;
+    }
+
+    public sealed class CardPayment : Payment;
+
+    public sealed class LegacyPayment
+    {
+        public int Id { get; set; }
+    }
+
+    public sealed class Report : ITenantEntity<string>
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string TenantId { get; set; } = string.Empty;
+    }
+
+    public sealed class ArchivedReport
+    {
+        public int Id { get; set; }
+    }
+
+    // Shares the Accounts table, not tenant-owned.
+    public sealed class AccountNote
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string Text { get; set; } = string.Empty;
+    }
+
+    // Shares the Accounts table, tenant-owned.
+    public sealed class TenantAccountNote : ITenantEntity<string>
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string TenantId { get; set; } = string.Empty;
+
+        [MaxLength(64)]
+        public string Text { get; set; } = string.Empty;
+    }
+
     // Not tenant-owned.
     public sealed class Notebook
     {
@@ -661,6 +740,56 @@ public sealed class TenantModelCheckTests : IDisposable
             modelBuilder.Entity<Account>().OwnsMany(
                 account => account.Notes,
                 note => note.WithOwner().HasForeignKey("AccountCode").HasPrincipalKey(account => account.Code));
+        }
+    }
+
+    private sealed class UnmappedTableNamesContext(DbContextOptions<UnmappedTableNamesContext> options) : DbContext(options)
+    {
+        public DbSet<Payment> Payments => Set<Payment>();
+
+        public DbSet<Report> Reports => Set<Report>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Payment>().UseTpcMappingStrategy();
+            modelBuilder.Entity<CardPayment>().ToTable("CardPayments");
+            modelBuilder.Entity<LegacyPayment>().ToTable("Payments");
+            modelBuilder.Entity<Report>().ToView("TenantReports");
+            modelBuilder.Entity<ArchivedReport>().ToTable("Reports");
+        }
+    }
+
+    private sealed class SharedTableContext(DbContextOptions<SharedTableContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Account>(account =>
+            {
+                account.Ignore(a => a.Notes);
+                account.ToTable("Accounts");
+            });
+            modelBuilder.Entity<AccountNote>(note =>
+            {
+                note.ToTable("Accounts");
+                note.HasOne<Account>().WithOne().HasForeignKey<AccountNote>(n => n.Id);
+            });
+        }
+    }
+
+    private sealed class TenantSharedTableContext(DbContextOptions<TenantSharedTableContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Account>(account =>
+            {
+                account.Ignore(a => a.Notes);
+                account.ToTable("Accounts");
+            });
+            modelBuilder.Entity<TenantAccountNote>(note =>
+            {
+                note.ToTable("Accounts");
+                note.HasOne<Account>().WithOne().HasForeignKey<TenantAccountNote>(n => n.Id);
+            });
         }
     }
 

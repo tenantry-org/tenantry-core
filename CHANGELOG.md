@@ -187,6 +187,18 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
 
 ### Fixed
 
+- A tenant-scoped entity mapped to more than one table (table-per-type inheritance, entity splitting) could be
+  changed in another tenant's row through a stub with a forged `TenantId`: EF Core updates only the tables whose
+  columns changed, and `TenantId`'s concurrency token is checked only in its own table, so a change to another
+  table's columns matched the row by its key alone. Its `TenantId` is now written back to its table too, in EF
+  Core's transaction, so the database checks it (and, when EF Core does not save `TenantId` after an insert, its
+  stored row is read through the tenant filter before the save); one keyed by its `TenantId` needs neither. The same
+  went for a stub deleted and added again under the same key, which EF Core saves as an `UPDATE` of what differs,
+  table by table: the deleted one's stored row is now read. Owners and these pairs were also not found for a byte
+  array key, which Tenantry compared by reference: keys are now compared as EF Core compares them.
+- An entity type that is not tenant-scoped could share a tenant-scoped entity's table (table splitting), with no tenant
+  filter or `TenantId`, and read or change every tenant's rows of it. Such a model now fails on its first query or
+  save.
 - `Entry(…).Reload()` and `GetDatabaseValues()` read a row by its key without query filters (EF Core's behaviour),
   so an entity attached with another tenant's key, as in a forged write that fails with
   `DbUpdateConcurrencyException`, got that tenant's values. Tenantry now keeps the tenant filter on that query:
@@ -222,8 +234,8 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   one UPDATE of what differs, which can be nothing; its stored row is read). An owner whose `TenantId` is part of the key its
   owned types are owned through needs no write, as their foreign key names the tenant; one whose `TenantId` EF Core
   does not write after an insert (in another key, such as an alternate key, or configured so) is read through the
-  tenant filter before the save instead. Owning a type through a key of a tenant-scoped owner that is neither its
-  primary key nor includes `TenantId` fails to build the model.
+  tenant filter before the save instead. Owning a type through a key of a tenant-scoped owner that neither includes
+  nor is part of its primary key, nor includes `TenantId`, fails to build the model.
 - The documented order, `base.OnModelCreating` (and so `ApplyTenantFilters`) first, lost the tenant filter: on
   EF Core 8 and 9 a later `HasQueryFilter` replaced it, so the tenant's queries returned every tenant's rows,
   and an entity type configured later got no filter; on EF Core 10 the model failed to build. `UseTenantry()`

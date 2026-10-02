@@ -114,9 +114,12 @@ registration, `InvalidOperationException`):
 - an owned type without a `TenantId` of its own, under a tenant-scoped owner, whose key does not include its
   owner's key (`OwnsMany(…, b => b.HasKey(x => x.Id))`): its rows carry no tenant, so an update or delete by that key
   could reach another tenant's row. Keep EF Core's default key, or implement `ITenantEntity<TKey>` on it;
-- an owned type owned by a tenant-scoped type through a key that is neither that type's primary key nor includes its
-  `TenantId` (`WithOwner().HasPrincipalKey(o => o.Code)`): Tenantry checks the owner by its primary key, which need
-  not be the row the owned rows name;
+- an owned type owned by a tenant-scoped type through a key that neither includes nor is part of that type's primary
+  key, nor includes its `TenantId` (`WithOwner().HasPrincipalKey(o => o.Code)`): Tenantry checks the owner by its
+  primary key, which need not be the row the owned rows name;
+- an entity type that is not tenant-scoped mapped to a tenant-scoped entity's table (table splitting): it has no
+  tenant filter or `TenantId`, so it would read and change every tenant's rows of that table (this one fails on the
+  context's first query or save, as only the finished model says which tables a type is mapped to);
 - entities that implement `ITenantEntity<TKey>` with more than one key type;
 - entities whose key type Tenantry is not registered for (`AddTenantry<Guid>` with `ITenantEntity<string>`);
 - a tenant-scoped entity whose `TenantId` is not a mapped public property of the key type, such as one implemented
@@ -198,7 +201,14 @@ for entities implementing `ITenantEntity<TKey>`:
   tenant's primary key with the current tenant's `TenantId` passes the in-memory check but matches no row, so EF
   Core throws `DbUpdateConcurrencyException` and nothing is changed. The interceptor logs a warning when a
   tenant-scoped write matches no row. No schema change is needed; your next migration's model snapshot records the
-  concurrency token.
+  concurrency token. An entity mapped to more than one table (table-per-type inheritance, entity splitting) is
+  updated only in the tables whose columns changed, so when one changes, its `TenantId` is written back to its table
+  too, to be checked there (or, when EF Core does not save `TenantId`, its stored row is read before the save, with
+  the same limit as an owner's above: a filter of your own that hides the row fails the save); one keyed by its
+  `TenantId` needs neither, as every table's key names the tenant. A save that deletes such an entity and adds one
+  under the same key, which EF Core saves as an `UPDATE` of what differs, table by table, has the deleted one's stored
+  row read. All of this relies on EF Core's transaction: with `Database.AutoTransactionBehavior` set to `Never`, a
+  statement EF Core sends before the one that fails is not undone.
 
 If there is **no resolved tenant**, behaviour follows the `OnMissingTenant` policy (below).
 

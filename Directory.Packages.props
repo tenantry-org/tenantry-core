@@ -7,6 +7,11 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[$(MicrosoftExtensionsFloor), )" />
   </ItemGroup>
 
+  <!-- A provider that is not relational, for the tests that Tenantry works without one -->
+  <ItemGroup Condition="'$(EfCoreFloor)' != ''">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="[$(EfCoreFloor), $(FrameworkNextMajor))" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="[8.0.0, 9.0.0)" />
   </ItemGroup>

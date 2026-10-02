@@ -205,7 +205,7 @@ public sealed class OwnedEntityOwnerTests : IDisposable
             db.Add(new Customer { Id = 1, Phones = { new Phone { Number = "from globex" } } });
 
             (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
-                .WithMessage("The 'Customer' that owns entities being saved is not stored for the current tenant 'globex'*");
+                .WithMessage("*'Customer': no row with its key is stored for the current tenant 'globex'*");
         }
 
         (await PhonesOfAcmeCustomerAsync()).Should().Equal("acme phone");

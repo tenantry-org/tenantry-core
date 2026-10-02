@@ -72,6 +72,40 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ForgedUpdateOfATablePerTypeEntity_InItsDerivedTableOnly_MatchesNoRow_AndLeavesTheRowUnchanged()
+    {
+        // EF Core updates only the derived table, so Tenantry writes TenantId back to the root table to be checked.
+        var id = await AddDogAsync(_acme, "acme detail");
+
+        var act = () => AsTenantAsync(_globex, db =>
+        {
+            ProviderDog stub = new() { Id = id, TenantId = _globex, Detail = "acme detail" };
+            db.Animals.Attach(stub);
+            stub.Detail = "overwritten";
+            return db.SaveChangesAsync();
+        });
+
+        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+
+    [Fact]
+    public async Task UpdateOfATablePerTypeEntity_InItsDerivedTableOnly_Succeeds()
+    {
+        // The TenantId written back is unchanged: the provider must count the row it matched.
+        var id = await AddDogAsync(_acme, "acme detail");
+
+        await AsTenantAsync(_acme, async db =>
+        {
+            var dog = await db.Animals.OfType<ProviderDog>().SingleAsync(d => d.Id == id);
+            dog.Detail = "changed";
+            return await db.SaveChangesAsync();
+        });
+
+        (await DogDetailAsync(id)).Should().Be("changed");
+    }
+
+    [Fact]
     public async Task DatabaseValues_OfAnotherTenantsRow_AreNotRead()
     {
         var id = await AddOrderAsync(_acme, "acme order");
@@ -210,6 +244,22 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
             await db.SaveChangesAsync();
             return order.Id;
         });
+
+    private async Task<int> AddDogAsync(string tenantId, string detail) =>
+        await AsTenantAsync(tenantId, async db =>
+        {
+            ProviderDog dog = new() { Detail = detail };
+            db.Animals.Add(dog);
+            await db.SaveChangesAsync();
+            return dog.Id;
+        });
+
+    private async Task<string?> DogDetailAsync(int id)
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ProviderOrdersContext>();
+        return (await db.Animals.IgnoreQueryFilters().AsNoTracking().OfType<ProviderDog>().SingleOrDefaultAsync(d => d.Id == id))?.Detail;
+    }
 
     private async Task<T> AsTenantAsync<T>(string tenantId, Func<ProviderOrdersContext, Task<T>> work)
     {

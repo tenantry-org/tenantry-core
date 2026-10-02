@@ -1,0 +1,96 @@
+using System.ComponentModel.DataAnnotations;
+using AwesomeAssertions;
+
+namespace Tenantry.EfCore.Tests.Interceptor;
+
+/// <summary>
+/// A provider that is not relational (EF Core's in-memory database) maps no tables, so the checks that need them do not
+/// run, and adding, changing and deleting tenant-owned entities still works.
+/// </summary>
+public sealed class NonRelationalProviderTests
+{
+    private readonly TestTenantContext _tenant = TestTenantContext.Empty();
+    private readonly string _database = Guid.NewGuid().ToString();
+
+    [Fact]
+    public async Task TenantOwnedEntities_AreAddedChangedAndDeleted()
+    {
+        await using (var db = Create(_tenant.As("acme")))
+        {
+            db.Notes.Add(new Note { Id = 1, Text = "acme note" });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var db = Create(_tenant.As("acme")))
+        {
+            var note = await db.Notes.SingleAsync(TestContext.Current.CancellationToken);
+            note.Text = "changed";
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var db = Create(_tenant.As("globex")))
+        {
+            (await db.Notes.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
+        }
+
+        await using (var db = Create(_tenant.As("acme")))
+        {
+            var note = await db.Notes.SingleAsync(TestContext.Current.CancellationToken);
+            note.Text.Should().Be("changed");
+            db.Notes.Remove(note);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            (await db.Notes.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
+        }
+    }
+
+    [Fact]
+    public async Task EntitiesWhoseNamesWouldShareATable_AreNotChecked_AsTheProviderHasNone()
+    {
+        // The in-memory provider names a type's "table" after its class, so these two would seem to share one.
+        await using var db = new SameNameContext(new DbContextOptionsBuilder<SameNameContext>()
+            .UseInMemoryDatabase(_database)
+            .UseApplicationServiceProvider(DbContextFactory.Services(_tenant.As("acme")))
+            .UseTenantry()
+            .Options);
+
+        await db.Awaiting(context => context.Set<Archive.Note>().ToListAsync()).Should().NotThrowAsync();
+    }
+
+    private NotesContext Create(TestTenantContext tenant) =>
+        new(new DbContextOptionsBuilder<NotesContext>()
+            .UseInMemoryDatabase(_database)
+            .UseApplicationServiceProvider(DbContextFactory.Services(tenant))
+            .UseTenantry()
+            .Options);
+
+    public sealed class Note : ITenantEntity<string>
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string TenantId { get; set; } = string.Empty;
+
+        [MaxLength(64)]
+        public string Text { get; set; } = string.Empty;
+    }
+
+    private sealed class NotesContext(DbContextOptions<NotesContext> options) : DbContext(options)
+    {
+        public DbSet<Note> Notes => Set<Note>();
+    }
+
+    private sealed class SameNameContext(DbContextOptions<SameNameContext> options) : DbContext(options)
+    {
+        public DbSet<Note> Notes => Set<Note>();
+
+        public DbSet<Archive.Note> ArchivedNotes => Set<Archive.Note>();
+    }
+
+    public static class Archive
+    {
+        public sealed class Note
+        {
+            public int Id { get; set; }
+        }
+    }
+}

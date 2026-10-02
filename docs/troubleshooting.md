@@ -94,8 +94,11 @@ the model is one `UseTenantry()` did not build: a compiled model (`UseModel`), w
 - **"Owned entity … has no TenantId and a key that does not include its owner's key":** its rows carry no tenant,
   so Tenantry checks them through their owner, which a key of their own bypasses. Remove the `HasKey` so EF Core keys
   it by its owner, or implement `ITenantEntity<TKey>` on it.
-- **"Owned entity … is owned through a key of … that is neither its primary key nor includes its TenantId":** own it
-  through the owner's primary key (remove `HasPrincipalKey`), or through a key that includes `TenantId`.
+- **"Entity … shares table … with tenant-owned … but is not tenant-owned"** (on the first query or save): implement
+  `ITenantEntity<TKey>` on the entity that shares the table, or map it to a table of its own.
+- **"Owned entity … is owned through a key of … that neither includes nor is part of its primary key, nor includes its
+  TenantId":** own it through the owner's primary key (remove `HasPrincipalKey`), or through a key that includes
+  `TenantId`.
 - **"has no mapped public property 'TenantId'":** `TenantId` is implemented explicitly, not mapped, or of another
   type. Make it a public property of the key type; its setter can be private or init-only.
 - **"has a query filter named 'Tenantry.Tenant'"** (EF Core 10): that name is the tenant filter's. Name your filter
