@@ -184,6 +184,10 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   `docs/tenant-stores.md`. Nothing checks a tenant's status for you in background work.
 - `Tenantry.EfCore` no longer depends on `Microsoft.Extensions.DependencyInjection.Abstractions` itself: EF Core
   and `Tenantry.Core` bring it, EF Core at the same minimum as before.
+- The packages carry a README of their own, with links that work on NuGet.org, an icon, the project URL
+  (tenantry.dev) and a copyright notice, and their descriptions match what each package holds. Packing checks
+  that each target framework's assembly keeps the API of the lower ones (package validation).
+- A GitHub release's notes are its section of this changelog.
 
 ### Fixed
 

@@ -6,8 +6,11 @@
   <PropertyGroup>
     <RepositoryUrl>https://github.com/tenantry-org/tenantry-core</RepositoryUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <!-- The README each package carries -->
-    <TenantryPackageReadme>$(MSBuildThisFileDirectory)README.md</TenantryPackageReadme>
+    <!-- As in LICENSE -->
+    <Copyright>Copyright 2026 Oliver James McNally</Copyright>
+    <!-- The README each package carries: for NuGet.org (eng/package-readme.md, with absolute links), not the
+         repository README -->
+    <TenantryPackageReadme>$(MSBuildThisFileDirectory)eng/package-readme.md</TenantryPackageReadme>
   </PropertyGroup>
 
 </Project>

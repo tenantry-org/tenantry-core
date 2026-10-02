@@ -8,6 +8,7 @@ eng/common/Build.props
 eng/common/Build.targets
 eng/common/Packages.props
 eng/common/coverage.settings.xml
+eng/common/package-icon.png
 eng/common/removed-names.txt
 eng/common/shared-files.txt
 eng/package-consumer/PackageLoadCheck.cs
@@ -20,6 +21,7 @@ scripts/check-package-consumer.sh
 scripts/check-package-ranges.cs
 scripts/check-removed-names.cs
 scripts/doc-snippets.cs
+scripts/release-notes.sh
 scripts/generate-api-docs.sh
 scripts/sync-shared-files.sh
 scripts/test-latest-dependencies.sh

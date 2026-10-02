@@ -7,6 +7,11 @@ on:
   # Actions → Release → Run workflow is a dry run: the same checks and packages as a release, then the
   # dry-run job lists what a release would publish instead of publishing anything.
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Also show the notes a release of this tag (v1.2.3) would publish, from CHANGELOG.md'
+        required: false
+        default: ''
 
 permissions:
   contents: read   # default least privilege; publish job opts into more below
@@ -34,6 +39,11 @@ jobs:
             exit 1
           fi
 
+      - name: Require the release's notes in CHANGELOG.md
+        # Its "## [x.y.z]" section is the GitHub release's notes (scripts/release-notes.sh)
+        if: github.event_name == 'push'
+        run: bash scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
+
   # Re-run build + tests + coverage gate + AOT publish against the tagged commit before
   # publishing. SonarCloud is skipped: it cannot analyze a tag ref (auto-detection fails with
   # "Not authorized or project not found"), and the tagged commit already passed the Sonar
@@ -53,15 +63,25 @@ jobs:
     environment: release   # manual-approval gate + OIDC scoped to this environment (see repo settings)
     permissions:
       id-token: write  # enable GitHub OIDC token issuance for this job
-      contents: write  # needed for creating releases; also allows the action to read the repo for changelog generation
+      contents: write  # needed for creating the release
 
     steps:
+      # Before the packages: checkout empties the folder it checks out into.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false   # only CHANGELOG.md and the script are needed
+
       # Publish the packages the ci job built, tested and checked (build-test.yml), not a rebuild.
       - name: Download the tested packages
         uses: actions/download-artifact@v8
         with:
           name: nuget-packages
           path: ./artifacts
+
+      - name: Write the release notes
+        # The tag's section of CHANGELOG.md, before anything is published
+        run: bash scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
 
       - name: Check the packages carry the tag's version
         run: |
@@ -95,7 +115,7 @@ jobs:
         # Release notes only: the packages and their symbols are on NuGet.org, so nothing is attached.
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/release-notes.md
 
   dry-run:
     name: Dry run (nothing is published)
@@ -104,6 +124,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download the tested packages
         uses: actions/download-artifact@v8
         with:
@@ -117,4 +140,11 @@ jobs:
             echo "$(basename "$package")  (version $version)"
           done
           echo "A release would push each .nupkg to NuGet.org, with its .snupkg to the NuGet.org symbol"
-          echo "server, and create a GitHub release with notes and no attached files."
+          echo "server, and create a GitHub release with its CHANGELOG.md section as notes and no attached files."
+
+      - name: Show the release notes
+        if: inputs.version != ''
+        # The input reaches the script as an environment variable, never expanded into the script text.
+        env:
+          RELEASE: ${{ inputs.version }}
+        run: bash scripts/release-notes.sh "$RELEASE"

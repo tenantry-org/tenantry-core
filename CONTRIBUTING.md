@@ -94,8 +94,10 @@ maintainer create, move or delete `v*` tags. The release workflow checks that th
 reruns the CI gate on the tagged commit (without SonarCloud, which already passed on `master`),
 including both package checks, then **pauses for approval** in the `release` environment (only `v*`
 tags can deploy to it) and publishes those same packages, with their symbol packages, to NuGet.org via
-OIDC trusted publishing. The GitHub release gets generated notes and no attached files.
+OIDC trusted publishing. The GitHub release's notes are the version's section of `CHANGELOG.md`
+(`scripts/release-notes.sh`), and a tag without one fails before anything is built; nothing is attached.
+[RELEASING.md](RELEASING.md) has the steps.
 
 To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on
 `master`: it runs the same checks and builds the same packages, then lists what a release would
-publish, without publishing anything.
+publish, without publishing anything. Give it the tag to also see that release's notes.

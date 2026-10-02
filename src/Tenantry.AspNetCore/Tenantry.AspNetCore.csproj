@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageDescription>ASP.NET Core integration for Tenantry. Provides tenant resolvers (header, subdomain, route, claim, query string), resolution middleware, and DI registration extensions.</PackageDescription>
+    <PackageDescription>ASP.NET Core integration for Tenantry: resolves each request's tenant (from a header, the host, a subdomain, a route value, a claim or the query string), with middleware, [RequireTenant] and [AllowMissingTenant] for endpoints, and access validators that check the caller may act for the tenant.</PackageDescription>
     <PackageTags>multi-tenancy;aspnetcore;middleware;saas;tenantry;tenant-isolation</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>

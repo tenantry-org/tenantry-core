@@ -1,6 +1,8 @@
 <Project>
 
-  <!-- Packages: every supported target framework, XML docs, trimming, MinVer. Shared with Tenantry Pro (eng/common/shared-files.txt). -->
+  <!-- Packages: every supported target framework, XML docs, symbols, trimming, package metadata, MinVer. Shared with
+       Tenantry Pro (eng/common/shared-files.txt); each repository's Directory.Build.props sets its licence, copyright
+       and package README. -->
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <PropertyGroup>
@@ -8,8 +10,12 @@
     <TargetFrameworks Condition="'$(IncludeNet11)' == 'true'">$(TargetFrameworks);net11.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- A symbol package beside each package, which NuGet.org serves to debuggers; or, in a repository that sets
+         TenantryEmbedPdbs (Tenantry Pro, whose feed takes no symbol packages), the PDB inside each assembly, so stack
+         traces carry file names and line numbers. -->
+    <IncludeSymbols Condition="'$(TenantryEmbedPdbs)' != 'true'">true</IncludeSymbols>
+    <SymbolPackageFormat Condition="'$(TenantryEmbedPdbs)' != 'true'">snupkg</SymbolPackageFormat>
+    <DebugType Condition="'$(TenantryEmbedPdbs)' == 'true'">embedded</DebugType>
     <IsTrimmable>true</IsTrimmable>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnableAotAnalyzer>true</EnableAotAnalyzer>
@@ -17,6 +23,11 @@
          Pinned, not latest, which follows the SDK: the .NET 11 SDK's level also turns on code-style rules. Raise it deliberately. -->
     <AnalysisLevel>10.0-recommended</AnalysisLevel>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageProjectUrl>https://tenantry.dev</PackageProjectUrl>
+    <!-- Pack checks that each target framework's assembly keeps the API of the lower ones: a library built against
+         the net8.0 assembly runs in an application that gets the net10.0 one. -->
+    <EnablePackageValidation>true</EnablePackageValidation>
     <!-- Release tags are v-prefixed (v1.2.3), as release.yml expects -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
@@ -29,6 +40,7 @@
          which fails NU5030 ("license file 'LICENSE' does not exist in the package"). -->
     <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="" />
     <None Include="$(TenantryPackageReadme)" Pack="true" PackagePath="README.md" />
+    <None Include="$(MSBuildThisFileDirectory)../eng/common/package-icon.png" Pack="true" PackagePath="icon.png" />
   </ItemGroup>
 
 </Project>
