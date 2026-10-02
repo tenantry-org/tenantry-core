@@ -8,7 +8,7 @@ using Tenantry.EfCore;
 using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
 
-// Every test in this assembly needs Docker: run the others with `dotnet test --filter Category!=Integration`.
+// Every test in this assembly needs Docker: CONTRIBUTING.md shows how to run the others (`--filter "Category!=Integration"`).
 [assembly: Trait("Category", "Integration")]
 
 // One container per database for each framework's test run, shared by every test class (MySQL's is in

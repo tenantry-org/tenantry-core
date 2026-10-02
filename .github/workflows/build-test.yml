@@ -71,7 +71,7 @@ jobs:
           /o:"tenantry-org"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.token="${SONAR_TOKEN}"
-          /d:sonar.cs.opencover.reportsPaths="coverage/**/coverage.opencover.xml"
+          /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
           /d:sonar.coverage.exclusions="samples/**"
           /d:sonar.cpd.exclusions="samples/**"
           /d:sonar.qualitygate.wait=true
@@ -90,11 +90,8 @@ jobs:
         timeout-minutes: 10
 
       - name: Test (all) + coverage
-        run: >
-          dotnet test Tenantry.slnx -c Release --no-build
-          --collect:"XPlat Code Coverage;Format=opencover"
-          --results-directory ./coverage
-          --logger "console;verbosity=minimal"
+        # On Microsoft Testing Platform (global.json); dotnet-coverage writes coverage/coverage.xml (see the script)
+        run: bash scripts/test-with-coverage.sh
 
       - name: SonarCloud end (uploads analysis, fails on quality gate)
         if: ${{ inputs.run_sonar }}
@@ -105,7 +102,7 @@ jobs:
       - name: Coverage gate (>= 90% line coverage)
         run: |
           reportgenerator \
-            -reports:"coverage/**/coverage.opencover.xml" \
+            -reports:coverage/coverage.xml \
             -targetdir:coverage/report \
             -reporttypes:JsonSummary
           line=$(jq '.summary.linecoverage' coverage/report/Summary.json)

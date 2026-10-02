@@ -418,7 +418,6 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.12, 11.0.0)",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Tenantry.Core": "[1.0.0, )"
         }
       }

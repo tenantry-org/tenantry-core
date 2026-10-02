@@ -65,8 +65,9 @@ jobs:
           dotnet-quality: preview
 
       - name: Use the .NET 11 SDK
-        # global.json pins the 10.0 SDK band; this lane needs 11.0.
-        run: rm global.json && dotnet --version
+        # global.json pins the 10.0 SDK band; this lane needs 11.0. The rest stays: it opts `dotnet test` into
+        # Microsoft Testing Platform.
+        run: jq 'del(.sdk)' global.json > global.json.lane && mv global.json.lane global.json && dotnet --version
 
       - name: Build and test for net11.0
         run: bash scripts/test-net11.sh

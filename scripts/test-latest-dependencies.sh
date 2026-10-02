@@ -25,4 +25,6 @@ find "$repo/tests" "$repo/samples" -path '*/obj/latest.packages.lock.json' | whi
 done
 
 dotnet build "$solution" -c Release --no-restore "${lane[@]}"
-dotnet test "$solution" -c Release --no-build "${lane[@]}"
+# From the repository root, whose global.json opts `dotnet test` into Microsoft Testing Platform
+cd "$repo"
+dotnet test --solution "$solution" -c Release --no-build "${lane[@]}"

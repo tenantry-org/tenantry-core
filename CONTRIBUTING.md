@@ -13,16 +13,20 @@ change must pass.
 ```bash
 dotnet restore Tenantry.slnx
 dotnet build   Tenantry.slnx -c Release
-dotnet test    Tenantry.slnx -c Release
+dotnet test    --solution Tenantry.slnx -c Release
 ```
 
-The tests use xUnit.net v3 and run through VSTest. `tests/Tenantry.IntegrationTests` needs **Docker**: it runs
-against SQL Server, PostgreSQL and MySQL containers, one per database for each target framework's run, one framework
-at a time (the image versions are in `Providers/ContainerImages.cs`). Without Docker, run the other tests with
+The tests use xUnit.net v3 on Microsoft Testing Platform: `global.json` opts `dotnet test` into it, so it takes the
+solution or a project as `--solution` or `--project`, and passes options it does not know on to the tests.
+`tests/Tenantry.IntegrationTests` needs **Docker**: it runs against SQL Server, PostgreSQL and MySQL containers, one
+per database for each target framework's run, one framework at a time (the image versions are in
+`Providers/ContainerImages.cs`). Without Docker, run the other tests with
 
 ```bash
-dotnet test Tenantry.slnx -c Release --filter "Category!=Integration"
+dotnet test --solution Tenantry.slnx -c Release --filter "Category!=Integration" --ignore-exit-code 8
 ```
+
+Exit code 8 means a test application ran no tests: here, the integration tests, which the filter leaves out.
 
 Package versions for `src/` and `tests/` are set centrally, in `Directory.Packages.props` and, for those Tenantry
 Pro also uses, `eng/common/Packages.props`; each sample declares its own, as an application copied from it would.
@@ -42,7 +46,11 @@ CI runs the same gates that block a release — make sure these hold locally bef
 1. **Build is warning-clean.** `TreatWarningsAsErrors` is on, including trim (`IL2xxx`) and AOT
    (`IL3xxx`) analyzer warnings for the `src/` projects. A warning fails the build.
 2. **Tests pass on all target frameworks.**
-3. **Line coverage ≥ 90%.** Add or update tests for any new code.
+3. **Line coverage ≥ 90%.** Add or update tests for any new code. To measure it as CI does, run
+   `scripts/test-with-coverage.sh` after a Release build: it runs every test and writes `coverage/coverage.xml`. CI
+   reads the line coverage from it with ReportGenerator (`dotnet tool install -g dotnet-reportgenerator-globaltool`):
+   `reportgenerator -reports:coverage/coverage.xml -targetdir:coverage/report -reporttypes:TextSummary` writes it to
+   `coverage/report/Summary.txt`.
 4. **SonarCloud quality gate.** Runs on pushes to `master` and internal PRs. (It is skipped on PRs
    from forks because secrets aren't available there — it runs after merge.)
 5. **AOT publish succeeds** for the AOT sample (`dotnet publish samples/Tenantry.Samples.Aot -c Release`).

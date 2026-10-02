@@ -7,6 +7,7 @@ eng/api-docs/docfx.json
 eng/common/Build.props
 eng/common/Build.targets
 eng/common/Packages.props
+eng/common/coverage.settings.xml
 eng/common/shared-files.txt
 eng/package-consumer/PackageLoadCheck.cs
 samples/Directory.Build.props
@@ -20,5 +21,6 @@ scripts/doc-snippets.cs
 scripts/generate-api-docs.sh
 scripts/sync-shared-files.sh
 scripts/test-latest-dependencies.sh
+scripts/test-with-coverage.sh
 src/Directory.Build.props
 tests/Directory.Build.props

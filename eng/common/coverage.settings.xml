@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Code coverage settings for dotnet-coverage (scripts/test-with-coverage.sh). Shared by Tenantry Core and Tenantry Pro
+  (eng/common/shared-files.txt).
+-->
+<Configuration>
+  <CodeCoverage>
+    <!-- Instrument only the files the script names, before the tests load them. Dynamic instrumentation collects
+         nothing on macOS, where its profiler does not start. -->
+    <EnableStaticManagedInstrumentation>True</EnableStaticManagedInstrumentation>
+    <EnableDynamicManagedInstrumentation>False</EnableDynamicManagedInstrumentation>
+    <!-- Source generated during the build (under obj/), such as the logging source generator's -->
+    <Sources>
+      <Exclude>
+        <Source>.*[\\/]obj[\\/].*</Source>
+      </Exclude>
+    </Sources>
+  </CodeCoverage>
+</Configuration>
