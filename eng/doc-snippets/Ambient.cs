@@ -64,6 +64,9 @@ public sealed class TenantList : List<ITenantDescriptor<Guid>>, IEnumerable<ITen
 
 public sealed record Message(Guid TenantId, string Description);
 
+/// <summary>The application's entry point, as <c>WebApplicationFactory&lt;Program&gt;</c> names it.</summary>
+public partial class Program;
+
 public sealed class Entitlements
 {
     public Task<bool> CanAccessAsync<TKey>(ClaimsPrincipal user, TKey tenantId, CancellationToken ct) => Task.FromResult(true);

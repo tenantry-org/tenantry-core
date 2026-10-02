@@ -193,6 +193,7 @@ Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
 | [Access control](docs/access-control.md) | Requiring tenants, access validators, claim-based validation |
 | [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
 | [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantry` in console apps, workers, and background jobs |
+| [Testing](docs/testing.md) | Tests with Tenantry's real services: scopes, `WebApplicationFactory`, EF Core isolation |
 | [Diagnostics](docs/diagnostics.md) | Log event ids, the `tenant.id` trace tag and log scope, the resolution metric |
 | [AOT & trimming](docs/aot-and-trimming.md) | What is supported, per package, and why |
 | [Compatibility](docs/compatibility.md) | Supported .NET and EF Core versions, databases, and dependency ranges |

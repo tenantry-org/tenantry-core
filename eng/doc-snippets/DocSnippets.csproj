@@ -25,6 +25,10 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
+    <!-- The testing guide's tests. This is not a test project, so xUnit's attributes and assertions without its runner. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageReference Include="xunit.v3.assert" Version="4.0.1" />
+    <PackageReference Include="xunit.v3.extensibility.core" Version="4.0.1" />
   </ItemGroup>
 
 </Project>

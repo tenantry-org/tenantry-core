@@ -19,11 +19,12 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 6. **[Access control](access-control.md)** — requiring tenants per-endpoint or globally, access validators, and claim-based validation.
 7. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, the isolation policy, the optional base context, pooling, a database per tenant, migrations, and admin/cross-tenant queries.
 8. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantry` for console apps, worker services, and background jobs.
-9. **[Diagnostics](diagnostics.md)** — log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.
-10. **[AOT & trimming](aot-and-trimming.md)** — exactly what is supported, per package, and why EF Core differs.
-11. **[Compatibility](compatibility.md)** — supported .NET and EF Core versions, databases, and dependency ranges.
-12. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.
-13. **[API reference](api/README.md)** — every public type and member, generated from the XML documentation comments.
+9. **[Testing](testing.md)** — tests with Tenantry's real services: tenant scopes, `WebApplicationFactory`, and EF Core isolation.
+10. **[Diagnostics](diagnostics.md)** — log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.
+11. **[AOT & trimming](aot-and-trimming.md)** — exactly what is supported, per package, and why EF Core differs.
+12. **[Compatibility](compatibility.md)** — supported .NET and EF Core versions, databases, and dependency ranges.
+13. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.
+14. **[API reference](api/README.md)** — every public type and member, generated from the XML documentation comments.
 
 ## How the pieces fit together
 
