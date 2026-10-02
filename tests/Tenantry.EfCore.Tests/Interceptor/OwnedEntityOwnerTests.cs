@@ -127,10 +127,154 @@ public sealed class OwnedEntityOwnerTests : IDisposable
         saved.Phones.Should().OnlyContain(phone => phone.TenantId == "acme");
     }
 
+    [Fact]
+    public async Task MovingAnOwnedEntity_ToAnotherTenantsOwner_ByItsForeignKey_IsRejected()
+    {
+        // Phone has a key of its own, so its foreign key can change, and the owner it names reads it.
+        await SeedAcmeCustomerAsync();
+        await SeedGlobexCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex")))
+        {
+            var customer = await db.Customers.SingleAsync(TestContext.Current.CancellationToken);
+            db.Entry(customer.Phones[0]).Property("CustomerId").CurrentValue = 1;
+
+            (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("A 'Phone' is being saved without its owner 'Customer'*");
+        }
+
+        (await PhonesOfAcmeCustomerAsync()).Should().Equal("acme phone");
+    }
+
+    [Fact]
+    public async Task MovingAnOwnedEntity_ToAStubOfAnotherTenantsOwner_FailsAndWritesNothing()
+    {
+        await SeedAcmeCustomerAsync();
+        await SeedGlobexCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex")))
+        {
+            var customer = await db.Customers.SingleAsync(TestContext.Current.CancellationToken);
+            Customer stub = new() { Id = 1, TenantId = "globex" };
+            db.Attach(stub);
+            var phone = customer.Phones[0];
+            customer.Phones.Remove(phone);
+            stub.Phones.Add(phone);
+
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+        }
+
+        (await PhonesOfAcmeCustomerAsync()).Should().Equal("acme phone");
+        await using var globex = await CreateAsync(_tenant.As("globex"));
+        (await globex.Customers.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken)).Phones.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task MovingAnOwnedEntity_BetweenTheCurrentTenantsOwners_Works()
+    {
+        await SeedGlobexCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex")))
+        {
+            db.Customers.Add(new Customer { Id = 3 });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var customers = await db.Customers.OrderBy(c => c.Id).ToListAsync(TestContext.Current.CancellationToken);
+            var phone = customers[0].Phones[0];
+            customers[0].Phones.Remove(phone);
+            customers[1].Phones.Add(phone);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var globex = await CreateAsync(_tenant.As("globex"));
+        var saved = await globex.Customers.AsNoTracking().OrderBy(c => c.Id).ToListAsync(TestContext.Current.CancellationToken);
+        saved[0].Phones.Should().BeEmpty();
+        saved[1].Phones.Should().ContainSingle().Which.Number.Should().Be("globex phone");
+    }
+
+    [Fact]
+    public async Task AddingToAnotherTenantsOwner_ThroughAStubDeletedAndAddedAgain_IsRejected()
+    {
+        // EF Core saves a deleted entity and a new one under the same key as one UPDATE of what differs between them:
+        // here nothing, so no statement would carry the owner's TenantId to the database.
+        await SeedAcmeCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex")))
+        {
+            db.Remove(new Customer { Id = 1, TenantId = "globex" });
+            db.Add(new Customer { Id = 1, Phones = { new Phone { Number = "from globex" } } });
+
+            (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+                .WithMessage("The 'Customer' that owns entities being saved is not stored for the current tenant 'globex'*");
+        }
+
+        (await PhonesOfAcmeCustomerAsync()).Should().Equal("acme phone");
+    }
+
+    [Fact]
+    public async Task ReplacingTheCurrentTenantsOwner_WithOneUnderTheSameKey_Works()
+    {
+        await SeedAcmeCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme")))
+        {
+            db.Remove(new Customer { Id = 1, TenantId = "acme" });
+            db.Add(new Customer { Id = 1, Phones = { new Phone { Number = "second acme phone" } } });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await PhonesOfAcmeCustomerAsync()).Should().Contain("second acme phone");
+    }
+
+    [Fact]
+    public async Task AddingUnderAnotherTenantsOwnedEntity_ThroughAStub_FailsAndWritesNothing()
+    {
+        // Phone has a key of its own, so an extension's foreign key names a phone, not a customer: the phone is the
+        // owner checked, whichever customer the stub claims it belongs to.
+        await SeedAcmeCustomerAsync();
+        await SeedGlobexCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex")))
+        {
+            Customer stub = new() { Id = 2, TenantId = "globex", Phones = { new Phone { Id = 1, TenantId = "globex" } } };
+            db.Attach(stub);
+            stub.Phones[0].Extensions.Add(new Extension { Id = 1, Number = "from globex" });
+
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+        }
+
+        await using var acme = await CreateAsync(_tenant.As("acme"));
+        (await acme.Customers.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken)).Phones.Single().Extensions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AddingUnderTheCurrentTenantsOwnedEntity_Works()
+    {
+        await SeedAcmeCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme")))
+        {
+            var customer = await db.Customers.SingleAsync(TestContext.Current.CancellationToken);
+            customer.Phones[0].Extensions.Add(new Extension { Id = 1, Number = "101" });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var acme = await CreateAsync(_tenant.As("acme"));
+        (await acme.Customers.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken)).Phones.Single().Extensions
+            .Should().ContainSingle().Which.Number.Should().Be("101");
+    }
+
     private async Task SeedAcmeCustomerAsync()
     {
         await using var db = await CreateAsync(_tenant.As("acme"));
         db.Customers.Add(new Customer { Id = 1, Phones = { new Phone { Number = "acme phone" } } });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SeedGlobexCustomerAsync()
+    {
+        await using var db = await CreateAsync(_tenant.As("globex"));
+        db.Customers.Add(new Customer { Id = 2, Phones = { new Phone { Number = "globex phone" } } });
         await db.SaveChangesAsync();
     }
 
@@ -169,6 +313,17 @@ public sealed class OwnedEntityOwnerTests : IDisposable
 
         [MaxLength(64)]
         public string Number { get; set; } = string.Empty;
+
+        public List<Extension> Extensions { get; } = [];
+    }
+
+    // Owned by an owned type with a key of its own, with no TenantId of its own.
+    public sealed class Extension
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string Number { get; set; } = string.Empty;
     }
 
     public sealed class Address : ITenantEntity<string>
@@ -190,7 +345,11 @@ public sealed class OwnedEntityOwnerTests : IDisposable
             modelBuilder.Entity<Customer>(customer =>
             {
                 customer.Property(c => c.Id).ValueGeneratedNever();
-                customer.OwnsMany(c => c.Phones, phone => phone.HasKey(p => p.Id));
+                customer.OwnsMany(c => c.Phones, phone =>
+                {
+                    phone.HasKey(p => p.Id);
+                    phone.OwnsMany(p => p.Extensions, extension => extension.Property(e => e.Id).ValueGeneratedNever());
+                });
                 customer.OwnsOne(c => c.Address);
             });
         }

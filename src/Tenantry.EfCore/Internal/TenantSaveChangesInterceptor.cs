@@ -11,7 +11,7 @@ namespace Tenantry.EfCore.Internal;
 /// On every <c>SaveChanges</c> or <c>SaveChangesAsync</c>:
 /// <list type="bullet">
 ///   <item>Checks, once per model, that every tenant-owned entity type still has the tenant filter and concurrency token (<see cref="TenantModelCheck"/>).</item>
-///   <item>Runs <see cref="TenantWriteGuard{TKey}"/>: it applies the configured <see cref="EfCoreIsolationOptions.OnMissingTenant"/> policy (default <c>Reject</c>) when tenant-owned entities are written without a resolved tenant; stamps <see cref="ITenantEntity{TKey}.TenantId"/> on all <c>Added</c> tenant-owned entities, and rejects one that already names another tenant; and validates that every <c>Modified</c> or <c>Deleted</c> entity was loaded or attached as, and still belongs to, the current tenant.</item>
+///   <item>Runs <see cref="TenantWriteGuard{TKey}"/>: it applies the configured <see cref="EfCoreIsolationOptions.OnMissingTenant"/> policy (default <c>Reject</c>) when tenant-owned entities are written without a resolved tenant; stamps <see cref="ITenantEntity{TKey}.TenantId"/> on all <c>Added</c> tenant-owned entities, and rejects one that already names another tenant; validates that every <c>Modified</c> or <c>Deleted</c> entity was loaded or attached as, and still belongs to, the current tenant; and checks owned entities through their owner, reading the stored tenant of an owner whose <c>TenantId</c> is part of a key.</item>
 ///   <item>Relies on the <c>TenantId</c> concurrency token so that a forged <c>TenantId</c> matches no row; EF Core then throws <see cref="DbUpdateConcurrencyException"/>, which is logged.</item>
 ///   <item>Throws <see cref="TenantIsolationViolationException"/> (before any data is written) if a cross-tenant write is detected.</item>
 /// </list>
@@ -36,13 +36,17 @@ internal sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
     }
 
     /// <inheritdoc />
-    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        ApplyTenantIsolation(eventData.Context);
-        return base.SavingChangesAsync(eventData, result, cancellationToken);
+        if (eventData.Context is { } context && TenantModelCheck.Verify(context) is { } isolation)
+        {
+            await isolation.SavingChangesAsync(context, cancellationToken);
+        }
+
+        return await base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
     /// <inheritdoc />

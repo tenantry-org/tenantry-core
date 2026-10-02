@@ -76,7 +76,9 @@ public enum TenantIsolationViolationKind
     /// <summary>
     /// The model does not isolate a tenant-owned entity type: it has no tenant query filter or <c>TenantId</c>
     /// concurrency token, it uses another tenant key type, or it inherits from or is owned by an entity type that
-    /// is not tenant-owned.
+    /// is not tenant-owned; or an owned type's writes cannot be checked through its owner: it has no <c>TenantId</c>
+    /// of its own and a key that does not include its owner's, or it is owned through a key of a tenant-owned type
+    /// that is neither its primary key nor includes its <c>TenantId</c>.
     /// </summary>
     ModelConfiguration,
 }

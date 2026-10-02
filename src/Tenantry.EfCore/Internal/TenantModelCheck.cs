@@ -196,14 +196,7 @@ internal static class TenantEntityTypes
     /// </summary>
     public static void ThrowIfOwnerIsNotTenantEntity(IReadOnlyEntityType owned, Type keyType)
     {
-        var owner = owned;
-
-        while (owner.IsOwned() && owner.FindOwnership() is { } ownership)
-        {
-            owner = ownership.PrincipalEntityType;
-        }
-
-        owner = owner.GetRootType();
+        var owner = RootOwner(owned);
 
         if (!KeyTypes(owner.ClrType).Contains(keyType))
         {
@@ -214,5 +207,68 @@ internal static class TenantEntityTypes
                 "EF Core reads owned rows only through their owner and filters only the owner, so implement " +
                 $"ITenantEntity<{keyType.Name}> on '{owner.ClrType.Name}'.");
         }
+    }
+
+    /// <summary>
+    /// Throws when Tenantry cannot check the writes of owned type <paramref name="entityType"/> through its owner, under
+    /// a tenant-owned owner: when it has no <c>TenantId</c> of its own and its key, or the key a type it owns is owned
+    /// through, does not include its owner's key (an <c>UPDATE</c> or <c>DELETE</c> by its own key would match a row
+    /// whatever owner it is stored under); or when it is owned by a tenant-owned type through a key that is neither that
+    /// type's primary key nor includes its <c>TenantId</c> (the owner Tenantry checks by its primary key need not be
+    /// the row its foreign key names).
+    /// </summary>
+    public static void ThrowIfOwnershipIsUnchecked(IReadOnlyEntityType entityType, Type keyType)
+    {
+        if (entityType.FindOwnership() is not { } ownership || !KeyTypes(RootOwner(entityType).ClrType).Contains(keyType))
+        {
+            return;
+        }
+
+        var owner = ownership.PrincipalEntityType;
+
+        if (IsTenantEntity(owner.ClrType) &&
+            !ownership.PrincipalKey.IsPrimaryKey() &&
+            !ownership.PrincipalKey.Properties.Any(property => property.Name == TenantOwnership.TenantIdProperty))
+        {
+            throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.ModelConfiguration,
+                entityType.ClrType.Name,
+                $"Owned entity '{entityType.ClrType.Name}' is owned through a key of '{owner.ClrType.Name}' that is " +
+                "neither its primary key nor includes its TenantId, so Tenantry cannot check that the owner its rows " +
+                $"name is the current tenant's. Own it through the primary key of '{owner.ClrType.Name}', or through a " +
+                "key that includes its TenantId.");
+        }
+
+        if (IsTenantEntity(entityType.ClrType))
+        {
+            return;
+        }
+
+        bool KeyedByOwner(IReadOnlyKey? key) => key is not null && ownership.Properties.All(key.Properties.Contains);
+
+        if (KeyedByOwner(entityType.FindPrimaryKey()) &&
+            entityType.GetReferencingForeignKeys().Where(foreignKey => foreignKey.IsOwnership).All(owned => KeyedByOwner(owned.PrincipalKey)))
+        {
+            return;
+        }
+
+        throw new TenantIsolationViolationException(
+            TenantIsolationViolationKind.ModelConfiguration,
+            entityType.ClrType.Name,
+            $"Owned entity '{entityType.ClrType.Name}' has no TenantId and a key that does not include its owner's key, " +
+            "so an update or delete of one of its rows would match that row whichever tenant's owner it belongs to. " +
+            "Keep its owner's key in its key (EF Core's default for OwnsMany), or implement " +
+            $"ITenantEntity<{keyType.Name}> on it so its rows carry their tenant.");
+    }
+
+    // The first owner up an owned type's ownership chain that is not itself owned, as the root of its hierarchy.
+    private static IReadOnlyEntityType RootOwner(IReadOnlyEntityType entityType)
+    {
+        while (entityType.IsOwned() && entityType.FindOwnership() is { } ownership)
+        {
+            entityType = ownership.PrincipalEntityType;
+        }
+
+        return entityType.GetRootType();
     }
 }

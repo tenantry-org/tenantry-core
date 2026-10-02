@@ -91,17 +91,32 @@ In an inheritance hierarchy, EF Core filters through the root entity type, so th
 covers the derived types. EF Core reads an owned type's rows only through its owner and does not let it have a
 filter of its own, so an owned type is isolated through its owner, whether or not it implements
 `ITenantEntity<TKey>` (a tenant-scoped owned type's `TenantId` is still a concurrency token). Its writes are checked
-through the owner too. When a save adds an owned entity, or changes or deletes one without a `TenantId` of its own,
-and the owner is unchanged (loaded or only attached), the owner's `TenantId` is written back with its concurrency
-token, so the database confirms the owner is the current tenant's (an audit log sees an update of the owner). An
-owned entity saved without its owner in the same context is rejected, and without a tenant, `OnMissingTenant`
-treats owned entities as tenant-scoped.
+through its nearest tenant-scoped owner too: when a save adds an owned entity, moves one with a key of its own to
+another owner (by changing its foreign key), or changes or deletes one without a `TenantId` of its own, that owner
+must have been loaded or attached as the current tenant. If the save does not write the owner itself (it is loaded
+or only attached, modified with nothing EF Core writes, or deleted and added again under the same key, which EF Core
+saves as one UPDATE of what differs), its `TenantId` is written back with its concurrency token, or, for a deleted
+and added pair, its stored row is read, so the database confirms the owner is the current tenant's
+(an audit log sees an update of the owner; with `Database.AutoTransactionBehavior` set to `Never`, the owned rows'
+statements are not undone when it fails). An owner whose `TenantId` is part of the key its owned types are owned
+through needs no write: their foreign key then names the tenant. One whose `TenantId` EF Core does not write after an
+insert, because it is part of another key, such as an alternate key on `(TenantId, Id)`, or is configured not to be
+saved, is not written back: its stored row is read before the save, one query per owner. That read applies the tenant
+filter, and on EF Core 8 and 9, or with a filter of your own that is not named, your filter too, so an owner it hides
+(an archived one, say) cannot be given owned entities. An owned entity saved without its owner in the same context is
+rejected, and without a tenant, `OnMissingTenant` treats owned entities as tenant-scoped.
 
 These models cannot be isolated, so building them throws `TenantIsolationViolationException` (or, for the
 registration, `InvalidOperationException`):
 
 - a tenant-scoped type whose base entity type is not tenant-scoped;
 - a tenant-scoped owned type whose owner is not tenant-scoped;
+- an owned type without a `TenantId` of its own, under a tenant-scoped owner, whose key does not include its
+  owner's key (`OwnsMany(…, b => b.HasKey(x => x.Id))`): its rows carry no tenant, so an update or delete by that key
+  could reach another tenant's row. Keep EF Core's default key, or implement `ITenantEntity<TKey>` on it;
+- an owned type owned by a tenant-scoped type through a key that is neither that type's primary key nor includes its
+  `TenantId` (`WithOwner().HasPrincipalKey(o => o.Code)`): Tenantry checks the owner by its primary key, which need
+  not be the row the owned rows name;
 - entities that implement `ITenantEntity<TKey>` with more than one key type;
 - entities whose key type Tenantry is not registered for (`AddTenantry<Guid>` with `ITenantEntity<string>`);
 - a tenant-scoped entity whose `TenantId` is not a mapped public property of the key type, such as one implemented

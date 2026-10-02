@@ -74,6 +74,9 @@ internal abstract class TenantIsolation
     /// <summary>Stamps and checks the tenant-owned entities <paramref name="context"/> is about to save.</summary>
     public abstract void SavingChanges(DbContext context);
 
+    /// <inheritdoc cref="SavingChanges"/>
+    public abstract Task SavingChangesAsync(DbContext context, CancellationToken cancellationToken);
+
     /// <summary>Logs a tenant-owned <c>UPDATE</c> or <c>DELETE</c> that matched no row.</summary>
     public abstract void WriteMatchedNoRow(ConcurrencyExceptionEventData eventData);
 }
@@ -99,6 +102,9 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes().ToList())
         {
+            // An owned type's writes are checked through its owner.
+            TenantEntityTypes.ThrowIfOwnershipIsUnchecked(entityType, typeof(TKey));
+
             if (!TenantEntityTypes.IsTenantEntity(entityType.ClrType))
             {
                 continue;
@@ -228,6 +234,9 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
             existing.Parameters);
 
     public override void SavingChanges(DbContext context) => TenantWriteGuard<TKey>.Check(context);
+
+    public override Task SavingChangesAsync(DbContext context, CancellationToken cancellationToken) =>
+        TenantWriteGuard<TKey>.CheckAsync(context, cancellationToken);
 
     public override void WriteMatchedNoRow(ConcurrencyExceptionEventData eventData) =>
         TenantWriteGuard<TKey>.WriteMatchedNoRow(eventData);

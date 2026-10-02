@@ -264,6 +264,36 @@ public sealed class TenantModelCheckTests : IDisposable
             .WithMessage("Owned entity 'Price' is tenant-owned but its owner 'Catalog' is not*");
     }
 
+    [Fact]
+    public void OwnedTypeWithoutATenantId_KeyedWithoutItsOwner_FailsToBuildTheModel()
+    {
+        var db = new OwnKeyNoteContext(DbContextFactory.Options<OwnKeyNoteContext>(_tenant, _connection));
+
+        db.Invoking(context => context.Model)
+            .Should().Throw<TenantIsolationViolationException>()
+            .WithMessage("Owned entity 'Note' has no TenantId and a key that does not include its owner's key*")
+            .Which.Kind.Should().Be(TenantIsolationViolationKind.ModelConfiguration);
+    }
+
+    [Fact]
+    public void OwnedThroughAnAlternateKeyWithoutTheTenantId_FailsToBuildTheModel()
+    {
+        // The owner Tenantry checks, by its primary key, need not be the row the owned rows' foreign key names.
+        var db = new CodeOwnedNoteContext(DbContextFactory.Options<CodeOwnedNoteContext>(_tenant, _connection));
+
+        db.Invoking(context => context.Model)
+            .Should().Throw<TenantIsolationViolationException>()
+            .WithMessage("Owned entity 'Note' is owned through a key of 'Account' that is neither its primary key nor includes its TenantId*");
+    }
+
+    [Fact]
+    public void OwnedTypeWithoutATenantId_KeyedWithoutItsOwner_IsAllowedUnderAnUnownedOwner()
+    {
+        var db = new UnownedOwnKeyNoteContext(DbContextFactory.Options<UnownedOwnKeyNoteContext>(_tenant, _connection));
+
+        db.Invoking(context => context.Model).Should().NotThrow();
+    }
+
     // ── Models that lost their isolation after UseTenantry() built them ─────────────────────────────────────
     // Simulated with Tenantry's interceptors on a context whose model Tenantry's customizer did not build. Each of
     // these context types is used only without UseTenantry(), so its cached model is never one Tenantry built.
@@ -454,6 +484,35 @@ public sealed class TenantModelCheckTests : IDisposable
         public string Street { get; set; } = string.Empty;
     }
 
+    public sealed class Account : ITenantEntity<string>
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string TenantId { get; set; } = string.Empty;
+
+        [MaxLength(16)]
+        public string Code { get; set; } = string.Empty;
+
+        public List<Note> Notes { get; set; } = [];
+    }
+
+    // Not tenant-owned.
+    public sealed class Notebook
+    {
+        public int Id { get; set; }
+
+        public List<Note> Notes { get; set; } = [];
+    }
+
+    public sealed class Note
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string Text { get; set; } = string.Empty;
+    }
+
     public sealed class Catalog
     {
         public int Id { get; set; }
@@ -582,6 +641,35 @@ public sealed class TenantModelCheckTests : IDisposable
 
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
             modelBuilder.Entity<Catalog>().OwnsMany(catalog => catalog.Prices, price => price.HasKey(p => p.Id));
+    }
+
+    private sealed class OwnKeyNoteContext(DbContextOptions<OwnKeyNoteContext> options) : DbContext(options)
+    {
+        public DbSet<Account> Accounts => Set<Account>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<Account>().OwnsMany(account => account.Notes, note => note.HasKey(n => n.Id));
+    }
+
+    private sealed class CodeOwnedNoteContext(DbContextOptions<CodeOwnedNoteContext> options) : DbContext(options)
+    {
+        public DbSet<Account> Accounts => Set<Account>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Account>().HasAlternateKey(account => account.Code);
+            modelBuilder.Entity<Account>().OwnsMany(
+                account => account.Notes,
+                note => note.WithOwner().HasForeignKey("AccountCode").HasPrincipalKey(account => account.Code));
+        }
+    }
+
+    private sealed class UnownedOwnKeyNoteContext(DbContextOptions<UnownedOwnKeyNoteContext> options) : DbContext(options)
+    {
+        public DbSet<Notebook> Notebooks => Set<Notebook>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<Notebook>().OwnsMany(notebook => notebook.Notes, note => note.HasKey(n => n.Id));
     }
 
     // Used only without UseTenantry().
