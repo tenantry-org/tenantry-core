@@ -1,22 +1,5 @@
 <Project>
 
-  <!--
-    Packs each project reference as this release up to the next minor ([x.y.z, x.(y+1).0)) instead of NuGet's
-    default minimum (>= x.y.z). The packages share no internals, so a consumer can update one of them within the
-    minor; a minor release in 0.x may break, so the range stops before the next one.
-  -->
-  <Target Name="BandProjectReferenceVersions" AfterTargets="_GetProjectReferenceVersions">
-    <ItemGroup>
-      <_BandedProjectReferenceVersions Include="@(_ProjectReferencesWithVersions)"
-                                       Major="$([System.Text.RegularExpressions.Regex]::Replace('%(_ProjectReferencesWithVersions.ProjectVersion)', '^(\d+)\..*$', '$1'))"
-                                       Minor="$([System.Text.RegularExpressions.Regex]::Replace('%(_ProjectReferencesWithVersions.ProjectVersion)', '^\d+\.(\d+)\..*$', '$1'))" />
-      <_BandedProjectReferenceVersions Update="@(_BandedProjectReferenceVersions)"
-                                       ProjectVersion="[%(ProjectVersion), %(Major).$([MSBuild]::Add(%(Minor), 1)).0)" />
-      <_ProjectReferencesWithVersions Remove="@(_ProjectReferencesWithVersions)" />
-      <_ProjectReferencesWithVersions Include="@(_BandedProjectReferenceVersions)" />
-    </ItemGroup>
-  </Target>
-
   <Import Project="eng/common/Build.targets" />
 
 </Project>

@@ -1,6 +1,36 @@
 <Project>
 
   <!--
+    Packs each project reference with a version range instead of NuGet's default minimum (">= x.y.z"): this release up
+    to the next one that may break it, [x.y.z, x.(y+1).0) in 0.x and [x.y.z, (x+1).0.0) from 1.0, so a consumer can
+    update one package of the set within that band. A reference marked PinExact="true" packs as exactly this release,
+    [x.y.z], because the package uses the referenced one's internals (InternalsVisibleTo) and works only with the same
+    release. scripts/check-package-ranges.cs checks the packed ranges, and that exactly the references to a package
+    that grants internals are pinned.
+  -->
+  <Target Name="RangeProjectReferenceVersions" AfterTargets="_GetProjectReferenceVersions">
+    <ItemGroup>
+      <_PinnedProjectReference Include="@(ProjectReference->WithMetadataValue('PinExact', 'true')->'%(FullPath)')" />
+      <_RangedProjectReferenceVersion Include="@(_ProjectReferencesWithVersions)" />
+      <_RangedProjectReferenceVersion Remove="@(_PinnedProjectReference)" />
+      <_PinnedProjectReferenceVersion Include="@(_ProjectReferencesWithVersions)" />
+      <_PinnedProjectReferenceVersion Remove="@(_RangedProjectReferenceVersion)" />
+
+      <_PinnedProjectReferenceVersion Update="@(_PinnedProjectReferenceVersion)" ProjectVersion="[%(ProjectVersion)]" />
+      <_RangedProjectReferenceVersion Update="@(_RangedProjectReferenceVersion)"
+                                      Major="$([System.Text.RegularExpressions.Regex]::Replace('%(ProjectVersion)', '^(\d+)\..*$', '$1'))"
+                                      Minor="$([System.Text.RegularExpressions.Regex]::Replace('%(ProjectVersion)', '^\d+\.(\d+)\..*$', '$1'))" />
+      <_RangedProjectReferenceVersion Update="@(_RangedProjectReferenceVersion)" Condition="'%(Major)' == '0'"
+                                      ProjectVersion="[%(ProjectVersion), 0.$([MSBuild]::Add('%(Minor)', 1)).0)" />
+      <_RangedProjectReferenceVersion Update="@(_RangedProjectReferenceVersion)" Condition="'%(Major)' != '0'"
+                                      ProjectVersion="[%(ProjectVersion), $([MSBuild]::Add('%(Major)', 1)).0.0)" />
+
+      <_ProjectReferencesWithVersions Remove="@(_ProjectReferencesWithVersions)" />
+      <_ProjectReferencesWithVersions Include="@(_PinnedProjectReferenceVersion);@(_RangedProjectReferenceVersion)" />
+    </ItemGroup>
+  </Target>
+
+  <!--
     The latest dependency lane (scripts/test-latest-dependencies.sh, run weekly by dependency-lanes.yml). A package
     declared with a version range ("[8.0.31, 9.0.0)") normally resolves to the lowest version the graph allows,
     which the committed lock files record and CI tests (scripts/check-dependency-floors.cs checks every floor is

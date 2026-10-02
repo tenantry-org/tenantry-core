@@ -47,7 +47,7 @@ CI runs the same gates that block a release — make sure these hold locally bef
    from forks because secrets aren't available there — it runs after merge.)
 5. **AOT publish succeeds** for the AOT sample (`dotnet publish samples/Tenantry.Samples.Aot -c Release`).
 6. **The packages pass both package checks**, which CI runs after packing the `src/` projects.
-   `dotnet run scripts/check-package-ranges.cs -- artifacts --siblings minor` checks that every dependency has its
+   `dotnet run scripts/check-package-ranges.cs -- artifacts` checks that every dependency has its
    intended range, and
    `scripts/check-package-consumer.sh artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'`
    has a stand-in application restore them from an empty cache with package source mapping, build for

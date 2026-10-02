@@ -61,6 +61,8 @@ because EF Core is not. See [AOT & trimming](aot-and-trimming.md).
 - **Tenantry packages**: `Tenantry.EfCore` and `Tenantry.AspNetCore` take `Tenantry.Core` from their own
   release up to the next minor (`[0.5.0, 0.6.0)`), because a minor release may break the API before 1.0. Within a
   minor they can be updated separately.
+- **Tenantry.Pro**: in the beta it releases each minor version with Tenantry Core's, and runs on that Core minor
+  (Tenantry.Pro 0.5 on Tenantry Core 0.5.x).
 
 CI checks every minimum is a version the tests run against, and a weekly job runs the whole test suite with
 every dependency at the newest version it allows.

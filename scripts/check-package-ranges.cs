@@ -1,13 +1,14 @@
 // Fails if any packed dependency lacks its intended version range. Usage, after dotnet pack:
 //
-//   dotnet run scripts/check-package-ranges.cs -- <directory containing the .nupkg files> --siblings exact|minor
+//   dotnet run scripts/check-package-ranges.cs -- <directory containing the .nupkg files>
 //
 // The rules:
 //   - A dependency on another package from the same directory (a sibling from this release) must be exact, [x.y.z],
-//     with --siblings exact (Tenantry Pro: its packages share internals, so they work only as a set from one
-//     release), or take this release up to the next minor, [x.y.z, x.(y+1).0), with --siblings minor (Tenantry Core:
-//     its packages share no internals, so a consumer can update one of them within the minor; a minor release in 0.x
-//     may break). Directory.Build.targets packs project references that way.
+//     when the sibling grants the dependant its internals (InternalsVisibleTo, read from the packed assembly), since
+//     the dependant then works only with the same release (Tenantry Pro's integration and EF Core packages). Any other
+//     sibling must take this release up to the next that may break it, [x.y.z, x.(y+1).0) in 0.x, so a consumer can
+//     update one package of the set within that band. eng/common/Build.targets packs project references that way: a
+//     reference marked PinExact="true" as exact, the others as a band.
 //   - Microsoft.Extensions.* take a minimum only (">= x.y.z", no upper bound). Microsoft ships every
 //     Microsoft.Extensions major for every supported framework and keeps it compatible, and current Azure SDKs need
 //     Microsoft.Extensions 10.x even on net8.0, so a cap would stop consumers restoring. The minimum must be the
@@ -17,18 +18,18 @@
 //     and Microsoft.EntityFrameworkCore* must also match the target framework's major version (net10.0 depends on
 //     10.x), because each framework's build is compiled against that major.
 using System.IO.Compression;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
-var siblingsOption = Array.IndexOf(args, "--siblings");
-var siblingRule = siblingsOption >= 0 && siblingsOption + 1 < args.Length ? args[siblingsOption + 1] : null;
-if (siblingRule is not ("exact" or "minor"))
+if (args.Length > 1 || args.Any(arg => arg.StartsWith("--", StringComparison.Ordinal)))
 {
-    Console.Error.WriteLine("Usage: dotnet run scripts/check-package-ranges.cs -- <package directory> --siblings exact|minor");
+    Console.Error.WriteLine("Usage: dotnet run scripts/check-package-ranges.cs -- <package directory>");
     return 2;
 }
 
-var directory = args.Where((_, index) => index != siblingsOption && index != siblingsOption + 1).FirstOrDefault() ?? "artifacts";
+var directory = args.FirstOrDefault() ?? "artifacts";
 var packages = Directory.GetFiles(directory, "*.nupkg")
     .Where(path => !path.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase))
     .Select(ReadPackage)
@@ -40,16 +41,28 @@ if (packages.Count == 0)
     return 1;
 }
 
-var siblings = packages.Select(package => package.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+// One release's packages: a sibling's internals are read from the release that depends on it.
+var mixed = packages.GroupBy(package => package.Id, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1).ToList();
+if (mixed.Count > 0)
+{
+    foreach (var group in mixed)
+    {
+        Console.Error.WriteLine($"'{directory}' holds more than one version of {group.Key} ({string.Join(", ", group.Select(p => p.Version))}); pack into an empty directory.");
+    }
+
+    return 1;
+}
+
+var siblings = packages.ToDictionary(package => package.Id, StringComparer.OrdinalIgnoreCase);
 var failures = new List<string>();
 
 foreach (var package in packages)
 {
     foreach (var dependency in package.Dependencies)
     {
-        var problem = siblings.Contains(dependency.Id)
-            ? CheckSibling(dependency, package.Version, siblingRule)
-            : IsMinimumOnly(dependency.Id)
+        var problem = siblings.TryGetValue(dependency.Id, out var sibling)
+            ? CheckSibling(dependency, package, sibling)
+            : dependency.Id.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase)
                 ? CheckMinimum(dependency)
                 : CheckBand(dependency);
 
@@ -86,22 +99,21 @@ Console.WriteLine(failures.Count == 0
 
 return failures.Count == 0 ? 0 : 1;
 
-static string? CheckSibling(Dependency dependency, string packageVersion, string rule)
+static string? CheckSibling(Dependency dependency, Package package, Package sibling)
 {
-    if (rule == "exact")
+    if (sibling.InternalsVisibleTo.Contains(package.Id))
     {
-        return dependency.Version == $"[{packageVersion}]"
+        return dependency.Version == $"[{package.Version}]"
             ? null
-            : $"expected exactly [{packageVersion}], because packages from the same release are used together";
+            : $"expected exactly [{package.Version}], because {sibling.Id} grants it its internals (set PinExact=\"true\" on the ProjectReference)";
     }
 
-    var release = Regex.Match(packageVersion, @"^(?<major>\d+)\.(?<minor>\d+)\.");
-    var expected = $"[{packageVersion}, {release.Groups["major"].Value}.{int.Parse(release.Groups["minor"].Value) + 1}.0)";
+    var expected = $"[{package.Version}, {NextBreaking(package.Version)})";
 
     // A nuspec writes the range without the space.
     return dependency.Version.Replace(" ", "") == expected.Replace(" ", "")
         ? null
-        : $"expected {expected}: this release up to the next minor";
+        : $"expected {expected}, this release up to the next that may break it, because {sibling.Id} shares no internals with it (only a ProjectReference to a package that does takes PinExact=\"true\")";
 }
 
 static string? CheckBand(Dependency dependency)
@@ -127,8 +139,6 @@ static string? CheckBand(Dependency dependency)
         ? $"expected version {frameworkMajor.Groups["major"].Value}.x to match the target framework"
         : null;
 }
-
-static bool IsMinimumOnly(string id) => id.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase);
 
 static string? CheckMinimum(Dependency dependency)
 {
@@ -175,9 +185,48 @@ static Package ReadPackage(string path)
                 (string?)d.Attribute("version") ?? "")))
         .ToList();
 
-    return new Package(Value("id"), Value("version"), dependencies);
+    var id = Value("id");
+    return new Package(id, Value("version"), dependencies, ReadInternalsVisibleTo(archive, id));
 }
 
-internal sealed record Package(string Id, string Version, List<Dependency> Dependencies);
+// The assembly names an assembly in the package grants its internals to (its InternalsVisibleTo attributes).
+static HashSet<string> ReadInternalsVisibleTo(ZipArchive archive, string id)
+{
+    var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var entry = archive.Entries.FirstOrDefault(e => e.FullName.StartsWith("lib/", StringComparison.Ordinal)
+        && e.Name.Equals($"{id}.dll", StringComparison.OrdinalIgnoreCase));
+    if (entry is null)
+    {
+        return names;
+    }
+
+    using var assembly = new MemoryStream();
+    using (var stream = entry.Open())
+    {
+        stream.CopyTo(assembly);
+    }
+
+    assembly.Position = 0;
+    using var reader = new PEReader(assembly);
+    var metadata = reader.GetMetadataReader();
+    foreach (var handle in metadata.GetAssemblyDefinition().GetCustomAttributes())
+    {
+        var attribute = metadata.GetCustomAttribute(handle);
+        if (attribute.Constructor.Kind != HandleKind.MemberReference
+            || metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor).Parent is not { Kind: HandleKind.TypeReference } parent
+            || metadata.GetString(metadata.GetTypeReference((TypeReferenceHandle)parent).Name) != "InternalsVisibleToAttribute")
+        {
+            continue;
+        }
+
+        var value = metadata.GetBlobReader(attribute.Value);
+        value.ReadUInt16(); // The custom attribute prolog
+        names.Add(value.ReadSerializedString()!.Split(',')[0].Trim());
+    }
+
+    return names;
+}
+
+internal sealed record Package(string Id, string Version, List<Dependency> Dependencies, HashSet<string> InternalsVisibleTo);
 
 internal sealed record Dependency(string Framework, string Id, string Version);
