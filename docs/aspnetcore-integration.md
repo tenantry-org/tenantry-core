@@ -182,12 +182,16 @@ app.MapControllers();     // or minimal API endpoints
 
 ## Reading the tenant in your code
 
-Inject `ITenantContext<TKey>` anywhere:
+Inject `ITenantContext<TKey>` anywhere. On an endpoint that requires a tenant (`RequireTenant()`, or
+`RequireTenantByDefault()`), a request without one is refused before the handler runs, so the handler need not
+check:
 
 ```csharp
-app.MapGet("/me", (ITenantContext<Guid> ctx) =>
-    ctx.HasTenant ? Results.Ok(ctx.CurrentTenant!.Name) : Results.NotFound());
+app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.CurrentTenant!.Name))
+    .RequireTenant();
 ```
+
+Check `HasTenant` only where the tenant is optional: on an endpoint that does not require one.
 
 You rarely need to read `CurrentTenantId` for data access — the EF Core query filter and interceptor
 apply it for you. Read it when you need the tenant for non-EF logic (per-tenant file paths, external

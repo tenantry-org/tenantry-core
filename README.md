@@ -63,7 +63,7 @@ builder.Services.AddDbContext<AppDbContext>(options => options
   database per tenant;
 - provisioning of tenant databases and schemas on SQL Server, PostgreSQL and MySQL;
 - migration orchestration across every tenant database, and the provision → migrate → seed lifecycle;
-- caching and at-rest encryption of connection strings;
+- caching of connection strings;
 - tenant context in Hangfire, MassTransit, Quartz.NET and Rebus, health checks, audit logging and per-tenant
   telemetry.
 
@@ -120,9 +120,8 @@ var app = builder.Build();
 // Resolves the tenant and populates ITenantContext<Guid> for the rest of the request.
 app.UseTenantry();
 
-app.MapGet("/me", (ITenantContext<Guid> ctx) =>
-        ctx.HasTenant ? Results.Ok(ctx.CurrentTenant!.Name) : Results.NotFound())
-   .RequireTenant();
+app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.CurrentTenant!.Name))
+   .RequireTenant();          // 400 without a tenant, so the handler always has one
 
 app.Run();
 ```

@@ -4,6 +4,7 @@
 // - Real EF Core migrations (not EnsureCreated)
 // - Tenants stored as EF entities, looked up via EfCoreTenantStore
 // - Inactive tenants kept in the store and refused by an access validator (403)
+// - A tenant required by default (400 without one), and the global endpoints allowing a missing tenant
 // - Mixed tenanted/non-tenanted entities (Orders are tenanted, Products are global)
 // - Relationships across tenant boundaries (OrderItem → Product)
 // - Seeding global reference data and tenants
@@ -49,6 +50,10 @@ builder.Services.AddTenantry<string>(tenant =>
 
     // The store returns inactive tenants too; refuse them here (403) before any scope opens.
     tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true });
+
+    // Every endpoint needs a tenant (400 without one) unless it allows a missing one, as the catalogue and the
+    // admin report below do. Handlers that need a tenant then always have one.
+    tenant.RequireTenantByDefault();
 });
 
 // ── 2. Register EF Core, isolated by tenant with UseTenantry() ───────────────────
@@ -88,7 +93,7 @@ app.MapGet("/products", async (AppDbContext db) =>
         .ToListAsync();
 
     return Results.Ok(products);
-});
+}).AllowMissingTenant();
 
 // Get product categories
 app.MapGet("/categories", async (AppDbContext db) =>
@@ -98,14 +103,11 @@ app.MapGet("/categories", async (AppDbContext db) =>
         .ToListAsync();
 
     return Results.Ok(categories);
-});
+}).AllowMissingTenant();
 
 // List current tenant's orders (automatically filtered by TenantId)
-app.MapGet("/orders", async (AppDbContext db, ITenantContext<string> ctx) =>
+app.MapGet("/orders", async (AppDbContext db) =>
 {
-    if (!ctx.HasTenant)
-        return Results.BadRequest("No tenant resolved.");
-
     var orders = await db.Orders
         .Select(o => new
         {
@@ -129,11 +131,8 @@ app.MapGet("/orders", async (AppDbContext db, ITenantContext<string> ctx) =>
 });
 
 // Create an order for the current tenant (TenantId stamped automatically)
-app.MapPost("/orders", async (AppDbContext db, ITenantContext<string> ctx, CreateOrderRequest request) =>
+app.MapPost("/orders", async (AppDbContext db, CreateOrderRequest request) =>
 {
-    if (!ctx.HasTenant)
-        return Results.BadRequest("No tenant resolved.");
-
     // Validate all products exist
     var productIds = request.Items.Select(i => i.ProductId).ToList();
     var products = await db.Products
@@ -198,20 +197,14 @@ app.MapGet("/admin/stats", async (AppDbContext db) =>
         TotalRevenue = totalRevenue,
         ByTenant = stats
     });
-});
+}).AllowMissingTenant();
 
 // Show current tenant info
-app.MapGet("/me", (ITenantContext<string> ctx) =>
+app.MapGet("/me", (ITenantContext<string> ctx) => Results.Json(new
 {
-    if (!ctx.HasTenant)
-        return Results.Json(new { Tenant = "None" });
-
-    return Results.Json(new
-    {
-        TenantId = ctx.CurrentTenantId,
-        TenantName = ctx.CurrentTenant!.Name
-    });
-});
+    TenantId = ctx.CurrentTenantId,
+    TenantName = ctx.CurrentTenant!.Name
+}));
 
 Console.WriteLine("""
 Tenantry EF Core Sample is running!
