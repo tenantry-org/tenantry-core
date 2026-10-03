@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ResolveFromHeader`, `ResolveFromQueryString` and `ResolveFromPropagationHeader` resolve nothing from a header or
   parameter sent more than once. Before, they took the first value, so a client's header could win over one a proxy
   appended.
+- `UseInMemoryStore` and `InMemoryTenantStore` refuse a tenant with an id Tenantry reserves for "no tenant", or two
+  tenants with the same id, when they are created. Before, the first request failed with a 500.
 
 ## [0.5.0] - 2026-10-03
 

@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 
 namespace Tenantry.AspNetCore.Tests;
@@ -50,5 +51,36 @@ public sealed class InMemoryTenantStoreTests
 
         result.Should().NotBeNull();
         result.TenantId.Should().Be(id);
+    }
+
+    [Fact]
+    public void ATenantWithAReservedId_IsRefused()
+    {
+        var create = () => new InMemoryTenantStore<string>([new TenantDescriptor<string> { TenantId = "", Name = "Empty" }]);
+
+        create.Should().Throw<ArgumentException>().WithMessage("*'Empty'*reserves*");
+    }
+
+    [Fact]
+    public void TwoTenantsWithTheSameId_AreRefused()
+    {
+        var create = () => new InMemoryTenantStore<string>(
+        [
+            new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
+            new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Again" },
+        ]);
+
+        create.Should().Throw<ArgumentException>().WithMessage("*'Acme Corp'*'Acme Again'*'acme'*");
+    }
+
+    [Fact]
+    public void UseInMemoryStore_ChecksItsTenantsWhenRegistered()
+    {
+        ServiceCollection services = new();
+
+        var register = () => services.AddTenantry<Guid>(tenant =>
+            tenant.UseInMemoryStore([new TenantDescriptor<Guid> { TenantId = Guid.Empty, Name = "Empty" }]));
+
+        register.Should().Throw<ArgumentException>();
     }
 }

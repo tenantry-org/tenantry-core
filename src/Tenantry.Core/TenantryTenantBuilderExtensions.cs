@@ -21,6 +21,10 @@ public static class TenantryTenantBuilderExtensions
     /// <param name="tenants">The tenants the store holds. The store does not change after registration.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="InvalidOperationException">A tenant store is already registered.</exception>
+    /// <exception cref="ArgumentException">
+    /// A tenant has an id Tenantry reserves for "no tenant" (<see cref="TenantIds.IsUnset{TKey}"/>), or two tenants
+    /// have the same id.
+    /// </exception>
     public static ITenantBuilder<TKey> UseInMemoryStore<TKey>(
         this ITenantBuilder<TKey> builder,
         IEnumerable<ITenantDescriptor<TKey>> tenants)
@@ -30,7 +34,9 @@ public static class TenantryTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(tenants);
 
         TenantStores.ThrowIfRegistered<TKey>(builder.Services);
-        builder.Services.AddSingleton<ITenantStore<TKey>>(_ => new InMemoryTenantStore<TKey>(tenants));
+
+        // Built now, so a tenant the store refuses fails registration rather than the first request.
+        builder.Services.AddSingleton<ITenantStore<TKey>>(new InMemoryTenantStore<TKey>(tenants));
         return builder;
     }
 
