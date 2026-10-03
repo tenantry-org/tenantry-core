@@ -69,7 +69,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 ```
 
 The options pattern has no asynchronous configuration, so the step runs synchronously; it runs once per tenant, until
-the tenant is invalidated (below).
+the tenant is invalidated (below). A step that throws is run again on the next read.
 
 ## When settings change
 

@@ -219,6 +219,35 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public void AStepThatThrows_IsRunAgainOnTheNextRead()
+    {
+        var calls = 0;
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant
+            .UseInMemoryStore([Acme])
+            .ConfigurePerTenant<BrandingOptions>((o, t) =>
+            {
+                if (++calls == 1)
+                    throw new TimeoutException("The database did not answer.");
+
+                o.Colour = "red";
+            }));
+        using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        using (Use(provider, Acme))
+        {
+            FluentActions.Invoking(() => monitor.CurrentValue).Should().Throw<TimeoutException>();
+            monitor.CurrentValue.Colour.Should().Be("red");
+
+            using var scope = provider.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IOptionsSnapshot<BrandingOptions>>().Value.Colour.Should().Be("red");
+        }
+
+        calls.Should().Be(2);
+    }
+
+    [Fact]
     public void EveryRegistration_Resolves_InAValidatedProvider()
     {
         using var provider = Build();

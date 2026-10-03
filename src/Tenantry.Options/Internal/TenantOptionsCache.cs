@@ -82,7 +82,19 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
     {
         ArgumentNullException.ThrowIfNull(createOptions);
 
-        return _values.GetOrAdd(Key(name), _ => new Lazy<TOptions>(createOptions)).Value;
+        var key = Key(name);
+        var value = _values.GetOrAdd(key, _ => new Lazy<TOptions>(createOptions));
+
+        try
+        {
+            return value.Value;
+        }
+        catch
+        {
+            // A Lazy keeps its exception: the failed value is dropped, so the next read builds it again.
+            _values.TryRemove(KeyValuePair.Create(key, value));
+            throw;
+        }
     }
 
     public bool TryAdd(string? name, TOptions options)
