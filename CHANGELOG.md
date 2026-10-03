@@ -70,8 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pack checks each package's API against the last release (`TenantryPackageBaseline`, 0.5.0), so a patch release
   cannot break code compiled against an earlier one in its minor, as Tenantry.Pro's version range assumes.
 
+- `ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)` (Tenantry.Options) configure named
+  options per tenant, such as an authentication scheme's, which its handler reads with `IOptionsMonitor<T>.Get(scheme)`.
+
 ### Changed
 
+- Tenantry.Options runs the tenant's steps after every `Configure` and before every `PostConfigure`, through an options
+  factory of its own. Before, they ran as post-configurations, so one added earlier ran before them.
 - `ITenantContextSetter<TKey>.UseNoTenant()` makes no tenant current until it is disposed, as `Use(tenant)` makes one
   current. A class of your own that implements `ITenantContextSetter<TKey>` must add it.
 - `UseTenantry()`, `AddDbContextPerTenantDatabase` and `IsSharedAcrossTenants()` carry `[RequiresUnreferencedCode]`

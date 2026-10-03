@@ -139,7 +139,7 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
-    public void ANamedValue_IsKeptPerTenant_ButTheStepsApplyToTheDefaultNameOnly()
+    public void ANamedValue_IsKeptPerTenant_AndADefaultNameStepDoesNotApplyToIt()
     {
         using var provider = Build(services => services.Configure<BrandingOptions>("print", o => o.Name = "print"));
         using var scope = provider.CreateScope();
@@ -147,6 +147,62 @@ public sealed class PerTenantOptionsTests
         using (Use(provider, Acme))
             scope.ServiceProvider.GetRequiredService<IOptionsSnapshot<BrandingOptions>>().Get("print")
                 .Should().Match<BrandingOptions>(o => o.Name == "print" && o.Colour == "grey");
+    }
+
+    [Fact]
+    public void ANamedStep_AppliesToItsNameOnly()
+    {
+        using var provider = Build(services =>
+        {
+            services.Configure<BrandingOptions>("print", o => o.Name = "print");
+            services.Configure<BrandingOptions>("web", o => o.Name = "web");
+            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant<BrandingOptions>("print", (o, t) => o.Colour = $"ink-{t.Name}"));
+        });
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        using (Use(provider, Acme))
+        {
+            monitor.Get("print").Should().Match<BrandingOptions>(o => o.Name == "print" && o.Colour == "ink-Acme");
+            monitor.Get("web").Colour.Should().Be("grey");
+            monitor.CurrentValue.Colour.Should().Be("red", "the default name keeps its own step");
+        }
+
+        using (Use(provider, Globex))
+            monitor.Get("print").Colour.Should().Be("ink-Globex");
+
+        monitor.Get("print").Colour.Should().Be("grey", "without a tenant");
+    }
+
+    [Fact]
+    public void AStepForEveryName_AppliesToTheDefaultAndEveryNamedValue()
+    {
+        using var provider = Build(services => services.AddTenantry<string>(tenant =>
+            tenant.ConfigureAllPerTenant<BrandingOptions>((o, t, sp) => o.Name = $"all-{t.Name}")));
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        using (Use(provider, Acme))
+        {
+            monitor.Get("anything").Name.Should().Be("all-Acme");
+            monitor.CurrentValue.Should().Match<BrandingOptions>(o => o.Name == "all-Acme" && o.Colour == "red");
+        }
+    }
+
+    [Fact]
+    public void TheTenantsSteps_RunBeforeEveryPostConfigure_WhateverTheOrderTheyWereAddedIn()
+    {
+        // As an authentication handler's post-configuration does: it builds what it needs from the settings it sees.
+        using var provider = Build(services =>
+        {
+            services.PostConfigureAll<BrandingOptions>(o => o.Name = $"built-from-{o.Colour}");
+            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant<BrandingOptions>("print", (o, t) => o.Colour = "ink"));
+        });
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        using (Use(provider, Acme))
+        {
+            monitor.CurrentValue.Name.Should().Be("built-from-red");
+            monitor.Get("print").Name.Should().Be("built-from-ink");
+        }
     }
 
     [Fact]

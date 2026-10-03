@@ -20,6 +20,7 @@ updates:
       # and a per-framework version must stay in its framework's band, which Dependabot cannot keep to.
       # scripts/check-dependabot.cs (run in CI) fails when this list and the project files disagree.
       # Banded packages: begin
+      - dependency-name: "Microsoft.AspNetCore.Authentication.JwtBearer"
       - dependency-name: "Microsoft.AspNetCore.Mvc.Testing"
       - dependency-name: "Microsoft.AspNetCore.TestHost"
       - dependency-name: "Microsoft.EntityFrameworkCore.InMemory"
