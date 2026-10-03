@@ -10,7 +10,7 @@ namespace Tenantry.AspNetCore.Tests;
 
 /// <summary>
 /// One service calls another as a tenant: Tenantry.Http sends the tenant, and the receiving service resolves it with
-/// <c>ResolveFromPropagationHeader()</c>, by id, from a store that maps its identifiers to slugs only.
+/// <c>ResolveFromPropagationHeader(...)</c>, by id, from a store that maps its identifiers to slugs only.
 /// </summary>
 public sealed class PropagationEndToEndTests
 {
@@ -69,7 +69,7 @@ public sealed class PropagationEndToEndTests
         });
         builder.WebHost.UseTestServer();
         builder.Services.AddTenantry<Guid>(tenant => tenant
-            .ResolveFromPropagationHeader()
+            .ResolveFromPropagationHeader(_ => true)   // the test's callers are all its own services
             .UseStore<SlugStore>()
             .AddHttpPropagation());
         builder.Services.AddHttpClient("next").UseTenantry();
@@ -89,7 +89,7 @@ public sealed class PropagationEndToEndTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.AddTenantry<Guid>(tenant => tenant.ResolveFromPropagationHeader().UseStore<SlugStore>());
+        builder.Services.AddTenantry<Guid>(tenant => tenant.ResolveFromPropagationHeader(_ => true).UseStore<SlugStore>());   // its callers are the test
 
         var app = builder.Build();
         app.UseTenantry();

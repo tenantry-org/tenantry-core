@@ -49,8 +49,9 @@ would authenticate with no tenant's settings (event 1010 warns of this).
 ## How the two steps work
 
 `app.UseTenantResolution()` runs the resolvers, looks the tenant up and checks it is
-[active](tenant-stores.md#suspended-and-inactive-tenants), then makes it current. It cannot read claims, so it stops at
-the first claim resolver: only the resolvers added before it run here. `app.UseTenantry()` then runs the
+[active](tenant-stores.md#suspended-and-inactive-tenants), then makes it current. It cannot read the user, so it stops
+at the first resolver that needs one, a claim resolver or `ResolveFromPropagationHeader`: only the resolvers added
+before it run here. `app.UseTenantry()` then runs the
 [access validators](access-control.md#validating-tenant-access). If nothing resolved before authentication, it runs
 every resolver again, in order, so a resolver added after a claim resolver never wins over the claim. Endpoints that
 require a tenant are rejected as usual.

@@ -141,6 +141,44 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task ThePropagationHeader_IsReadOnlyFromATrustedCaller_AfterAuthentication()
+    {
+        // The header first, then a header any user can send. The caller is trusted by its token, which is not read
+        // until authentication has run, so the early pass must not take the second header in the first one's place.
+        await using var app = await StartAsync(
+            tenant => tenant
+                .ResolveFromPropagationHeader(http => http.User.FindFirst("sub")?.Value == "orders-service")
+                .ResolveFromHeader("X-Tenant-Id")
+                .UseInMemoryStore([Acme, Globex]),
+            AddJwt,
+            pipeline: a =>
+            {
+                a.UseTenantResolution();
+                a.UseAuthentication();
+                a.UseTenantry();
+            });
+        using var client = app.GetTestClient();
+
+        async Task<string> TenantOf(string caller, string? propagated, string? header)
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, "http://localhost/tenant");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token("default", caller));
+
+            if (propagated is not null)
+                request.Headers.Add(TenantPropagation.HeaderName, propagated);
+
+            if (header is not null)
+                request.Headers.Add("X-Tenant-Id", header);
+
+            using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+            return await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await TenantOf("orders-service", propagated: "globex", header: "acme")).Should().Be("globex", "a trusted caller's header comes first");
+        (await TenantOf("mallory", propagated: "globex", header: "acme")).Should().Be("acme", "an untrusted caller's header is ignored");
+    }
+
+    [Fact]
     public async Task AResolverAddedBeforeAClaimResolver_ResolvesBeforeAuthentication()
     {
         // The subdomain comes first, so it resolves before authentication and the tenant's settings authenticate.

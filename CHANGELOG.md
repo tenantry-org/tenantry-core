@@ -37,8 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with its requests, in the `tenantry-tenant-id` header, after `tenant.AddHttpPropagation()` in `AddTenantry`. Only
   requests to the client's base address carry it, a header the caller set is kept, and `ConfigureHttpClientDefaults`
   is refused. See [Calling other services](docs/http-propagation.md).
-- `ResolveFromPropagationHeader()` (Tenantry.AspNetCore) resolves the tenant another service sent, by id with the
-  store's `GetTenantAsync`, so a store whose identifiers are slugs still finds it.
+- `ResolveFromPropagationHeader(isTrustedCaller)` (Tenantry.AspNetCore) resolves the tenant another service sent, by
+  id with the store's `GetTenantAsync`, so a store whose identifiers are slugs still finds it. It reads the header only
+  when `isTrustedCaller` accepts the request, after authentication, and ignores it from any other caller.
 - `Tenantry.Caching`, a new package: `IsolateCaches()` keeps the application's `HybridCache` entries per tenant (keys
   and tags under the tenant's prefix, a factory run as the tenant, and no call without a tenant), with
   `SharedHybridCache` for entries every tenant shares and `ITenantDistributedCache` for code that uses

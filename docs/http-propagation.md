@@ -3,7 +3,7 @@
 When one of your services calls another as a tenant, the called service needs to know which tenant. `Tenantry.Http`
 sends the current tenant with an `HttpClient`'s or gRPC client's requests, in the `tenantry-tenant-id` header
 (`TenantPropagation.HeaderName`), and `Tenantry.AspNetCore` reads it on the other side with
-`ResolveFromPropagationHeader()`.
+`ResolveFromPropagationHeader`.
 
 ```bash
 dotnet add package Tenantry.Http
@@ -68,41 +68,61 @@ rather than sending something the other side would read as another id.
 
 ## Receiving the tenant
 
-The called service resolves the tenant from the header with `ResolveFromPropagationHeader()`:
+The called service resolves the tenant from the header with `ResolveFromPropagationHeader`. Any caller that reaches
+the service can set the header, so it takes a check of the caller, and reads the header only when the check passes.
+Here the caller must have authenticated with a token carrying an `internal` scope, which your identity provider gives
+only to your services:
 
 ```csharp
+using System.Security.Claims;
+using Tenantry;
+
 builder.Services.AddTenantry<Guid>(tenant => tenant
-    .ResolveFromPropagationHeader()
+    .ResolveFromPropagationHeader(http => HasScope(http.User, "internal"))
     .UseStore<EfCoreTenantStore>());
+
+// An OAuth scope claim is usually one space-separated value ("internal orders.read"); some providers send one claim
+// per scope. This reads both.
+static bool HasScope(ClaimsPrincipal user, string scope) =>
+    user.FindAll("scope").SelectMany(c => c.Value.Split(' ')).Contains(scope);
 ```
 
-The header holds a tenant id, so the resolver reads it with `TenantIds.TryParse` and looks the tenant up with the
-store's `GetTenantAsync`, not `FindByIdentifierAsync`: a store whose identifiers are slugs still finds the tenant. A
-value that is not a tenant id, or is an id reserved for "no tenant", finds no tenant.
+The claim's type and shape depend on your identity provider: Microsoft Entra ID puts scopes in `scp`, and a
+client-credentials token may be easier to recognise by its `client_id` or `azp` claim. Mutual TLS works too: check
+`http.Connection.ClientCertificate`.
+
+- **Checked after authentication.** The check reads the authenticated user, so `app.UseTenantResolution()` stops
+  before this resolver and `app.UseTenantry()` runs it after `app.UseAuthentication()`. A tenant from the header is
+  therefore not known while authentication runs, so its schemes use their default settings.
+- **Ignored from other callers.** When the check fails, the header is ignored and the next resolver runs. A caller
+  with no token is not trusted, so placing `app.UseTenantry()` before `app.UseAuthentication()` makes every header
+  ignored rather than accepted.
+- **Read as a tenant id.** The resolver reads the value with `TenantIds.TryParse` and looks the tenant up with the
+  store's `GetTenantAsync`, not `FindByIdentifierAsync`, so a store whose identifiers are slugs still finds the
+  tenant. A value that is not a tenant id, or is an id reserved for "no tenant", finds no tenant.
 
 Resolvers run in the order they are added, and the first that finds a value wins. A service that serves both users
-and other services resolves its users' requests first and takes the header only when nothing else names a tenant. Its
-users can set the header too, so an access validator accepts it only from callers that authenticated as one of your
-services (here, with a token carrying a `scope` claim your identity provider gives only to services):
+and other services resolves its users' requests first and takes the header only when nothing else names a tenant:
 
 ```csharp
+using System.Security.Claims;
 using Tenantry;
 
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
-    .ResolveFromPropagationHeader()
-    .UseStore<EfCoreTenantStore>()
-    .ValidateTenantAccess((http, _) =>
-        !http.Request.Headers.ContainsKey(TenantPropagation.HeaderName) || http.User.HasClaim("scope", "internal")));
+    .ResolveFromPropagationHeader(http => HasScope(http.User, "internal"))
+    .UseStore<EfCoreTenantStore>());
+
+static bool HasScope(ClaimsPrincipal user, string scope) =>
+    user.FindAll("scope").SelectMany(c => c.Value.Split(' ')).Contains(scope);
 ```
 
 ### A header is a claim, not proof
 
-Any caller that reaches the service can set the header. Accept it only from callers you authenticate (a bearer token
-from your identity provider, mutual TLS), and check that the caller may act for the tenant with an
-[access validator](access-control.md). A service that only other services call should not be reachable from outside
-at all. Where the calling service already sends a token that names the tenant, `ResolveFromClaim` reads it from the
-token instead, and the header is not needed.
+A trusted caller can still name any tenant. Where a calling service should act only for some tenants, check that with
+an [access validator](access-control.md). A service that only other services call should not be reachable from
+outside at all. Where the calling service already sends a token that names the tenant, `ResolveFromClaim` reads it from
+the token instead, and the header is not needed.
 
 ## Jobs and messages
 

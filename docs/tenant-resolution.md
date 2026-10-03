@@ -31,7 +31,7 @@ Resolution turns an HTTP request into a tenant, in two steps:
 | `ResolveFromRouteValue(key = "tenant")` | route value `key` | For routes like `/api/{tenant}/…`. Needs routing before the middleware. |
 | `ResolveFromClaim(type = "tenant_id")` | claim on `HttpContext.User` | Needs authentication before the middleware. |
 | `ResolveFromQueryString(name = "tenantId")` | query string parameter | **Development/testing only** — see warning. |
-| `ResolveFromPropagationHeader()` | the `tenantry-tenant-id` header another service sent | Read as a tenant id, not an identifier. See [Calling other services](http-propagation.md). |
+| `ResolveFromPropagationHeader(isTrustedCaller)` | the `tenantry-tenant-id` header another service sent | Only from a caller `isTrustedCaller` accepts, after authentication; read as a tenant id. See [Calling other services](http-propagation.md). |
 
 ### Header
 

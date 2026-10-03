@@ -15,7 +15,8 @@ internal sealed record TenantResolution<TKey>(
 /// <summary>
 /// Finds a request's tenant: the resolvers in registration order, the store lookup, the activity check, and the access
 /// validators. <c>app.UseTenantry()</c> runs all of it; <c>app.UseTenantResolution()</c>, before authentication, runs
-/// only the resolvers added before the first claim resolver, and no access validators. When those find nothing,
+/// only the resolvers added before the first that needs the user (a claim or propagation header resolver), and no
+/// access validators. When those find nothing,
 /// <c>app.UseTenantry()</c> runs every resolver again, in order, after authentication.
 /// </summary>
 internal sealed class TenantRequestResolution<TKey>
@@ -101,9 +102,10 @@ internal sealed class TenantRequestResolution<TKey>
 
         foreach (var resolver in context.RequestServices.GetServices<ITenantResolver>())
         {
-            // Before authentication there is no user to read. Stop here rather than skip it, so a resolver added after a
-            // claim resolver never wins over the claim: app.UseTenantry() resolves again, in order, once the user is known.
-            if (beforeAuthentication && resolver is ClaimTenantResolver)
+            // Before authentication there is no user to read, for a claim or to trust a propagated tenant. Stop here rather
+            // than skip it, so a resolver added after it never wins over it: app.UseTenantry() resolves again, in order,
+            // once the user is known.
+            if (beforeAuthentication && resolver is ClaimTenantResolver or PropagationHeaderTenantResolver)
             {
                 break;
             }
