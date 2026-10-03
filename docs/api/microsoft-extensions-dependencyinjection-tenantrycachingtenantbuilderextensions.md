@@ -28,7 +28,7 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-It wraps the `HybridCache` registered before it, so call `AddHybridCache()` before `AddTenantry`. Without one, the `HybridCache` it registers throws when used, naming the fix, rather than leaving a cache registered later unisolated.
+It wraps the `HybridCache` registered before it, so call `AddHybridCache()` before `AddTenantry`. Without one, the `HybridCache` it registers throws when used, naming the fix, and a later `AddHybridCache()`, which adds a cache only if none is registered, leaves it in place. A `HybridCache` registered later with `AddSingleton` replaces it, unisolated: keep cache registrations before `AddTenantry`.
 
 A `HybridCache` call with no current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), rather than writing an entry no tenant owns. The tenant's prefix makes keys longer: keep them within the cache's maximum key length (1,024 characters by default) with the id added.
 

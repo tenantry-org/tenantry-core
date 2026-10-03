@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 using Tenantry;
 using Tenantry.Http.Internal;
 
@@ -59,17 +60,12 @@ public static class TenantryHttpClientBuilderExtensions
                 "the clients of your own services: builder.Services.AddHttpClient<BillingClient>(…).UseTenantry().");
         }
 
-        PropagationTarget target = new();
-
-        // After the client's own configuration, which sets its base address.
-        builder.Services.PostConfigure<HttpClientFactoryOptions>(
-            name,
-            options => options.HttpClientActions.Add(client => target.Record(client.BaseAddress)));
-
+        // Read when the factory builds the client's handlers, not added to HttpClientActions: gRPC's client factory
+        // refuses those (before Grpc.Net.ClientFactory 2.64) or warns about them each time it creates a client.
         return builder.AddHttpMessageHandler(sp => new TenantPropagationHandler(
             sp.GetService<ITenantHeaderSource>() ?? throw new InvalidOperationException(
                 $"The HTTP client '{name}' calls UseTenantry(), but Tenantry is not set up to send tenants: add " +
                 "tenant.AddHttpPropagation() in AddTenantry."),
-            target));
+            PropagationTarget.Of(sp.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get(name))));
     }
 }

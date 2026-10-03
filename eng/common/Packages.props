@@ -59,6 +59,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[$(MicrosoftExtensionsFloor), )" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="[$(MicrosoftExtensionsFloor), )" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="[$(MicrosoftExtensionsFloor), )" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="[$(MicrosoftExtensionsFloor), )" />
     <!-- HybridCache's base type arrived in 9.0, which supports net8.0 (scripts/check-package-ranges.cs allows it) -->
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="[$(MicrosoftExtensionsFloor), )" Condition="'$(TargetFramework)' != 'net8.0'" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="[9.0.0, )" Condition="'$(TargetFramework)' == 'net8.0'" />

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tenantry.Core\Tenantry.Core.csproj" />
+    <ProjectReference Include="..\..\src\Tenantry.Options\Tenantry.Options.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\Conformance.cs" Link="Shared\Conformance.cs" />
+  </ItemGroup>
+
+</Project>

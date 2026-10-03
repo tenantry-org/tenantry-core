@@ -24,8 +24,10 @@ public static class TenantryCachingTenantBuilderExtensions
     /// <remarks>
     /// <para>
     /// It wraps the <see cref="HybridCache"/> registered before it, so call <c>AddHybridCache()</c> before
-    /// <c>AddTenantry</c>. Without one, the <see cref="HybridCache"/> it registers throws when used, naming the fix,
-    /// rather than leaving a cache registered later unisolated.
+    /// <c>AddTenantry</c>. Without one, the <see cref="HybridCache"/> it registers throws when used, naming the fix, and a
+    /// later <c>AddHybridCache()</c>, which adds a cache only if none is registered, leaves it in place. A
+    /// <see cref="HybridCache"/> registered later with <c>AddSingleton</c> replaces it, unisolated: keep cache
+    /// registrations before <c>AddTenantry</c>.
     /// </para>
     /// <para>
     /// A <see cref="HybridCache"/> call with no current tenant throws <see cref="TenantNotResolvedException"/>, rather

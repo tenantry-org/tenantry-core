@@ -2,8 +2,8 @@ namespace Tenantry;
 
 /// <summary>
 /// Removes cached tenants, so the next lookup asks the tenant store again, and clears what else is kept for them: each
-/// registered <see cref="ITenantInvalidationHandler{TKey}"/> runs too (Tenantry.Caching's cache entries, Tenantry.Options'
-/// options). Use it when a tenant changes (it is suspended, renamed or deleted, or its identifiers or settings change)
+/// registered <see cref="ITenantInvalidationHandler{TKey}"/> runs too (Tenantry.Caching's cache entries, Tenantry.AspNetCore's
+/// output-cached responses, Tenantry.Options' options). Use it when a tenant changes (it is suspended, renamed or deleted, or its identifiers or settings change)
 /// before its cached copy expires, and when a tenant is removed.
 /// </summary>
 /// <typeparam name="TKey">
@@ -22,6 +22,11 @@ public interface ITenantStoreCache<in TKey>
     /// Removes the tenant <paramref name="tenantId"/>, found by its id or by any identifier, from the cache.
     /// </summary>
     /// <param name="tenantId">The id of the tenant to remove.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="tenantId"/> is null.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="tenantId"/> is one Tenantry reserves for "no tenant": the key type's default (<c>Guid.Empty</c>,
+    /// <c>0</c>) or an empty string.
+    /// </exception>
     /// <exception cref="Exception">An invalidation handler threw (several: <see cref="AggregateException"/>), after every handler ran.</exception>
     void Invalidate(TKey tenantId);
 

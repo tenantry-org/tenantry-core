@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Tenantry;
 using Tenantry.Caching;
 
@@ -12,7 +13,8 @@ services.AddSingleton<HybridCache, DictionaryCache>();
 services.AddTenantry<string>(tenant => tenant
     .UseInMemoryStore([acme])
     .AddHttpPropagation()
-    .IsolateCaches());
+    .IsolateCaches()
+    .ConfigurePerTenant<PlanOptions>((options, tenant) => options.Name = $"{tenant.Name}'s plan"));
 services.AddHttpClient("service", client => client.BaseAddress = new Uri("http://service.internal"))
     .UseTenantry()
     .ConfigurePrimaryHttpMessageHandler(() => new EchoTenant());
@@ -26,7 +28,10 @@ using (tenantContext.Use(acme))
     Expect("HybridCache", await cache.GetOrCreateAsync("plan", _ => ValueTask.FromResult(tenantContext.CurrentTenantId)), "acme");
     Expect("HybridCache with state", await cache.GetOrCreateAsync("double", 21, (n, _) => ValueTask.FromResult(n * 2)), 42);
     Expect("HTTP propagation", await provider.GetRequiredService<IHttpClientFactory>().CreateClient("service").GetStringAsync("/"), "acme");
+    Expect("options per tenant", provider.GetRequiredService<IOptions<PlanOptions>>().Value.Name, "Acme's plan");
 }
+
+Expect("options without a tenant", provider.GetRequiredService<IOptions<PlanOptions>>().Value.Name, "default");
 
 Expect("SharedHybridCache", await provider.GetRequiredService<SharedHybridCache>().GetOrCreateAsync("rates", _ => ValueTask.FromResult("shared")), "shared");
 provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
@@ -42,6 +47,12 @@ static void Expect<T>(string check, T actual, T expected)
         Console.Error.WriteLine($"{check}: expected {expected}");
         Environment.Exit(1);
     }
+}
+
+// Options configured per tenant.
+internal sealed class PlanOptions
+{
+    public string Name { get; set; } = "default";
 }
 
 // A small HybridCache: entries by key, removed by tag.

@@ -149,9 +149,9 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <remarks>
     /// Add the output cache after Tenantry in the pipeline (<c>app.UseTenantry()</c>, then <c>app.UseOutputCache()</c>),
-    /// so the tenant is known when the cache runs. In the other order, a request the output cache handles throws,
-    /// naming the fix, rather than being cached for every tenant. Endpoints still opt in to output caching themselves
-    /// (<c>CacheOutput()</c>, <c>[OutputCache]</c>).
+    /// so the tenant is known when the cache runs. A response for a request <c>app.UseTenantry()</c> did not handle (the
+    /// other order, or a branch without it) is not cached, and a warning says so once. Endpoints still opt in to output
+    /// caching themselves (<c>CacheOutput()</c>, <c>[OutputCache]</c>).
     /// </remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>

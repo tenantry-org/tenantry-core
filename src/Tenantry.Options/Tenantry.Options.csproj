@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageDescription>Per-tenant options for Tenantry: tenant.ConfigurePerTenant&lt;TOptions&gt;() makes IOptions, IOptionsSnapshot and IOptionsMonitor return the current tenant's values, built from your configuration plus the tenant, cached per tenant, and cleared when the tenant is invalidated.</PackageDescription>
+    <PackageTags>multi-tenancy;options;configuration;saas;tenantry</PackageTags>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tenantry.Core\Tenantry.Core.csproj" IncludeAssets="compile;runtime;build;native;contentfiles;analyzers;buildtransitive" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tenantry.Options.Tests"/>
+  </ItemGroup>
+
+  <!-- Not in the .NET 11 preview lane (IncludeNet11), where Microsoft.Extensions.Options comes with the shared framework -->
+  <ItemGroup Condition="'$(TargetFramework)' != 'net11.0'">
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+</Project>

@@ -47,7 +47,7 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-Add the output cache after Tenantry in the pipeline (`app.UseTenantry()`, then `app.UseOutputCache()`), so the tenant is known when the cache runs. In the other order, a request the output cache handles throws, naming the fix, rather than being cached for every tenant. Endpoints still opt in to output caching themselves (`CacheOutput()`, `[OutputCache]`).
+Add the output cache after Tenantry in the pipeline (`app.UseTenantry()`, then `app.UseOutputCache()`), so the tenant is known when the cache runs. A response for a request `app.UseTenantry()` did not handle (the other order, or a branch without it) is not cached, and a warning says so once. Endpoints still opt in to output caching themselves (`CacheOutput()`, `[OutputCache]`).
 
 ```csharp
 builder.Services.AddOutputCache();

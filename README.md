@@ -76,6 +76,7 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 | `Tenantry.AspNetCore` | [![NuGet](https://img.shields.io/nuget/v/Tenantry.AspNetCore.svg)](https://www.nuget.org/packages/Tenantry.AspNetCore) | ASP.NET Core integration — resolution middleware, resolvers, access validation |
 | `Tenantry.Http`       | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Http.svg)](https://www.nuget.org/packages/Tenantry.Http)             | Sends the current tenant to the services an `HttpClient` or gRPC client calls |
 | `Tenantry.Caching`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Caching.svg)](https://www.nuget.org/packages/Tenantry.Caching)       | Keeps `HybridCache` entries per tenant                                         |
+| `Tenantry.Options`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Options.svg)](https://www.nuget.org/packages/Tenantry.Options)       | `IOptions<T>` values per tenant                                                |
 
 Each depends on `Tenantry.Core`. Reference whichever combination matches your host:
 
@@ -93,6 +94,9 @@ dotnet add package Tenantry.Http
 
 # HybridCache entries per tenant
 dotnet add package Tenantry.Caching
+
+# Options with values per tenant
+dotnet add package Tenantry.Options
 ```
 
 Tenantry is in beta until 1.0: releases are numbered 0.x, and a minor release (0.4 to 0.5) can change the
@@ -177,9 +181,10 @@ differs by package because EF Core's query-filter mechanism requires runtime cod
 | `Tenantry.AspNetCore` | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`) — see the `Aot` sample             |
 | `Tenantry.Http`       | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`) — see the `Aot` sample             |
 | `Tenantry.Caching`    | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`); Microsoft's `HybridCache` has trim warnings of its own |
+| `Tenantry.Options`    | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`)                                     |
 | `Tenantry.EfCore`     | ✅ Trim-compatible      | ⚠️ Not AOT-compatible — query filters require dynamic code (see below)     |
 
-- **`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http` and `Tenantry.Caching`** are marked `IsAotCompatible` and `IsTrimmable` and
+- **`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options`** are marked `IsAotCompatible` and `IsTrimmable` and
   carry no trim/AOT warnings. The [`Tenantry.Samples.Aot`](samples/Tenantry.Samples.Aot) project
   publishes with `PublishAot=true` against a slim host and source-generated JSON.
 - **`Tenantry.EfCore`** is `IsTrimmable` but **not** AOT-compatible. `UseTenantry()` builds the tenant query

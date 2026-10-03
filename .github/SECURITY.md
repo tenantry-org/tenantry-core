@@ -34,3 +34,4 @@ may receive fixes at the maintainers' discretion.
 | `Tenantry.EfCore` | latest minor |
 | `Tenantry.Http` | latest minor |
 | `Tenantry.Caching` | latest minor |
+| `Tenantry.Options` | latest minor |

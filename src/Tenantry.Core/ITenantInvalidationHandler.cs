@@ -3,8 +3,9 @@ namespace Tenantry;
 /// <summary>
 /// Clears what an application or a Tenantry package keeps for each tenant when the tenant changes. Every registered
 /// handler runs when <see cref="ITenantStoreCache{TKey}.Invalidate"/> or <see cref="ITenantStoreCache{TKey}.InvalidateAll"/>
-/// is called, after the cached tenants are removed, whether or not tenants are cached: Tenantry.Caching's cache entries
-/// and Tenantry.Options' options register one, so one call clears everything Tenantry keeps for a tenant.
+/// is called, after the cached tenants are removed, whether or not tenants are cached: Tenantry.Caching's cache entries,
+/// Tenantry.AspNetCore's output-cached responses (<c>IsolateOutputCache()</c>) and Tenantry.Options' options register one,
+/// so one call clears everything Tenantry keeps for a tenant.
 /// </summary>
 /// <typeparam name="TKey">
 /// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.

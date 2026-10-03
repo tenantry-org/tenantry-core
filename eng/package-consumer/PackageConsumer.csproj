@@ -19,6 +19,7 @@
     <PackageReference Include="Tenantry.AspNetCore" Version="[$(TenantryVersion)]" />
     <PackageReference Include="Tenantry.Http" Version="[$(TenantryVersion)]" />
     <PackageReference Include="Tenantry.Caching" Version="[$(TenantryVersion)]" />
+    <PackageReference Include="Tenantry.Options" Version="[$(TenantryVersion)]" />
   </ItemGroup>
 
 </Project>

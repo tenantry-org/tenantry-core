@@ -143,6 +143,7 @@ public sealed class TenantStoreCacheTests
         cache.Invalidate("acme");
         cache.InvalidateAll();
         cache.Invoking(c => c.Invalidate(null!)).Should().Throw<ArgumentNullException>();
+        cache.Invoking(c => c.Invalidate("")).Should().Throw<ArgumentException>().WithMessage("*reserved for \"no tenant\"*");
     }
 
     [Fact]
@@ -275,6 +276,20 @@ public sealed class TenantStoreCacheTests
     }
 
     [Fact]
+    public async Task InvalidatingAReservedId_IsRefused_BeforeAnyHandlerRuns()
+    {
+        ServiceCollection services = new();
+        Recorder handler = new();
+        services.AddSingleton<ITenantInvalidationHandler<int>>(handler);
+        services.AddTenantry<int>(tenant => tenant.UseInMemoryStore([new TenantDescriptor<int> { TenantId = 7, Name = "Seven" }]).CacheTenants());
+        await using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<ITenantStoreCache<int>>().Invoking(c => c.Invalidate(0))
+            .Should().Throw<ArgumentException>().WithParameterName("tenantId");
+        handler.Calls.Should().BeEmpty("an empty or default id would read as every tenant to some handlers");
+    }
+
+    [Fact]
     public async Task AHandler_CanDependOnTheCacheItself()
     {
         ServiceCollection services = new();
@@ -301,11 +316,13 @@ public sealed class TenantStoreCacheTests
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 
-    private sealed class Recorder : ITenantInvalidationHandler<string>
+    private sealed class Recorder : ITenantInvalidationHandler<string>, ITenantInvalidationHandler<int>
     {
         public List<string> Calls { get; } = [];
 
         public void Invalidate(string tenantId) => Calls.Add(tenantId);
+
+        public void Invalidate(int tenantId) => Calls.Add($"{tenantId}");
 
         public void InvalidateAll() => Calls.Add("*");
     }

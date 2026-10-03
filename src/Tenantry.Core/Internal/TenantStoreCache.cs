@@ -44,7 +44,7 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
 
     public void Invalidate(TKey tenantId)
     {
-        ArgumentNullException.ThrowIfNull(tenantId);
+        TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
 
         Interlocked.Increment(ref _generation);
         _byId.RemoveWhere((key, entry) => key.Equals(tenantId) || entry.Tenant.TenantId.Equals(tenantId));
@@ -150,7 +150,7 @@ internal sealed class NoTenantStoreCache<TKey>(TenantInvalidationHandlers<TKey> 
 {
     public void Invalidate(TKey tenantId)
     {
-        ArgumentNullException.ThrowIfNull(tenantId);
+        TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
         handlers.Invalidate(tenantId);
     }
 

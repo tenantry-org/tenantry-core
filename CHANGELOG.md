@@ -27,10 +27,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SharedHybridCache` for entries every tenant shares and `ITenantDistributedCache` for code that uses
   `IDistributedCache` directly. Invalidating a tenant removes its entries. See [Caching per tenant](docs/caching.md).
 - `IsolateOutputCache()` (Tenantry.AspNetCore) makes cached responses vary by tenant, and invalidating a tenant
-  evicts its responses. The output cache before `UseTenantry()` throws, rather than caching for every tenant.
+  evicts its responses. A response for a request `UseTenantry()` did not handle first is not cached (log event 1009,
+  once).
+- `Tenantry.Options`, a new package: `ConfigurePerTenant<TOptions>()` makes `IOptions<T>`, `IOptionsSnapshot<T>` and
+  `IOptionsMonitor<T>` give the current tenant's value, built from the ordinary configuration and the tenant, cached
+  per tenant and cleared when the tenant is invalidated. See [Options per tenant](docs/per-tenant-options.md).
 - `ITenantInvalidationHandler<TKey>`: `ITenantStoreCache<TKey>.Invalidate` and `InvalidateAll` run every registered
-  handler, with or without `CacheTenants`, so one call clears everything kept for a tenant. Tenantry.Caching and
-  Tenantry.Options register one.
+  handler, with or without `CacheTenants`, so one call clears everything kept for a tenant. Tenantry.Caching,
+  `IsolateOutputCache()` and Tenantry.Options register one.
+
+### Changed
+
+- `ITenantStoreCache<TKey>.Invalidate` refuses an id Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty
+  string), which no tenant has.
 
 ## [0.5.0] - 2026-10-03
 

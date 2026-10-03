@@ -5,8 +5,9 @@ namespace Tenantry.Caching.Internal;
 /// <summary>
 /// The <see cref="HybridCache"/> an application injects once <c>IsolateCaches()</c> is called: each key and tag goes to
 /// the cache it wraps under the current tenant's prefix, and each entry it writes is tagged with the tenant, so
-/// invalidating the tenant removes it. A factory runs as the tenant that called: HybridCache runs it without the caller's
-/// async context, which is where the current tenant lives. Without a tenant, every call throws
+/// invalidating the tenant removes it. A factory runs as the tenant that called: a HybridCache may run it without the
+/// caller's async context, where the current tenant lives (Microsoft's does, for a call whose token can be cancelled).
+/// The tag <c>*</c> (every entry) means every entry of the tenant. Without a tenant, every call throws
 /// <see cref="TenantNotResolvedException"/>.
 /// </summary>
 internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant currentTenant) : HybridCache
@@ -56,25 +57,27 @@ internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant curren
         return inner.RemoveAsync(currentTenant.Require(Name).Prefix + key, cancellationToken);
     }
 
+    // HybridCache's contract treats a null collection as empty.
     public override ValueTask RemoveAsync(IEnumerable<string> keys, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(keys);
         var prefix = currentTenant.Require(Name).Prefix;
-        return inner.RemoveAsync(keys.Select(key => prefix + key).ToList(), cancellationToken);
+        return keys is null ? ValueTask.CompletedTask : inner.RemoveAsync(keys.Select(key => prefix + key).ToList(), cancellationToken);
     }
 
     public override ValueTask RemoveByTagAsync(string tag, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(tag);
-        return inner.RemoveByTagAsync(currentTenant.Require(Name).Prefix + tag, cancellationToken);
+        return inner.RemoveByTagAsync(TenantTag(currentTenant.Require(Name).Prefix, tag), cancellationToken);
     }
 
     public override ValueTask RemoveByTagAsync(IEnumerable<string> tags, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(tags);
         var prefix = currentTenant.Require(Name).Prefix;
-        return inner.RemoveByTagAsync(tags.Select(tag => prefix + tag).ToList(), cancellationToken);
+        return tags is null ? ValueTask.CompletedTask : inner.RemoveByTagAsync(tags.Select(tag => TenantTag(prefix, tag)).ToList(), cancellationToken);
     }
+
+    // "*", every entry to HybridCache, is every entry of the tenant: its own tag, the prefix without the separator.
+    private static string TenantTag(string prefix, string tag) => tag == TenantCacheKeys.EveryEntry ? prefix[..^1] : prefix + tag;
 
     // The tenant's own tags, its prefix stripped of the separator (the tenant), and the tag every tenant entry has.
     private static List<string> Tags(string prefix, IEnumerable<string>? tags)

@@ -36,18 +36,62 @@ public sealed class IsolateCachesTests
         _inner.Entries.Keys.Should().BeEquivalentTo("t:acme:orders", "t:globex:orders");
     }
 
-    [Fact]
-    public async Task AFactory_RunsAsTheTenantThatCalled_ThoughTheCacheRunsItWithoutTheCallersContext()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AFactory_RunsAsTheTenantThatCalled_AndASharedOneAsNoTenant_WhereverTheCacheRunsIt(bool cancellable)
     {
         await using var provider = Build();
         var cache = provider.GetRequiredService<HybridCache>();
+        var shared = provider.GetRequiredService<SharedHybridCache>();
         var tenantContext = provider.GetRequiredService<ITenantContext<string>>();
+        var token = cancellable ? Ct : CancellationToken.None;
 
         var seen = await AsAsync(provider, Acme, () =>
-            cache.GetOrCreateAsync("tenant", _ => ValueTask.FromResult(tenantContext.CurrentTenantId), cancellationToken: Ct));
+            cache.GetOrCreateAsync("tenant", _ => ValueTask.FromResult(tenantContext.CurrentTenantId), cancellationToken: token));
+        var sharedSeen = await AsAsync(provider, Acme, () =>
+            shared.GetOrCreateAsync("tenant", _ => ValueTask.FromResult(tenantContext.CurrentTenantId ?? "none"), cancellationToken: token));
 
         seen.Should().Be("acme");
+        sharedSeen.Should().Be("none");
         tenantContext.HasTenant.Should().BeFalse("the tenant is current only inside the factory and the caller's scope");
+    }
+
+    [Fact]
+    public async Task TheTagStar_RemovesEveryEntryOfTheCurrentTenant_OrEverySharedEntry_AndNoOther()
+    {
+        await using var provider = Build();
+        var cache = provider.GetRequiredService<HybridCache>();
+        var shared = provider.GetRequiredService<SharedHybridCache>();
+        await shared.SetAsync("rates", 1, cancellationToken: Ct);
+        await shared.SetAsync("currencies", 2, tags: ["fx"], cancellationToken: Ct);
+        foreach (var tenant in new[] { Acme, Globex })
+            await AsAsync(provider, tenant, () => cache.SetAsync("orders", 1, cancellationToken: Ct).AsTask());
+
+        await AsAsync(provider, Acme, () => cache.RemoveByTagAsync("*", Ct).AsTask());
+        _inner.Entries.Keys.Should().BeEquivalentTo("s:rates", "s:currencies", "t:globex:orders");
+
+        await shared.RemoveByTagAsync(["*"], Ct);
+        _inner.Entries.Keys.Should().Equal("t:globex:orders");
+    }
+
+    [Fact]
+    public async Task NullCollections_RemoveNothing_AsHybridCachesContractSays()
+    {
+        await using var provider = Build();
+        var cache = provider.GetRequiredService<HybridCache>();
+        var shared = provider.GetRequiredService<SharedHybridCache>();
+        await shared.SetAsync("rates", 1, cancellationToken: Ct);
+
+        await AsAsync(provider, Acme, async () =>
+        {
+            await cache.RemoveAsync((IEnumerable<string>)null!, Ct);
+            await cache.RemoveByTagAsync((IEnumerable<string>)null!, Ct);
+        });
+        await shared.RemoveAsync((IEnumerable<string>)null!, Ct);
+        await shared.RemoveByTagAsync((IEnumerable<string>)null!, Ct);
+
+        _inner.Entries.Keys.Should().Equal("s:rates");
     }
 
     [Fact]
@@ -127,7 +171,7 @@ public sealed class IsolateCachesTests
         await AsAsync(provider, Acme, () => cache.SetAsync("orders", "acme's", cancellationToken: Ct).AsTask());
 
         (await shared.GetOrCreateAsync("t:acme:orders", _ => ValueTask.FromResult("missed"), cancellationToken: Ct)).Should().Be("shared");
-        _inner.Entries["s:t:acme:orders"].Tags.Should().Equal("s:rates");
+        _inner.Entries["s:t:acme:orders"].Tags.Should().Equal("s:", "s:rates");
 
         await shared.RemoveByTagAsync(["rates"], Ct);
         await shared.SetAsync("x", 1, cancellationToken: Ct);

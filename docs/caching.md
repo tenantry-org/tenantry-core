@@ -35,14 +35,19 @@ public sealed class RecentOrders(HybridCache cache, AppDbContext db)
 ```
 
 - **Keys and tags are the tenant's.** An entry written while Acme is current is read only while Acme is current.
-  `RemoveAsync` and `RemoveByTagAsync` reach only the current tenant's entries.
-- **The factory runs as the tenant.** Microsoft's `HybridCache` runs a factory without the caller's async context,
-  where the current tenant lives, so without Tenantry a factory that queries a tenant's `DbContext` would run with no
-  tenant. `IsolateCaches()` makes the calling tenant current while the factory runs.
+  `RemoveAsync` and `RemoveByTagAsync` reach only the current tenant's entries, and the tag `*` (every entry) means
+  every entry of the current tenant.
+- **The factory runs as the tenant.** Microsoft's `HybridCache` can run a factory without the caller's async context,
+  where the current tenant lives (it does when the call's token can be cancelled), so without Tenantry a factory that
+  queries a tenant's `DbContext` could run with no tenant. `IsolateCaches()` makes the calling tenant current while the
+  factory runs.
 - **No tenant, no cache.** A call with no current tenant throws `TenantNotResolvedException`, rather than reading or
   writing an entry no tenant owns.
 - **Register the cache first.** `IsolateCaches()` wraps the `HybridCache` registered before it, so call
-  `AddHybridCache()` before `AddTenantry`. Without one, the `HybridCache` it registers throws when used, naming the fix.
+  `AddHybridCache()` (or another library's registration of a `HybridCache`) before `AddTenantry`. Without one, the
+  `HybridCache` it registers throws when used, naming the fix, and `AddHybridCache()` called later leaves it in place.
+  A `HybridCache` registered later with `AddSingleton` replaces it, unisolated, so keep cache registrations before
+  `AddTenantry`.
 - **Keys get longer.** Each key carries the tenant's id, so keep keys within the cache's maximum key length (1,024
   characters by default) with the id added.
 
@@ -60,8 +65,9 @@ public sealed class ExchangeRates(SharedHybridCache cache)
 }
 ```
 
-It works with or without a current tenant, and its keys and tags never name a tenant's entry. Its factory runs with no
-current tenant, so load data that no tenant owns.
+It works with or without a current tenant, and its keys and tags never name a tenant's entry; `*` means every shared
+entry. Its factory always runs with no current tenant, on the thread pool, whoever calls: a query through a tenant's
+`DbContext` there fails, as it does outside a tenant, rather than caching one tenant's rows for every tenant.
 
 ### IDistributedCache
 
@@ -98,9 +104,10 @@ app.UseOutputCache();   // after UseTenantry()
 app.MapGet("/catalogue", () => "…").CacheOutput();
 ```
 
-The output cache must come after `app.UseTenantry()`, so the tenant is known when it runs. In the other order, a
-request the output cache handles throws, naming the fix, rather than being cached for every tenant. A response for a
-request without a tenant (an endpoint with `AllowMissingTenant()`) is cached apart from every tenant's.
+The output cache must come after `app.UseTenantry()`, so the tenant is known when it runs. A response for a request
+`app.UseTenantry()` did not handle first (the other order, or a branch of the pipeline without it) is not cached, and a
+warning says so once (event 1009). A response for a request without a tenant (an endpoint with `AllowMissingTenant()`)
+is cached apart from every tenant's.
 
 ## Invalidating a tenant
 
@@ -109,9 +116,12 @@ carries) and evicts its cached responses, along with its cached descriptor; `Inv
 tenant, and leaves shared entries. Call it when a tenant changes or is removed (see
 [Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)).
 
-- **HybridCache** records a tag's invalidation in its second level, when it has one, so other instances of the
-  application see it too. Without one, each instance has its own entries.
-- **Output caching** in memory (the default store) is per instance; a distributed store shares the eviction.
+- **On the instance that calls it.** Microsoft's `HybridCache` marks the tag invalid in its second level, but each
+  instance keeps the invalidation times it has already read, so other instances of the application serve their copies
+  until the entries expire. Where that matters, keep entries short-lived (`HybridCacheEntryOptions.Expiration` and
+  `LocalCacheExpiration`), as with the tenant cache.
+- **Output caching** in memory (the default store) is per instance too; a store shared between instances shares the
+  eviction.
 - **`ITenantDistributedCache`** entries cannot be removed by tag: they expire.
 
 ## See also

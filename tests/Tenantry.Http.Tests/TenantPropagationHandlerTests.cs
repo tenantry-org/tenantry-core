@@ -1,6 +1,8 @@
 using System.Globalization;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.Http.Tests;
@@ -145,6 +147,17 @@ public sealed class TenantPropagationHandlerTests
         }
 
         recorder.TenantHeaders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void UseTenantry_AddsNothingToTheClientsHttpClientActions_WhichGrpcClientsRefuse()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
+        services.AddHttpClient("inventory").UseTenantry();
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get("inventory").HttpClientActions.Should().BeEmpty();
     }
 
     [Fact]

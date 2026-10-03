@@ -58,7 +58,7 @@ cp "$repo/global.json" "$work"/
   echo '    </packageSource>'
   if [[ -n "${TENANTRY_CORE_PACKAGES:-}" ]]; then
     echo '    <packageSource key="tenantry-core">'
-    for pattern in Tenantry.Core Tenantry.EfCore Tenantry.AspNetCore Tenantry.Http Tenantry.Caching; do
+    for pattern in Tenantry.Core Tenantry.EfCore Tenantry.AspNetCore Tenantry.Http Tenantry.Caching Tenantry.Options; do
       echo "      <package pattern=\"$pattern\" />"
     done
     echo '    </packageSource>'

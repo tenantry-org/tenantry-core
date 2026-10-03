@@ -51,4 +51,11 @@ internal static partial class TenantResolutionLog
         "did not see its user's claims. Call app.UseAuthentication() before app.UseTenantry(). Logged once",
         EventName = "TenantryBeforeAuthentication")]
     public static partial void TenantryBeforeAuthentication(ILogger logger, string method, string path);
+
+    [LoggerMessage(1009, LogLevel.Warning,
+        "The output cache ran before app.UseTenantry() for request {Method} {Path}, so its response was not cached: " +
+        "IsolateOutputCache() caches only responses for requests app.UseTenantry() handled. Call app.UseTenantry() " +
+        "before app.UseOutputCache(). Logged once",
+        EventName = "OutputCacheBeforeTenantry")]
+    public static partial void OutputCacheBeforeTenantry(ILogger logger, string method, string path);
 }

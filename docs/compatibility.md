@@ -49,7 +49,7 @@ Details and caveats are in [Tested providers](efcore-integration.md#tested-provi
 
 ## Native AOT and trimming
 
-`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http` and `Tenantry.Caching` are trim- and Native AOT-compatible; `Tenantry.EfCore` is not,
+`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` are trim- and Native AOT-compatible; `Tenantry.EfCore` is not,
 because EF Core is not. See [AOT & trimming](aot-and-trimming.md).
 
 ## Dependency versions
@@ -59,8 +59,8 @@ because EF Core is not. See [AOT & trimming](aot-and-trimming.md).
   first with `HybridCache`. Microsoft ships every `Microsoft.Extensions` major for all supported frameworks, and current
   Azure SDKs need 10.x even on .NET 8.
 - **EF Core**: the target framework's major only, as above.
-- **Tenantry packages**: `Tenantry.EfCore`, `Tenantry.AspNetCore`, `Tenantry.Http` and `Tenantry.Caching` take `Tenantry.Core` from their own
-  release up to the next minor (`[0.5.0, 0.6.0)`), because a minor release may break the API before 1.0. Within a
+- **Tenantry packages**: `Tenantry.EfCore`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` take `Tenantry.Core` from their own
+  release up to the next minor (`[0.6.0, 0.7.0)` for 0.6), because a minor release may break the API before 1.0. Within a
   minor they can be updated separately.
 - **Tenantry.Pro**: in the beta it releases each minor version with Tenantry Core's, and runs on that Core minor
   (Tenantry.Pro 0.5 on Tenantry Core 0.5.x).

@@ -20,7 +20,7 @@ builder.Services.AddOutputCache();
 builder.Services.AddTenantry<string>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .ResolveFromSubdomain(options => options.BaseDomains.Add("localhost")) // acme.localhost:5268
-    .ResolveFromPropagationHeader()                                      // the tenant another service sent
+    .ResolveFromPropagationHeader()                                      // the tenant another service sent (unauthenticated here, as X-Tenant-Id is)
     .UseInMemoryStore(
     [
         new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },

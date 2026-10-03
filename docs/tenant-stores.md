@@ -184,8 +184,8 @@ a registered `TimeProvider`, so tests can control expiry.
 ### Everything kept for a tenant
 
 `Invalidate` also runs every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one
-call clears everything kept for a tenant: Tenantry.Caching's cache entries and Tenantry.Options' options register a
-handler, and so can your own code that keeps data per tenant:
+call clears everything kept for a tenant: Tenantry.Caching's cache entries, the responses `IsolateOutputCache()` caches,
+and Tenantry.Options' options register a handler, and so can your own code that keeps data per tenant:
 
 ```csharp
 using System.Collections.Concurrent;
@@ -203,4 +203,5 @@ public sealed class PriceListCache : ITenantInvalidationHandler<Guid>
 }
 ```
 
-Each handler runs even when another throws; the exception is thrown once they have all run.
+Each handler runs even when another throws; the exception is thrown once they have all run. Invalidating an id
+Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty string) throws, since no tenant has it.

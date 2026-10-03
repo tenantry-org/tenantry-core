@@ -12,7 +12,8 @@ services.AddTenantry<string>(tenant => tenant
     .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }])
     .AddHttpPropagation()
     .IsolateCaches()
-    .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Reject));
+    .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Reject)
+    .ConfigurePerTenant<ConsumerOptions>((options, t) => options.Name = t.Name));
 services.AddHttpClient("service", client => client.BaseAddress = new Uri("https://service.internal")).UseTenantry();
 _ = new DbContextOptionsBuilder().UseTenantry();
 
@@ -25,3 +26,9 @@ await provider.GetRequiredService<ITenantScopeFactory<string>>().RunInScopeAsync
 });
 
 PackageLoadCheck.Run();
+
+// Options configured per tenant.
+internal sealed class ConsumerOptions
+{
+    public string Name { get; set; } = "";
+}

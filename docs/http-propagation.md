@@ -78,13 +78,19 @@ store's `GetTenantAsync`, not `FindByIdentifierAsync`: a store whose identifiers
 value that is not a tenant id, or is an id reserved for "no tenant", finds no tenant.
 
 Resolvers run in the order they are added, and the first that finds a value wins. A service that serves both users
-and other services can take the header first and fall back to its own resolver:
+and other services resolves its users' requests first and takes the header only when nothing else names a tenant. Its
+users can set the header too, so an access validator accepts it only from callers that authenticated as one of your
+services (here, with a token carrying a `scope` claim your identity provider gives only to services):
 
 ```csharp
+using Tenantry;
+
 builder.Services.AddTenantry<Guid>(tenant => tenant
-    .ResolveFromPropagationHeader()
     .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
-    .UseStore<EfCoreTenantStore>());
+    .ResolveFromPropagationHeader()
+    .UseStore<EfCoreTenantStore>()
+    .ValidateTenantAccess((http, _) =>
+        !http.Request.Headers.ContainsKey(TenantPropagation.HeaderName) || http.User.HasClaim("scope", "internal")));
 ```
 
 ### A header is a claim, not proof

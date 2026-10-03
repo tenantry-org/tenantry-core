@@ -21,14 +21,23 @@ internal sealed class InMemoryHybridCache : HybridCache, IDisposable
         if (Entries.TryGetValue(key, out var entry))
             return (T)entry.Value!;
 
-        // As Microsoft's HybridCache does, the factory runs without the caller's async context.
-        Task<T> run;
-        using (ExecutionContext.SuppressFlow())
+        // As Microsoft's HybridCache does: inline for a token that cannot be cancelled, otherwise on the thread pool
+        // without the caller's async context.
+        T value;
+        if (!cancellationToken.CanBeCanceled)
         {
-            run = Task.Run(() => factory(state, cancellationToken).AsTask(), cancellationToken);
+            value = await factory(state, cancellationToken);
         }
+        else
+        {
+            Task<T> run;
+            using (ExecutionContext.SuppressFlow())
+            {
+                run = Task.Run(() => factory(state, cancellationToken).AsTask(), cancellationToken);
+            }
 
-        var value = await run;
+            value = await run;
+        }
         Entries[key] = (value, tags?.ToArray() ?? []);
         return value;
     }

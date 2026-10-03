@@ -14,6 +14,21 @@ internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services
 
     public void Invalidate(TKey tenantId) => RunEach(handler => handler.Invalidate(tenantId));
 
+    // No tenant has an id reserved for "no tenant", and a handler could read an empty one as every tenant.
+    public static void ThrowIfUnset(TKey tenantId)
+    {
+        if (tenantId is null)
+            throw new ArgumentNullException(nameof(tenantId));
+
+        if (TenantIds.IsUnset(tenantId))
+        {
+            throw new ArgumentException(
+                $"'{tenantId}' is reserved for \"no tenant\" (the {typeof(TKey).Name} default value, or an empty string), " +
+                "so no tenant has it to invalidate.",
+                nameof(tenantId));
+        }
+    }
+
     public void InvalidateAll() => RunEach(handler => handler.InvalidateAll());
 
     private void RunEach(Action<ITenantInvalidationHandler<TKey>> run)

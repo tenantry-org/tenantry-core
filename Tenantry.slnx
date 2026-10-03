@@ -13,6 +13,7 @@
     <Project Path="src\Tenantry.Core\Tenantry.Core.csproj" />
     <Project Path="src\Tenantry.EfCore\Tenantry.EfCore.csproj" />
     <Project Path="src\Tenantry.Http\Tenantry.Http.csproj" />
+    <Project Path="src\Tenantry.Options\Tenantry.Options.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests\Tenantry.AspNetCore.Tests\Tenantry.AspNetCore.Tests.csproj" />
@@ -21,5 +22,6 @@
     <Project Path="tests\Tenantry.EfCore.Tests\Tenantry.EfCore.Tests.csproj" />
     <Project Path="tests\Tenantry.Http.Tests\Tenantry.Http.Tests.csproj" />
     <Project Path="tests\Tenantry.IntegrationTests\Tenantry.IntegrationTests.csproj" />
+    <Project Path="tests\Tenantry.Options.Tests\Tenantry.Options.Tests.csproj" />
   </Folder>
 </Solution>

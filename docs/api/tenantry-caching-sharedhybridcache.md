@@ -4,7 +4,7 @@ Namespace: `Tenantry.Caching` · Package: `Tenantry.Caching` · [API reference](
 
 The `HybridCache` for entries every tenant shares (exchange rates, reference data), where `IsolateCaches()` makes the injected `HybridCache` keep entries per tenant. Inject it where sharing is meant, so the constructor says so. Its keys and tags are its own: they never name a tenant's entry, and a tenant's never name one of these.
 
-It is the `HybridCache` registered before `IsolateCaches()`, with its serializers and options, and works with or without a current tenant. Microsoft's HybridCache runs a factory without the caller's async context, so a factory here runs with no current tenant: load data that no tenant owns.
+It is the `HybridCache` registered before `IsolateCaches()`, with its serializers and options, and works with or without a current tenant. A factory here runs with no current tenant, whoever calls, so what it loads cannot be one tenant's data: a query through a tenant's `DbContext` fails, as it does outside a tenant, rather than caching that tenant's rows for every tenant. It runs on the thread pool, without the caller's async context (its activity and log scopes too). A key or tag of `*` (every entry) means every shared entry.
 
 ```csharp
 public sealed class ExchangeRates(SharedHybridCache cache)
@@ -58,7 +58,7 @@ Returns: `ValueTask<T>`: The data, either from cache or the underlying data serv
 
 ### `RemoveAsync(IEnumerable<string>, CancellationToken)`
 
-Removes the shared entries `keys`.
+Removes the shared entries `keys`; null removes none.
 
 ```csharp
 public override ValueTask RemoveAsync(IEnumerable<string> keys, CancellationToken cancellationToken = default)
@@ -88,7 +88,7 @@ Returns: `ValueTask`: A task that completes when the entry is removed.
 
 ### `RemoveByTagAsync(IEnumerable<string>, CancellationToken)`
 
-Removes the shared entries tagged with any of `tags`.
+Removes the shared entries tagged with any of `tags`; null removes none.
 
 ```csharp
 public override ValueTask RemoveByTagAsync(IEnumerable<string> tags, CancellationToken cancellationToken = default)
@@ -103,7 +103,7 @@ Returns: `ValueTask`: A task that completes when the entries are removed.
 
 ### `RemoveByTagAsync(string, CancellationToken)`
 
-Removes the shared entries tagged `tag`.
+Removes the shared entries tagged `tag`; `*` removes every shared entry.
 
 ```csharp
 public override ValueTask RemoveByTagAsync(string tag, CancellationToken cancellationToken = default)

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Tenantry.Caching;
 using Tenantry.Tests.Shared;
 
@@ -62,13 +63,50 @@ public sealed class TenantCachingTests
     }
 
     [Fact]
-    public async Task TheOutputCacheBeforeUseTenantry_Throws_RatherThanCachingForEveryTenant()
+    public async Task TheOutputCacheBeforeUseTenantry_CachesNothing_AndSaysSoOnce()
     {
-        await using var app = await StartAsync(outputCacheFirst: true);
+        RecordingLoggerProvider logs = new();
+        await using var app = await StartAsync(outputCacheFirst: true, logs: logs);
         using var acme = Client(app, "acme");
+        using var globex = Client(app, "globex");
 
-        await FluentActions.Awaiting(() => acme.GetStringAsync("/now", Ct))
-            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*Call app.UseTenantry() before app.UseOutputCache()*");
+        var first = await acme.GetStringAsync("/now", Ct);
+        (await acme.GetStringAsync("/now", Ct)).Should().NotBe(first);
+        (await globex.GetStringAsync("/now", Ct)).Should().NotBe(first, "nothing acme got is served to globex");
+
+        logs.Messages.Where(message => message.Contains("output cache ran before app.UseTenantry()", StringComparison.Ordinal))
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task ARequestOnABranchWithoutUseTenantry_IsServed_AndNotCached()
+    {
+        await using var app = await StartAsync(tenantryOnlyOutside: "/health");
+        using var client = app.GetTestClient();
+
+        var first = await client.GetStringAsync("/health", Ct);
+        (await client.GetStringAsync("/health", Ct)).Should().NotBe(first);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HybridCacheFactories_RunAsTheCallingTenant_AndSharedOnesAsNoTenant_WhateverTheToken(bool cancellable)
+    {
+        await using var app = await StartAsync();
+        var cache = app.Services.GetRequiredService<HybridCache>();
+        var shared = app.Services.GetRequiredService<SharedHybridCache>();
+        var tenants = app.Services.GetRequiredService<ITenantContextSetter<string>>();
+        using CancellationTokenSource source = new();
+        var token = cancellable ? source.Token : CancellationToken.None;
+
+        using (tenants.Use(new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }))
+        {
+            (await cache.GetOrCreateAsync($"seen-{cancellable}", _ => ValueTask.FromResult(tenants.CurrentTenantId), cancellationToken: token))
+                .Should().Be("acme");
+            (await shared.GetOrCreateAsync($"seen-{cancellable}", _ => ValueTask.FromResult(tenants.CurrentTenantId ?? "no tenant"), cancellationToken: token))
+                .Should().Be("no tenant", "a shared entry is never loaded as one tenant");
+        }
     }
 
     [Fact]
@@ -116,7 +154,8 @@ public sealed class TenantCachingTests
 
     private static IServiceCollection Services(WebApplication app) => app.Services.GetRequiredService<ServicesHolder>().Services;
 
-    private static async Task<WebApplication> StartAsync(bool outputCacheFirst = false)
+    private static async Task<WebApplication> StartAsync(
+        bool outputCacheFirst = false, RecordingLoggerProvider? logs = null, string? tenantryOnlyOutside = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Host.UseDefaultServiceProvider(options =>
@@ -125,6 +164,9 @@ public sealed class TenantCachingTests
             options.ValidateOnBuild = Conformance.ProviderOptions.ValidateOnBuild;
         });
         builder.WebHost.UseTestServer();
+        if (logs is not null)
+            builder.Logging.AddProvider(logs);
+
         builder.Services.AddOutputCache();
         // Not AddDistributedMemoryCache(): HybridCache does not use MemoryDistributedCache as its second level.
         builder.Services.AddSingleton<IDistributedCache, DictionaryDistributedCache>();
@@ -146,6 +188,11 @@ public sealed class TenantCachingTests
             app.UseOutputCache();
             app.UseTenantry();
         }
+        else if (tenantryOnlyOutside is { } path)
+        {
+            app.UseWhen(context => !context.Request.Path.StartsWithSegments(path), branch => branch.UseTenantry());
+            app.UseOutputCache();
+        }
         else
         {
             app.UseTenantry();
@@ -155,6 +202,7 @@ public sealed class TenantCachingTests
         var counter = 0;
         app.MapGet("/now", () => Guid.NewGuid().ToString()).CacheOutput().RequireTenant();
         app.MapGet("/public", () => Guid.NewGuid().ToString()).CacheOutput().AllowMissingTenant();
+        app.MapGet("/health", () => Guid.NewGuid().ToString()).CacheOutput().AllowMissingTenant();
         app.MapGet("/plan", async (HybridCache cache, ITenantContext<string> tenant, CancellationToken ct) =>
             await cache.GetOrCreateAsync("plan", _ => ValueTask.FromResult($"{tenant.CurrentTenantId} {Interlocked.Increment(ref counter)}"), cancellationToken: ct))
             .RequireTenant();
@@ -167,6 +215,27 @@ public sealed class TenantCachingTests
     }
 
     private sealed record ServicesHolder(IServiceCollection Services);
+
+    private sealed class RecordingLoggerProvider : ILoggerProvider
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> Messages { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => new Logger(this);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(RecordingLoggerProvider provider) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                provider.Messages.Enqueue(formatter(state, exception));
+        }
+    }
 
     private sealed class DictionaryDistributedCache : IDistributedCache
     {
