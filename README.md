@@ -165,6 +165,7 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and i
 | [AOT & trimming](docs/aot-and-trimming.md) | What is supported, per package, and why |
 | [Compatibility](docs/compatibility.md) | Supported .NET and EF Core versions, databases, and dependency ranges |
 | [Troubleshooting](docs/troubleshooting.md) | Common pitfalls and how to diagnose them |
+| [Migrating from Finbuckle.MultiTenant](docs/migrating-from-finbuckle.md) | Finbuckle's concepts and EF Core setup in Tenantry, and what changes |
 
 ## Samples
 

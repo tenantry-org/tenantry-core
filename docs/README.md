@@ -26,7 +26,8 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 15. **[AOT & trimming](aot-and-trimming.md)** — what is supported, per package, and why EF Core differs.
 16. **[Compatibility](compatibility.md)** — supported .NET and EF Core versions, databases, and dependency ranges.
 17. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.
-18. **[API reference](api/README.md)** — every public type and member, generated from the XML documentation comments.
+18. **[Migrating from Finbuckle.MultiTenant](migrating-from-finbuckle.md)** — how Finbuckle's concepts and EF Core setup map to Tenantry, and what changes.
+19. **[API reference](api/README.md)** — every public type and member, generated from the XML documentation comments.
 
 ## How the pieces fit together
 
