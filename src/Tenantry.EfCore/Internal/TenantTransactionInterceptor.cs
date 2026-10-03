@@ -29,7 +29,7 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
     /// <inheritdoc />
     public override DbTransaction TransactionStarted(DbConnection connection, TransactionEndEventData eventData, DbTransaction result)
     {
-        AtomicSave.Forget(result);
+        AtomicSave.Began(eventData.Context, result);
         return base.TransactionStarted(connection, eventData, result);
     }
 
@@ -40,8 +40,43 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
         DbTransaction result,
         CancellationToken cancellationToken = default)
     {
-        AtomicSave.Forget(result);
+        AtomicSave.Began(eventData.Context, result);
         return base.TransactionStartedAsync(connection, eventData, result, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public override DbTransaction TransactionUsed(DbConnection connection, TransactionEventData eventData, DbTransaction result)
+    {
+        AtomicSave.Used(result);
+        return base.TransactionUsed(connection, eventData, result);
+    }
+
+    /// <inheritdoc />
+    public override ValueTask<DbTransaction> TransactionUsedAsync(
+        DbConnection connection,
+        TransactionEventData eventData,
+        DbTransaction result,
+        CancellationToken cancellationToken = default)
+    {
+        AtomicSave.Used(result);
+        return base.TransactionUsedAsync(connection, eventData, result, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public override void TransactionCommitted(DbTransaction transaction, TransactionEndEventData eventData)
+    {
+        AtomicSave.Forget(transaction);
+        base.TransactionCommitted(transaction, eventData);
+    }
+
+    /// <inheritdoc />
+    public override Task TransactionCommittedAsync(
+        DbTransaction transaction,
+        TransactionEndEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        AtomicSave.Forget(transaction);
+        return base.TransactionCommittedAsync(transaction, eventData, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -141,7 +176,7 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
     // A save that sends a command can leave statements behind if it fails (AtomicSave).
     public InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
     {
-        AtomicSave.Sending(eventData.Context);
+        Sending(eventData);
         return result;
     }
 
@@ -151,13 +186,13 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
         InterceptionResult<DbDataReader> result,
         CancellationToken cancellationToken = default)
     {
-        AtomicSave.Sending(eventData.Context);
+        Sending(eventData);
         return ValueTask.FromResult(result);
     }
 
     public InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
     {
-        AtomicSave.Sending(eventData.Context);
+        Sending(eventData);
         return result;
     }
 
@@ -167,8 +202,17 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        AtomicSave.Sending(eventData.Context);
+        Sending(eventData);
         return ValueTask.FromResult(result);
+    }
+
+    // A save's own commands, not a query the context runs meanwhile.
+    private static void Sending(CommandEventData eventData)
+    {
+        if (eventData.CommandSource == CommandSource.SaveChanges)
+        {
+            AtomicSave.Sending(eventData.Context);
+        }
     }
 
     // Disposing the context's transaction clears it, so the context can begin another.

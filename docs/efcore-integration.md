@@ -240,7 +240,8 @@ transaction and rolls it back when it fails, but not in every setup, so for such
   save in it failed after sending some of its statements, or EF Core failed to roll it back to its savepoint: `Commit`
   throws `TenantIsolationViolationException`, of kind `TransactionRolledBack` (event 2004). A save can fail before EF
   Core reads the check, on a duplicate key, say, so whether the check held is unknown, and a forged write and a genuine
-  conflict look the same: any failure of such a save stops the commit.
+  conflict look the same: any failure of such a save stops the commit. So does one Tenantry is not told succeeded,
+  when an interceptor added before `UseTenantry()` throws from `SavedChanges`.
 - **In a `TransactionScope`**, or a transaction the connection was enlisted in, where EF Core sets no savepoint, the
   same failure rolls the transaction back when it completes, so disposing the completed scope throws
   `TransactionAbortedException`.

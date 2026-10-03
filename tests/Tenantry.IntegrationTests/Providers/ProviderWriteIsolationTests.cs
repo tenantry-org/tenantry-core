@@ -1,8 +1,12 @@
+using System.Data.Common;
 using System.Transactions;
 using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Tenantry;
 using Tenantry.EfCore;
 
@@ -39,7 +43,68 @@ public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : Pro
     }
 }
 
-public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : ProviderWriteIsolationTests(fixture);
+public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : ProviderWriteIsolationTests(fixture)
+{
+    [Fact]
+    public async Task ARefusedTransactionThatEnded_DoesNotRefuseTheNextOne_ThoughNpgsqlHandsOutItsObjectAgain()
+    {
+        // EF Core fails to roll a forged save back to its savepoint, so that transaction may not commit. It is disposed
+        // instead, and Npgsql hands the same transaction object to the next transaction on the connection, which must
+        // commit.
+        var id = await AddDogAsync(Acme, "acme detail");
+        var connectionString = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { MaxPoolSize = 1 }.ConnectionString;
+        DbTransaction first;
+
+        using (Tenants.Use(Tenant(Globex)))
+        {
+            await using ProviderOrdersContext db = new(new DbContextOptionsBuilder<ProviderOrdersContext>()
+                .UseNpgsql(connectionString)
+                .UseApplicationServiceProvider(Services)
+                .AddInterceptors(new SavepointRollbackFails())
+                .UseTenantry()
+                .Options);
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            first = transaction.GetDbTransaction();
+            ProviderDog stub = new() { Id = id, TenantId = Globex, Detail = "acme detail" };
+            db.Animals.Attach(stub);
+            stub.Detail = "overwritten";
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+        }
+
+        await using (NpgsqlConnection connection = new(connectionString))
+        {
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
+            await using var next = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            next.Should().BeSameAs(first, "Npgsql hands out its transaction object again");
+
+            using (Tenants.Use(Tenant(Acme)))
+            {
+                await using ProviderOrdersContext db = new(new DbContextOptionsBuilder<ProviderOrdersContext>()
+                    .UseNpgsql(connection)
+                    .UseApplicationServiceProvider(Services)
+                    .UseTenantry()
+                    .Options);
+                await db.Database.UseTransactionAsync(next, TestContext.Current.CancellationToken);
+                (await db.Animals.OfType<ProviderDog>().SingleAsync(d => d.Id == id, TestContext.Current.CancellationToken)).Detail = "changed";
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+                await db.Database.CommitTransactionAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        (await DogDetailAsync(id)).Should().Be("changed");
+    }
+
+    // A rollback to a save's savepoint that fails, which EF Core only logs.
+    private sealed class SavepointRollbackFails : DbTransactionInterceptor
+    {
+        public override ValueTask<InterceptionResult> RollingBackToSavepointAsync(
+            DbTransaction transaction,
+            TransactionEventData eventData,
+            InterceptionResult result,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("rollback failed");
+    }
+}
 
 /// <summary>
 /// Write-isolation guarantees that depend on the database's behaviour, run against each real provider:
@@ -189,6 +254,27 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
         await act.Should().ThrowAsync<TransactionAbortedException>();
         (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+
+    [Fact]
+    public async Task InATransactionScope_TheTenantsOwnSaveOfADerivedTable_Commits()
+    {
+        // Tenantry's vote must not turn the connection's single-phase commit into a two-phase one, which PostgreSQL
+        // refuses by default.
+        var id = await AddDogAsync(_acme, "acme detail");
+
+        using (TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled))
+        {
+            await AsTenantAsync(_acme, async db =>
+            {
+                (await db.Animals.OfType<ProviderDog>().SingleAsync(d => d.Id == id)).Detail = "changed";
+                return await db.SaveChangesAsync();
+            });
+
+            scope.Complete();
+        }
+
+        (await DogDetailAsync(id)).Should().Be("changed");
     }
 
     [Fact]

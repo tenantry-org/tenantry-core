@@ -284,6 +284,9 @@ public sealed class AtomicSaveTests : IDisposable
             await ChangeAsync(db, Change.AddOwnedRow);
             await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<InvalidOperationException>().WithMessage("stopped");
 
+            // A query the context runs meanwhile is not the stopped save's.
+            (await db.Set<Customer>().CountAsync(TestContext.Current.CancellationToken)).Should().Be(1);
+
             db.ChangeTracker.Clear();
             db.Add(new Customer { Id = 2, Name = "second" });
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -292,6 +295,28 @@ public sealed class AtomicSaveTests : IDisposable
 
         await using var check = await CreateAsync(_tenant.As("acme"));
         (await check.Set<Customer>().CountAsync(TestContext.Current.CancellationToken)).Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InATransactionWithoutSavepoints_ASaveNestedInASavedChangesInterceptor_DoesNotStopTheCommit(bool sync)
+    {
+        // An audit interceptor added before UseTenantry() saves a row of its own through the context from SavedChanges,
+        // so its save runs inside the tenant's, which succeeded.
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme"), new Setup { NoSavepoints = true, Before = new SaveAgainWhenSaved() }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await ChangeAsync(db, Change.AddOwnedRow);
+            await SaveAsync(db, sync);
+            await transaction.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await AcmeStateAsync()).Should().Be("acme|1:acme phone,2:added|acme detail");
+        await using var check = await CreateAsync(_tenant.As("acme"));
+        (await check.Set<Supplier>().CountAsync(TestContext.Current.CancellationToken)).Should().Be(1);
     }
 
     [Fact]
@@ -708,6 +733,41 @@ public sealed class AtomicSaveTests : IDisposable
             InterceptionResult result,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("the application's own");
+    }
+
+    // Saves a row of its own through the context once a save of the context's has succeeded, as an audit log might.
+    private sealed class SaveAgainWhenSaved : SaveChangesInterceptor
+    {
+        private bool _saving;
+
+        public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                context.Add(new Supplier());
+                context.SaveChanges();
+                _saving = false;
+            }
+
+            return result;
+        }
+
+        public override async ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                context.Add(new Supplier());
+                await context.SaveChangesAsync(cancellationToken);
+                _saving = false;
+            }
+
+            return result;
+        }
     }
 
     // Translates a failed save into an exception of the application's own, as EntityFramework.Exceptions does.
