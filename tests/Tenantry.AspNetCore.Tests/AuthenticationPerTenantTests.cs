@@ -119,6 +119,26 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task WebApplicationsOwnUseAuthentication_RunsTooEarly_AndIsLogged()
+    {
+        RecordingLoggerProvider logs = new();
+        await using var app = await StartAsync(
+            JwtTenants,
+            AddJwt,
+            pipeline: a =>
+            {
+                // No app.UseAuthentication(): WebApplication adds one before this middleware.
+                a.UseTenantResolution();
+                a.UseTenantry();
+            },
+            logs);
+
+        await Get(app, "acme", "/tenant", Token("acme", "alice"));
+
+        logs.For(1010).Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task ACookieIssuedForOneTenant_IsRefusedOnAnother_ByTheClaimValidator()
     {
         await using var app = await StartAsync(
@@ -145,6 +165,8 @@ public sealed class AuthenticationPerTenantTests
                     ClaimsIdentity identity = new([new Claim("tenant_id", signingInTo)], CookieAuthenticationDefaults.AuthenticationScheme);
                     await http.SignInAsync(new ClaimsPrincipal(identity));
                 }).AllowMissingTenant();
+                a.MapGet("/signed-in-to", (HttpContext http) => http.User.FindFirst("tenant_id")?.Value ?? "(anonymous)")
+                    .AllowMissingTenant();
             });
         using var client = app.GetTestClient();
 
@@ -155,7 +177,11 @@ public sealed class AuthenticationPerTenantTests
 
         (await Send(client, "acme", "/required", cookie: $"auth-acme={value}")).StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // The same ticket under Globex's cookie name decrypts there (one key ring), but names Acme: refused.
+        // The same ticket under Globex's cookie name decrypts there (one key ring)...
+        using var replayed = await Send(client, "globex", "/signed-in-to", cookie: $"auth-globex={value}");
+        (await replayed.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("acme");
+
+        // ...but names Acme, so the validator refuses Globex.
         (await Send(client, "globex", "/required", cookie: $"auth-globex={value}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 

@@ -141,7 +141,8 @@ it.
 Put `UseTenantry()` before anything that needs the tenant: your endpoints, authorization that depends on it, and
 EF Core work driven by the request. Put it after `UseAuthentication()` when you resolve or validate from claims, and
 after routing, so it sees endpoint metadata (`WebApplication` adds routing first; a custom pipeline must call
-`UseRouting()` before `UseTenantry()`).
+`UseRouting()` before `UseTenantry()`). For authentication settings that differ per tenant, also call
+`UseTenantResolution()` before `UseAuthentication()`: see [Authentication per tenant](authentication-per-tenant.md).
 
 If the middleware runs before routing, a request without a tenant to an endpoint that requires one is still
 rejected, but `RequireTenantByDefault()` then applies to `AllowMissingTenant()` endpoints too, and route values are

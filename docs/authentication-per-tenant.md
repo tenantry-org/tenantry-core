@@ -1,0 +1,101 @@
+# Authentication per tenant
+
+Tenants often sign in with settings of their own: their own identity provider (`Authority`), client id, audience or
+cookie name. ASP.NET Core's authentication handlers read these per request, as named options
+(`IOptionsMonitor<TOptions>.Get(scheme)`), so with `Tenantry.Options` each scheme's settings can differ by tenant
+while the schemes themselves stay the same.
+
+```bash
+dotnet add package Tenantry.Options
+```
+
+## Setup
+
+Register the scheme as usual, with the defaults, then set what differs per tenant with `ConfigurePerTenant`, naming
+the scheme:
+
+```csharp
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Tenantry;
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o => o.Audience = "api");
+
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
+    .UseStore<EfCoreTenantStore>()
+    .ConfigurePerTenant<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, (o, t) =>
+        o.Authority = t.As<AppTenant>().Authority));
+```
+
+`ConfigureAllPerTenant<TOptions>` sets every scheme of a type at once. The tenant's settings apply after every
+`Configure` and before the handler's own post-configuration, which builds the scheme's metadata manager and data
+protector from them.
+
+Then resolve the tenant **before** authentication, and check it **after**:
+
+```csharp
+var app = builder.Build();
+
+app.UseTenantResolution();   // finds the tenant and makes it current
+app.UseAuthentication();     // authenticates with the tenant's settings
+app.UseTenantry();           // runs the access validators, then rejects or continues
+app.UseAuthorization();
+```
+
+Call `app.UseAuthentication()` yourself: the one `WebApplication` adds on its own runs before your middleware, so it
+would authenticate with no tenant's settings (event 1010 warns of this).
+
+## How the two steps work
+
+`app.UseTenantResolution()` runs the resolvers, looks the tenant up and checks it is
+[active](tenant-stores.md#suspended-and-inactive-tenants), then makes it current. It cannot read claims, so claim
+resolvers wait. `app.UseTenantry()` then runs the [access validators](access-control.md#validating-tenant-access), and
+the claim resolvers if nothing else named a tenant. Endpoints that require a tenant are rejected as usual.
+
+Between the two, the tenant is current but not yet checked against the user. So:
+
+- Put only `app.UseAuthentication()` between them.
+- A tenant the validators refuse is not current for the rest of the request.
+- An endpoint the request reaches without passing `app.UseTenantry()` (in a branch, say) does not run: it gets `500`
+  and log event 1011.
+- An application with `app.UseTenantResolution()` and no `app.UseTenantry()` fails to start.
+
+Resolve from the host, subdomain, route or a header. A tenant named only by a claim is resolved after authentication,
+which then used the default settings.
+
+## Sign-in redirects
+
+OpenID Connect's sign-in returns to your application through the identity provider (`/signin-oidc`). That request
+carries only what the URL carries, so it must resolve to the same tenant: resolve from the host, subdomain or route.
+A tenant named by a header cannot sign in this way, because the identity provider's redirect does not send the header.
+
+## Cookies
+
+Every tenant's cookies are protected with the application's one key ring, so a cookie issued for one tenant also
+decrypts for another, even under another cookie name. A per-tenant cookie name does not stop it being replayed. Put
+the tenant in the ticket and check it:
+
+- add a `tenant_id` claim when you sign the user in, and
+- add `tenant.ValidateTenantAccessByClaim("tenant_id")`, or a validator of your own that compares them.
+
+The validator refuses an anonymous caller, so a sign-in endpoint runs with no tenant current: mark it
+`AllowMissingTenant()` and take the tenant from the request (its host, say) when you issue the cookie. Its
+authentication handler was created with the tenant current, so it writes the tenant's cookie.
+
+## Identity provider metadata
+
+JWT bearer and OpenID Connect fetch the provider's metadata (its signing keys) and cache it in their options. With
+per-tenant options, each tenant has its own copy, fetched on its first request. Invalidating the tenant
+(`ITenantStoreCache<TKey>.Invalidate`) clears it with the tenant's other options.
+
+## Not supported
+
+The set of schemes is the same for every tenant: one tenant cannot sign in with Google and another with Entra ID under
+different schemes. Give them one scheme whose settings differ per tenant instead.
+
+## See also
+
+- [Options per tenant](per-tenant-options.md)
+- [Access control](access-control.md)
+- [ASP.NET Core integration](aspnetcore-integration.md#pipeline-ordering)

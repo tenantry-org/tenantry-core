@@ -20,6 +20,8 @@ alert on it. Alert on **2001** above all: a save that tried to write another ten
 | 1007 | `TenantryBeforeRouting` | Warning | `app.UseTenantry()` ran before routing chose an endpoint with `RequireTenant()` or `AllowMissingTenant()`. Requests without a tenant are still rejected where one is required. Logged once. |
 | 1008 | `TenantryBeforeAuthentication` | Warning | The authentication middleware ran after `app.UseTenantry()` and signed in a user with the claim `ResolveFromClaim` reads, which it therefore missed. Logged once. |
 | 1009 | `OutputCacheBeforeTenantry` | Warning | The output cache ran before `app.UseTenantry()` for a request, so `IsolateOutputCache()` did not cache its response. Logged once. |
+| 1010 | `TenantResolutionAfterAuthentication` | Warning | `app.UseTenantResolution()` ran after the authentication middleware, so authentication used no tenant's settings. Logged once. |
+| 1011 | `TenantryDidNotRun` | Error | `app.UseTenantResolution()` resolved a request, but `app.UseTenantry()` did not run before its endpoint, which was not run (500). |
 | 2001 | `TenantIsolationViolation` | Error | `SaveChanges` refused to write an entity of another tenant. |
 | 2002 | `WriteWithoutTenant` | Warning | `SaveChanges` wrote tenant-owned entities without a tenant, under `OnMissingTenant = Warn`. |
 | 2003 | `WriteMatchedNoRow` | Warning | An update or delete of a tenant-owned entity matched no row: it does not exist, belongs to another tenant, or changed concurrently. |

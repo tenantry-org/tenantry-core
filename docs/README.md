@@ -18,16 +18,17 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 7. **[Calling other services](http-propagation.md)** — sending the current tenant with `HttpClient` and gRPC calls (`Tenantry.Http`), and resolving it in the called service.
 8. **[Caching per tenant](caching.md)** — `HybridCache` entries and output-cached responses kept per tenant (`Tenantry.Caching`, `IsolateOutputCache()`), shared entries, and invalidation.
 9. **[Options per tenant](per-tenant-options.md)** — `IOptions<T>` values per tenant (`Tenantry.Options`), built from your configuration and the tenant, and cleared when the tenant changes.
-10. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, isolation options, pooling, a database per tenant, migrations, and cross-tenant queries.
-11. **[Owned and multi-table entities](efcore-advanced.md)** — how owned entities and entities split across tables are checked, saves that succeed or fail as a whole, and models that cannot be isolated.
-12. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantry` for console apps, worker services, and background jobs.
-13. **[Testing](testing.md)** — tests with Tenantry's real services: tenant scopes, `WebApplicationFactory`, and EF Core isolation.
-14. **[Diagnostics](diagnostics.md)** — log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.
-15. **[AOT & trimming](aot-and-trimming.md)** — what is supported, per package, and why EF Core differs.
-16. **[Compatibility](compatibility.md)** — supported .NET and EF Core versions, databases, and dependency ranges.
-17. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.
-18. **[Migrating from Finbuckle.MultiTenant](migrating-from-finbuckle.md)** — how Finbuckle's concepts and EF Core setup map to Tenantry, and what changes.
-19. **[API reference](api/README.md)** — every public type and member, generated from the XML documentation comments.
+10. **[Authentication per tenant](authentication-per-tenant.md)** — JWT bearer, OpenID Connect and cookie settings per tenant, with `UseTenantResolution()` before authentication.
+11. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, isolation options, pooling, a database per tenant, migrations, and cross-tenant queries.
+12. **[Owned and multi-table entities](efcore-advanced.md)** — how owned entities and entities split across tables are checked, saves that succeed or fail as a whole, and models that cannot be isolated.
+13. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantry` for console apps, worker services, and background jobs.
+14. **[Testing](testing.md)** — tests with Tenantry's real services: tenant scopes, `WebApplicationFactory`, and EF Core isolation.
+15. **[Diagnostics](diagnostics.md)** — log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.
+16. **[AOT & trimming](aot-and-trimming.md)** — what is supported, per package, and why EF Core differs.
+17. **[Compatibility](compatibility.md)** — supported .NET and EF Core versions, databases, and dependency ranges.
+18. **[Troubleshooting](troubleshooting.md)** — common pitfalls and how to diagnose them.
+19. **[Migrating from Finbuckle.MultiTenant](migrating-from-finbuckle.md)** — how Finbuckle's concepts and EF Core setup map to Tenantry, and what changes.
+20. **[API reference](api/README.md)** — every public type and member, generated from the XML documentation comments.
 
 ## How the pieces fit together
 

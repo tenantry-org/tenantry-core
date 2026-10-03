@@ -39,14 +39,17 @@ using Microsoft.Extensions.Options;
 app.MapGet("/limits", (IOptions<LimitsOptions> limits) => limits.Value.MaxUsers).RequireTenant();
 ```
 
-- **Built from the ordinary configuration, then the tenant.** Each tenant's value starts from every `Configure`, in
-  any order they were added, then the tenant's steps run, in the order added.
+- **Built from the ordinary configuration, then the tenant.** Each tenant's value starts from the ordinary
+  configuration, then the tenant's steps run, in the order added.
 - **No tenant, no change.** Without a current tenant, the readers give the ordinary value.
 - **Read where it is used.** `IOptions<T>.Value` reads the current tenant each time, so a singleton that holds
   `IOptions<T>` sees the tenant of the code that calls it, not the one it was created under.
 - **Only the types you name.** Every other options type behaves as before.
-- **The default name.** The steps apply to the default-named options; named options (`Get("name")`) are kept per
-  tenant but get no tenant steps.
+- **After `Configure`, before `PostConfigure`.** The tenant's steps run after every `Configure`, in any order they were
+  added, and before every `PostConfigure`.
+- **The default name, or a name you give.** `ConfigurePerTenant<T>(configure)` applies to the default-named options,
+  `ConfigurePerTenant<T>(name, configure)` to one name (`Get("name")`), and `ConfigureAllPerTenant<T>(configure)` to
+  every name. For authentication schemes, see [Authentication per tenant](authentication-per-tenant.md).
 - `ConfigurePerTenant` has a type parameter of its own, so it returns the non-generic builder: call it after the
   methods that need the tenant key type, such as `UseStore`.
 

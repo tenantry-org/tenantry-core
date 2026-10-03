@@ -98,6 +98,8 @@ public class AppTenant : ITenantDescriptor<Guid>
     public string Region { get; set; } = "";
     public string ConnectionString { get; set; } = "";
     public bool IsSuspended { get; set; }
+    public string Authority { get; set; } = "";
+    public string ClientId { get; set; } = "";
 }
 
 /// <summary>The catalog database, which lists the tenants.</summary>

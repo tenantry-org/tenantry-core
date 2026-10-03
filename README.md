@@ -156,6 +156,7 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and i
 | [Tenant stores](docs/tenant-stores.md) | In-memory and custom stores, service lifetimes, caching tenants |
 | [ASP.NET Core integration](docs/aspnetcore-integration.md) | Registration, middleware, pipeline ordering, status codes, events |
 | [Tenant resolution](docs/tenant-resolution.md) | Header, subdomain, host, route, claim, query-string, and custom resolvers; slugs and custom domains |
+| [Authentication per tenant](docs/authentication-per-tenant.md) | JWT bearer, OpenID Connect and cookie settings per tenant |
 | [Access control](docs/access-control.md) | Requiring tenants, access validators, claim-based validation |
 | [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
 | [Owned and multi-table entities](docs/efcore-advanced.md) | How owned entities and split tables are checked, all-or-nothing saves, unsupported models |
