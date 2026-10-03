@@ -43,17 +43,16 @@ builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = new U
 
 ### Which requests carry it
 
-- **A tenant is current:** the request carries its id, formatted with the invariant culture (`TenantIds.Format`).
-  With no tenant, the request goes without the header, and the called service decides what that means, for example
-  with `RequireTenant()`.
+- **Only while a tenant is current.** The request carries the tenant's id, formatted with the invariant culture
+  (`TenantIds.Format`). With no tenant, the request goes without the header, and the called service decides what that
+  means, for example with `RequireTenant()`.
 - **A header naming another tenant is refused.** A request that already carries the header with another tenant's
   id, while a tenant is current, throws `InvalidOperationException`. That catches a header forwarded from the incoming
   request or set in `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.Use`.
   With no current tenant, a header you set is sent as it is.
-- **The request is for the client's own service:** when the client has a base address, set in its configuration as
-  above, only requests to that scheme, host and port carry the tenant; a request to an absolute address elsewhere does
-  not. A client with no base address there carries it on every request: a gRPC client, whose address is the
-  channel's, or a typed client that sets `BaseAddress` in its constructor.
+- **Only to the client's own service.** If the client's registration sets `BaseAddress`, only requests to that
+  scheme, host and port get the header. Otherwise every request gets it, which covers gRPC clients and typed clients
+  that set `BaseAddress` in their constructor.
 - **A redirect keeps it.** `HttpClient` follows a redirect inside its primary handler with the request's headers, so
   a service that redirects to another passes the tenant id on. Turn redirects off for the client
   (`ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })`) if a service
@@ -62,9 +61,8 @@ builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = new U
 `UseTenantry()` refuses `ConfigureHttpClientDefaults`, which configures every client in the application, third-party
 SDKs' included: tenant ids go only to the services you name.
 
-A header carries printable ASCII, and the receiving side trims it, so an id must be printable ASCII with no space at
-either end (a GUID, a number or a slug). A request as a tenant whose id is not throws `InvalidOperationException`,
-rather than sending something the other side would read as another id.
+Tenant ids must be printable ASCII with no leading or trailing space (a GUID, number or slug); sending any other id
+throws `InvalidOperationException`.
 
 ## Receiving the tenant
 
