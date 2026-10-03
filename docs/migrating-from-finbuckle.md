@@ -136,7 +136,9 @@ app.UseAuthorization();
 
 `UseTenantry()` goes after `UseAuthentication()`. Finbuckle's claim strategy authenticated the request itself.
 `ResolveFromClaim` reads `HttpContext.User`, which the authentication middleware sets
-([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)).
+([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). If your authentication settings differ per tenant
+(Finbuckle's `WithPerTenantAuthentication()`), also call `UseTenantResolution()` before `UseAuthentication()`, where
+`UseMultiTenant()` was (step 6).
 
 `ShortCircuitWhenTenantNotResolved()` ended the request without an error status. `RequireTenantByDefault()` answers
 `400` when the request names no tenant, `404` when it names an unknown one and `403` when the tenant is refused
