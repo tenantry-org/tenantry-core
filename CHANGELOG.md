@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-03
+
 ### Upgrading from 0.5
 
 0.6 adds to the API more than it changes it. Most applications build and run as before; check these:
