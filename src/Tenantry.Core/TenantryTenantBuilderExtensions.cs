@@ -21,6 +21,10 @@ public static class TenantryTenantBuilderExtensions
     /// <param name="tenants">The tenants the store holds. The store does not change after registration.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="InvalidOperationException">A tenant store is already registered.</exception>
+    /// <exception cref="ArgumentException">
+    /// A tenant has an id Tenantry reserves for "no tenant" (<see cref="TenantIds.IsReserved{TKey}"/>), or two tenants
+    /// have the same id.
+    /// </exception>
     public static ITenantBuilder<TKey> UseInMemoryStore<TKey>(
         this ITenantBuilder<TKey> builder,
         IEnumerable<ITenantDescriptor<TKey>> tenants)
@@ -30,7 +34,9 @@ public static class TenantryTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(tenants);
 
         TenantStores.ThrowIfRegistered<TKey>(builder.Services);
-        builder.Services.AddSingleton<ITenantStore<TKey>>(_ => new InMemoryTenantStore<TKey>(tenants));
+
+        // Built now, so a tenant the store refuses fails registration rather than the first request.
+        builder.Services.AddSingleton<ITenantStore<TKey>>(new InMemoryTenantStore<TKey>(tenants));
         return builder;
     }
 
@@ -60,29 +66,59 @@ public static class TenantryTenantBuilderExtensions
     }
 
     /// <summary>
-    /// Caches the tenants Tenantry reads from the tenant store, so a request does not ask the store for its tenant
-    /// each time. <see cref="ITenantStoreCache{TKey}"/> then removes a tenant that changes (<c>AddTenantry</c> always
-    /// registers it, so code that invalidates runs with caching off too).
+    /// Stops work for tenants that <paramref name="isActive"/> refuses, such as suspended ones: requests (with
+    /// Tenantry.AspNetCore), <c>RunInScopeAsync</c>, and Tenantry.Pro's background work, jobs and messages.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="configure">Sets how long a tenant is cached, or <see langword="null"/> for the default (5 minutes).</param>
+    /// <param name="isActive">Returns <see langword="true"/> when work may run for the tenant.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// <para>
-    /// The cache serves Tenantry's own lookups: <c>app.UseTenantry()</c>'s, and <see cref="ITenantLookup{TKey}"/>'s,
-    /// which <see cref="ITenantScopeFactory{TKey}.RunInScopeAsync(TKey, Func{ITenantScope{TKey}, CancellationToken, Task}, CancellationToken)"/>
-    /// and background work use. It keeps each tenant the store finds, by the id or identifier it was looked up with,
-    /// in memory for <see cref="TenantStoreCacheOptions.Duration"/>. A lookup that finds no tenant is not cached, so a
-    /// tenant added to the store is found at once; <see cref="ITenantStore{TKey}.GetAllTenantsAsync"/> is never
-    /// cached. Code that injects <see cref="ITenantStore{TKey}"/> reads the store itself.
-    /// </para>
-    /// <para>
-    /// A tenant that changes (is suspended, say, which an access validator reads) is served as it was until its entry
-    /// expires: call <see cref="ITenantStoreCache{TKey}.Invalidate"/> when you change it. Each instance of the
-    /// application has its own cache. Calling it again configures the same options. It reads the time from a
-    /// registered <see cref="TimeProvider"/>, if there is one.
-    /// </para>
+    /// Calling it again adds another check: a tenant must pass all of them. See <see cref="ITenantActivity{TKey}"/>
+    /// for where Tenantry checks.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;string&gt;(tenant =&gt; tenant
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .ValidateTenantActivity(t =&gt; t.As&lt;AppTenant&gt;().IsActive));
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> ValidateTenantActivity<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<ITenantDescriptor<TKey>, bool> isActive)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(isActive);
+
+        return builder.ValidateTenantActivity((tenant, _) => ValueTask.FromResult(isActive(tenant)));
+    }
+
+    /// <inheritdoc cref="ValidateTenantActivity{TKey}(ITenantBuilder{TKey}, Func{ITenantDescriptor{TKey}, bool})"/>
+    public static ITenantBuilder<TKey> ValidateTenantActivity<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>> isActive)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(isActive);
+
+        builder.Services.AddSingleton<ITenantActivityValidator<TKey>>(new DelegateTenantActivityValidator<TKey>(isActive));
+        return builder;
+    }
+
+    /// <summary>
+    /// Caches the tenants that Tenantry's own lookups (<c>app.UseTenantry()</c> and <see cref="ITenantLookup{TKey}"/>)
+    /// find in the store, for <see cref="TenantStoreCacheOptions.Duration"/> (5 minutes by default).
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="configure">Sets how long a tenant is cached, or <see langword="null"/> for the default.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// Lookups that find nothing, and <see cref="ITenantStore{TKey}.GetAllTenantsAsync"/>, are not cached. Call
+    /// <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> when a tenant changes. It uses a registered
+    /// <see cref="TimeProvider"/> if there is one.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"><see cref="TenantStoreCacheOptions.Duration"/> is not positive.</exception>
     /// <example>
@@ -116,9 +152,7 @@ public static class TenantryTenantBuilderExtensions
 
         services.TryAddSingleton(sp => new TenantStoreCache<TKey>(
             sp.GetRequiredService<TenantStoreCacheOptions>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System,
-            sp.GetRequiredService<TenantInvalidationHandlers<TKey>>()));
-        services.Replace(ServiceDescriptor.Singleton<ITenantStoreCache<TKey>>(sp => sp.GetRequiredService<TenantStoreCache<TKey>>()));
+            sp.GetService<TimeProvider>() ?? TimeProvider.System));
 
         return builder;
     }
@@ -177,9 +211,74 @@ public static class TenantryTenantBuilderExtensions
         }
 
         services.TryAddSingleton<TenantConnectionStringProvider<TKey>>();
-        services.TryAddSingleton<ITenantConnectionStringProvider<TKey>>(sp =>
-            sp.GetRequiredService<TenantConnectionStringProvider<TKey>>());
+        TenantConnectionStrings.SetBase<TKey>(
+            services, sp => sp.GetRequiredService<TenantConnectionStringProvider<TKey>>(), replace: false);
         services.TryAddSingleton<CurrentTenantConnectionString<TKey>>();
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Registers the provider that returns each tenant's connection string, built from the application's services,
+    /// so it can use a secrets client or other services registered in DI. Registers
+    /// <see cref="ITenantConnectionStringProvider{TKey}"/> and <see cref="CurrentTenantConnectionString{TKey}"/> as
+    /// singletons.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="factory">Creates the provider, once, from the application's services.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// It replaces a provider set before, by this method or by <c>UseConnectionStrings(options =&gt; …)</c>. A provider
+    /// that can only read connection strings asynchronously returns <see langword="false"/> from
+    /// <see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .UseConnectionStrings(sp =&gt; new VaultConnectionStrings(sp.GetRequiredService&lt;SecretClient&gt;())));
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> UseConnectionStrings<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<IServiceProvider, ITenantConnectionStringProvider<TKey>> factory)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(factory);
+
+        TenantConnectionStrings.SetBase(builder.Services, factory, replace: true);
+        builder.Services.TryAddSingleton<CurrentTenantConnectionString<TKey>>();
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Wraps the registered <see cref="ITenantConnectionStringProvider{TKey}"/>, for example to cache or log. The
+    /// decorator applies whether this is called before or after <c>UseConnectionStrings</c>; several decorators
+    /// wrap in the order they are added, so the last one added is called first.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="decorate">
+    /// Returns the provider to use in place of the one it is given. It runs once, when the provider is first resolved.
+    /// </param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// A decorator should forward <see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/> to the
+    /// provider it wraps. Resolving the provider without any connection strings configured throws
+    /// <see cref="InvalidOperationException"/>.
+    /// </remarks>
+    public static ITenantBuilder<TKey> DecorateConnectionStrings<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<IServiceProvider, ITenantConnectionStringProvider<TKey>, ITenantConnectionStringProvider<TKey>> decorate)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(decorate);
+
+        TenantConnectionStrings.Register<TKey>(builder.Services).All.Add(decorate);
 
         return builder;
     }

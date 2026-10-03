@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,6 +18,7 @@ public interface ITenantBuilder
     /// Applies <paramref name="registration"/> with the tenant key type this builder was created for.
     /// </summary>
     /// <param name="registration">The registration to apply.</param>
+    [EditorBrowsable(EditorBrowsableState.Advanced)]
     void Add(ITenantRegistration registration);
 }
 
@@ -49,6 +51,7 @@ public interface ITenantBuilder<TKey> : ITenantBuilder
 /// A registration that needs the tenant key type, added through <see cref="ITenantBuilder.Add"/>. Packages
 /// use it for builder methods that take a type parameter of their own, such as a <c>DbContext</c> type.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public interface ITenantRegistration
 {
     /// <summary>Registers the feature's services for the tenant key type <typeparamref name="TKey"/>.</summary>

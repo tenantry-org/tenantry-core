@@ -21,12 +21,12 @@ Tenantry targets **.NET 8, 9, and 10**. EF Core integration requires the matchin
 
 ## 2. Choose your tenant key type
 
-Every Tenantry API is generic over `TKey`, the type of your tenant identifier. `TKey` must implement
+Tenantry's tenant types are generic over `TKey`, the type of your tenant identifier. `TKey` must implement
 both `IEquatable<TKey>` (so EF Core can translate equality to SQL) and `IParsable<TKey>` (so Tenantry can
 parse the id a request carries in a header, route, etc.).
 
 `Guid`, `int`, `long`, and `string` all qualify out of the box. Pick one and use it consistently —
-it appears in your entities, your `DbContext`, and your registration.
+it appears in your entities, your store and your registration.
 
 This guide uses `Guid`.
 
@@ -58,13 +58,9 @@ builder.Services.AddTenantry<Guid>(tenant =>
 });
 ```
 
-Every builder method returns the builder, so the same registration can be written as one chain:
-`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`.
-
-> **Startup validation.** `app.UseTenantry()` (step 7) checks the registration when the pipeline is built and
-> throws a clear `InvalidOperationException` if no resolver or no store is registered, rather than letting the
-> application misbehave at runtime. Registering a second store, or calling `AddTenantry` with another key
-> type, throws too.
+Builder methods chain, so this can also be one chain:
+`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`. `app.UseTenantry()` (step 7) throws
+at startup if no resolver or no store is registered. The rules are in [Registration](core-concepts.md#registration).
 
 ## 4. Mark your tenant-owned entities
 

@@ -41,6 +41,10 @@ public interface ITenantScopeFactory<TKey>
     /// new scope and see this tenant.
     /// </summary>
     /// <param name="tenant">The tenant to activate.</param>
+    /// <remarks>
+    /// It does not consult <see cref="ITenantActivity{TKey}"/>, so it reaches suspended tenants too, for provisioning
+    /// and migrations. Check <see cref="ITenantActivity{TKey}"/> first for other work.
+    /// </remarks>
     /// <exception cref="ArgumentException">The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".</exception>
     /// <returns>
     /// The scope. Dispose it (<c>using</c> or <c>await using</c>) to dispose its services and restore the
@@ -57,6 +61,7 @@ public interface ITenantScopeFactory<TKey>
     /// <param name="work">The work to run. It receives the scope and <paramref name="cancellationToken"/>.</param>
     /// <param name="cancellationToken">Passed to the tenant lookup and to <paramref name="work"/>.</param>
     /// <exception cref="TenantNotFoundException">The tenant store has no tenant with that id.</exception>
+    /// <exception cref="TenantInactiveException">An <see cref="ITenantActivityValidator{TKey}"/> refused the tenant.</exception>
     /// <exception cref="InvalidOperationException">No tenant store is registered.</exception>
     /// <exception cref="ArgumentException"><paramref name="tenantId"/> is the key type's default value or an empty string, which no tenant can have.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled before the work started.</exception>

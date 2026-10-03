@@ -1,0 +1,6 @@
+# docfx leaves EditorBrowsable out of the metadata by default; scripts/api-docs.cs reads it to list the types marked
+# Advanced (the seams for packages that build on Tenantry) apart from the rest.
+attributeRules:
+- include:
+    uidRegex: ^System\.ComponentModel\.EditorBrowsableAttribute$
+    type: Type

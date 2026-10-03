@@ -4,6 +4,7 @@
 dotnet-tools.json
 global.json
 eng/api-docs/docfx.json
+eng/api-docs/filter.yml
 eng/common/Build.props
 eng/common/Build.targets
 eng/common/Packages.props
@@ -16,6 +17,7 @@ samples/Directory.Build.props
 scripts/api-docs.cs
 scripts/check-dependabot.cs
 scripts/check-dependency-floors.cs
+scripts/check-doc-links.cs
 scripts/check-doc-snippets.sh
 scripts/check-package-consumer.sh
 scripts/check-package-ranges.cs

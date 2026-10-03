@@ -43,21 +43,23 @@ builds on Windows.
 
 CI runs these steps (`.github/workflows/build-test.yml`) on every push to `master` and every pull request, in this
 order, and the release workflow runs them again on the tagged commit. Each one runs locally with the same command,
-from the repository root. The scripts that need the tools in `dotnet-tools.json` (docfx, dotnet-coverage) restore
-them, and the coverage gate needs ReportGenerator (`dotnet tool install -g dotnet-reportgenerator-globaltool`).
+from the repository root. `dotnet tool restore` installs the tools `dotnet-tools.json` pins (docfx, dotnet-coverage,
+ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them restore them too.
 
 | Check | Command | When it fails |
 |-------|---------|---------------|
 | Dependabot's list of banded packages matches the project files | `dotnet run scripts/check-dependabot.cs` | Update the list in `.github/dependabot.yml` |
 | No API or package that no longer exists is named in the README, docs, samples or `src/` | `dotnet run scripts/check-removed-names.cs` | Use the name it gives; the removed names are in `eng/common/removed-names.txt` |
+| Every link reaches a file, page and heading | `dotnet run scripts/check-doc-links.cs` | Fix the link it names. Links in `docs/` are checked as tenantry.dev serves them: another page as `page.md#heading`, any other file through `../` |
 | The lock files are up to date | `dotnet restore Tenantry.slnx --locked-mode` | `dotnet restore Tenantry.slnx`, then commit the lock files |
 | Formatting | `dotnet format Tenantry.slnx --verify-no-changes --no-restore` | `dotnet format Tenantry.slnx` |
 | Every published floor is tested | `dotnet run scripts/check-dependency-floors.cs` | A version range's minimum must be a version some test project resolves |
 | The build has no warnings | `dotnet build Tenantry.slnx -c Release --no-restore` | Warnings are errors, trim (`IL2xxx`) and AOT (`IL3xxx`) warnings in `src/` included |
 | The samples start | `bash scripts/smoke-samples.sh` | After the Release build |
 | Every test passes on every target framework, with coverage | `bash scripts/test-with-coverage.sh` | Docker runs the integration tests; it writes `coverage/coverage.xml` |
-| SonarCloud quality gate | CI only | On pushes to `master` and every pull request. A pull request from a fork gets no secrets, so its Sonar step fails for lack of the token |
-| Line coverage is at least 90% | `reportgenerator -reports:coverage/coverage.xml -targetdir:coverage/report -reporttypes:JsonSummary`, then `jq '.summary.linecoverage' coverage/report/Summary.json` | CI fails below 90: add tests for the new code |
+| SonarCloud quality gate | CI only | On pushes to `master` and pull requests from branches of this repository. A pull request from a fork, or from Dependabot, gets no secrets, so CI skips Sonar for it and still builds and tests |
+| Line coverage is at least 90% | `dotnet reportgenerator -reports:coverage/coverage.xml -targetdir:coverage/report -reporttypes:JsonSummary`, then `jq '.summary.linecoverage' coverage/report/Summary.json` | CI fails below 90: add tests for the new code |
+| The public API still works for code built against the last release | Part of `dotnet pack` (package validation against `TenantryPackageBaseline`) | Keep the old member, or, for an intended break in a minor release, record it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true` |
 | The packages' dependency ranges | `for p in src/*/*.csproj; do dotnet pack "$p" -c Release --no-build -o artifacts; done`, then `dotnet run scripts/check-package-ranges.cs -- artifacts` | Each dependency has its intended range (see the script) |
 | The API reference is up to date | `bash scripts/generate-api-docs.sh --check` | `bash scripts/generate-api-docs.sh`, then commit `docs/api`: a change to the public API or its XML documentation changes it |
 | An application can restore and run the packages | `bash scripts/check-package-consumer.sh artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'` | From an empty cache, with package source mapping, on every target framework |
@@ -91,11 +93,15 @@ If you have signing configured, signed commits are appreciated. See GitHub's gui
 
 Releases are cut by pushing a `v*` tag on a commit that is on `master`; a ruleset lets only the
 maintainer create, move or delete `v*` tags. The release workflow checks that the tag is on `master`,
-reruns the CI gate on the tagged commit (without SonarCloud, which already passed on `master`),
+checks that CI, SonarCloud included, passed on the tagged commit on `master`, reruns the CI gate on it (without
+SonarCloud),
 including both package checks, then **pauses for approval** in the `release` environment (only `v*`
 tags can deploy to it) and publishes those same packages, with their symbol packages, to NuGet.org via
 OIDC trusted publishing. The GitHub release's notes are the version's section of `CHANGELOG.md`
-(`scripts/release-notes.sh`), and a tag without one fails before anything is built; nothing is attached.
+(`scripts/release-notes.sh`), and a tag without one fails before anything is built. The release attests each
+package's build provenance and attaches the packages' checksums (`SHA256SUMS`) and a CycloneDX SBOM per package.
+A tag whose commit has no passing CI run on `master` fails before anything is built, and a tag with a prerelease
+suffix makes a GitHub prerelease.
 [RELEASING.md](RELEASING.md) has the steps.
 
 To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on

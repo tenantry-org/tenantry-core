@@ -52,8 +52,9 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
-    public async Task AHeaderTheCallerSet_IsNotReplaced()
+    public async Task AHeaderNamingAnotherTenant_IsRefused_WhileATenantIsCurrent()
     {
+        // A forwarded or stale header must not call the service as another tenant.
         var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing);
         await using var _ = provider;
         using HttpRequestMessage request = new(HttpMethod.Get, "/invoices");
@@ -61,10 +62,32 @@ public sealed class TenantPropagationHandlerTests
 
         using (Use(provider, "acme"))
         {
-            await Client(provider).SendAsync(request, TestContext.Current.CancellationToken);
+            await FluentActions.Awaiting(() => Client(provider).SendAsync(request, TestContext.Current.CancellationToken))
+                .Should().ThrowAsync<InvalidOperationException>().WithMessage("*'globex'*current tenant is 'acme'*");
         }
 
-        recorder.TenantHeaders.Should().Equal("globex");
+        recorder.TenantHeaders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AHeaderTheCallerSet_IsSent_WhenItNamesTheCurrentTenant_OrNoTenantIsCurrent()
+    {
+        var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing);
+        await using var _ = provider;
+        var client = Client(provider);
+
+        using (Use(provider, "acme"))
+        {
+            using HttpRequestMessage same = new(HttpMethod.Get, "/invoices");
+            same.Headers.Add(TenantPropagation.HeaderName, "acme");
+            await client.SendAsync(same, TestContext.Current.CancellationToken);
+        }
+
+        using HttpRequestMessage noTenant = new(HttpMethod.Get, "/invoices");
+        noTenant.Headers.Add(TenantPropagation.HeaderName, "globex");
+        await client.SendAsync(noTenant, TestContext.Current.CancellationToken);
+
+        recorder.TenantHeaders.Should().Equal("acme", "globex");
     }
 
     [Fact]

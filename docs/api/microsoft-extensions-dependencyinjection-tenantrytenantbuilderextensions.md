@@ -12,7 +12,7 @@ public static class TenantryTenantBuilderExtensions
 
 ### `CacheTenants<TKey>(ITenantBuilder<TKey>, Action<TenantStoreCacheOptions>?)`
 
-Caches the tenants Tenantry reads from the tenant store, so a request does not ask the store for its tenant each time. [`ITenantStoreCache<TKey>`](tenantry-itenantstorecache.md) then removes a tenant that changes (`AddTenantry` always registers it, so code that invalidates runs with caching off too).
+Caches the tenants that Tenantry's own lookups (`app.UseTenantry()` and [`ITenantLookup<TKey>`](tenantry-itenantlookup.md)) find in the store, for [`TenantStoreCacheOptions.Duration`](tenantry-tenantstorecacheoptions.md) (5 minutes by default).
 
 ```csharp
 public static ITenantBuilder<TKey> CacheTenants<TKey>(this ITenantBuilder<TKey> builder, Action<TenantStoreCacheOptions>? configure = null) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -25,7 +25,7 @@ Type parameters:
 Parameters:
 
 - `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `configure` `Action<TenantStoreCacheOptions>`: Sets how long a tenant is cached, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for the default (5 minutes).
+- `configure` `Action<TenantStoreCacheOptions>`: Sets how long a tenant is cached, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for the default.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
@@ -33,9 +33,7 @@ Exceptions:
 
 - `ArgumentOutOfRangeException`: [`TenantStoreCacheOptions.Duration`](tenantry-tenantstorecacheoptions.md) is not positive.
 
-The cache serves Tenantry's own lookups: `app.UseTenantry()`'s, and [`ITenantLookup<TKey>`](tenantry-itenantlookup.md)'s, which [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md) and background work use. It keeps each tenant the store finds, by the id or identifier it was looked up with, in memory for [`TenantStoreCacheOptions.Duration`](tenantry-tenantstorecacheoptions.md). A lookup that finds no tenant is not cached, so a tenant added to the store is found at once; [`ITenantStore<TKey>.GetAllTenantsAsync`](tenantry-itenantstore.md) is never cached. Code that injects [`ITenantStore<TKey>`](tenantry-itenantstore.md) reads the store itself.
-
-A tenant that changes (is suspended, say, which an access validator reads) is served as it was until its entry expires: call [`ITenantStoreCache<TKey>.Invalidate`](tenantry-itenantstorecache.md) when you change it. Each instance of the application has its own cache. Calling it again configures the same options. It reads the time from a registered `TimeProvider`, if there is one.
+Lookups that find nothing, and [`ITenantStore<TKey>.GetAllTenantsAsync`](tenantry-itenantstore.md), are not cached. Call [`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md) when a tenant changes. It uses a registered `TimeProvider` if there is one.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -43,6 +41,27 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .UseStore<AppTenantStore>()
     .CacheTenants(o => o.Duration = TimeSpan.FromMinutes(1)));
 ```
+
+### `DecorateConnectionStrings<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantConnectionStringProvider<TKey>, ITenantConnectionStringProvider<TKey>>)`
+
+Wraps the registered [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md), for example to cache or log. The decorator applies whether this is called before or after `UseConnectionStrings`; several decorators wrap in the order they are added, so the last one added is called first.
+
+```csharp
+public static ITenantBuilder<TKey> DecorateConnectionStrings<TKey>(this ITenantBuilder<TKey> builder, Func<IServiceProvider, ITenantConnectionStringProvider<TKey>, ITenantConnectionStringProvider<TKey>> decorate) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `decorate` `Func<IServiceProvider, ITenantConnectionStringProvider<TKey>, ITenantConnectionStringProvider<TKey>>`: Returns the provider to use in place of the one it is given. It runs once, when the provider is first resolved.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+A decorator should forward [`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md) to the provider it wraps. Resolving the provider without any connection strings configured throws `InvalidOperationException`.
 
 ### `UseConnectionStrings<TKey>(ITenantBuilder<TKey>, Action<TenantConnectionStringOptions<TKey>>)`
 
@@ -78,6 +97,33 @@ builder.Services.AddTenantry<string>(tenant => tenant
 
 builder.Services.AddDbContext<AppDbContext>((sp, options) =>     options.UseSqlServer(sp.GetRequiredService<CurrentTenantConnectionString<string>>().Get())); ```
 
+### `UseConnectionStrings<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantConnectionStringProvider<TKey>>)`
+
+Registers the provider that returns each tenant's connection string, built from the application's services, so it can use a secrets client or other services registered in DI. Registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons.
+
+```csharp
+public static ITenantBuilder<TKey> UseConnectionStrings<TKey>(this ITenantBuilder<TKey> builder, Func<IServiceProvider, ITenantConnectionStringProvider<TKey>> factory) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `factory` `Func<IServiceProvider, ITenantConnectionStringProvider<TKey>>`: Creates the provider, once, from the application's services.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+It replaces a provider set before, by this method or by `UseConnectionStrings(options => …)`. A provider that can only read connection strings asynchronously returns [false](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) from [`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md).
+
+```csharp
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .UseStore<AppTenantStore>()
+    .UseConnectionStrings(sp => new VaultConnectionStrings(sp.GetRequiredService<SecretClient>())));
+```
+
 ### `UseInMemoryStore<TKey>(ITenantBuilder<TKey>, IEnumerable<ITenantDescriptor<TKey>>)`
 
 Registers a pre-populated in-memory tenant store. Suitable for testing and simple single-instance deployments.
@@ -100,6 +146,7 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 Exceptions:
 
 - `InvalidOperationException`: A tenant store is already registered.
+- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsReserved<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
 
 ### `UseStore<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantStore<TKey>>)`
 
@@ -125,3 +172,57 @@ Exceptions:
 - `InvalidOperationException`: A tenant store is already registered.
 
 The store is registered with a **scoped** lifetime and is resolved per operation, so the factory may return an instance that depends on scoped services such as a `DbContext`.
+
+### `ValidateTenantActivity<TKey>(ITenantBuilder<TKey>, Func<ITenantDescriptor<TKey>, bool>)`
+
+Stops work for tenants that `isActive` refuses, such as suspended ones: requests (with Tenantry.AspNetCore), `RunInScopeAsync`, and Tenantry.Pro's background work, jobs and messages.
+
+```csharp
+public static ITenantBuilder<TKey> ValidateTenantActivity<TKey>(this ITenantBuilder<TKey> builder, Func<ITenantDescriptor<TKey>, bool> isActive) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `isActive` `Func<ITenantDescriptor<TKey>, bool>`: Returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) when work may run for the tenant.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+Calling it again adds another check: a tenant must pass all of them. See [`ITenantActivity<TKey>`](tenantry-itenantactivity.md) for where Tenantry checks.
+
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .UseStore<AppTenantStore>()
+    .ValidateTenantActivity(t => t.As<AppTenant>().IsActive));
+```
+
+### `ValidateTenantActivity<TKey>(ITenantBuilder<TKey>, Func<ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>>)`
+
+Stops work for tenants that `isActive` refuses, such as suspended ones: requests (with Tenantry.AspNetCore), `RunInScopeAsync`, and Tenantry.Pro's background work, jobs and messages.
+
+```csharp
+public static ITenantBuilder<TKey> ValidateTenantActivity<TKey>(this ITenantBuilder<TKey> builder, Func<ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>> isActive) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `isActive` `Func<ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>>`: Returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) when work may run for the tenant.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+Calling it again adds another check: a tenant must pass all of them. See [`ITenantActivity<TKey>`](tenantry-itenantactivity.md) for where Tenantry checks.
+
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .UseStore<AppTenantStore>()
+    .ValidateTenantActivity(t => t.As<AppTenant>().IsActive));
+```

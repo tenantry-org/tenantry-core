@@ -895,7 +895,7 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
         await using var app = await StartAsync<Guid>(tenant => tenant
             .ResolveFromHeader("X-Tenant-Id")
             .RequireTenantByDefault()
-            .UseInMemoryStore([new TenantDescriptor<Guid> { TenantId = Guid.Empty, Name = "Empty" }]));
+            .UseStore(_ => new EmptyIdStore()));
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", Guid.Empty.ToString());
 
@@ -1081,6 +1081,18 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
     // A problem response's trace id, which differs between responses
     [System.Text.RegularExpressions.GeneratedRegex("\"traceId\":\"[^\"]*\"")]
     private static partial System.Text.RegularExpressions.Regex TraceId();
+
+    // A store with a tenant whose id is the reserved Guid.Empty, which InMemoryTenantStore refuses.
+    private sealed class EmptyIdStore : ITenantStore<Guid>
+    {
+        private static readonly TenantDescriptor<Guid> Empty = new() { TenantId = Guid.Empty, Name = "Empty" };
+
+        public ValueTask<ITenantDescriptor<Guid>?> GetTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ITenantDescriptor<Guid>?>(tenantId == Guid.Empty ? Empty : null);
+
+        public ValueTask<IReadOnlyList<ITenantDescriptor<Guid>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<Guid>>>([Empty]);
+    }
 
     public async ValueTask DisposeAsync()
     {

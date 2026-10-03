@@ -1,11 +1,10 @@
 # Core concepts
 
 Everything in Tenantry is built on a small set of types in the `Tenantry` namespace (package `Tenantry.Core`).
-Understanding them makes the EF Core and ASP.NET Core layers obvious.
 
 ## The tenant key (`TKey`)
 
-Every Tenantry type is generic over `TKey`, the type of your tenant identifier. The constraint is:
+Tenantry's tenant types are generic over `TKey`, the type of your tenant identifier. The constraint is:
 
 ```csharp no-compile
 where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -16,12 +15,12 @@ where TKey : IEquatable<TKey>, IParsable<TKey>
   claim, into a `TKey`, with the invariant culture.
 
 `TenantIds` does this the way Tenantry does, for code of your own that carries tenant ids as text: `Format` writes
-an id with the invariant culture, and `TryParse` reads one back, refusing text that names no tenant. `IsUnset` is
+an id with the invariant culture, and `TryParse` reads one back, refusing text that names no tenant. `IsReserved` is
 true for the ids Tenantry reserves for "no tenant": `null`, the key type's default (`Guid.Empty`, `0`) and an
 empty string.
 
 `Guid`, `int`, `long`, `string`, and most numeric types satisfy this. Choose one type and use it
-everywhere — the same `TKey` flows through your entities, store, `DbContext`, and registration. An application
+everywhere: the same `TKey` flows through your entities, store and registration. An application
 has one key type: calling `AddTenantry` with a second one throws, and an entity that implements
 `ITenantEntity<string>` in a `Guid` application fails its model's first query or save instead of going
 unisolated.
@@ -54,8 +53,8 @@ new TenantDescriptor<Guid> { TenantId = id, Name = "Acme" };
 
 Implement `ITenantDescriptor<TKey>` on your own type to carry what your application knows about a tenant (its
 plan, region, connection string, feature flags…), and return it from your [tenant store](tenant-stores.md).
-Tenantry only ever reads `TenantId` and `Name`. That includes status: Tenantry has no notion of an active or
-suspended tenant, so keep yours on your tenant type and check it where work starts (see
+Tenantry only ever reads `TenantId` and `Name`. It has no tenant status of its own: keep yours on your tenant type
+and give Tenantry a check for it with `ValidateTenantActivity` (see
 [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
 
 ```csharp no-compile
@@ -77,7 +76,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .UseStore<EfCoreTenantStore>()
     .UseConnectionStrings(o => o.GetConnectionString = t => t.As<AppTenant>().ConnectionString)
-    .ValidateTenantAccess((http, t) => !t.As<AppTenant>().IsSuspended));
+    .ValidateTenantActivity(t => !t.As<AppTenant>().IsSuspended));
 
 app.MapGet("/plan", (ITenantContext<Guid> tenants) => tenants.GetCurrentTenant<AppTenant>()?.Plan);
 ```
@@ -105,8 +104,8 @@ public interface ITenantEntity<TKey>
 
 ## `ITenantContext<TKey>` — reading the current tenant
 
-This is the read-only view of "who is the tenant right now", and the type you inject into endpoints,
-services, and your `DbContext`:
+This is the read-only view of "who is the tenant right now", and the type you inject into endpoints and
+services:
 
 ```csharp no-compile
 public interface ITenantContext<TKey>
@@ -132,6 +131,7 @@ nullable for them. Check `HasTenant` to tell "no tenant" apart.
 public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
 {
     IDisposable Use(ITenantDescriptor<TKey> tenant);
+    IDisposable UseNoTenant();
 }
 ```
 
@@ -149,6 +149,9 @@ In ASP.NET Core the **middleware** calls `Use` for you once the tenant is resolv
 `ITenantScopeFactory<TKey>` makes a tenant current together with a fresh DI scope, which is what most code
 wants; call `Use` yourself only when you need no new scope. See [Non-HTTP hosts](non-http-hosts.md).
 
+`UseNoTenant()` does the opposite: code inside it sees no tenant, and disposing it restores the tenant that was
+current. The middleware uses it for the rest of a request whose tenant the access validators refused.
+
 Call `Use` (or `ITenantScopeFactory.CreateScope`) in the method that does the work. Because of the
 `AsyncLocal` model below, a tenant made current inside an `async` helper is not current for the helper's caller.
 
@@ -165,28 +168,18 @@ using (tenantContext.Use(acme))       // current = Acme
 }                                     // current = none
 ```
 
-This is useful for admin/maintenance code that needs to briefly act as a specific tenant from within
-another context.
+Use it in maintenance code that acts as another tenant for a moment.
 
 ## The `AsyncLocal` model
 
-`ITenantContext<TKey>` and `ITenantContextSetter<TKey>` are both registered as a **singleton** backed by a
-single `AsyncLocal` holding the innermost open scope. The implication matters:
+`ITenantContext<TKey>` and `ITenantContextSetter<TKey>` are one singleton over an `AsyncLocal`, so the current tenant
+belongs to the async flow, not to an object. It flows into code you call and await, never back to your caller, and
+concurrent requests never see each other's tenant.
 
-- The "current tenant" is **per async-execution-context**, not per object instance. The value flows
-  *down* into every method you call and every `Task` you `await`, but never *up* to your caller.
-- This is why a singleton is correct and safe: there is no per-request instance to manage, and the
-  value cannot leak between concurrent requests/operations because each runs in its own async context.
-- A background `Task.Run(...)` started inside a scope inherits the tenant at the moment it is created.
-  If you queue work to run *later* (after the scope disposes), capture the tenant id and open a fresh
-  scope when the work runs (`ITenantScopeFactory.RunInScopeAsync`); do not rely on the ambient value
-  still being set.
-- Disposing a scope is order-safe. Disposing the innermost scope restores the nearest scope that is
-  still open; disposing any other scope (out of order, or from a different async flow) closes it without
-  changing the active tenant.
-- Disposal restores the tenant only in the flow that disposes. If a child task disposes a handle it
-  inherited, the caller keeps that tenant until it disposes the handle as well, which then restores the
-  caller's previous tenant. Further disposals change nothing.
+- A `Task.Run(...)` started inside a scope inherits the tenant it had then. For work that runs after the scope is
+  disposed, capture the tenant id and run the work by id (see [Non-HTTP hosts](non-http-hosts.md)).
+- Disposing the innermost scope restores the nearest one still open. Disposing any other, out of order or from
+  another async flow, closes it without changing the current tenant, and only in the flow that disposes it.
 
 ### How EF Core queries see the current tenant
 
@@ -208,20 +201,36 @@ and runs your work in such a scope. See [Non-HTTP hosts](non-http-hosts.md).
 |-----------|---------|-------------|
 | `TenantNotResolvedException` | `Tenantry.Core` | Code that needs a current tenant runs without one (an EF Core write, `CurrentTenantConnectionString`). |
 | `TenantNotFoundException` | `Tenantry.Core` | A tenant id is not in the store (`RunInScopeAsync`). It derives from `TenantNotResolvedException` and carries the `TenantId`, so a queue consumer can drop a message for a tenant that no longer exists. |
+| `TenantInactiveException` | `Tenantry.Core` | `RunInScopeAsync` names a tenant that `ValidateTenantActivity` refuses. It derives from `TenantNotResolvedException` and carries the `TenantId`. |
 | `TenantIsolationViolationException` | `Tenantry.EfCore` | EF Core would read or write across tenants; `Kind` says which check failed. See [EF Core integration](efcore-integration.md). |
 
 ## Registration
 
 There is one entry point, `AddTenantry<TKey>(configure?)` in `Tenantry.Core`, for every kind of host. It registers
-the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITenantScopeFactory<TKey>` and
-`ITenantLookup<TKey>`. Inside the `configure` lambda you compose, on `ITenantBuilder<TKey>`, a store
-(`UseInMemoryStore`, `UseStore`), connection strings, EF Core options (`ConfigureEfCoreIsolation`,
-`AddDbContextPerTenantDatabase`, from `Tenantry.EfCore`), and — for ASP.NET Core, from `Tenantry.AspNetCore` —
-resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`.
-Every builder method returns the builder, so they chain; the few that take a type parameter of their own
-(`UseResolver<TResolver>()`, `AddDbContextPerTenantDatabase<TContext>()`) return it without its key type, so they
-go last.
+the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITenantScopeFactory<TKey>`,
+`ITenantLookup<TKey>`, `ITenantInvalidator<TKey>`, `ITenantActivity<TKey>` and
+`ITenantKeyType`. Inside the `configure` lambda you add a store, connection strings, EF Core options and, with
+`Tenantry.AspNetCore`, resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`.
 
-Registration needs no Tenantry `using` directive: `AddTenantry` and the builder methods are extension methods in
-`Microsoft.Extensions.DependencyInjection`. Calling `AddTenantry` again adds to the same registration, and the
-core services are only added once. An application registers one store: a second one throws.
+The rules, stated here once:
+
+- Every builder method returns the builder, so calls chain. Three return it without its key type:
+  `UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()` and `AddDbContextPerTenantDatabase<TContext>()`.
+  Put them last in a chain, or make each call a statement of its own:
+
+  ```csharp
+  builder.Services.AddTenantry<Guid>(tenant =>
+  {
+      tenant.UseResolver<CookieTenantResolver>();
+      tenant.ValidateTenantAccess<MembershipValidator>();
+      tenant.UseStore<EfCoreTenantStore>();
+  });
+  ```
+
+- Registration needs no Tenantry `using` directive: `AddTenantry` and the builder methods are extension methods in
+  `Microsoft.Extensions.DependencyInjection`.
+- Calling `AddTenantry` again adds to the same registration. An application uses one tenant key type and one store:
+  a second of either throws.
+- Code that needs the key type without naming it, such as a package's registration method, reads it with
+  `services.FindTenantKeyType()` while registering, or injects `ITenantKeyType` later. Its `Accept` method calls a
+  generic visitor with the key type, which works under Native AOT.

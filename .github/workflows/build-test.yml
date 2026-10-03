@@ -10,6 +10,10 @@ on:
           not found". The tagged commit already passed the Sonar gate on master before tagging.
         type: boolean
         default: true
+    secrets:
+      SONAR_TOKEN:
+        description: SonarCloud's token, needed only when run_sonar is true.
+        required: false
 
 permissions:
   contents: read   # least privilege; this workflow only reads the repo
@@ -21,12 +25,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # MinVer needs full history; SonarCloud needs it for SCM blame
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: |
             8.0.x
@@ -38,16 +42,24 @@ jobs:
         run: dotnet --version
 
       - name: Setup Java (required by the Sonar scanner)
-        uses: actions/setup-java@v6
+        if: ${{ inputs.run_sonar }}
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Install tooling
+      - name: Restore tools
+        # The versions dotnet-tools.json pins (the Sonar scanner, ReportGenerator, CycloneDX, docfx, dotnet-coverage),
+        # so a new release of a tool never changes a build, a release build included
+        run: dotnet tool restore
+
+      - name: Check every action is pinned to a commit
+        # A tag can be moved; a commit cannot. Dependabot keeps the pins and their version comments up to date.
         run: |
-          dotnet tool install --global dotnet-sonarscanner
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+          if grep -rnE '^\s*(-\s*)?uses:\s*[^./][^@]*@' .github/workflows | grep -vE '@[0-9a-f]{40}( |$)'; then
+            echo "::error::Pin these actions to a full commit SHA, with the version in a comment (uses: owner/repo@<sha> # vX.Y.Z)"
+            exit 1
+          fi
 
       - name: Check the Dependabot configuration
         # Its list of banded packages (version ranges, per-framework versions) must match the project files
@@ -56,6 +68,10 @@ jobs:
       - name: Check for removed names
         # The README, docs, samples and src name no API or package that no longer exists (eng/common/removed-names.txt)
         run: dotnet run scripts/check-removed-names.cs
+
+      - name: Check the documentation's links
+        # Every link in the README, docs and samples reaches a file, page and heading, as tenantry.dev serves docs/
+        run: dotnet run scripts/check-doc-links.cs
 
       - name: Restore
         # Locked: fails if a test or sample project's packages.lock.json is out of date
@@ -105,7 +121,7 @@ jobs:
 
       - name: Coverage gate (>= 90% line coverage)
         run: |
-          reportgenerator \
+          dotnet reportgenerator \
             -reports:coverage/coverage.xml \
             -targetdir:coverage/report \
             -reporttypes:JsonSummary
@@ -121,6 +137,18 @@ jobs:
         run: |
           for project in src/*/*.csproj; do
             dotnet pack "$project" -c Release --no-build -o ./artifacts
+          done
+
+      - name: Software bills of materials
+        # A CycloneDX SBOM per package, which the release attaches to the GitHub release with the packages' checksums
+        run: |
+          mkdir -p ./artifacts/sbom
+          for project in src/*/*.csproj; do
+            name="$(basename "$project" .csproj)"
+            package="$(ls ./artifacts/"$name".[0-9]*.nupkg)"
+            version="$(unzip -p "$package" '*.nuspec' | sed -n 's:.*<version>\(.*\)</version>.*:\1:p' | head -n 1)"
+            dotnet CycloneDX "$project" -o ./artifacts/sbom -fn "$name.cdx.json" -F Json -ed \
+              -st Library -sn "$name" -sv "$version" --set-nuget-purl
           done
 
       - name: Check package dependency ranges
@@ -144,12 +172,13 @@ jobs:
 
       - name: Upload packages
         # The release job publishes exactly these packages: the ones built, tested and checked above
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nuget-packages
           path: |
             ./artifacts/*.nupkg
             ./artifacts/*.snupkg
+            ./artifacts/sbom/*.cdx.json
           if-no-files-found: error
           retention-days: 7
 

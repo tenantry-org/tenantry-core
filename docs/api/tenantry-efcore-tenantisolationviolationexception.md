@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry.EfCore` · Package: `Tenantry.EfCore` · [API reference](README.md)
 
-Thrown when EF Core would read or write across tenants: before `SaveChanges` writes another tenant's entity, before an `ExecuteUpdate` that could move rows between tenants, before a pooled database-per-tenant context uses another tenant's database, on the first use of a model that does not isolate a tenant-owned entity type, before a save that must succeed or fail as a whole runs without a transaction it may not begin, or instead of committing a transaction that holds a save whose tenant check failed and could not be undone. Nothing has been written when it is thrown, or, for a commit, kept: the transaction is rolled back. [`TenantIsolationViolationException.Kind`](tenantry-efcore-tenantisolationviolationexception.md) says which.
+Thrown when EF Core would read or write across tenants. [`TenantIsolationViolationException.Kind`](tenantry-efcore-tenantisolationviolationexception.md) says which check failed. Nothing has been written; a refused commit is rolled back.
 
 ```csharp
 public sealed class TenantIsolationViolationException : InvalidOperationException, ISerializable

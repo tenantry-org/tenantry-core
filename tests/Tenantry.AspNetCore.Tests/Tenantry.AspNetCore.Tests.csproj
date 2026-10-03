@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" />
   </ItemGroup>
@@ -10,6 +11,7 @@
     <ProjectReference Include="..\..\src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\Tenantry.Http\Tenantry.Http.csproj" />
     <ProjectReference Include="..\..\src\Tenantry.Caching\Tenantry.Caching.csproj" />
+    <ProjectReference Include="..\..\src\Tenantry.Options\Tenantry.Options.csproj" />
   </ItemGroup>
 
   <ItemGroup>

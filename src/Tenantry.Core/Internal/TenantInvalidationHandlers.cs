@@ -4,23 +4,27 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Tenantry.Internal;
 
 /// <summary>
-/// Runs every registered <see cref="ITenantInvalidationHandler{TKey}"/> for <see cref="ITenantStoreCache{TKey}"/>,
-/// resolving them the first time, so a handler may depend on the cache itself.
+/// Runs every registered <see cref="ITenantInvalidationHandler{TKey}"/>, resolving them the first time, so a handler may
+/// depend on <see cref="ITenantInvalidator{TKey}"/> itself.
 /// </summary>
 internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services)
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     private ITenantInvalidationHandler<TKey>[]? _handlers;
 
-    public void Invalidate(TKey tenantId) => RunEach(handler => handler.Invalidate(tenantId));
+    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken) =>
+        RunEachAsync(handler => handler.InvalidateAsync(tenantId, cancellationToken), cancellationToken);
+
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken) =>
+        RunEachAsync(handler => handler.InvalidateAllAsync(cancellationToken), cancellationToken);
 
     // No tenant has an id reserved for "no tenant", and a handler could read an empty one as every tenant.
-    public static void ThrowIfUnset(TKey tenantId)
+    public static void ThrowIfReserved(TKey tenantId)
     {
         if (tenantId is null)
             throw new ArgumentNullException(nameof(tenantId));
 
-        if (TenantIds.IsUnset(tenantId))
+        if (TenantIds.IsReserved(tenantId))
         {
             throw new ArgumentException(
                 $"'{tenantId}' is reserved for \"no tenant\" (the {typeof(TKey).Name} default value, or an empty string), " +
@@ -29,18 +33,22 @@ internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services
         }
     }
 
-    public void InvalidateAll() => RunEach(handler => handler.InvalidateAll());
-
-    private void RunEach(Action<ITenantInvalidationHandler<TKey>> run)
+    private async ValueTask RunEachAsync(Func<ITenantInvalidationHandler<TKey>, ValueTask> run, CancellationToken cancellationToken)
     {
         _handlers ??= services.GetServices<ITenantInvalidationHandler<TKey>>().ToArray();
         List<Exception>? errors = null;
 
         foreach (var handler in _handlers)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
-                run(handler);
+                await run(handler).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception e)
             {

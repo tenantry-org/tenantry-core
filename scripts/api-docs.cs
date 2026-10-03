@@ -89,7 +89,8 @@ string IndexPage()
         page.AppendLine();
         page.AppendLine($"## {package.Key}");
 
-        foreach (var ns in package.GroupBy(type => type.Namespace).OrderBy(group => group.Key, StringComparer.Ordinal))
+        foreach (var ns in package.Where(type => !IsExtensionPoint(type)).GroupBy(type => type.Namespace)
+                     .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             page.AppendLine();
             page.AppendLine($"### `{ns.Key}`");
@@ -101,10 +102,33 @@ string IndexPage()
                 page.AppendLine($"| [`{type.Name}`]({slugs[type.Uid]}.md) | {type.Type.ToLowerInvariant()} | {Cell(FirstSentence(type.Summary))} |");
             }
         }
+
+        // Types marked [EditorBrowsable(EditorBrowsableState.Advanced)]: listed apart, so an application's developers
+        // can pass them by.
+        var extensionPoints = package.Where(IsExtensionPoint).ToList();
+        if (extensionPoints.Count == 0) continue;
+
+        page.AppendLine();
+        page.AppendLine("### Extension points");
+        page.AppendLine();
+        page.AppendLine("For code that extends the package, such as another package that builds on it. An application rarely needs them.");
+        page.AppendLine();
+        page.AppendLine("| Type | Namespace | Kind | Summary |");
+        page.AppendLine("|------|-----------|------|---------|");
+        foreach (var type in extensionPoints)
+        {
+            page.AppendLine($"| [`{type.Name}`]({slugs[type.Uid]}.md) | `{type.Namespace}` | {type.Type.ToLowerInvariant()} | {Cell(FirstSentence(type.Summary))} |");
+        }
     }
 
     return page.ToString();
 }
+
+// [EditorBrowsable(EditorBrowsableState.Advanced)], which docfx keeps in the metadata through eng/api-docs/filter.yml.
+static bool IsExtensionPoint(Item item) =>
+    item.Attributes?.Any(attribute =>
+        attribute.Type == "System.ComponentModel.EditorBrowsableAttribute"
+        && attribute.Arguments is [{ Value: "2" }]) == true;
 
 string TypePage(Item type)
 {
@@ -112,6 +136,11 @@ string TypePage(Item type)
     page.AppendLine($"# {Heading(type.Name)} {type.Type.ToLowerInvariant()}");
     page.AppendLine();
     page.AppendLine($"Namespace: `{type.Namespace}` · Package: `{Package(type)}` · [API reference](README.md)");
+    if (IsExtensionPoint(type))
+    {
+        page.AppendLine();
+        page.AppendLine("An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.");
+    }
     AppendDocumentation(page, type);
 
     var syntax = type.Syntax;
@@ -392,6 +421,19 @@ sealed class Item
     public List<string>? DerivedClasses { get; set; }
     public List<ExceptionInfo>? Exceptions { get; set; }
     public SourceInfo? Source { get; set; }
+    public List<AttributeInfo>? Attributes { get; set; }
+}
+
+sealed class AttributeInfo
+{
+    public string Type { get; set; } = "";
+    public List<AttributeArgument>? Arguments { get; set; }
+}
+
+sealed class AttributeArgument
+{
+    public string? Type { get; set; }
+    public string? Value { get; set; }
 }
 
 sealed class SourceInfo

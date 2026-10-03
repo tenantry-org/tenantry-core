@@ -8,7 +8,7 @@ namespace Tenantry.Internal;
 /// they were looked up with, for <see cref="TenantStoreCacheOptions.Duration"/>; a lookup that finds no tenant is
 /// not cached, so a new tenant is found at once.
 /// </summary>
-internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
+internal sealed class TenantStoreCache<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     // Each map stops growing at this size: identifiers are request input, and a store that matches them without
@@ -19,14 +19,12 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
     private readonly Map<string> _byIdentifier = new(StringComparer.Ordinal);
     private readonly TenantStoreCacheOptions _options;
     private readonly TimeProvider _time;
-    private readonly TenantInvalidationHandlers<TKey> _handlers;
     private long _generation;
 
-    public TenantStoreCache(TenantStoreCacheOptions options, TimeProvider time, TenantInvalidationHandlers<TKey> handlers)
+    public TenantStoreCache(TenantStoreCacheOptions options, TimeProvider time)
     {
         _options = options;
         _time = time;
-        _handlers = handlers;
     }
 
     /// <summary>Changes whenever entries are invalidated; read it before a store lookup and pass it to Set.</summary>
@@ -42,22 +40,20 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
     public void SetByIdentifier(string identifier, ITenantDescriptor<TKey> tenant, long generation) =>
         Set(_byIdentifier, identifier, tenant, generation);
 
-    public void Invalidate(TKey tenantId)
+    /// <summary>Removes the tenant's cached copies, by its id and every identifier, without running the handlers.</summary>
+    public void Remove(TKey tenantId)
     {
-        TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
-
         Interlocked.Increment(ref _generation);
         _byId.RemoveWhere((key, entry) => key.Equals(tenantId) || entry.Tenant.TenantId.Equals(tenantId));
         _byIdentifier.RemoveWhere((_, entry) => entry.Tenant.TenantId.Equals(tenantId));
-        _handlers.Invalidate(tenantId);
     }
 
-    public void InvalidateAll()
+    /// <summary>Removes every cached tenant, without running the handlers.</summary>
+    public void RemoveAll()
     {
         Interlocked.Increment(ref _generation);
         _byId.Entries.Clear();
         _byIdentifier.Entries.Clear();
-        _handlers.InvalidateAll();
     }
 
     private void Set<TLookup>(Map<TLookup> map, TLookup key, ITenantDescriptor<TKey> tenant, long generation)
@@ -141,18 +137,23 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
 }
 
 /// <summary>
-/// The <see cref="ITenantStoreCache{TKey}"/> of an application that does not cache tenants: there are no tenants to
-/// remove, so invalidation code runs whether or not <c>CacheTenants</c> is called, and the invalidation handlers still
-/// run.
+/// The <see cref="ITenantInvalidator{TKey}"/>: removes the tenant from <c>CacheTenants</c>' cache, when there is one,
+/// then runs every <see cref="ITenantInvalidationHandler{TKey}"/>.
 /// </summary>
-internal sealed class NoTenantStoreCache<TKey>(TenantInvalidationHandlers<TKey> handlers) : ITenantStoreCache<TKey>
+internal sealed class TenantInvalidator<TKey>(TenantStoreCache<TKey>? cache, TenantInvalidationHandlers<TKey> handlers)
+    : ITenantInvalidator<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public void Invalidate(TKey tenantId)
+    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken = default)
     {
-        TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
-        handlers.Invalidate(tenantId);
+        TenantInvalidationHandlers<TKey>.ThrowIfReserved(tenantId);
+        cache?.Remove(tenantId);
+        return handlers.InvalidateAsync(tenantId, cancellationToken);
     }
 
-    public void InvalidateAll() => handlers.InvalidateAll();
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken = default)
+    {
+        cache?.RemoveAll();
+        return handlers.InvalidateAllAsync(cancellationToken);
+    }
 }

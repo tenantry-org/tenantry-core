@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
@@ -9,6 +10,7 @@ namespace Tenantry;
 /// jobs and messages carry, and in the identifiers <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/> reads by
 /// default.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public static class TenantIds
 {
     /// <summary>
@@ -33,7 +35,7 @@ public static class TenantIds
     /// <summary>
     /// Parses <paramref name="text"/> as a tenant id with the invariant culture, as <see cref="Format{TKey}"/> writes
     /// it. Returns false for text that does not parse and for the ids Tenantry reserves for "no tenant"
-    /// (<see cref="IsUnset{TKey}"/>), so a parsed id can name a tenant.
+    /// (<see cref="IsReserved{TKey}"/>), so a parsed id can name a tenant.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="text">The text, from a header, a route value or a claim.</param>
@@ -42,7 +44,7 @@ public static class TenantIds
     public static bool TryParse<TKey>([NotNullWhen(true)] string? text, [MaybeNullWhen(false)] out TKey tenantId)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
-        if (TKey.TryParse(text, CultureInfo.InvariantCulture, out var parsed) && !IsUnset(parsed))
+        if (TKey.TryParse(text, CultureInfo.InvariantCulture, out var parsed) && !IsReserved(parsed))
         {
             tenantId = parsed;
             return true;
@@ -61,14 +63,14 @@ public static class TenantIds
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="tenantId">The tenant id.</param>
     /// <returns>Whether the id is one Tenantry reserves for "no tenant".</returns>
-    public static bool IsUnset<TKey>([NotNullWhen(false)] TKey? tenantId)
+    public static bool IsReserved<TKey>([NotNullWhen(false)] TKey? tenantId)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         tenantId is null or string { Length: 0 } || EqualityComparer<TKey>.Default.Equals(tenantId, default!);
 
-    internal static void ThrowIfUnset<TKey>(ITenantDescriptor<TKey> tenant, string paramName)
+    internal static void ThrowIfReserved<TKey>(ITenantDescriptor<TKey> tenant, string paramName)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
-        if (IsUnset(tenant.TenantId))
+        if (IsReserved(tenant.TenantId))
         {
             throw new ArgumentException(
                 $"Tenant '{tenant.Name}' has the id '{tenant.TenantId}', the default value of {typeof(TKey).Name}, which " +

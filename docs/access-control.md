@@ -118,8 +118,8 @@ public sealed class Membership
 tenant.ValidateTenantAccess<MembershipValidator>();
 ```
 
-`ValidateTenantAccess<TValidator>()` has a type parameter of its own, so it returns the builder without its key
-type: call it last in a chain.
+`ValidateTenantAccess<TValidator>()` returns the builder without its key type, so put it last in a chain or call it
+as a statement of its own (see [Registration](core-concepts.md#registration)).
 
 A validator that needs only the request and the tenant can be a delegate, synchronous or asynchronous:
 
@@ -155,34 +155,24 @@ a string; it does not read the JSON-array form that `ValidateTenantAccessByClaim
 
 ### Suspended tenants
 
-Your store returns suspended tenants too (see
-[Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)), so refuse them with a
-validator that reads the status from your own tenant type (see
-[Your own tenant type](core-concepts.md#your-own-tenant-type)):
-
-```csharp
-tenant.ValidateTenantAccess((http, t) => !t.As<AppTenant>().IsSuspended);
-```
-
-With [`CacheTenants`](tenant-stores.md#caching), a tenant you suspend is served from the cache until its entry
-expires: call `ITenantStoreCache<TKey>.Invalidate` when you suspend it.
-
-Access validators run only in the HTTP middleware. `ITenantScopeFactory`, `ITenantContextSetter.Use` and
-background jobs never call them, so background work must check the tenant's status itself.
+Refuse suspended tenants with `ValidateTenantActivity`, not an access validator: it also stops their background
+work, jobs and messages. See [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants).
 
 ## Putting it together
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant =>
 {
-    tenant.ResolveFromClaim("tenant_id");        // bind tenant to the token
-    tenant.ResolveFromHeader("X-Tenant-Id");     // fallback for service calls
+    tenant.ResolveFromHeader("X-Tenant-Id");     // the tenant the caller asks for
     tenant.UseStore<EfCoreTenantStore>();
     tenant.RequireTenantByDefault();             // no anonymous tenant access
-    tenant.ValidateTenantAccessByClaim("tenant_id"); // caller must be entitled to the tenant
-    tenant.ValidateTenantAccess((_, t) => !t.As<AppTenant>().IsSuspended); // and it must be active
+    tenant.ValidateTenantAccessByClaim("tenant_id"); // the token must list that tenant
+    tenant.ValidateTenantActivity(t => !t.As<AppTenant>().IsSuspended); // and it must be active
 });
 ```
+
+A user whose token lists several tenants picks one with the header, and the validator checks it against all of
+them. This is what the [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does.
 
 See the [`Quickstart` sample](../samples/Tenantry.Samples.Quickstart) for a runnable demonstration of
 required tenants, chained (AND) validators, and endpoint metadata.

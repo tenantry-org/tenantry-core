@@ -8,7 +8,7 @@ namespace Tenantry.AspNetCore.Internal;
 /// </summary>
 internal static partial class TenantResolutionLog
 {
-    public const string Category = "Tenantry.AspNetCore";
+    public const string Category = TenantryAspNetCoreTelemetry.LogCategory;
 
     [LoggerMessage(1001, LogLevel.Debug, "Tenant {TenantId} resolved for {Method} {Path}", EventName = "TenantResolved")]
     public static partial void TenantResolved(ILogger logger, string tenantId, string method, string path);
@@ -30,7 +30,8 @@ internal static partial class TenantResolutionLog
     public static partial void TenantNotFound(ILogger logger, string identifier, string method, string path, int statusCode);
 
     [LoggerMessage(1005, LogLevel.Warning,
-        "Request {Method} {Path} by user '{User}' may not use tenant {TenantId}: an access validator refused it",
+        "Request {Method} {Path} by user '{User}' may not use tenant {TenantId}: it is not active, or an access " +
+        "validator refused it",
         EventName = "TenantAccessDenied")]
     public static partial void TenantAccessDenied(ILogger logger, string method, string path, string user, string tenantId);
 
@@ -41,8 +42,9 @@ internal static partial class TenantResolutionLog
     public static partial void ContinuingWithoutTenant(ILogger logger, string method, string path, string reason);
 
     [LoggerMessage(1007, LogLevel.Warning,
-        "app.UseTenantry() ran before routing chose an endpoint, so it ignored the RequireTenant or " +
-        "AllowMissingTenant of {Endpoint}. Call app.UseRouting() before app.UseTenantry(). Logged once",
+        "app.UseTenantry() ran before routing chose {Endpoint}. A request without a tenant to an endpoint that " +
+        "requires one is still rejected, but RequireTenantByDefault overrides AllowMissingTenant. Call " +
+        "app.UseRouting() before app.UseTenantry(). Logged once",
         EventName = "TenantryBeforeRouting")]
     public static partial void TenantryBeforeRouting(ILogger logger, string endpoint);
 
@@ -58,4 +60,18 @@ internal static partial class TenantResolutionLog
         "before app.UseOutputCache(). Logged once",
         EventName = "OutputCacheBeforeTenantry")]
     public static partial void OutputCacheBeforeTenantry(ILogger logger, string method, string path);
+
+    [LoggerMessage(1010, LogLevel.Warning,
+        "app.UseTenantResolution() ran after the authentication middleware for request {Method} {Path}, so " +
+        "authentication used the options of no tenant. Call app.UseTenantResolution() before app.UseAuthentication(). " +
+        "Logged once",
+        EventName = "TenantResolutionAfterAuthentication")]
+    public static partial void TenantResolutionAfterAuthentication(ILogger logger, string method, string path);
+
+    [LoggerMessage(1011, LogLevel.Error,
+        "app.UseTenantResolution() resolved request {Method} {Path}, but app.UseTenantry() did not run before its " +
+        "endpoint, so the access validators never checked the tenant. The endpoint was not run (500). Call " +
+        "app.UseTenantry() after app.UseAuthentication(), in every branch",
+        EventName = "TenantryDidNotRun")]
+    public static partial void TenantryDidNotRun(ILogger logger, string method, string path);
 }

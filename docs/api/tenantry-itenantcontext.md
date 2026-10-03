@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-Provides read-only access to the currently resolved tenant for the active request scope. Registered as a singleton backed by `AsyncLocal<T>` — the value is per-async-context (effectively per HTTP request) rather than per-instance.
+The current tenant, for a request or an [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md) scope. A singleton over an `AsyncLocal<T>`: the value belongs to the async flow, not to the instance.
 
 ```csharp
 public interface ITenantContext<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -16,7 +16,7 @@ public interface ITenantContext<TKey> where TKey : IEquatable<TKey>, IParsable<T
 
 ### `CurrentTenant`
 
-The currently resolved tenant, or `null` if no tenant has been resolved (e.g. before the middleware has run, or on anonymous endpoints).
+The current tenant, or `null` when none is current: no tenant was resolved for the request, or the code runs outside a tenant scope.
 
 ```csharp
 ITenantDescriptor<TKey>? CurrentTenant { get; }

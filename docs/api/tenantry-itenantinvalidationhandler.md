@@ -2,9 +2,17 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-Clears what an application or a Tenantry package keeps for each tenant when the tenant changes. Every registered handler runs when [`ITenantStoreCache<TKey>.Invalidate`](tenantry-itenantstorecache.md) or [`ITenantStoreCache<TKey>.InvalidateAll`](tenantry-itenantstorecache.md) is called, after the cached tenants are removed, whether or not tenants are cached: Tenantry.Caching's cache entries, Tenantry.AspNetCore's output-cached responses (`IsolateOutputCache()`) and Tenantry.Options' options register one, so one call clears everything Tenantry keeps for a tenant.
+Clears data kept per tenant when the tenant changes. Every registered handler runs on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md) invalidation, with or without `CacheTenants`. Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options register their own.
 
-Register a handler as a singleton, once: `services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<Guid>, MyHandler>())`. The handlers are resolved the first time a tenant is invalidated, so a handler may depend on [`ITenantStoreCache<TKey>`](tenantry-itenantstorecache.md). Each runs even when another throws; the exception, or an `AggregateException` of several, is thrown once they have all run.
+Register a handler as a singleton, once, with `TryAddEnumerable`. When the application also injects the handler to read what it keeps, register it once and forward the handler registration to that instance:
+
+```csharp
+services.AddSingleton<PriceListCache>();
+services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<Guid>, PriceListCache>(
+    sp => sp.GetRequiredService<PriceListCache>()));
+```
+
+The handlers are resolved the first time a tenant is invalidated, so a handler may depend on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md). They run one after another, and each runs even when another throws; the exception, or an `AggregateException` of several, is thrown once they have all run.
 
 ```csharp
 public interface ITenantInvalidationHandler<in TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -16,22 +24,31 @@ public interface ITenantInvalidationHandler<in TKey> where TKey : IEquatable<TKe
 
 ## Methods
 
-### `Invalidate(TKey)`
+### `InvalidateAllAsync(CancellationToken)`
+
+Clears what is kept for every tenant.
+
+```csharp
+ValueTask InvalidateAllAsync(CancellationToken cancellationToken)
+```
+
+Parameters:
+
+- `cancellationToken` `CancellationToken`: Cancels the invalidation.
+
+Returns: `ValueTask`: A task that completes when every tenant's data is cleared.
+
+### `InvalidateAsync(TKey, CancellationToken)`
 
 Clears what is kept for the tenant `tenantId`.
 
 ```csharp
-void Invalidate(TKey tenantId)
+ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken)
 ```
 
 Parameters:
 
 - `tenantId` `TKey`: The id of the tenant that changed.
+- `cancellationToken` `CancellationToken`: Cancels the invalidation.
 
-### `InvalidateAll()`
-
-Clears what is kept for every tenant.
-
-```csharp
-void InvalidateAll()
-```
+Returns: `ValueTask`: A task that completes when the tenant's data is cleared.

@@ -18,9 +18,12 @@ internal sealed class TenantScopeFactory<TKey>(
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     private ITenantLookup<TKey>? _tenants;
+    private ITenantActivity<TKey>? _activity;
 
     // A race resolves the singleton twice, which returns the same instance.
     private ITenantLookup<TKey> Tenants => _tenants ??= services.GetRequiredService<ITenantLookup<TKey>>();
+
+    private ITenantActivity<TKey> Activity => _activity ??= services.GetRequiredService<ITenantActivity<TKey>>();
 
     /// <inheritdoc />
     /// <remarks>
@@ -32,7 +35,7 @@ internal sealed class TenantScopeFactory<TKey>(
         ArgumentNullException.ThrowIfNull(tenant);
 
         // Checked before the services are created, so a tenant Use rejects leaves nothing to dispose.
-        TenantIds.ThrowIfUnset(tenant, nameof(tenant));
+        TenantIds.ThrowIfReserved(tenant, nameof(tenant));
         var scope = serviceScopes.CreateAsyncScope();
 
         return new TenantScope<TKey>(scope, tenantContext.Use(tenant), tenant);
@@ -67,7 +70,7 @@ internal sealed class TenantScopeFactory<TKey>(
             throw new ArgumentNullException(nameof(tenantId));
         }
 
-        if (TenantIds.IsUnset(tenantId))
+        if (TenantIds.IsReserved(tenantId))
         {
             throw new ArgumentException(
                 $"'{tenantId}' is the default value of {typeof(TKey).Name}, which Tenantry reserves for \"no tenant\", " +
@@ -80,6 +83,8 @@ internal sealed class TenantScopeFactory<TKey>(
 
         var tenant = await Tenants.GetTenantAsync(tenantId, cancellationToken)
                      ?? throw new TenantNotFoundException(tenantId);
+
+        await Activity.ThrowIfInactiveAsync(tenant, cancellationToken);
 
         // The scope is opened inside this method, so it is active for the work and never for the caller.
         await using var scope = CreateScope(tenant);

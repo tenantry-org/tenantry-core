@@ -1,25 +1,32 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Tenantry.Options.Internal;
 
+/// <summary>A step of <c>ConfigurePerTenant</c>, which the options factory applies while a tenant is current.</summary>
+internal interface ITenantOptionsStep<TOptions>
+    where TOptions : class
+{
+    void Apply(string name, TOptions options);
+}
+
 /// <summary>
-/// One <c>ConfigurePerTenant</c> step: applied to the default-named value after every ordinary <c>Configure</c>, while a
-/// tenant is current, with the tenant (and, for a step that asks, the services of a scope of its own).
+/// One <see cref="TenantOptionsBuilder{TKey}"/> <c>Configure</c> or <c>ConfigureAll</c> step: applied to the options of its name (or of every
+/// name), while a tenant is current, with the tenant (and, for a step that asks, the services of a scope of its own).
 /// </summary>
 internal sealed class TenantConfigureOptions<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions, TKey>(
     ITenantContext<TKey> tenantContext,
     IServiceScopeFactory scopes,
-    Action<TOptions, ITenantDescriptor, IServiceProvider?> configure,
+    string? optionsName,
+    Action<TOptions, ITenantDescriptor<TKey>, IServiceProvider?> configure,
     bool withServices)
-    : IPostConfigureOptions<TOptions>
+    : ITenantOptionsStep<TOptions>
     where TOptions : class
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public void PostConfigure(string? name, TOptions options)
+    public void Apply(string name, TOptions options)
     {
-        if (name != Microsoft.Extensions.Options.Options.DefaultName || tenantContext.CurrentTenant is not { } tenant)
+        if ((optionsName is not null && name != optionsName) || tenantContext.CurrentTenant is not { } tenant)
             return;
 
         if (!withServices)

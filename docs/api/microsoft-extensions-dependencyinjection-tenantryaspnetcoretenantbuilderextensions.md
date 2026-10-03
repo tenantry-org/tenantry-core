@@ -31,7 +31,7 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 
 ### `IsolateOutputCache<TKey>(ITenantBuilder<TKey>)`
 
-Keeps ASP.NET Core's output cache per tenant: a response cached while a tenant is current varies by the tenant, so it is served only to that tenant, and invalidating the tenant ([`ITenantStoreCache<TKey>.Invalidate`](tenantry-itenantstorecache.md)) evicts it. A response for a request without a tenant (an endpoint that allows one to be missing) is cached apart from every tenant's.
+Keeps ASP.NET Core's output cache per tenant: a response cached while a tenant is current varies by the tenant, so it is served only to that tenant, and invalidating the tenant ([`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md)) evicts it. A response for a request without a tenant (an endpoint that allows one to be missing) is cached apart from every tenant's.
 
 ```csharp
 public static ITenantBuilder<TKey> IsolateOutputCache<TKey>(this ITenantBuilder<TKey> builder) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -141,12 +141,12 @@ tenant
     .ResolveFromHost(o => o.ExcludedDomains.Add("example.com"));   // app.acme.com
 ```
 
-### `ResolveFromPropagationHeader<TKey>(ITenantBuilder<TKey>)`
+### `ResolveFromPropagationHeader<TKey>(ITenantBuilder<TKey>, Func<HttpContext, bool>)`
 
 Resolves the tenant another service sent with its request: the tenant id in the [`TenantPropagation.HeaderName`](tenantry-tenantpropagation.md) header, which Tenantry.Http's `UseTenantry()` adds to an HttpClient's or gRPC client's requests. The value is read as a tenant id ([`TenantIds.TryParse<TKey>`](tenantry-tenantids.md)) and looked up with the store's [`ITenantStore<TKey>.GetTenantAsync`](tenantry-itenantstore.md), not its [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md); a value that is not a tenant id finds no tenant.
 
 ```csharp
-public static ITenantBuilder<TKey> ResolveFromPropagationHeader<TKey>(this ITenantBuilder<TKey> builder) where TKey : IEquatable<TKey>, IParsable<TKey>
+public static ITenantBuilder<TKey> ResolveFromPropagationHeader<TKey>(this ITenantBuilder<TKey> builder, Func<HttpContext, bool> isTrustedCaller) where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
 
 Type parameters:
@@ -156,16 +156,18 @@ Type parameters:
 Parameters:
 
 - `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `isTrustedCaller` `Func<HttpContext, bool>`: Whether the request's caller may name the tenant: for example, whether its token carries a scope that only your services are given.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-A header is a claim, not proof: any caller that reaches the service can set it. Accept it only from callers you authenticate (a token, mutual TLS), and check that the caller may act for the tenant with `ValidateTenantAccess`. Resolvers run in the order they are added, and the first that finds a value wins.
+A header is a claim, not proof: any caller that reaches the service can set it. So the header is read only when `isTrustedCaller` returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) for the request, typically because the caller authenticated as one of your services. From any other caller it is ignored, and the next resolver runs.
+
+`isTrustedCaller` runs after authentication, so it can read `HttpContext.User`: `app.UseTenantResolution()` stops before this resolver, and `app.UseTenantry()` runs it once the user is known. A tenant from the header is therefore not known while authentication runs. Resolvers run in the order they are added, and the first that finds a value wins.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
-    .ResolveFromPropagationHeader()
-    .UseStore<AppTenantStore>()
-    .ValidateTenantAccess<CallingServiceValidator>());
+    .ResolveFromPropagationHeader(http => http.User.HasClaim("client_id", "orders-service"))
+    .UseStore<AppTenantStore>());
 ```
 
 ### `ResolveFromQueryString<TKey>(ITenantBuilder<TKey>, string)`
@@ -243,7 +245,7 @@ Parameters:
 
 - `builder` [`ITenantBuilder`](tenantry-itenantbuilder.md): The tenant builder.
 
-Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first.
+Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first, or call it as a statement of its own.
 
 ### `UseResolver<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantResolver>)`
 
@@ -318,7 +320,7 @@ Parameters:
 
 - `builder` [`ITenantBuilder`](tenantry-itenantbuilder.md): The tenant builder.
 
-Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first.
+Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first, or call it as a statement of its own.
 
 Exceptions:
 

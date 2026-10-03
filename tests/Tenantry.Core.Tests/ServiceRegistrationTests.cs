@@ -142,6 +142,25 @@ public sealed class ServiceRegistrationTests
         }
     }
 
+    [Fact]
+    public void TheKeyType_CanBeReadFromTheServicesAndTheProvider()
+    {
+        ServiceCollection services = new();
+        services.FindTenantKeyType().Should().BeNull();
+
+        services.AddTenantry<Guid>();
+
+        services.FindTenantKeyType()!.Type.Should().Be<Guid>();
+        using var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<ITenantKeyType>().Accept(new KeyTypeName()).Should().Be(nameof(Guid));
+    }
+
+    private sealed class KeyTypeName : ITenantKeyTypeVisitor<string>
+    {
+        public string Visit<TKey>()
+            where TKey : IEquatable<TKey>, IParsable<TKey> => typeof(TKey).Name;
+    }
+
     private sealed class StubTenantStore : ITenantStore<string>
     {
         public ValueTask<ITenantDescriptor<string>?> GetTenantAsync(string tenantId, CancellationToken cancellationToken = default)

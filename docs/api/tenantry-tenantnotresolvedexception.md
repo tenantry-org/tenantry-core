@@ -12,7 +12,7 @@ Inherits `Exception` → `SystemException` → `InvalidOperationException`.
 
 Implements `ISerializable`.
 
-Derived types: [`TenantNotFoundException`](tenantry-tenantnotfoundexception.md).
+Derived types: [`TenantInactiveException`](tenantry-tenantinactiveexception.md), [`TenantNotFoundException`](tenantry-tenantnotfoundexception.md).
 
 ## Constructors
 

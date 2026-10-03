@@ -1,9 +1,10 @@
 namespace Tenantry.Http.Internal;
 
 /// <summary>
-/// Adds the current tenant's id to a client's requests, in <see cref="TenantPropagation.HeaderName"/>: when a tenant is
-/// current, the request is for the client's own service (<see cref="PropagationTarget"/>), and the caller has not set
-/// the header itself. With no tenant, the request goes without it, and the receiving service decides.
+/// Adds the current tenant's id to a client's requests, in <see cref="TenantPropagation.HeaderName"/>, when a tenant is
+/// current and the request is for the client's own service (<see cref="PropagationTarget"/>). A header already on the
+/// request that names another tenant is refused. With no tenant, the request goes as the caller made it, and the
+/// receiving service decides.
 /// </summary>
 internal sealed class TenantPropagationHandler(ITenantHeaderSource source, PropagationTarget target) : DelegatingHandler
 {
@@ -21,11 +22,23 @@ internal sealed class TenantPropagationHandler(ITenantHeaderSource source, Propa
 
     private void AddTenant(HttpRequestMessage request)
     {
-        if (source.CurrentTenantId is not { } tenantId ||
-            request.Headers.Contains(TenantPropagation.HeaderName) ||
-            !target.Allows(request.RequestUri))
+        if (source.CurrentTenantId is not { } tenantId || !target.Allows(request.RequestUri))
         {
             return;
+        }
+
+        // A header put there before (forwarded from the incoming request, or a client's DefaultRequestHeaders) would call
+        // the service as whatever tenant it names, with this service's credentials.
+        if (request.Headers.TryGetValues(TenantPropagation.HeaderName, out var existing))
+        {
+            if (existing.All(value => value == tenantId))
+                return;
+
+            throw new InvalidOperationException(
+                $"The request already carries the {TenantPropagation.HeaderName} header with " +
+                $"'{string.Join("', '", existing)}', but the current tenant is '{tenantId}'. Remove the header from the " +
+                "request (header propagation, copied incoming headers or the client's DefaultRequestHeaders); to call " +
+                "as another tenant, make it current with ITenantContextSetter.Use.");
         }
 
         ThrowIfNotSendable(tenantId);

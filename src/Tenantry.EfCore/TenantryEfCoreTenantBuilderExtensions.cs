@@ -28,7 +28,11 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// <param name="builder">The tenant builder.</param>
     /// <param name="configure">Sets the options.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
-    /// <remarks>Calling it again configures the same options instance.</remarks>
+    /// <remarks>
+    /// These are the defaults for every context. A context registered with <c>UseTenantry(configure)</c> uses its own
+    /// instead, so keep the defaults strict and relax them only on a context for maintenance code. The options are
+    /// ordinary <c>IOptions&lt;EfCoreIsolationOptions&gt;</c>, so <c>services.Configure</c> also sets them.
+    /// </remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
@@ -45,19 +49,7 @@ public static class TenantryEfCoreTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configure);
 
-        // The interceptor reads the options at SaveChanges time, so register one instance and configure it in
-        // place: calling this again changes the same options rather than being ignored.
-        var options = builder.Services
-            .FirstOrDefault(d => d.ServiceType == typeof(EfCoreIsolationOptions) && !d.IsKeyedService)
-            ?.ImplementationInstance as EfCoreIsolationOptions;
-
-        if (options is null)
-        {
-            options = new EfCoreIsolationOptions();
-            builder.Services.TryAddSingleton(options);
-        }
-
-        configure(options);
+        builder.Services.AddOptions<EfCoreIsolationOptions>().Configure(configure);
 
         return builder;
     }
@@ -91,12 +83,14 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// </para>
     /// <para>
     /// The options get <c>UseTenantry()</c> before <paramref name="configure"/> runs, so interceptors added there
-    /// (an audit log, say) see new entities already stamped with their tenant.
+    /// (an audit log, say) see new entities already stamped with their tenant. For the same reason, an interceptor
+    /// added there that changes what a save writes (a soft delete) runs after Tenantry's checks and is not checked.
     /// </para>
     /// <para>
-    /// The scoped <typeparamref name="TContext"/> reads the connection string synchronously, so it needs
-    /// <see cref="TenantConnectionStringOptions{TKey}.GetConnectionString"/>. With only an asynchronous delegate,
-    /// use <c>IDbContextFactory&lt;TContext&gt;.CreateDbContextAsync</c>.
+    /// When the provider cannot read connection strings synchronously
+    /// (<see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>), a context created synchronously, the
+    /// scoped <typeparamref name="TContext"/> among them, reads its connection string when it first opens a
+    /// connection, so only asynchronous EF Core calls work on it.
     /// </para>
     /// <para>
     /// A guard checks each context before it opens a connection and before every command it runs, including on a
@@ -119,6 +113,8 @@ public static class TenantryEfCoreTenantBuilderExtensions
     ///     .AddDbContextPerTenantDatabase&lt;AppDbContext&gt;((sp, options) =&gt; options.UseSqlServer(), pooled: true));
     /// </code>
     /// </example>
+    [RequiresUnreferencedCode(EfCoreRequirements.UnreferencedCode)]
+    [RequiresDynamicCode(EfCoreRequirements.DynamicCode)]
     public static ITenantBuilder AddDbContextPerTenantDatabase<[DynamicallyAccessedMembers(ContextMembers)] TContext>(
         this ITenantBuilder builder,
         Action<IServiceProvider, DbContextOptionsBuilder> configure,
@@ -141,6 +137,8 @@ public static class TenantryEfCoreTenantBuilderExtensions
         : ITenantRegistration
         where TContext : DbContext
     {
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "AddDbContextPerTenantDatabase, which adds this registration, carries the annotation.")]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "AddDbContextPerTenantDatabase, which adds this registration, carries the annotation.")]
         public void Apply<TKey>(ITenantBuilder<TKey> tenant)
             where TKey : IEquatable<TKey>, IParsable<TKey>
         {

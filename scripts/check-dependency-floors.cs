@@ -7,9 +7,10 @@
 // to the lowest version the graph allows, but a test graph can lift it (a test's own provider package can
 // need a newer EF Core), and then the floor is promised without ever being tested. For each range a src project
 // depends on, per target framework (its central version in Directory.Packages.props, as MSBuild evaluates it for
-// that framework), this reads the committed test lock files (which CI restores in locked mode) and requires at
-// least one test project that includes that src project to resolve exactly the floor. Our own packages and the
-// .NET 11 preview are not checked.
+// that framework), this reads the test lock files the last restore used and requires at least one test project that
+// includes that src project to resolve exactly the floor: the committed ones, which CI restores in locked mode, or,
+// with NuGetLockFilePath set (a local Tenantry Core pack, scripts/pack-local-core.sh), the ones it names under each
+// project, which are the graph the build and tests use. Our own packages and the .NET 11 preview are not checked.
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -41,9 +42,15 @@ foreach (var path in Directory.EnumerateFiles("src", "*.csproj", SearchOption.Al
 
 // Per test lock file and framework: the projects in the graph, and the resolved version of each package.
 var graphs = new List<(string Test, string Framework, HashSet<string> Projects, Dictionary<string, string> Resolved)>();
-foreach (var path in Directory.EnumerateFiles("tests", "packages.lock.json", SearchOption.AllDirectories))
+var lockFileName = Environment.GetEnvironmentVariable("NuGetLockFilePath") is { Length: > 0 } local ? local : "packages.lock.json";
+foreach (var testProject in Directory.EnumerateFiles("tests", "*.csproj", SearchOption.AllDirectories))
 {
-    if (path.Split(Path.DirectorySeparatorChar).Contains("obj")) continue;
+    var path = Path.Combine(Path.GetDirectoryName(testProject)!, lockFileName);
+    if (!File.Exists(path))
+    {
+        Console.Error.WriteLine($"{path} does not exist: restore first.");
+        return 1;
+    }
 
     using var lockFile = JsonDocument.Parse(File.ReadAllText(path));
     foreach (var framework in lockFile.RootElement.GetProperty("dependencies").EnumerateObject())
@@ -57,7 +64,7 @@ foreach (var path in Directory.EnumerateFiles("tests", "packages.lock.json", Sea
             else if (dependency.Value.TryGetProperty("resolved", out var version)) resolved[dependency.Name] = version.GetString()!;
         }
 
-        graphs.Add((Path.GetFileName(Path.GetDirectoryName(path)!), framework.Name, projects, resolved));
+        graphs.Add((Path.GetFileName(Path.GetDirectoryName(testProject)!), framework.Name, projects, resolved));
     }
 }
 

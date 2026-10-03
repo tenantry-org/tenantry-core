@@ -53,12 +53,12 @@ public sealed class TenantCachingTests
         var acmeFirst = await acme.GetStringAsync("/now", Ct);
         var globexFirst = await globex.GetStringAsync("/now", Ct);
 
-        app.Services.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+        await app.Services.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
 
         (await acme.GetStringAsync("/now", Ct)).Should().NotBe(acmeFirst);
         (await globex.GetStringAsync("/now", Ct)).Should().Be(globexFirst);
 
-        app.Services.GetRequiredService<ITenantStoreCache<string>>().InvalidateAll();
+        await app.Services.GetRequiredService<ITenantInvalidator<string>>().InvalidateAllAsync(TestContext.Current.CancellationToken);
         (await globex.GetStringAsync("/now", Ct)).Should().NotBe(globexFirst);
     }
 
@@ -127,11 +127,26 @@ public sealed class TenantCachingTests
         (await distributed.GetAsync("t:globex:plan", Ct)).Should().NotBeNull();
         (await distributed.GetAsync("s:rate", Ct)).Should().NotBeNull();
 
-        app.Services.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+        await app.Services.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
 
         (await acme.GetStringAsync("/plan", Ct)).Should().Be("acme 4");
         (await globex.GetStringAsync("/plan", Ct)).Should().Be("globex 2");
         (await app.GetTestClient().GetStringAsync("/rate", Ct)).Should().Be("rate 3");
+    }
+
+    [Fact]
+    public async Task AddHybridCacheAfterAddTenantry_StopsTheHost_NamingTheOrder()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddTenantry<string>(tenant => tenant
+            .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }])
+            .IsolateCaches());
+        builder.Services.AddHybridCache();
+        await using var app = builder.Build();
+
+        await FluentActions.Awaiting(() => app.StartAsync(Ct))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("AddHybridCache() was called after AddTenantry*");
     }
 
     [Fact]

@@ -141,12 +141,111 @@ public sealed class TenantConnectionStringProviderTests
         using var provider = services.BuildServiceProvider();
 
         services.Should().ContainSingle(d => d.ServiceType == typeof(TenantConnectionStringOptions<string>));
-        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantConnectionStringProvider<string>))
+        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantConnectionStringProvider<string>) && !d.IsKeyedService)
             .Which.Lifetime.Should().Be(ServiceLifetime.Singleton);
         services.Should().ContainSingle(d => d.ServiceType == typeof(CurrentTenantConnectionString<string>))
             .Which.Lifetime.Should().Be(ServiceLifetime.Singleton);
         Provider(provider).Get(Acme).Should().Be("second");
         Provider(provider).Should().BeSameAs(provider.GetRequiredService<TenantConnectionStringProvider<string>>());
+    }
+
+    [Fact]
+    public async Task AProviderFromDI_IsBuiltFromTheApplicationsServices()
+    {
+        ServiceCollection services = new();
+        services.AddSingleton(new Vault("secret"));
+        services.AddTenantry<string>(tenant => tenant
+            .UseConnectionStrings(options => options.GetConnectionString = _ => "replaced")
+            .UseConnectionStrings(sp => new VaultProvider(sp.GetRequiredService<Vault>())));
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+
+        Provider(provider).Get(Acme).Should().Be("secret acme");
+        Provider(provider).CanGetSynchronously.Should().BeFalse();
+        await provider.GetRequiredService<CurrentTenantConnectionString<string>>()
+            .Awaiting(c => c.GetAsync(TestContext.Current.CancellationToken).AsTask())
+            .Should().ThrowAsync<TenantNotResolvedException>();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Decorators_WrapTheProvider_WhicheverIsRegisteredFirst(bool decorateFirst)
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant =>
+        {
+            if (decorateFirst)
+            {
+                tenant.DecorateConnectionStrings((_, inner) => new Suffix(inner, " first"));
+                tenant.DecorateConnectionStrings((_, inner) => new Suffix(inner, " second"));
+            }
+
+            tenant.UseConnectionStrings(options => options.GetConnectionString = t => t.TenantId);
+
+            if (!decorateFirst)
+            {
+                tenant.DecorateConnectionStrings((_, inner) => new Suffix(inner, " first"));
+                tenant.DecorateConnectionStrings((_, inner) => new Suffix(inner, " second"));
+            }
+        });
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+
+        Provider(provider).Get(Acme).Should().Be("acme first second");
+        Provider(provider).CanGetSynchronously.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Decorators_WrapAProviderTheApplicationRegisteredItself()
+    {
+        ServiceCollection services = new();
+        services.AddSingleton<ITenantConnectionStringProvider<string>>(new VaultProvider(new Vault("own")));
+        services.AddTenantry<string>(tenant => tenant.DecorateConnectionStrings((_, inner) => new Suffix(inner, " decorated")));
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+
+        Provider(provider).Get(Acme).Should().Be("own acme decorated");
+    }
+
+    [Fact]
+    public void Decorators_WithoutConnectionStrings_ThrowWithGuidance()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant.DecorateConnectionStrings((_, inner) => inner));
+        using var provider = services.BuildServiceProvider();
+
+        provider.Invoking(Provider).Should().Throw<InvalidOperationException>().WithMessage("*UseConnectionStrings*");
+    }
+
+    [Fact]
+    public void CanGetSynchronously_FollowsTheDelegates()
+    {
+        using var asyncOnly = Build(options => options.GetConnectionStringAsync = (_, _) => ValueTask.FromResult("x"));
+        using var sync = Build(options => options.GetConnectionString = _ => "x");
+
+        Provider(asyncOnly).CanGetSynchronously.Should().BeFalse();
+        Provider(sync).CanGetSynchronously.Should().BeTrue();
+    }
+
+    private sealed record Vault(string Secret);
+
+    // Reads synchronously too, but says it cannot, as a vault client might.
+    private sealed class VaultProvider(Vault vault) : ITenantConnectionStringProvider<string>
+    {
+        public bool CanGetSynchronously => false;
+
+        public string Get(ITenantDescriptor<string> tenant) => $"{vault.Secret} {tenant.TenantId}";
+
+        public ValueTask<string> GetAsync(ITenantDescriptor<string> tenant, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Get(tenant));
+    }
+
+    private sealed class Suffix(ITenantConnectionStringProvider<string> inner, string suffix) : ITenantConnectionStringProvider<string>
+    {
+        public bool CanGetSynchronously => inner.CanGetSynchronously;
+
+        public string Get(ITenantDescriptor<string> tenant) => inner.Get(tenant) + suffix;
+
+        public async ValueTask<string> GetAsync(ITenantDescriptor<string> tenant, CancellationToken cancellationToken = default) =>
+            await inner.GetAsync(tenant, cancellationToken) + suffix;
     }
 
     [Fact]

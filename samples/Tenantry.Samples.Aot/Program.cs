@@ -20,7 +20,7 @@ builder.Services.AddOutputCache();
 builder.Services.AddTenantry<string>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .ResolveFromSubdomain(options => options.BaseDomains.Add("localhost")) // acme.localhost:5268
-    .ResolveFromPropagationHeader()                                      // the tenant another service sent (unauthenticated here, as X-Tenant-Id is)
+    .ResolveFromPropagationHeader(_ => true)                             // the tenant another service sent (every caller is trusted here, as with X-Tenant-Id)
     .UseInMemoryStore(
     [
         new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
@@ -33,7 +33,7 @@ builder.Services.AddTenantry<string>(tenant => tenant
     .UseResolver<TenantCookieResolver>());                               // a custom resolver, created by DI
 
 // A client for another service: its requests carry the current tenant, which that service reads with
-// ResolveFromPropagationHeader(). This sample calls itself, at the address it listens on.
+// ResolveFromPropagationHeader(...). This sample calls itself, at the address it listens on.
 builder.Services.AddHttpClient("self", client => client.BaseAddress = new Uri(builder.Configuration["SelfUrl"]!))
     .UseTenantry();
 

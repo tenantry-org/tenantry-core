@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- First released in 0.6.0: nothing to check its API against yet -->
+    <TenantryPackageBaseline />
     <PackageDescription>Tenant-aware caching for Tenantry: tenant.IsolateCaches() keys HybridCache entries by the current tenant, so one tenant's cached data is never served to another, with SharedHybridCache for entries every tenant shares and ITenantDistributedCache for IDistributedCache; invalidating a tenant removes its entries.</PackageDescription>
     <PackageTags>multi-tenancy;caching;hybridcache;saas;tenantry;tenant-isolation</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
@@ -15,9 +17,11 @@
     <InternalsVisibleTo Include="Tenantry.AspNetCore.Tests"/>
   </ItemGroup>
 
-  <!-- Not in the .NET 11 preview lane (IncludeNet11), where Microsoft.Extensions.Caching.Abstractions comes with the shared framework -->
+  <!-- Not in the .NET 11 preview lane (IncludeNet11), where these come with the shared framework -->
   <ItemGroup Condition="'$(TargetFramework)' != 'net11.0'">
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <!-- ValidateOnStart, for the startup check of the cache's registration -->
+    <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 
 </Project>

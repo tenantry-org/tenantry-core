@@ -7,6 +7,7 @@ global using static DocSnippets.Ambient;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Tenantry;
+using Tenantry.AspNetCore;
 
 namespace DocSnippets;
 
@@ -28,6 +29,7 @@ public static class Ambient
     public static ITenantContextSetter<Guid> tenantContext = null!;
     public static ITenantScope<Guid> scope = null!;
     public static ITenantScopeFactory<Guid> scopes = null!;
+    public static ITenantActivity<Guid> activity = null!;
     public static AppDbContext db = null!;
     public static ModelBuilder modelBuilder = null!;
     public static Message message = null!;
@@ -97,6 +99,9 @@ public class AppTenant : ITenantDescriptor<Guid>
     public string Region { get; set; } = "";
     public string ConnectionString { get; set; } = "";
     public bool IsSuspended { get; set; }
+    public string Authority { get; set; } = "";
+    public string ClientId { get; set; } = "";
+    public string? SignInScheme { get; set; }
 }
 
 /// <summary>The catalog database, which lists the tenants.</summary>
@@ -109,6 +114,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
+}
+
+/// <summary>A context for maintenance code that writes across tenants.</summary>
+public class MaintenanceDbContext(DbContextOptions<MaintenanceDbContext> options) : DbContext(options)
+{
+    public DbSet<Order> Orders => Set<Order>();
 }
 
 public sealed class EfCoreTenantStore : ITenantStore<Guid>
@@ -127,4 +138,43 @@ public sealed class AppTenantStore : ITenantStore<string>
 
     public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken ct = default) =>
         ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([]);
+}
+
+public sealed class CookieTenantResolver : ITenantResolver
+{
+    public ValueTask<string?> ResolveAsync(Microsoft.AspNetCore.Http.HttpContext context, CancellationToken ct = default) =>
+        ValueTask.FromResult(context.Request.Cookies["tenant"]);
+}
+
+public sealed class MembershipValidator : ITenantAccessValidator<Guid>
+{
+    public ValueTask<bool> ValidateAsync(Microsoft.AspNetCore.Http.HttpContext context, ITenantDescriptor<Guid> tenant, CancellationToken ct) =>
+        ValueTask.FromResult(true);
+}
+
+/// <summary>A secrets client, as Azure Key Vault's or AWS Secrets Manager's.</summary>
+public sealed class SecretClient
+{
+    public Task<string> GetSecretAsync(string name, CancellationToken ct = default) => Task.FromResult("");
+}
+
+/// <summary>A connection-string provider over a secrets client.</summary>
+public sealed class VaultConnectionStrings(SecretClient secrets) : ITenantConnectionStringProvider<string>
+{
+    public bool CanGetSynchronously => false;
+
+    public string Get(ITenantDescriptor<string> tenant) => throw new NotSupportedException();
+
+    public async ValueTask<string> GetAsync(ITenantDescriptor<string> tenant, CancellationToken ct = default) =>
+        await secrets.GetSecretAsync($"connstr-{tenant.TenantId}", ct);
+}
+
+/// <summary>A decorator that logs each connection string read.</summary>
+public sealed class LoggingConnectionStrings(ITenantConnectionStringProvider<string> inner) : ITenantConnectionStringProvider<string>
+{
+    public bool CanGetSynchronously => inner.CanGetSynchronously;
+
+    public string Get(ITenantDescriptor<string> tenant) => inner.Get(tenant);
+
+    public ValueTask<string> GetAsync(ITenantDescriptor<string> tenant, CancellationToken ct = default) => inner.GetAsync(tenant, ct);
 }

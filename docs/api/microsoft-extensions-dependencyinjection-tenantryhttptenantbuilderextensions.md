@@ -12,7 +12,7 @@ public static class TenantryHttpTenantBuilderExtensions
 
 ### `AddHttpPropagation<TKey>(ITenantBuilder<TKey>)`
 
-Lets the HTTP and gRPC clients marked with [`TenantryHttpClientBuilderExtensions.UseTenantry`](microsoft-extensions-dependencyinjection-tenantryhttpclientbuilderextensions.md) send the current tenant's id to the services they call, in the [`TenantPropagation.HeaderName`](tenantry-tenantpropagation.md) header. The receiving service reads it with Tenantry.AspNetCore's `ResolveFromPropagationHeader()`.
+Lets the HTTP and gRPC clients marked with [`TenantryHttpClientBuilderExtensions.UseTenantry`](microsoft-extensions-dependencyinjection-tenantryhttpclientbuilderextensions.md) send the current tenant's id to the services they call, in the [`TenantPropagation.HeaderName`](tenantry-tenantpropagation.md) header. The receiving service reads it with Tenantry.AspNetCore's `ResolveFromPropagationHeader(...)`.
 
 ```csharp
 public static ITenantBuilder<TKey> AddHttpPropagation<TKey>(this ITenantBuilder<TKey> builder) where TKey : IEquatable<TKey>, IParsable<TKey>

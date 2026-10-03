@@ -20,6 +20,8 @@ updates:
       # and a per-framework version must stay in its framework's band, which Dependabot cannot keep to.
       # scripts/check-dependabot.cs (run in CI) fails when this list and the project files disagree.
       # Banded packages: begin
+      - dependency-name: "Microsoft.AspNetCore.Authentication.JwtBearer"
+      - dependency-name: "Microsoft.AspNetCore.Identity.EntityFrameworkCore"
       - dependency-name: "Microsoft.AspNetCore.Mvc.Testing"
       - dependency-name: "Microsoft.AspNetCore.TestHost"
       - dependency-name: "Microsoft.EntityFrameworkCore.InMemory"
@@ -32,6 +34,7 @@ updates:
       - dependency-name: "Microsoft.Extensions.DependencyInjection.Abstractions"
       - dependency-name: "Microsoft.Extensions.Hosting"
       - dependency-name: "Microsoft.Extensions.Http"
+      - dependency-name: "Microsoft.Extensions.Logging.Abstractions"
       - dependency-name: "Microsoft.Extensions.Options"
       - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
       - dependency-name: "Pomelo.EntityFrameworkCore.MySql"

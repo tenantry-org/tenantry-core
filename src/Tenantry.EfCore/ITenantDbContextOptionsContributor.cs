@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 
 namespace Tenantry.EfCore;
@@ -15,6 +16,7 @@ namespace Tenantry.EfCore;
 /// <c>AddDbContextFactory</c>, <c>AddDbContextPerTenantDatabase</c>), so a contributor must never depend on the current
 /// tenant.
 /// </remarks>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public interface ITenantDbContextOptionsContributor
 {
     /// <summary>

@@ -33,3 +33,15 @@ Returns: `IDisposable`: A handle that restores the previously current tenant on 
 Exceptions:
 
 - `ArgumentException`: The tenant's id is the key type's default value (`Empty`, `0`) or an empty string, which Tenantry reserves for "no tenant".
+
+### `UseNoTenant()`
+
+Makes no tenant current until the returned handle is disposed, as [`ITenantContextSetter<TKey>.Use`](tenantry-itenantcontextsetter.md) makes one current: code inside sees no tenant, and disposing it restores the tenant that was current before.
+
+```csharp
+IDisposable UseNoTenant()
+```
+
+Returns: `IDisposable`: A handle that restores the previously current tenant on disposal.
+
+For code that must run as no tenant inside a tenant's flow, such as the rest of a request whose tenant was refused after it was made current.

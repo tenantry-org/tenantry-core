@@ -7,10 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading from 0.5
+
+0.6 adds to the API more than it changes it. Most applications build and run as before; check these:
+
+- Code that resolved `EfCoreIsolationOptions` from DI reads `IOptions<EfCoreIsolationOptions>`. To let maintenance code
+  write without a tenant, give it a context of its own, registered with `options.UseTenantry(o => …)`, rather than
+  relaxing the application's options.
+- A class of your own that implements `ITenantContextSetter<TKey>` adds `UseNoTenant()`.
+- A tenant header or query parameter sent more than once names no tenant. A proxy that sets the tenant header must
+  replace the client's, not add another.
+- `UseInMemoryStore` reads its tenants when it is called, and refuses duplicate ids and the ids Tenantry reserves for
+  "no tenant" there.
+- With trimming or Native AOT, `UseTenantry()`, `AddDbContextPerTenantDatabase` and `IsSharedAcrossTenants()` warn
+  where you call them, as EF Core's own methods do.
+- A post-configuration of an options type you configure per tenant sees the tenant's values.
+- If an access validator refuses suspended tenants, `ValidateTenantActivity` also stops their background work.
+- `ITenantStoreCache<TKey>` is gone. Inject `ITenantInvalidator<TKey>` instead and await `InvalidateAsync(tenantId)` or
+  `InvalidateAllAsync()`, which also clear everything else Tenantry keeps for the tenant.
+
 ### Added
 
 - `TenantIds`: `Format` writes a tenant id with the invariant culture, `TryParse` reads one back and refuses the ids
-  Tenantry reserves for "no tenant", and `IsUnset` tells those ids apart. They are what Tenantry itself uses, for code
+  Tenantry reserves for "no tenant", and `IsReserved` tells those ids apart. They are what Tenantry itself uses, for code
   of your own that carries tenant ids as text.
 - `TenantTelemetry`: the `tenant.id` tag and `TenantId` log-scope names Tenantry records a tenant under, and
   `CreateLogScope`, the scope's state, to record it the same way in your own code.
@@ -20,26 +39,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with its requests, in the `tenantry-tenant-id` header, after `tenant.AddHttpPropagation()` in `AddTenantry`. Only
   requests to the client's base address carry it, a header the caller set is kept, and `ConfigureHttpClientDefaults`
   is refused. See [Calling other services](docs/http-propagation.md).
-- `ResolveFromPropagationHeader()` (Tenantry.AspNetCore) resolves the tenant another service sent, by id with the
-  store's `GetTenantAsync`, so a store whose identifiers are slugs still finds it.
+- `ResolveFromPropagationHeader(isTrustedCaller)` (Tenantry.AspNetCore) resolves the tenant another service sent, by
+  id with the store's `GetTenantAsync`, so a store whose identifiers are slugs still finds it. It reads the header only
+  when `isTrustedCaller` accepts the request, after authentication, and ignores it from any other caller.
 - `Tenantry.Caching`, a new package: `IsolateCaches()` keeps the application's `HybridCache` entries per tenant (keys
   and tags under the tenant's prefix, a factory run as the tenant, and no call without a tenant), with
   `SharedHybridCache` for entries every tenant shares and `ITenantDistributedCache` for code that uses
-  `IDistributedCache` directly. Invalidating a tenant removes its entries. See [Caching per tenant](docs/caching.md).
+  `IDistributedCache` directly. Keyed `HybridCache` registrations are kept per tenant the same way. Invalidating a
+  tenant removes its entries. The host does not start when a `HybridCache` registered after `AddTenantry` would share
+  entries across tenants. See [Caching per tenant](docs/caching.md).
 - `IsolateOutputCache()` (Tenantry.AspNetCore) makes cached responses vary by tenant, and invalidating a tenant
   evicts its responses. A response for a request `UseTenantry()` did not handle first is not cached (log event 1009,
   once).
-- `Tenantry.Options`, a new package: `ConfigurePerTenant<TOptions>()` makes `IOptions<T>`, `IOptionsSnapshot<T>` and
-  `IOptionsMonitor<T>` give the current tenant's value, built from the ordinary configuration and the tenant, cached
-  per tenant and cleared when the tenant is invalidated. See [Options per tenant](docs/per-tenant-options.md).
-- `ITenantInvalidationHandler<TKey>`: `ITenantStoreCache<TKey>.Invalidate` and `InvalidateAll` run every registered
-  handler, with or without `CacheTenants`, so one call clears everything kept for a tenant. Tenantry.Caching,
-  `IsolateOutputCache()` and Tenantry.Options register one.
+- `Tenantry.Options`, a new package: `tenant.ConfigurePerTenant(perTenant => perTenant.Configure<TOptions>(…))` makes
+  `IOptionsSnapshot<T>` and `IOptionsMonitor<T>` give the current tenant's value, built from the ordinary
+  configuration and the tenant, cached per tenant and cleared when the tenant is invalidated. `IOptions<T>` keeps the ordinary value, so a singleton that
+  reads it once never keeps one tenant's settings; reading it while a tenant is current logs a warning (event 3001),
+  once per options type. See [Options per tenant](docs/per-tenant-options.md).
+- `ITenantInvalidator<TKey>`: `InvalidateAsync(tenantId, ct)` and `InvalidateAllAsync(ct)` remove the cached tenant
+  and run every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one call clears
+  everything kept for a tenant. Handlers are asynchronous and take a `CancellationToken`, so removing a tenant's
+  entries from a remote cache does not block a thread. Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options
+  register one. It replaces `ITenantStoreCache<TKey>`, whose synchronous methods blocked on those handlers, and
+  refuses an id Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty string), which no tenant has.
+
+- `options.UseTenantry(o => …)` sets a context's own isolation options, starting from the application's, so a
+  context kept for maintenance code can allow writes without a tenant while every other context keeps `Reject`.
+
+- `ValidateTenantActivity(t => …)` and `ITenantActivityValidator<TKey>`: one check for whether work may run for a
+  tenant, so suspending a tenant stops all its work. `app.UseTenantry()` refuses an inactive tenant as it refuses one
+  an access validator refuses, `RunInScopeAsync` throws the new `TenantInactiveException`, and other code, Tenantry.Pro's
+  background services, schedulers and message integrations among it, asks the new `ITenantActivity<TKey>`.
+  `CreateScope` does not check, so migrations and provisioning still reach suspended tenants.
+
+- `UseConnectionStrings(sp => provider)` registers an `ITenantConnectionStringProvider<TKey>` built from the
+  application's services, for connection strings read with a client registered in DI, and
+  `DecorateConnectionStrings((sp, inner) => …)` wraps whichever provider is registered, before or after it, for
+  caching or logging.
+- `ITenantConnectionStringProvider<TKey>.CanGetSynchronously` (default `true`). When it is `false`, as for
+  `UseConnectionStrings` with only `GetConnectionStringAsync`, the scoped context of `AddDbContextPerTenantDatabase`
+  reads its connection string when it first opens a connection. It can now be injected; only asynchronous EF Core
+  calls work on it. Before, injecting it threw.
+
+- Seams for packages that build on Tenantry, Tenantry.Pro among them. They and the other extension points
+  (`TenantIds`, `ITenantRegistration`, the EF Core contributors, `TenantConnectionStringProvider<TKey>`) are marked
+  `[EditorBrowsable(EditorBrowsableState.Advanced)]`, and the API reference lists them apart from the types an
+  application uses:
+  - `TenantContextGuard` (Tenantry.EfCore), an interceptor base that checks a context before it opens a connection,
+    runs a command or saves, and the violation kind `TenantSchemaMismatch`, for a context on another tenant's schema.
+    A guard checks a save before Tenantry stamps its new entities, wherever it is among the context's interceptors,
+    so a save it refuses leaves them as they were.
+  - `TenantModel` (Tenantry.EfCore): `HasTenantOwnedEntityTypes`, `IsTenantOwned`, `IsSharedAcrossTenants` and
+    `FindUnisolatedEntityTypes`; and `[SharedAcrossTenants]` or `IsSharedAcrossTenants()` to mark an entity type every
+    tenant shares. Marking a tenant-owned type fails the model check.
+  - `ITenantKeyType`, registered by `AddTenantry`, and `services.FindTenantKeyType()`: the tenant key type, for code
+    that has only a service provider or collection, with an AOT-safe visitor.
+  - `TenantryAspNetCoreTelemetry`: the activity source, meter and log category names of `app.UseTenantry()`.
+
+- Pack checks each package's API against the last release (`TenantryPackageBaseline`, 0.5.0), so a patch release
+  cannot break code compiled against an earlier one in its minor, as Tenantry.Pro's version range assumes.
+
+- `Configure<TOptions>(name, …)` and `ConfigureAll<TOptions>(…)` in `ConfigurePerTenant` (Tenantry.Options) configure
+  named options per tenant, such as an authentication scheme's, which its handler reads with
+  `IOptionsMonitor<T>.Get(scheme)`.
+
+- `app.UseTenantResolution()` (Tenantry.AspNetCore) resolves the tenant before `app.UseAuthentication()`, so
+  authentication handlers read the tenant's options, and `app.UseTenantry()` after it runs the access validators. Only
+  the resolvers added before the first claim resolver run before authentication, so the registration order still
+  decides which resolver wins. A tenant the validators refuse is not current for the rest of the request, an endpoint
+  that `app.UseTenantry()` did not run for gets `500` (event 1011), and a pipeline without `app.UseTenantry()` fails to
+  start. Event 1010 warns when it runs after authentication. See [Authentication per tenant](docs/authentication-per-tenant.md).
+
+- Docs: ASP.NET Core Identity in a database tenants share, with each tenant's users kept apart and user names unique
+  within a tenant, now tested ([ASP.NET Core Identity](docs/aspnetcore-identity.md)); and a scheme per tenant, for
+  tenants on different identity providers, through a policy scheme
+  ([A scheme per tenant](docs/authentication-per-tenant.md#a-scheme-per-tenant)).
 
 ### Changed
 
-- `ITenantStoreCache<TKey>.Invalidate` refuses an id Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty
-  string), which no tenant has.
+- Tenantry.Options runs the tenant's steps after every `Configure` and before every `PostConfigure`, through an options
+  factory of its own. Before, they ran as post-configurations, so one added earlier ran before them.
+- `ITenantContextSetter<TKey>.UseNoTenant()` makes no tenant current until it is disposed, as `Use(tenant)` makes one
+  current. A class of your own that implements `ITenantContextSetter<TKey>` must add it.
+- `UseTenantry()`, `AddDbContextPerTenantDatabase` and `IsSharedAcrossTenants()` carry `[RequiresUnreferencedCode]`
+  and `[RequiresDynamicCode]`, as EF Core's `DbContext` does, so the analyzers warn where an app calls them. Before,
+  Tenantry.EfCore relied on EF Core's own annotations. See [AOT & trimming](docs/aot-and-trimming.md).
+- `ConfigureEfCoreIsolation` configures `IOptions<EfCoreIsolationOptions>`, so `services.Configure` sets the same
+  options, and the options can no longer be changed through a registered instance at run time. The
+  `TenantNotResolvedException` for a write without a tenant now points at a maintenance context, not the global switch.
+
+### Fixed
+
+- `app.UseTenantry()` before `app.UseRouting()` no longer lets a request without a tenant reach an endpoint that
+  requires one: the request is rejected as it would be with routing first. Before, it ran without a tenant and
+  event 1007 was logged.
+- `ResolveFromHeader`, `ResolveFromQueryString` and `ResolveFromPropagationHeader` resolve nothing from a header or
+  parameter sent more than once. Before, they took the first value, so a client's header could win over one a proxy
+  appended.
+- `UseInMemoryStore` and `InMemoryTenantStore` refuse a tenant with an id Tenantry reserves for "no tenant", or two
+  tenants with the same id, when they are created. Before, the first request failed with a 500.
 
 ## [0.5.0] - 2026-10-03
 

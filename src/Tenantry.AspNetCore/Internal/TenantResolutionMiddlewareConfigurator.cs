@@ -14,6 +14,8 @@ namespace Tenantry.AspNetCore.Internal;
 internal interface ITenantResolutionMiddlewareConfigurator
 {
     IApplicationBuilder Use(IApplicationBuilder app);
+
+    IApplicationBuilder UseResolution(IApplicationBuilder app);
 }
 
 internal sealed class TenantResolutionMiddlewareConfigurator<TKey> : ITenantResolutionMiddlewareConfigurator
@@ -28,11 +30,28 @@ internal sealed class TenantResolutionMiddlewareConfigurator<TKey> : ITenantReso
         services.TryAddSingleton<ITenantResolutionMiddlewareConfigurator>(new TenantResolutionMiddlewareConfigurator<TKey>());
         services.TryAddSingleton(sp => new TenantResolutionMetrics(sp.GetService<IMeterFactory>()));
         services.TryAddSingleton<TenantryPipeline>();
+        services.TryAddSingleton(sp => new TenantRequestResolution<TKey>(sp.GetRequiredService<ITenantLookup<TKey>>(), sp));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupFilter, TenantryPipelineCheck>());
     }
 
     // Checks the registration when the pipeline is built, so a web application fails as it starts.
     public IApplicationBuilder Use(IApplicationBuilder app)
+    {
+        CheckRegistration(app);
+        app.ApplicationServices.GetRequiredService<TenantryPipeline>().HasMiddleware = true;
+
+        return app.UseMiddleware<TenantResolutionMiddleware<TKey>>();
+    }
+
+    public IApplicationBuilder UseResolution(IApplicationBuilder app)
+    {
+        CheckRegistration(app);
+        app.ApplicationServices.GetRequiredService<TenantryPipeline>().HasEarlyResolution = true;
+
+        return app.UseMiddleware<TenantEarlyResolutionMiddleware<TKey>>();
+    }
+
+    private static void CheckRegistration(IApplicationBuilder app)
     {
         var services = app.ApplicationServices;
         var serviceTypes = services.GetService<IServiceProviderIsService>();
@@ -54,10 +73,6 @@ internal sealed class TenantResolutionMiddlewareConfigurator<TKey> : ITenantReso
                 $"app.UseTenantry() has no tenant store for ITenantStore<{typeof(TKey).Name}>. Register one in " +
                 "AddTenantry, with tenant.UseStore<TStore>() or tenant.UseInMemoryStore(...).");
         }
-
-        services.GetRequiredService<TenantryPipeline>().HasMiddleware = true;
-
-        return app.UseMiddleware<TenantResolutionMiddleware<TKey>>();
     }
 }
 
@@ -67,11 +82,19 @@ internal sealed class TenantResolutionMiddlewareConfigurator<TKey> : ITenantReso
 internal sealed class TenantryPipeline
 {
     private volatile bool _hasMiddleware;
+    private volatile bool _hasEarlyResolution;
 
     public bool HasMiddleware
     {
         get => _hasMiddleware;
         set => _hasMiddleware = value;
+    }
+
+    /// <summary>Whether <c>app.UseTenantResolution()</c> is in the pipeline.</summary>
+    public bool HasEarlyResolution
+    {
+        get => _hasEarlyResolution;
+        set => _hasEarlyResolution = value;
     }
 }
 
@@ -90,6 +113,13 @@ internal sealed class TenantryPipelineCheck(TenantryPipeline pipeline) : IStartu
         app =>
         {
             next(app);
+
+            if (!pipeline.HasMiddleware && pipeline.HasEarlyResolution)
+            {
+                throw new InvalidOperationException(
+                    "app.UseTenantResolution() is in the request pipeline but app.UseTenantry() is not, so no request's " +
+                    "tenant would be checked by the access validators. Call app.UseTenantry() after app.UseAuthentication().");
+            }
 
             if (!pipeline.HasMiddleware)
             {

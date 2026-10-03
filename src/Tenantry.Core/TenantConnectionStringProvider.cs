@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace Tenantry;
 
 /// <summary>
@@ -12,6 +14,7 @@ namespace Tenantry;
 /// Public so that other providers (for example a caching one) can wrap it. <c>UseConnectionStrings</c>
 /// registers it as a singleton, and forwards <see cref="ITenantConnectionStringProvider{TKey}"/> to it.
 /// </remarks>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public sealed class TenantConnectionStringProvider<TKey>(TenantConnectionStringOptions<TKey> options)
     : ITenantConnectionStringProvider<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -19,6 +22,10 @@ public sealed class TenantConnectionStringProvider<TKey>(TenantConnectionStringO
     private const string NotConfigured =
         "No connection string delegate is configured. Set GetConnectionString or GetConnectionStringAsync with " +
         "UseConnectionStrings, for example: options.GetConnectionString = tenant => $\"...Database=app_{tenant.TenantId}\".";
+
+    /// <inheritdoc />
+    /// <value>Whether <see cref="TenantConnectionStringOptions{TKey}.GetConnectionString"/> is set.</value>
+    public bool CanGetSynchronously => options.GetConnectionString is not null;
 
     /// <inheritdoc />
     public string Get(ITenantDescriptor<TKey> tenant)

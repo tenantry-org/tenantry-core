@@ -27,4 +27,15 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
     /// which Tenantry reserves for "no tenant".
     /// </exception>
     IDisposable Use(ITenantDescriptor<TKey> tenant);
+
+    /// <summary>
+    /// Makes no tenant current until the returned handle is disposed, as <see cref="Use"/> makes one current: code
+    /// inside sees no tenant, and disposing it restores the tenant that was current before.
+    /// </summary>
+    /// <returns>A handle that restores the previously current tenant on disposal.</returns>
+    /// <remarks>
+    /// For code that must run as no tenant inside a tenant's flow, such as the rest of a request whose tenant was
+    /// refused after it was made current.
+    /// </remarks>
+    IDisposable UseNoTenant();
 }

@@ -122,28 +122,43 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/>; a value that is not a tenant id finds no tenant.
     /// </summary>
     /// <remarks>
-    /// A header is a claim, not proof: any caller that reaches the service can set it. Accept it only from callers you
-    /// authenticate (a token, mutual TLS), and check that the caller may act for the tenant with
-    /// <c>ValidateTenantAccess</c>. Resolvers run in the order they are added, and the first that finds a value wins.
+    /// <para>
+    /// A header is a claim, not proof: any caller that reaches the service can set it. So the header is read only when
+    /// <paramref name="isTrustedCaller"/> returns <see langword="true"/> for the request, typically because the caller
+    /// authenticated as one of your services. From any other caller it is ignored, and the next resolver runs.
+    /// </para>
+    /// <para>
+    /// <paramref name="isTrustedCaller"/> runs after authentication, so it can read <c>HttpContext.User</c>:
+    /// <c>app.UseTenantResolution()</c> stops before this resolver, and <c>app.UseTenantry()</c> runs it once the user
+    /// is known. A tenant from the header is therefore not known while authentication runs. Resolvers run in the order
+    /// they are added, and the first that finds a value wins.
+    /// </para>
     /// </remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
+    /// <param name="isTrustedCaller">
+    /// Whether the request's caller may name the tenant: for example, whether its token carries a scope that only your
+    /// services are given.
+    /// </param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
-    ///     .ResolveFromPropagationHeader()
-    ///     .UseStore&lt;AppTenantStore&gt;()
-    ///     .ValidateTenantAccess&lt;CallingServiceValidator&gt;());
+    ///     .ResolveFromPropagationHeader(http =&gt; http.User.HasClaim("client_id", "orders-service"))
+    ///     .UseStore&lt;AppTenantStore&gt;());
     /// </code>
     /// </example>
-    public static ITenantBuilder<TKey> ResolveFromPropagationHeader<TKey>(this ITenantBuilder<TKey> builder)
-        where TKey : IEquatable<TKey>, IParsable<TKey> =>
-        builder.UseResolver(new PropagationHeaderTenantResolver());
+    public static ITenantBuilder<TKey> ResolveFromPropagationHeader<TKey>(
+        this ITenantBuilder<TKey> builder, Func<HttpContext, bool> isTrustedCaller)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(isTrustedCaller);
+        return builder.UseResolver(new PropagationHeaderTenantResolver(isTrustedCaller));
+    }
 
     /// <summary>
     /// Keeps ASP.NET Core's output cache per tenant: a response cached while a tenant is current varies by the tenant,
-    /// so it is served only to that tenant, and invalidating the tenant (<see cref="ITenantStoreCache{TKey}.Invalidate"/>)
+    /// so it is served only to that tenant, and invalidating the tenant (<see cref="ITenantInvalidator{TKey}.InvalidateAsync"/>)
     /// evicts it. A response for a request without a tenant (an endpoint that allows one to be missing) is cached apart
     /// from every tenant's.
     /// </summary>
@@ -207,7 +222,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TResolver">The resolver type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first.</returns>
+    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first, or call it as a statement of its own.</returns>
     public static ITenantBuilder UseResolver<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TResolver>(
         this ITenantBuilder builder)
@@ -353,7 +368,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TValidator">The validator type, which implements <see cref="ITenantAccessValidator{TKey}"/> for the application's tenant key type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first.</returns>
+    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first, or call it as a statement of its own.</returns>
     /// <exception cref="InvalidOperationException"><typeparamref name="TValidator"/> does not implement <see cref="ITenantAccessValidator{TKey}"/> for the builder's key type.</exception>
     public static ITenantBuilder ValidateTenantAccess<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>(

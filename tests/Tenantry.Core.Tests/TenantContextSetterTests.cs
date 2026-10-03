@@ -211,6 +211,49 @@ public sealed class TenantContextSetterTests
         BuildSetter().CurrentTenantId.Should().BeNull();
     }
 
+    [Fact]
+    public void UseNoTenant_HidesTheTenant_UntilDisposed()
+    {
+        var setter = BuildSetter();
+
+        using (setter.Use(Tenant("acme")))
+        {
+            using (setter.UseNoTenant())
+            {
+                setter.HasTenant.Should().BeFalse();
+                setter.CurrentTenant.Should().BeNull();
+                setter.CurrentTenantId.Should().BeNull();
+
+                using (setter.Use(Tenant("globex")))
+                {
+                    setter.CurrentTenantId.Should().Be("globex");
+                }
+
+                setter.HasTenant.Should().BeFalse();
+            }
+
+            setter.CurrentTenantId.Should().Be("acme");
+        }
+
+        setter.HasTenant.Should().BeFalse();
+    }
+
+    [Fact]
+    public void UseNoTenant_ClosedOutOfOrder_LeavesTheInnermostScopeCurrent()
+    {
+        var setter = BuildSetter();
+
+        using var outer = setter.Use(Tenant("acme"));
+        var none = setter.UseNoTenant();
+        var inner = setter.Use(Tenant("globex"));
+
+        none.Dispose();
+        setter.CurrentTenantId.Should().Be("globex");
+
+        inner.Dispose();
+        setter.CurrentTenantId.Should().Be("acme");
+    }
+
     private static ITenantContextSetter<TKey> Setter<TKey>()
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {

@@ -14,7 +14,8 @@ namespace Tenantry.Caching;
 /// works with or without a current tenant. A factory here runs with no current tenant, whoever calls, so what it loads
 /// cannot be one tenant's data: a query through a tenant's <c>DbContext</c> fails, as it does outside a tenant, rather
 /// than caching that tenant's rows for every tenant. It runs on the thread pool, without the caller's async context
-/// (its activity and log scopes too). A key or tag of <c>*</c> (every entry) means every shared entry.
+/// (its activity and log scopes too). A key or tag of <c>*</c> (every entry) means every shared entry. For a keyed
+/// <see cref="HybridCache"/>, inject <c>[FromKeyedServices(key)] SharedHybridCache</c> with the same key.
 /// </remarks>
 /// <example>
 /// <code>

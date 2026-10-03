@@ -447,14 +447,45 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
 
         using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
         {
-            await using (var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken))
-            {
-                (await db.Notes.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
-            }
-
-            var sync = () => factory.CreateDbContext();
-            sync.Should().Throw<InvalidOperationException>().WithMessage("*GetAsync*");
+            await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+            (await db.Notes.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
         }
+    }
+
+    [Fact]
+    public async Task OnlyAnAsyncDelegate_TheScopedContextReadsItsConnectionStringWhenItFirstConnects()
+    {
+        await using var services = Build(asyncOnly: true);
+        var scopes = services.GetRequiredService<ITenantScopeFactory<string>>();
+
+        // Each tenant's database gets a note of its own, through injected contexts, a pooled one reused.
+        foreach (var tenant in new[] { Acme, Globex, Acme })
+        {
+            await using var scope = scopes.CreateScope(tenant);
+            var db = scope.ServiceProvider.GetRequiredService<PooledNotesContext>();
+            db.Notes.Add(new PooledNote { Text = tenant.TenantId });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        foreach (var (tenant, count) in new[] { (Acme, 2), (Globex, 1) })
+        {
+            await using var scope = scopes.CreateScope(tenant);
+            var db = scope.ServiceProvider.GetRequiredService<PooledNotesContext>();
+            var texts = await db.Notes.Select(n => n.Text).ToListAsync(TestContext.Current.CancellationToken);
+            texts.Should().HaveCount(count).And.OnlyContain(text => text == tenant.TenantId);
+        }
+    }
+
+    [Fact]
+    public async Task OnlyAnAsyncDelegate_ASynchronousQuery_ThrowsWithGuidance()
+    {
+        await using var services = Build(asyncOnly: true);
+        await using var scope = services.GetRequiredService<ITenantScopeFactory<string>>().CreateScope(Acme);
+        var db = scope.ServiceProvider.GetRequiredService<PooledNotesContext>();
+
+        var count = () => db.Notes.Count();
+
+        count.Should().Throw<InvalidOperationException>().WithMessage("*asynchronous EF Core methods*");
     }
 
     [Fact]

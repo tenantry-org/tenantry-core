@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Tenantry.EfCore.Internal;
 
@@ -13,6 +14,17 @@ internal static class ApplicationServices
         options.FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider;
 
     public static IServiceProvider? Find(DbContext context) => Find(context.GetService<IDbContextOptions>());
+
+    /// <summary>
+    /// The isolation options the context follows: its own, from <c>UseTenantry(configure)</c>, or else the
+    /// application's, from <c>ConfigureEfCoreIsolation</c>.
+    /// </summary>
+    public static EfCoreIsolationOptions Isolation(DbContext context, IServiceProvider? services) =>
+        context.GetService<IDbContextOptions>().FindExtension<TenantryOptionsExtension>()?.Isolation
+        ?? services?.GetService<IOptions<EfCoreIsolationOptions>>()?.Value
+        ?? Defaults;
+
+    private static readonly EfCoreIsolationOptions Defaults = new();
 
     /// <summary>The current tenant, as the context's application sees it.</summary>
     /// <exception cref="InvalidOperationException">The context has no application service provider, or Tenantry is not registered in it for <typeparamref name="TKey"/>.</exception>

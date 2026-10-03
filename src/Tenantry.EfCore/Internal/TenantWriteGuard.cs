@@ -119,11 +119,11 @@ internal sealed class TenantWriteGuard<TKey>
         // Entries() runs DetectChanges once; the checks below read this list.
         var entries = context.ChangeTracker.Entries().ToList();
 
-        var options = services?.GetService<EfCoreIsolationOptions>();
+        var options = ApplicationServices.Isolation(context, services);
 
         if (!tenantContext.HasTenant)
         {
-            CheckWithoutTenant(entries, options?.OnMissingTenant ?? MissingTenantBehavior.Reject, logger);
+            CheckWithoutTenant(entries, options.OnMissingTenant, logger);
             return null;
         }
 
@@ -132,7 +132,7 @@ internal sealed class TenantWriteGuard<TKey>
             tenantContext.CurrentTenant!.TenantId,
             logger,
             context.Database.IsRelational(),
-            options?.OnSaveWithoutTransaction ?? SaveWithoutTransactionBehavior.UseTransaction);
+            options.OnSaveWithoutTransaction);
 
         guard.CheckEntries();
         return guard;
@@ -188,16 +188,16 @@ internal sealed class TenantWriteGuard<TKey>
                 throw new TenantNotResolvedException(
                     $"SaveChanges is writing tenant-scoped entities ({entityTypes}) without a resolved tenant. " +
                     "Run the write while a tenant is current (app.UseTenantry() for requests, " +
-                    "ITenantScopeFactory.RunInScopeAsync or CreateScope elsewhere), or set " +
-                    "EfCoreIsolationOptions.OnMissingTenant to Allow or Warn for maintenance code that deliberately " +
-                    "writes across tenants.");
+                    "ITenantScopeFactory.RunInScopeAsync or CreateScope elsewhere). Maintenance code that deliberately " +
+                    "writes across tenants can use a context of its own, registered with " +
+                    "UseTenantry(o => o.OnMissingTenant = MissingTenantBehavior.Allow).");
         }
 
         // Even when unscoped writes are allowed, a new row must name its tenant: an unowned row is never
         // visible through the tenant filter and belongs to no one.
         var unowned = writes.FirstOrDefault(entry =>
             entry is { State: EntityState.Added, Entity: ITenantEntity<TKey> entity } &&
-            TenantIds.IsUnset(entity.TenantId));
+            TenantIds.IsReserved(entity.TenantId));
 
         if (unowned is not null)
         {
@@ -297,7 +297,7 @@ internal sealed class TenantWriteGuard<TKey>
     // silently moved: the caller meant another tenant's data.
     private void CheckNew(EntityEntry entry, ITenantEntity<TKey> entity)
     {
-        if (TenantIds.IsUnset(entity.TenantId))
+        if (TenantIds.IsReserved(entity.TenantId))
         {
             // Through EF Core rather than the entity, so a private or init-only setter works.
             entry.Property(TenantOwnership.TenantIdProperty).CurrentValue = _tenantId;

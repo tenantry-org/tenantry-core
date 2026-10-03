@@ -30,17 +30,33 @@ public static class TenantTelemetry
     /// <param name="tenantId">The tenant's id, formatted by <see cref="TenantIds.Format{TKey}"/>.</param>
     /// <returns>The scope's state.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="tenantId"/> is null.</exception>
+    public static IReadOnlyList<KeyValuePair<string, object?>> CreateLogScope(string tenantId)
+    {
+        ArgumentNullException.ThrowIfNull(tenantId);
+        return new TenantLogScope(tenantId);
+    }
+
+    /// <summary>
+    /// The state of a log scope with one property, <see cref="LogScopeName"/>, for <c>ILogger.BeginScope</c>, with the
+    /// id formatted as Tenantry formats it everywhere (<see cref="TenantIds.Format{TKey}"/>), so log entries can be
+    /// queried by it.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="tenantId">The tenant's id.</param>
+    /// <returns>The scope's state.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="tenantId"/> is null.</exception>
     /// <example>
     /// <code>
-    /// using (logger.BeginScope(TenantTelemetry.CreateLogScope(TenantIds.Format(tenantId))))
+    /// using (logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId)))
     /// {
     ///     logger.LogInformation("Invoicing");   // carries TenantId
     /// }
     /// </code>
     /// </example>
-    public static IReadOnlyList<KeyValuePair<string, object?>> CreateLogScope(string tenantId)
+    public static IReadOnlyList<KeyValuePair<string, object?>> CreateLogScope<TKey>(TKey tenantId)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         ArgumentNullException.ThrowIfNull(tenantId);
-        return new TenantLogScope(tenantId);
+        return new TenantLogScope(TenantIds.Format(tenantId));
     }
 }

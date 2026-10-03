@@ -2,7 +2,7 @@ namespace Tenantry;
 
 /// <summary>
 /// How Tenantry carries a tenant from one process to another: Tenantry.Http's outgoing requests, Tenantry.AspNetCore's
-/// <c>ResolveFromPropagationHeader()</c> on the receiving side, and Tenantry.Pro's Hangfire, MassTransit, Quartz.NET
+/// <c>ResolveFromPropagationHeader(...)</c> on the receiving side, and Tenantry.Pro's Hangfire, MassTransit, Quartz.NET
 /// and Rebus integrations.
 /// </summary>
 public static class TenantPropagation

@@ -47,7 +47,7 @@ public sealed class TenantIdentifierTests
     [Fact]
     public async Task ByDefault_AnEmptyStringId_NamesNoTenant()
     {
-        ITenantStore<string> store = new InMemoryTenantStore<string>([new TenantDescriptor<string> { TenantId = "", Name = "Empty" }]);
+        ITenantStore<string> store = new ListStore<string>([new TenantDescriptor<string> { TenantId = "", Name = "Empty" }]);
 
         (await store.FindByIdentifierAsync("", TestContext.Current.CancellationToken)).Should().BeNull();
     }
@@ -95,7 +95,7 @@ public sealed class TenantIdentifierTests
 
     private sealed class CountingStore(IEnumerable<ITenantDescriptor<Guid>> tenants) : ITenantStore<Guid>
     {
-        private readonly InMemoryTenantStore<Guid> _inner = new(tenants);
+        private readonly ListStore<Guid> _inner = new(tenants);
 
         public int Lookups { get; private set; }
 
@@ -107,5 +107,18 @@ public sealed class TenantIdentifierTests
 
         public ValueTask<IReadOnlyList<ITenantDescriptor<Guid>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
             _inner.GetAllTenantsAsync(cancellationToken);
+    }
+
+    // Holds any tenants, reserved ids included, which InMemoryTenantStore refuses.
+    private sealed class ListStore<TKey>(IEnumerable<ITenantDescriptor<TKey>> tenants) : ITenantStore<TKey>
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        private readonly List<ITenantDescriptor<TKey>> _tenants = [.. tenants];
+
+        public ValueTask<ITenantDescriptor<TKey>?> GetTenantAsync(TKey tenantId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(_tenants.Find(t => t.TenantId.Equals(tenantId)));
+
+        public ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<TKey>>>(_tenants);
     }
 }

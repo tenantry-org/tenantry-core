@@ -25,13 +25,13 @@ Resolution turns an HTTP request into a tenant, in two steps:
 
 | Method | Source | Notes |
 |--------|--------|-------|
-| `ResolveFromHeader(name)` | request header `name` | Trims whitespace. e.g. `X-Tenant-Id`. |
+| `ResolveFromHeader(name)` | request header `name` | Trims whitespace. A repeated header names no tenant. e.g. `X-Tenant-Id`. |
 | `ResolveFromSubdomain(options)` | the subdomain of the host | Ignores `www` and IP addresses; takes base domains. See below. |
 | `ResolveFromHost()` | the host name | For tenants with domains of their own. See below. |
 | `ResolveFromRouteValue(key = "tenant")` | route value `key` | For routes like `/api/{tenant}/…`. Needs routing before the middleware. |
 | `ResolveFromClaim(type = "tenant_id")` | claim on `HttpContext.User` | Needs authentication before the middleware. |
 | `ResolveFromQueryString(name = "tenantId")` | query string parameter | **Development/testing only** — see warning. |
-| `ResolveFromPropagationHeader()` | the `tenantry-tenant-id` header another service sent | Read as a tenant id, not an identifier. See [Calling other services](http-propagation.md). |
+| `ResolveFromPropagationHeader(isTrustedCaller)` | the `tenantry-tenant-id` header another service sent | Only from a caller `isTrustedCaller` accepts, after authentication; read as a tenant id. See [Calling other services](http-propagation.md). |
 
 ### Header
 
@@ -39,8 +39,8 @@ Resolution turns an HTTP request into a tenant, in two steps:
 tenant.ResolveFromHeader("X-Tenant-Id");
 ```
 
-The most common choice for APIs and service-to-service calls. The value is trimmed; empty/whitespace
-yields `null`.
+The most common choice for APIs and service-to-service calls. The value is trimmed; an empty value, or a header
+sent more than once, names no tenant. A proxy that sets the header must replace the client's, not add a second one.
 
 ### Subdomain
 
@@ -122,12 +122,18 @@ You can register several resolvers. The middleware tries them **in registration 
 **first identifier** one returns (`null`, an empty string or whitespace counts as none):
 
 ```csharp
-tenant.ResolveFromClaim("tenant_id");     // 1. prefer the authenticated identity
-tenant.ResolveFromHeader("X-Tenant-Id");  // 2. fall back to an explicit header
+tenant.ResolveFromClaim("tenant_id");             // 1. the tenant in the caller's token
+tenant.ResolveFromHeader("X-Tenant-Id");          // 2. otherwise, the header
+tenant.ValidateTenantAccessByClaim("tenant_id");  // the caller must be entitled to it
 ```
 
-Order by trust and specificity: put the most authoritative source first. If none match, the request
-proceeds without a tenant unless a tenant is required (see [Access control](access-control.md)).
+Put the most trusted source first. If none match, the request proceeds without a tenant unless a tenant is
+required (see [Access control](access-control.md)).
+
+- `ResolveFromClaim` reads the first matching claim, so use it only for tokens that carry exactly one tenant. For
+  tokens that list several, resolve from the header and validate against the claims.
+- A header fallback lets any caller without the claim, anonymous ones too, name a tenant. Pair it with an access
+  validator such as `ValidateTenantAccessByClaim`.
 
 At least one resolver must be registered, or `app.UseTenantry()` throws at startup.
 
@@ -158,8 +164,9 @@ tenant.UseResolver<CookieTenantResolver>();                          // created 
 ```
 
 `UseResolver<TResolver>()` creates the resolver in each request's scope, so it can depend on scoped services
-such as a `DbContext`. It has a type parameter of its own, so it returns the builder without its key type: call
-it last in a chain. An instance or a factory's resolver is created once and used for every request.
+such as a `DbContext`. It returns the builder without its key type, so put it last in a chain or call it as a
+statement of its own (see [Registration](core-concepts.md#registration)). An instance or a factory's resolver is
+created once and used for every request.
 
 Registration order relative to the built-in resolvers is preserved, so you can slot a custom resolver
 anywhere in the fallback chain.

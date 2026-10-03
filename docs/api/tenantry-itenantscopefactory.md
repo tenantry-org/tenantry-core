@@ -39,6 +39,8 @@ Exceptions:
 
 - `ArgumentException`: The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".
 
+It does not consult [`ITenantActivity<TKey>`](tenantry-itenantactivity.md), so it reaches suspended tenants too, for provisioning and migrations. Check [`ITenantActivity<TKey>`](tenantry-itenantactivity.md) first for other work.
+
 ### `RunInScopeAsync(TKey, Func<ITenantScope<TKey>, CancellationToken, Task>, CancellationToken)`
 
 Looks the tenant up with [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), then runs `work` inside a new scope for it (see [`ITenantScopeFactory<TKey>.CreateScope`](tenantry-itenantscopefactory.md)). The scope is disposed when the work completes or throws. The caller's current tenant is never changed.
@@ -58,6 +60,7 @@ Returns: `Task`
 Exceptions:
 
 - [`TenantNotFoundException`](tenantry-tenantnotfoundexception.md): The tenant store has no tenant with that id.
+- [`TenantInactiveException`](tenantry-tenantinactiveexception.md): An [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) refused the tenant.
 - `InvalidOperationException`: No tenant store is registered.
 - `ArgumentException`: `tenantId` is the key type's default value or an empty string, which no tenant can have.
 - `OperationCanceledException`: `cancellationToken` was cancelled before the work started.
@@ -85,6 +88,7 @@ Returns: `Task<TResult>`: The value returned by `work`.
 Exceptions:
 
 - [`TenantNotFoundException`](tenantry-tenantnotfoundexception.md): The tenant store has no tenant with that id.
+- [`TenantInactiveException`](tenantry-tenantinactiveexception.md): An [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) refused the tenant.
 - `InvalidOperationException`: No tenant store is registered.
 - `ArgumentException`: `tenantId` is the key type's default value or an empty string, which no tenant can have.
 - `OperationCanceledException`: `cancellationToken` was cancelled before the work started.

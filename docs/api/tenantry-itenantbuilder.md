@@ -27,6 +27,7 @@ Value: `IServiceCollection`
 Applies `registration` with the tenant key type this builder was created for.
 
 ```csharp
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 void Add(ITenantRegistration registration)
 ```
 

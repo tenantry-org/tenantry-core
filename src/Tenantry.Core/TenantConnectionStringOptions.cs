@@ -31,7 +31,8 @@ public sealed class TenantConnectionStringOptions<TKey>
 
     /// <summary>
     /// Returns the connection string for a tenant asynchronously, for connection strings held elsewhere such
-    /// as a secrets vault. Only the asynchronous <c>GetAsync</c> methods can use it.
+    /// as a secrets vault. Only the asynchronous <c>GetAsync</c> methods can use it. To use services from DI, register
+    /// a provider with <c>UseConnectionStrings(sp =&gt; …)</c> instead.
     /// </summary>
     public Func<ITenantDescriptor<TKey>, CancellationToken, ValueTask<string>>? GetConnectionStringAsync { get; set; }
 }

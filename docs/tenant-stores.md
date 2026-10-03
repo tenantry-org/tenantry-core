@@ -2,7 +2,7 @@
 
 A tenant store answers "which tenants exist, and what are their details?" It returns an
 `ITenantDescriptor<TKey>` for a tenant id, or for an identifier a request carries (or `null` if there is no such
-tenant), and lists every tenant that exists, suspended ones included; whether a tenant may be served is decided
+tenant), and lists every tenant that exists, suspended ones included; whether work may run for a tenant is decided
 elsewhere (see [Suspended and inactive tenants](#suspended-and-inactive-tenants)).
 
 ```csharp no-compile
@@ -44,9 +44,9 @@ tenant.UseInMemoryStore(
 ]);
 ```
 
-This registers `InMemoryTenantStore<TKey>` as a **singleton**. The collection is indexed by `TenantId`
-into a dictionary once, so lookups are O(1). It does not observe changes to the source collection
-after registration.
+This registers `InMemoryTenantStore<TKey>` as a **singleton**, built when you register it. It does not see later
+changes to the collection. Two tenants with the same id, or a tenant with an id Tenantry reserves for "no tenant"
+(`Guid.Empty`, `0`, an empty string), throw `ArgumentException` at registration.
 
 ## Custom store
 
@@ -85,53 +85,47 @@ tenant.UseStore(sp => new EfCoreTenantStore(sp.GetRequiredService<AppDbContext>(
 
 ## Suspended and inactive tenants
 
-Tenantry has no tenant status of its own: a descriptor carries only `TenantId` and `Name`. Keep the
-status on your own descriptor type, and keep **every** tenant that exists in the store whatever its
-status. Do not hide a suspended tenant by returning `null` or leaving it out of `GetAllTenantsAsync`:
-tools that maintain each tenant's database find tenants through the store. Tenantry.Pro's provisioning
-and single-tenant migration fail for a tenant the store does not return, and its migration runs,
-migration status and health checks cover only the tenants `GetAllTenantsAsync` lists. A tenant hidden
-while it is suspended misses every migration and breaks when it is reactivated. For the same reason, keep
-a suspended tenant's database available; remove a tenant from the store only once its database has been
-archived or dropped.
+Tenantry has no tenant status of its own: a descriptor carries only `TenantId` and `Name`. Keep the status on your
+own descriptor type, and return every tenant from the store, suspended ones included. Migration tools (Tenantry.Pro's
+among them) find tenants through the store, so a hidden tenant misses migrations and breaks when reactivated. Keep its
+database until you remove it from the store.
 
 ```csharp
 public class Tenant : TenantDescriptor<string>
 {
-    public bool IsActive { get; set; } = true;   // yours; Tenantry never reads it
+    public bool IsActive { get; set; } = true;   // yours; Tenantry reads it only through your check
 }
 ```
 
-Decide whether a tenant may be served where its work starts:
+Tell Tenantry which tenants may have work run for them with `ValidateTenantActivity`:
 
-- **HTTP requests:** add an [access validator](access-control.md#validating-tenant-access). It receives
-  the descriptor your store returned and runs before any scope opens; a refused request gets
-  `403 Forbidden`.
+```csharp
+tenant.UseStore<EfCoreTenantStore>();
+tenant.ValidateTenantActivity(t => t is Tenant { IsActive: true });
+```
 
-  ```csharp
-  tenant.UseStore<EfCoreTenantStore>();
-  tenant.ValidateTenantAccess((http, t) => t is Tenant { IsActive: true });
-  ```
+Check for the active status, as here, rather than the suspended one, so a descriptor of another type is refused
+rather than served. For a check that needs services, implement `ITenantActivityValidator<TKey>` and register it as a
+singleton; every registered check must allow the tenant. Tenantry then refuses an inactive tenant:
 
-  With [caching](#caching), invalidate a tenant when you suspend it, or it is served until its entry expires.
+- **HTTP requests** get `403 Forbidden` where a tenant is required, and run without a tenant elsewhere, as for a
+  tenant an [access validator](access-control.md#validating-tenant-access) refuses.
+- **`RunInScopeAsync`** throws `TenantInactiveException`, a `TenantNotResolvedException`.
+- **Tenantry.Pro's** background services, schedulers and message integrations skip it.
 
-- **Background work:** access validators run only in the HTTP middleware, never for
-  `ITenantScopeFactory` or background jobs, so check the descriptor yourself:
+`CreateScope` does not check, because it takes a tenant you already hold, for work such as migrations that must
+reach suspended tenants. When you loop over tenants for work of your own, ask `ITenantActivity<TKey>`:
 
-  ```csharp
-  foreach (var t in await tenants.GetAllTenantsAsync(ct))
-  {
-      if (t is not Tenant { IsActive: true }) continue;   // not active: skip it
-      await using var scope = scopes.CreateScope(t);
-      // ...
-  }
-  ```
+```csharp
+foreach (var t in await tenants.GetAllTenantsAsync(ct))
+{
+    if (!await activity.IsActiveAsync(t, ct)) continue;
+    await using var scope = scopes.CreateScope(t);
+    // ...
+}
+```
 
-  With `RunInScopeAsync`, check `scope.Tenant` at the start of the work. Check for the active status, as
-  here, rather than for the suspended one, so a descriptor of another type is skipped rather than served.
-
-Once an access validator is configured, an unknown id gets the same response as a refused one (`403` by
-default), so a caller cannot tell that a suspended tenant's id exists.
+With [caching](#caching), invalidate a tenant when you suspend it, or it is served until its entry expires.
 
 ## Bootstrapping with an EF Core-backed store
 
@@ -160,46 +154,60 @@ looked up with. It serves Tenantry's own lookups: the request middleware's and `
 tenant is not cached, so a tenant you add is found at once, and `GetAllTenantsAsync` is never cached. Code that
 injects `ITenantStore<TKey>` itself reads the store.
 
-When a tenant changes (it is suspended, renamed or deleted, or its slug changes), remove it from the cache, or it
-is served as it was until its entry expires: an access validator reads the status from the cached descriptor.
+When a tenant changes (it is suspended, renamed or deleted, or its slug changes), invalidate it with
+`ITenantInvalidator<TKey>`, or it is served as it was until its entry expires: an access validator reads the status
+from the cached descriptor.
 
 ```csharp
-app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, ITenantStoreCache<string> cache) =>
+app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, ITenantInvalidator<string> tenants, CancellationToken ct) =>
 {
-    var t = await db.Tenants.SingleOrDefaultAsync(t => t.TenantId == id);
+    var t = await db.Tenants.SingleOrDefaultAsync(t => t.TenantId == id, ct);
     if (t is null) return Results.NotFound();
 
     t.IsActive = false;
-    await db.SaveChangesAsync();
-    cache.Invalidate(id);   // by its id and every identifier it was found by
+    await db.SaveChangesAsync(ct);
+    await tenants.InvalidateAsync(id, ct);   // by its id and every identifier it was found by
     return Results.NoContent();
 });
 ```
 
-`AddTenantry` always registers `ITenantStoreCache<TKey>`, so this code runs with caching off too, when there is
-nothing to remove. Each instance of the application has its own cache, so `Invalidate` clears this instance's copy;
-other instances serve theirs until it expires. Keep the duration as short as that staleness allows. The cache reads the time from
-a registered `TimeProvider`, so tests can control expiry.
+`AddTenantry` always registers `ITenantInvalidator<TKey>`, so this code runs with caching off too, when there is no
+cached copy to remove. Each instance of the application has its own cache, so `InvalidateAsync` clears this instance's
+copy; other instances serve theirs until it expires. Keep the duration as short as that staleness allows. The cache
+reads the time from a registered `TimeProvider`, so tests can control expiry.
 
 ### Everything kept for a tenant
 
-`Invalidate` also runs every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one
-call clears everything kept for a tenant: Tenantry.Caching's cache entries, the responses `IsolateOutputCache()` caches,
-and Tenantry.Options' options register a handler, and so can your own code that keeps data per tenant:
+`InvalidateAsync` also runs every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`.
+Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options each register one, so one call clears all of them.
+Register your own for data you keep per tenant. When your code also injects the class to read from it, register it
+once and point the handler registration at that instance, so both use the same data:
 
 ```csharp
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<Guid>, PriceListCache>());
+builder.Services.AddSingleton<PriceListCache>();
+builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<Guid>, PriceListCache>(
+    sp => sp.GetRequiredService<PriceListCache>()));
 
 public sealed class PriceListCache : ITenantInvalidationHandler<Guid>
 {
     private readonly ConcurrentDictionary<Guid, decimal[]> _prices = new();
 
-    public void Invalidate(Guid tenantId) => _prices.TryRemove(tenantId, out _);
+    public decimal[] GetOrAdd(Guid tenantId, Func<Guid, decimal[]> load) => _prices.GetOrAdd(tenantId, load);
 
-    public void InvalidateAll() => _prices.Clear();
+    public ValueTask InvalidateAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        _prices.TryRemove(tenantId, out _);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken)
+    {
+        _prices.Clear();
+        return ValueTask.CompletedTask;
+    }
 }
 ```
 

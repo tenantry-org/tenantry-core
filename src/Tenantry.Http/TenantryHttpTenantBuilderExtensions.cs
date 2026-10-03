@@ -14,7 +14,7 @@ public static class TenantryHttpTenantBuilderExtensions
     /// <summary>
     /// Lets the HTTP and gRPC clients marked with <see cref="TenantryHttpClientBuilderExtensions.UseTenantry"/> send
     /// the current tenant's id to the services they call, in the <see cref="TenantPropagation.HeaderName"/> header.
-    /// The receiving service reads it with Tenantry.AspNetCore's <c>ResolveFromPropagationHeader()</c>.
+    /// The receiving service reads it with Tenantry.AspNetCore's <c>ResolveFromPropagationHeader(...)</c>.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>

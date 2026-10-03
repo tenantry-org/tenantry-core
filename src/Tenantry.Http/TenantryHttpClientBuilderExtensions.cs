@@ -15,7 +15,7 @@ public static class TenantryHttpClientBuilderExtensions
     /// <summary>
     /// Adds the current tenant's id to the client's requests, in the <see cref="TenantPropagation.HeaderName"/> header,
     /// formatted by <see cref="TenantIds.Format{TKey}"/>, for the service it calls to resolve with Tenantry.AspNetCore's
-    /// <c>ResolveFromPropagationHeader()</c>. Requires <c>tenant.AddHttpPropagation()</c> in <c>AddTenantry</c>.
+    /// <c>ResolveFromPropagationHeader(...)</c>. Requires <c>tenant.AddHttpPropagation()</c> in <c>AddTenantry</c>.
     /// </summary>
     /// <remarks>
     /// <para>

@@ -12,7 +12,7 @@ public static class TenantryHttpClientBuilderExtensions
 
 ### `UseTenantry(IHttpClientBuilder)`
 
-Adds the current tenant's id to the client's requests, in the [`TenantPropagation.HeaderName`](tenantry-tenantpropagation.md) header, formatted by [`TenantIds.Format<TKey>`](tenantry-tenantids.md), for the service it calls to resolve with Tenantry.AspNetCore's `ResolveFromPropagationHeader()`. Requires `tenant.AddHttpPropagation()` in `AddTenantry`.
+Adds the current tenant's id to the client's requests, in the [`TenantPropagation.HeaderName`](tenantry-tenantpropagation.md) header, formatted by [`TenantIds.Format<TKey>`](tenantry-tenantids.md), for the service it calls to resolve with Tenantry.AspNetCore's `ResolveFromPropagationHeader(...)`. Requires `tenant.AddHttpPropagation()` in `AddTenantry`.
 
 ```csharp
 public static IHttpClientBuilder UseTenantry(this IHttpClientBuilder builder)

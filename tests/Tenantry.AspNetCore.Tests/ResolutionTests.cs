@@ -56,7 +56,7 @@ public sealed class ResolutionTests
         (await Get(client, "acme")).Should().Be(HttpStatusCode.OK);
         store.Lookups.Should().Be(1);
 
-        app.Services.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+        await app.Services.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
         (await Get(client, "acme")).Should().Be(HttpStatusCode.OK);
         store.Lookups.Should().Be(2);
     }
@@ -235,11 +235,31 @@ public sealed class ResolutionTests
         await using var _ = app;
         using var client = app.GetTestClient();
 
-        // The endpoint requires a tenant, but the middleware ran before routing chose it, so it ran without one.
-        (await client.GetStringAsync("/required", TestContext.Current.CancellationToken)).Should().Be("(none)");
-        (await client.GetStringAsync("/required", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        // The middleware ran before routing chose the endpoint, which requires a tenant: the request is still rejected.
+        (await client.GetAsync("/required", TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await client.GetAsync("/required", TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         logs.For(1007).Should().ContainSingle().Which.Message.Should().Contain("/required").And.Contain("app.UseRouting()");
+    }
+
+    [Fact]
+    public async Task UseTenantryBeforeRouting_ServesTenantsAndEndpointsThatNeedNone()
+    {
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme]),
+            pipeline: a =>
+            {
+                a.UseTenantry();
+                a.UseRouting();
+            });
+        await using var _ = app;
+        using var client = app.GetTestClient();
+
+        (await Get(client, "acme", "/required")).Should().Be(HttpStatusCode.OK);
+        (await Get(client, "globex", "/required")).Should().Be(HttpStatusCode.NotFound);
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetAsync("/nowhere", TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        logs.For(1003).Should().BeEmpty();
     }
 
     [Fact]
@@ -352,12 +372,11 @@ public sealed class ResolutionTests
 
         TenantResolutionMiddleware<string> middleware = new(
             _ => Task.CompletedTask,
-            provider.GetRequiredService<ITenantLookup<string>>(),
+            new TenantRequestResolution<string>(provider.GetRequiredService<ITenantLookup<string>>(), new NoServices()),
             provider.GetRequiredService<ITenantContextSetter<string>>(),
             provider.GetRequiredService<IOptions<TenantResolutionOptions<string>>>(),
             provider.GetRequiredService<TenantResolutionMetrics>(),
-            provider.GetRequiredService<ILoggerFactory>(),
-            new NoServices());
+            provider.GetRequiredService<ILoggerFactory>());
         DefaultHttpContext context = new() { RequestServices = scope.ServiceProvider };
         context.Request.Headers["X-Tenant-Id"] = "initech";
         context.SetEndpoint(new Endpoint(null, new EndpointMetadataCollection(new RequireTenantAttribute()), "required"));
@@ -403,6 +422,21 @@ public sealed class ResolutionTests
         logs.For(1006).Should().ContainSingle().Which.Message.Should().Contain("names no tenant");
         logs.Entries.Where(e => e.Category == "Tenantry.AspNetCore").Select(e => e.EventId.Id)
             .Should().OnlyContain(id => id >= 1001 && id <= 1008);
+    }
+
+    [Fact]
+    public async Task AnInactiveTenant_IsRefusedLikeOneAnAccessValidatorRefuses()
+    {
+        var (app, _) = await StartWithLogsAsync<string>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .UseInMemoryStore([Acme, Globex])
+            .ValidateTenantActivity(t => t.TenantId != "globex"));
+        await using var _ = app;
+        using var client = app.GetTestClient();
+
+        (await Get(client, "acme", "/required")).Should().Be(HttpStatusCode.OK);
+        (await Get(client, "globex", "/required")).Should().Be(HttpStatusCode.Forbidden);
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
     }
 
     [Fact]

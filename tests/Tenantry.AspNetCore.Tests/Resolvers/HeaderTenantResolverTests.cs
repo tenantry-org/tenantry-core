@@ -18,6 +18,18 @@ public sealed class HeaderTenantResolverTests
     }
 
     [Fact]
+    public async Task Header_SentTwice_ReturnsNull()
+    {
+        HeaderTenantResolver resolver = new("X-Tenant-Id");
+        DefaultHttpContext context = new();
+        context.Request.Headers["X-Tenant-Id"] = new(["acme", "globex"]);
+
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Header_Absent_ReturnsNull()
     {
         HeaderTenantResolver resolver = new("X-Tenant-Id");

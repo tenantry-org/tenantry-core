@@ -1,19 +1,15 @@
 # EF Core integration
 
-`Tenantry.EfCore` provides the data isolation that makes multi-tenancy real. It has two independent
-halves:
+`Tenantry.EfCore` isolates tenants' data in EF Core. `options.UseTenantry()` turns on both parts:
 
-- **Read isolation** — a global query filter restricts every query against an `ITenantEntity<TKey>`
-  entity to the current tenant.
-- **Write isolation** — a `SaveChanges` interceptor stamps `TenantId` on new rows and rejects writes of
-  another tenant's rows before saving; the stored tenant is also part of every `UPDATE` and `DELETE`
-  statement, and bulk updates cannot change `TenantId`. Tenant-scoped writes with no tenant are rejected by
-  default.
+- Read isolation: a global query filter limits queries on `ITenantEntity<TKey>` entities to the current tenant.
+- Write isolation: a `SaveChanges` interceptor stamps `TenantId` on new rows and rejects writes to other tenants' rows
+  and, by default, writes with no tenant. Every `UPDATE` and `DELETE` also matches the stored tenant, and bulk updates
+  cannot set `TenantId`.
 
-One call on a context's options turns on both: `options.UseTenantry()`. It works on **any** `DbContext`,
-pooled or not, with no base class and no interface, using only standard EF Core features, so it is
-provider-agnostic; see [tested providers](#tested-providers) for what the test suite covers. It reads the
-same `ITenantContext<TKey>` used everywhere else, so HTTP and non-HTTP hosts behave identically.
+It works on any `DbContext`, pooled or not, with no base class or interface, using only standard EF Core features
+([tested providers](#tested-providers)). It reads the same `ITenantContext<TKey>` as the rest of Tenantry, so HTTP and
+non-HTTP hosts behave the same.
 
 ## Setup at a glance
 
@@ -59,108 +55,55 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 }
 ```
 
-`UseTenantry()` goes wherever the context's options are built: `AddDbContext`, `AddDbContextPool`,
-`AddDbContextFactory`, `AddPooledDbContextFactory`, or `OnConfiguring`. It reads the current tenant through the
-context's application service provider, which those registrations supply, so Tenantry must be registered there
-with `AddTenantry` for the key type your entities use. If it is not, building the model throws, naming the call
-to add, and so does every query and save (EF Core may share a model built for another application in the process). The context itself only ever *reads* the tenant, through `ITenantContext<TKey>` (never
-`ITenantContextSetter<TKey>`).
+`UseTenantry()` goes wherever the context's options are built (`AddDbContext`, `AddDbContextPool`,
+`AddDbContextFactory`, `AddPooledDbContextFactory`, `OnConfiguring`). The context reads the tenant, and never sets it,
+through `ITenantContext<TKey>` from its application service provider, which those registrations supply. So call
+`AddTenantry` there with your entities' key type. Otherwise building the model throws, naming the call to add, and so
+does every query and save (EF Core may share a model built for another application in the process).
 
 ## Read isolation: the global query filter
 
-While EF Core builds the model, after your `OnModelCreating`, `UseTenantry()` goes through every entity type that
-implements `ITenantEntity<TKey>`:
+After your `OnModelCreating`, `UseTenantry()` gives every entity type that implements `ITenantEntity<TKey>` a global
+query filter that matches the current tenant's rows, and makes `TenantId` a concurrency token, so updates and deletes
+also match the stored tenant. A plain `db.Orders.ToListAsync()` returns only the current tenant's rows. Other entities
+stay global.
 
-- it adds a global query filter that matches the current tenant's rows, and nothing when no tenant is current,
-  and
-- it marks `TenantId` as a concurrency token, so updates and deletes also match on the stored tenant.
-
-Tenantry does not add indexes. Because every filtered query compares `TenantId`, index it yourself: usually
-as the **leading column of composite indexes** that match your queries, rather than on its own.
+Tenantry adds no indexes. Index `TenantId` yourself, usually as the leading column of composite indexes that match
+your queries rather than alone:
 
 ```csharp
 modelBuilder.Entity<Order>().HasIndex(o => new { o.TenantId, o.CreatedAt });
 modelBuilder.Entity<Order>().HasIndex(o => new { o.TenantId, o.Reference }).IsUnique(); // unique per tenant
 ```
 
-So a plain `db.Orders.ToListAsync()` returns only the current tenant's rows — you never write
-`Where(o => o.TenantId == …)` by hand. Entities without `ITenantEntity<TKey>` are untouched and remain
-global.
-
-In an inheritance hierarchy, EF Core filters through the root entity type, so the root's tenant filter
-covers the derived types. EF Core reads an owned type's rows only through its owner and does not let it have a
-filter of its own, so an owned type is isolated through its owner, whether or not it implements
-`ITenantEntity<TKey>` (a tenant-scoped owned type's `TenantId` is still a concurrency token). Its writes are checked
-through its nearest tenant-scoped owner too: when a save adds an owned entity, moves one with a key of its own to
-another owner (by changing its foreign key), or changes or deletes one without a `TenantId` of its own, that owner
-must have been loaded or attached as the current tenant. If the save does not write the owner itself (it is loaded
-or only attached, modified with nothing EF Core writes, or deleted and added again under the same key, which EF Core
-saves as one UPDATE of what differs), its `TenantId` is written back with its concurrency token, or, for a deleted
-and added pair, its stored row is read, so the database confirms the owner is the current tenant's
-(an audit log sees an update of the owner). An owner whose `TenantId` is part of the key its owned types are owned
-through needs no write: their foreign key then names the tenant. One whose `TenantId` EF Core does not write after an
-insert, because it is part of another key, such as an alternate key on `(TenantId, Id)`, or is configured not to be
-saved, is not written back: its stored row is read before the save, one query per owner. That read names the current
-tenant itself and ignores every query filter, yours too, as EF Core's own writes do, so an owner your filter hides (an
-archived one, say) can still be given owned entities. Owned rows in a table of their own rely on their owner's
-statement for their tenant, so the save must succeed or fail as a whole: see
-[Saves that succeed or fail as a whole](#saves-that-succeed-or-fail-as-a-whole). An owned entity saved without its
-owner in the same context is rejected, and without a tenant, `OnMissingTenant` treats owned entities as tenant-scoped.
-
-These models cannot be isolated, so building them throws `TenantIsolationViolationException` (or, for the
-registration, `InvalidOperationException`):
-
-- a tenant-scoped type whose base entity type is not tenant-scoped;
-- a tenant-scoped owned type whose owner is not tenant-scoped;
-- an owned type without a `TenantId` of its own, under a tenant-scoped owner, whose key does not include its
-  owner's key (`OwnsMany(…, b => b.HasKey(x => x.Id))`): its rows carry no tenant, so an update or delete by that key
-  could reach another tenant's row. Keep EF Core's default key, or implement `ITenantEntity<TKey>` on it;
-- an owned type owned by a tenant-scoped type through a key that neither includes nor is part of that type's primary
-  key, nor includes its `TenantId` (`WithOwner().HasPrincipalKey(o => o.Code)`): Tenantry checks the owner by its
-  primary key, which need not be the row the owned rows name;
-- a tenant-scoped owned type mapped to JSON (`ToJson()`): its owner's row holds it, under the owner's `TenantId`, and
-  EF Core cannot check a `TenantId` of its own, so do not implement `ITenantEntity<TKey>` on it;
-- an entity type that is not tenant-scoped mapped to a tenant-scoped entity's table (table splitting): it has no
-  tenant filter or `TenantId`, so it would read and change every tenant's rows of that table (this one fails on the
-  context's first query or save, as only the finished model says which tables a type is mapped to);
-- entities that implement `ITenantEntity<TKey>` with more than one key type;
-- entities whose key type Tenantry is not registered for (`AddTenantry<Guid>` with `ITenantEntity<string>`);
-- a tenant-scoped entity whose `TenantId` is not a mapped public property of the key type, such as one implemented
-  explicitly (`Guid ITenantEntity<Guid>.TenantId => OrganizationId`);
-- on EF Core 10, a filter of your own named `TenantryQueryFilters.Tenant`, which the tenant filter would replace.
+Derived types are covered by their root's filter. Owned types are read and checked through their owner: a save that
+adds, moves, changes or deletes an owned entity needs its owner loaded or attached as the current tenant, and Tenantry
+has the database confirm the owner's tenant. Details: [Advanced](efcore-advanced.md). Some
+models cannot be isolated at all: see [the list](efcore-advanced.md#models-that-cannot-be-isolated).
 
 ### Fail-closed behaviour
 
-When **no tenant is current**, the filter matches **nothing**. Reads return zero rows rather than leaking every
-tenant's data. This is deliberate: a missing tenant is treated as "see nothing", not "see everything". The
-filter asks whether a tenant is current, rather than comparing the id with a default value, and Tenantry never
-lets a tenant have the default id.
+With no tenant current, the filter matches nothing, so reads return no rows. It checks whether a tenant is current
+rather than comparing the id with a default value, and no tenant can have the default id.
 
 ### How the query filter stays correct
 
-EF Core compiles a global query filter **once** and caches the plan across all instances of the model.
-If the filter captured an `ITenantContext<TKey>` instance, or the current tenant id, every query would use
-whatever was current when the plan was first built — a serious leak.
+EF Core compiles a query filter once and caches it for every instance of the model, so a filter that captured a
+tenant id or an `ITenantContext<TKey>` would keep the tenant current when it was compiled. Tenantry's filter reads the
+tenant through the `DbContext` running the query, which EF Core evaluates as a parameter on every execution, so one
+model serves every tenant and a pooled context serves whichever tenant is current when it queries.
 
-Tenantry's filter reads the tenant through the `DbContext` that runs the query, and EF Core evaluates that
-part again, as a query parameter, on **every** execution. So one model serves every tenant, a pooled context
-serves whichever tenant is current when it queries, and a query with no tenant matches nothing.
-
-Use a context for one tenant, as a request or an `ITenantScopeFactory` scope gives you. Its change tracker keeps
-what it loaded, so after a tenant switch on the same context `Find` and `Local` can still return entities loaded for
-the previous tenant (writing them is rejected). A pooled context is reset between leases.
+Use a context for one tenant, as a request or an `ITenantScopeFactory` scope gives you. After a tenant switch on the
+same context, `Find` and `Local` can still return entities loaded for the previous tenant (writing them is rejected).
+A pooled context is reset between leases.
 
 ### Combining with your own query filters
 
-The tenant filter is added after your `OnModelCreating` and combined with any filter you configured on the
-entity (with logical AND), so the order of your configuration does not matter: configure entity types and
-filters wherever you like, including in `IEntityTypeConfiguration` classes.
-
-On **EF Core 10+**, the tenant filter is a *named* filter, `TenantryQueryFilters.Tenant`, alongside your
-named filters. EF Core does not allow a named filter beside an unnamed one, so when an entity has an unnamed
-filter, Tenantry names it `TenantryQueryFilters.Application`, and adds the tenant filter beside it: your filter
-still applies to every query, and each can be ignored alone. Before EF Core 10, filters have no names, and the tenant
-filter is merged into the entity's filter. You can name your own filters on EF Core 10:
+The tenant filter is added after your `OnModelCreating` and ANDed with your own filter on the entity, so your
+configuration can go anywhere, including `IEntityTypeConfiguration` classes. Before EF Core 10, the tenant filter is
+merged into the entity's filter. On EF Core 10+, it is a named filter, `TenantryQueryFilters.Tenant`. EF Core does not
+allow a named filter beside an unnamed one, so Tenantry names an unnamed filter of yours
+`TenantryQueryFilters.Application`; both still apply, and each can be ignored alone. You can name your own:
 
 ```csharp
 modelBuilder.Entity<Order>().HasQueryFilter("SoftDelete", o => !o.IsDeleted);
@@ -168,8 +111,7 @@ modelBuilder.Entity<Order>().HasQueryFilter("SoftDelete", o => !o.IsDeleted);
 
 ### Bypassing the filter (admin / reporting)
 
-Use EF Core's standard `IgnoreQueryFilters()` to deliberately cross tenant boundaries — for admin
-dashboards, cross-tenant reports, or maintenance:
+`IgnoreQueryFilters()` reads across tenants, for admin dashboards, cross-tenant reports or maintenance:
 
 ```csharp
 var perTenant = await db.Orders
@@ -179,101 +121,49 @@ var perTenant = await db.Orders
     .ToListAsync();
 ```
 
-On EF Core 10, `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes only the tenant filter and keeps your
-other named filters. `IgnoreQueryFilters()` removes them all.
-
-This bypasses the read filter only. Use it consciously and guard such endpoints with appropriate
-authorization — it is the one place the isolation is intentionally off.
+On EF Core 10, `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes only the tenant filter and keeps your other
+named filters; `IgnoreQueryFilters()` removes them all. Either applies to that query only. Protect endpoints that use
+it with authorization.
 
 ## Write isolation: the interceptor
 
-The `SaveChanges`/`SaveChangesAsync` interceptor runs on every save of a context that uses `UseTenantry()`, and
-for entities implementing `ITenantEntity<TKey>`:
+The `SaveChanges`/`SaveChangesAsync` interceptor runs on every save of a context that uses `UseTenantry()`. For
+entities that implement `ITenantEntity<TKey>`:
 
-- **Added** entities have their `TenantId` **stamped** from the current tenant when it is unset (the key
-  type's default, `null` or `string.Empty`). An `Added` entity that already names **another** tenant is
-  rejected with `TenantIsolationViolationException` rather than silently moved, which catches code (or a
-  request body) trying to write into another tenant. The stamp goes through EF Core, so `TenantId` may have a
-  private or init-only setter.
-- **Modified / Deleted** entities are **validated**: the entity must have been loaded or attached as the
-  current tenant and must still belong to it. Otherwise the interceptor throws
-  `TenantIsolationViolationException` **before any data is written** and the whole `SaveChanges` is
-  aborted. This is **always on**, regardless of configuration.
-- **The database enforces ownership too.** `TenantId` is a concurrency token, so every `UPDATE` and `DELETE`
-  includes `AND TenantId = <tenant the entity was loaded or attached with>`. A detached entity that pairs another
-  tenant's primary key with the current tenant's `TenantId` passes the in-memory check but matches no row, so EF
-  Core throws `DbUpdateConcurrencyException` and nothing is changed. The interceptor logs a warning when a
-  tenant-scoped write matches no row. No schema change is needed; your next migration's model snapshot records the
-  concurrency token. An entity mapped to more than one table (table-per-type inheritance, entity splitting) is
-  updated only in the tables whose columns changed, so when one changes, its `TenantId` is written back to its table
-  too, to be checked there (or, when EF Core does not save `TenantId`, its stored row is read before the save, as an
-  owner's is); one keyed by its `TenantId` needs neither, as every table's key names the tenant. A save that deletes
-  such an entity and adds one under the same key, which EF Core saves as an `UPDATE` of what differs, table by table,
-  has the deleted one's stored row read. Its rows outside the table with `TenantId` rely on that table's statement, so
-  the save must succeed or fail as a whole (below).
+- **Added** entities get `TenantId` from the current tenant when it is unset (the key type's default, `null` or
+  `string.Empty`). One that already names another tenant is rejected with `TenantIsolationViolationException`, not
+  moved. The stamp goes through EF Core, so `TenantId` may have a private or init-only setter.
+- **Modified** and **Deleted** entities must have been loaded or attached as the current tenant and still belong to
+  it. Otherwise the interceptor throws `TenantIsolationViolationException` before anything is written, and the whole
+  save is aborted. With a tenant current, this check always runs. Without one,
+  [`OnMissingTenant`](#onmissingtenant-writes-with-no-tenant) decides.
 
-If there is **no resolved tenant**, behaviour follows the `OnMissingTenant` policy (below).
-
-### Saves that succeed or fail as a whole
-
-Some rows have no tenant check of their own. Owned rows stored in a table of their own are checked through their
-owner's statement, and when an entity is mapped to more than one table, only the table with `TenantId` is checked.
-Those rows are safe only if the whole save is undone when the check fails. EF Core normally runs a save in a
-transaction and rolls it back when it fails, but not in every setup. For such saves, Tenantry does the following:
-
-- **The failed check cannot be suppressed.** An interceptor of yours that suppresses concurrency failures
-  (`ThrowingConcurrencyException`), such as a "last write wins" policy or EF Core's sample that ignores rows already
-  deleted, still works for other entities. For a check that other rows depend on, Tenantry's interceptor throws the
-  failure anyway, wherever yours is registered. Interceptors added after `UseTenantry()`, including those that packages
-  add through it, do not see that failure.
-- **Without a transaction** (`Database.AutoTransactionBehavior` set to `Never`), EF Core runs the save in a
-  transaction of its own, as it does by default, and the setting goes back to `Never` when the save ends (event 2005,
-  at `Debug`). Other saves still run without a transaction. If your database or connection pooler cannot run
-  transactions, set `EfCoreIsolationOptions.OnSaveWithoutTransaction` to `Reject`: such a save then throws
-  `TenantIsolationViolationException` of kind `SaveWithoutTransaction` before anything is sent.
-  - If you began a transaction on the connection through ADO.NET, hand it to EF Core with `Database.UseTransaction`;
-    otherwise EF Core cannot begin its own, and the save fails.
-  - If a `SavingChanges` interceptor registered after Tenantry's stops the save, the setting stays `WhenNeeded` until
-    the context's next save, which sets it back to `Never`.
-- **In your own transaction**, EF Core rolls a failed save back to a savepoint it creates first. If you turned
-  savepoints off (`AutoSavepointsEnabled = false`), Tenantry turns them on for such a save. A transaction without
-  savepoints, such as one on SQL Server with multiple active result sets (MARS), is rolled back instead of committed if
-  such a save in it failed after sending any of its statements, or if EF Core could not roll back to its savepoint.
-  `Commit` then throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
-  - This applies to any failure of such a save, not only a failed tenant check. A save can fail before EF Core reads
-    the check (on a duplicate key, for example), so Tenantry cannot know whether the check held, and a forged write
-    looks the same as a genuine conflict.
-  - It also applies when Tenantry never learns that the save succeeded, which happens if an interceptor added before
-    `UseTenantry()` throws from `SavedChanges`.
-- **In a `TransactionScope`**, or a transaction the connection was enlisted in, EF Core creates no savepoint. The same
-  failures roll the transaction back when it completes, so disposing the completed scope throws
-  `TransactionAbortedException`.
-
-These cases are not covered:
-
-- EF Core's in-memory provider, which has no transactions;
-- SQLite, or another provider that cannot join a `TransactionScope`, used inside one with EF Core's
-  `AmbientTransactionWarning` turned off: it then saves with no transaction at all;
-- storage without transactions, such as MySQL's MyISAM tables;
-- an interceptor that suppresses EF Core's savepoint commands;
-- a transaction handed to EF Core with `UseTransaction` and then committed directly through ADO.NET.
+The database checks too. `TenantId` is a concurrency token, so every `UPDATE` and `DELETE` includes
+`AND TenantId = <tenant the entity was loaded or attached with>`. A detached entity that pairs another tenant's key
+with the current tenant's `TenantId` passes the in-memory check but matches no row, so EF Core throws
+`DbUpdateConcurrencyException` and nothing changes. The interceptor logs a warning when a tenant-scoped write matches
+no row. No schema change is needed; your next migration's snapshot records the concurrency token. Entities mapped to
+more than one table get extra checks: see [Advanced](efcore-advanced.md#entities-mapped-to-more-than-one-table).
 
 Call `UseTenantry()` after adding your own `SaveChanges` interceptors. An interceptor that runs after Tenantry's and
-changes what the save writes, such as a soft-delete interceptor that turns a delete into an update, is not checked.
+changes what a save writes, such as a soft delete that turns a delete into an update, is not checked.
+`AddDbContextPerTenantDatabase` applies `UseTenantry()` before your configuration, so interceptors you add there run
+after Tenantry's: they see new entities already stamped, and their changes are not checked.
 
 `TenantIsolationViolationException` (namespace `Tenantry.EfCore`) says which check failed in `Kind`:
 
 | `Kind` | Thrown when | `TypeName` | Tenant ids |
 |--------|-------------|------------|------------|
-| `EntityWrite` | `SaveChanges` would write another tenant's entity (above) | the entity | the entity's and the current tenant |
-| `BulkUpdate` | An `ExecuteUpdate` would set `TenantId`, or sets a property the guard cannot identify | the entity | `null` |
-| `TenantDatabaseMismatch` | A database-per-tenant context would use another tenant's database ([below](#database-per-tenant)) | the `DbContext` | the database's and the current tenant (`null` when none) |
-| `ModelConfiguration` | A model does not isolate a tenant-scoped entity type ([above](#read-isolation-the-global-query-filter), and [below](#what-is-and-isnt-isolated)) | the entity | `null` |
-| `SaveWithoutTransaction` | A save that must succeed or fail as a whole would run without a transaction, and `OnSaveWithoutTransaction` is `Reject` ([above](#saves-that-succeed-or-fail-as-a-whole)) | the `DbContext` | `null` |
-| `TransactionRolledBack` | A transaction EF Core could not undo a failed save of that kind in would commit or complete ([above](#saves-that-succeed-or-fail-as-a-whole)) | the entity whose check failed, or the `DbContext` | `null` |
+| `EntityWrite` | `SaveChanges` would write another tenant's entity | the entity | the entity's and the current tenant |
+| `BulkUpdate` | `ExecuteUpdate` would set `TenantId`, or sets a property the guard cannot identify | the entity | `null` |
+| `TenantDatabaseMismatch` | A context would use another tenant's database ([database per tenant](#database-per-tenant)) | the `DbContext` | the database's and the current tenant (`null` when none) |
+| `ModelConfiguration` | The model does not isolate a tenant-scoped entity type ([list](efcore-advanced.md#models-that-cannot-be-isolated)) | the entity | `null` |
+| `SaveWithoutTransaction` | An [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) would run without a transaction, and `OnSaveWithoutTransaction` is `Reject` | the `DbContext` | `null` |
+| `TransactionRolledBack` | A transaction would commit or complete after an [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) in it failed and EF Core could not undo it | the entity whose check failed, or the `DbContext` | `null` |
+| `TenantSchemaMismatch` | A context would use another tenant's schema. Thrown by packages that put tenants in schemas of their own, such as Tenantry.Pro, from a [`TenantContextGuard`](#extending-contributors) | the `DbContext` | as the package sets them |
 
-`OffendingTenantId` and `ExpectedTenantId` are strings for logging. Nothing has been written when it is thrown, or
-for a refused commit, kept: the transaction is rolled back.
+`OffendingTenantId` and `ExpectedTenantId` are strings for logging. When it is thrown, nothing has been written; a
+refused commit's transaction is rolled back, so nothing is kept.
 
 ## Configuring write isolation
 
@@ -291,15 +181,14 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     }));
 ```
 
-`OnSaveWithoutTransaction` says what a save that must succeed or fail as a whole does when
-`Database.AutoTransactionBehavior` is `Never`: run in a transaction EF Core begins (`UseTransaction`, the default), or
-throw before anything is sent (`Reject`). See [Saves that succeed or fail as a whole](#saves-that-succeed-or-fail-as-a-whole).
+`OnSaveWithoutTransaction` applies to an all-or-nothing save when `Database.AutoTransactionBehavior` is `Never`: run
+it in a transaction EF Core begins (`UseTransaction`, the default), or throw before anything is sent (`Reject`). See
+[Saves that succeed or fail as a whole](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole).
 
-### `OnMissingTenant` — what happens when a write runs with no tenant
+### `OnMissingTenant`: writes with no tenant
 
-The policy applies only when a save writes entities that implement `ITenantEntity<TKey>`. Saves that
-write only host-level data (the tenant registry, a global catalogue, seeding reference data) never
-need a tenant and are unaffected. The `MissingTenantBehavior` values:
+The policy applies only to saves that write `ITenantEntity<TKey>` entities. Saves of host-level data only (the tenant
+registry, a global catalogue, seeded reference data) never need a tenant.
 
 | Value | Behaviour when tenant-scoped entities are saved with no tenant |
 |-------|----------------------------------------|
@@ -307,20 +196,25 @@ need a tenant and are unaffected. The `MissingTenantBehavior` values:
 | `Warn` | The save proceeds and a structured warning is logged. |
 | `Allow` | The save proceeds silently. |
 
-`Warn` and `Allow` are opt-ins for maintenance code that deliberately writes across tenants. Updates and
-deletes are then not tenant-checked, and a new entity must set `TenantId` explicitly: an unowned row is
-always rejected, whatever the policy. Prefer running maintenance per tenant with `ITenantScopeFactory`
-instead.
+`Warn` and `Allow` are for maintenance code that writes across tenants on purpose. Updates and deletes are then not
+tenant-checked, and a new entity must set `TenantId` itself: a row with no tenant is always rejected. Reads with no
+tenant still match nothing.
 
-Reads are unaffected by this setting — they always fail closed (a query with no tenant matches nothing).
+`ConfigureEfCoreIsolation` sets the policy for every context, so keep it at `Reject`. To relax it for one context kept
+for maintenance code, use `UseTenantry(configure)`, which starts from the application's options:
 
-Keep `OnMissingTenant` at `Reject` except in maintenance code.
+```csharp
+builder.Services.AddDbContext<MaintenanceDbContext>(options => options
+    .UseSqlServer(connectionString)
+    .UseTenantry(o => o.OnMissingTenant = MissingTenantBehavior.Allow));
+```
+
+Or run maintenance one tenant at a time with `ITenantScopeFactory`.
 
 ## DbContext pooling
 
-Pooled contexts need nothing extra. A pooled instance is reused across requests, and because the filter and
-the interceptor read the tenant that is current when the context queries or saves, each request sees only its
-own tenant. As for any pooled context, it needs a single constructor that takes only its options.
+Pooled contexts need nothing extra: the filter and the interceptor read the tenant current when the context queries
+or saves. As for any pooled context, it needs a single constructor that takes only its options.
 
 ```csharp
 builder.Services.AddDbContextPool<AppDbContext>(options =>
@@ -331,14 +225,13 @@ builder.Services.AddPooledDbContextFactory<AppDbContext>(options =>
     options.UseSqlServer(connectionString).UseTenantry());
 ```
 
-This covers shared-database isolation. With a database per tenant, the connection must change with the tenant;
-see [Database per tenant](#database-per-tenant).
+With a database per tenant, the connection must change with the tenant too: see below.
 
 ## Database per tenant
 
-To give each tenant its own database (or route tenants to different servers), tell Tenantry how to find a
-tenant's connection string, and register the context with `AddDbContextPerTenantDatabase`. Configure the
-provider **without** a connection string: each context is connected to the current tenant's database.
+To give each tenant its own database, or route tenants to different servers, tell Tenantry how to find a tenant's
+connection string and register the context with `AddDbContextPerTenantDatabase`. Configure the provider without a
+connection string; each context connects to the current tenant's database.
 
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant
@@ -349,150 +242,141 @@ builder.Services.AddTenantry<string>(tenant => tenant
     .AddDbContextPerTenantDatabase<AppDbContext>((sp, options) => options.UseSqlServer(), pooled: true));
 ```
 
-- It registers a scoped `AppDbContext` and an `IDbContextFactory<AppDbContext>`, and applies `UseTenantry()` before
-  your configuration, so interceptors you add see new entities already stamped. Use it instead of `AddDbContext`,
-  `AddDbContextPool` or `AddPooledDbContextFactory` for that context. Call `UseConnectionStrings` first; without it,
-  `AddDbContextPerTenantDatabase` throws. It returns the builder without its key type, so it goes after the methods
-  that need one.
-- `pooled: true` reuses contexts from a pool, as `AddDbContextPool` does; the context then needs a constructor
-  that takes only its options. Without a pool, a context can take other services in its constructor, and has its
-  scope as its application service provider, as with `AddDbContext`.
-- `dotnet ef` cannot create the context, because no tenant is current at design time: give it an
-  `IDesignTimeDbContextFactory` (see [Migrations](#migrations)).
-- Creating a context without a current tenant throws `TenantNotResolvedException`.
-- The scoped context reads the connection string synchronously, so it needs `GetConnectionString`. With only
-  `GetConnectionStringAsync`, create contexts with `IDbContextFactory<T>.CreateDbContextAsync()`.
+- It registers a scoped `AppDbContext` and an `IDbContextFactory<AppDbContext>`; use it instead of `AddDbContext`,
+  `AddDbContextPool` or `AddPooledDbContextFactory`. Call `UseConnectionStrings` first, or it throws. It returns the
+  builder without its key type, so put it last (see [Registration](core-concepts.md#registration)).
+- It applies `UseTenantry()` before your configuration (see [Write isolation](#write-isolation-the-interceptor)).
+- `pooled: true` pools contexts as `AddDbContextPool` does, so the context needs a constructor that takes only its
+  options. Unpooled, it can take other services and has its scope as its application service provider.
+- Creating a context with no current tenant throws `TenantNotResolvedException` (for `dotnet ef`, see
+  [Migrations](#migrations)).
+- With only `GetConnectionStringAsync`, the scoped context reads its connection string when it first opens a
+  connection. It can still be injected, but only asynchronous calls (`ToListAsync`, `SaveChangesAsync`) work on it;
+  a synchronous one throws `InvalidOperationException`.
 
-The tenant filter and write checks still apply, as a second line of defence: a connection string that points at
-the wrong database then shows no rows and rejects writes instead of mixing tenants. So does a guard: before a
-context opens a connection, and again before every command it runs, it checks that the connection was set for
-this context (and, pooled, for this lease) and belongs to the tenant that is current now. A context kept and used
-after switching to another tenant, or whose connection or connection string your code replaced, throws
-`TenantIsolationViolationException` instead of touching the wrong database. That includes a context whose
-connection is still open, whether you opened it or a transaction did.
+The tenant filter and write checks still apply, so a connection string that points at the wrong database shows no rows
+and rejects writes. A guard also checks, before a context opens a connection and before every command, that the
+connection was set for this context (and, pooled, this lease) and belongs to the current tenant. A context used after
+a switch to another tenant, or whose connection or connection string your code replaced, throws
+`TenantIsolationViolationException`, even if its connection is already open.
 
-- The guard cannot see SQL you run yourself on `Database.GetDbConnection()`. Nor does it stop a query that
-  started before the tenant changed: a streaming or split query keeps reading from the database it started
-  on, and those rows belong to the tenant that was current when it started. Use SQLite in-memory databases
-  as tenant databases only in tests, because deleting one runs no command the guard can check.
+The guard cannot see SQL you run on `Database.GetDbConnection()`. A streaming or split query that started before the
+tenant changed keeps reading from its database, whose rows belong to the tenant current when it started. Use SQLite
+in-memory tenant databases only in tests: deleting one runs no command the guard can check.
 
-Do not read the connection string yourself in an `AddDbContextPool` or `AddPooledDbContextFactory` callback: it
-runs once, and EF Core keeps a pooled context's connection string between leases, so every pooled context would
-keep the first tenant's database.
+Do not read the connection string yourself in an `AddDbContextPool` or `AddPooledDbContextFactory` callback: it runs
+once, and EF Core keeps a pooled context's connection string between leases, so every lease would use the first
+tenant's database.
 
 `UseConnectionStrings` also registers `ITenantConnectionStringProvider<TKey>`, which returns a given tenant's
-connection string (`Get(tenant)`, `GetAsync(tenant)`) for code that visits tenants without making each one
-current (implement it to decorate the default provider, for example to cache), and
-`CurrentTenantConnectionString<TKey>`, which returns the current tenant's (`Get()`, `GetAsync()`) for code that
-opens its own connections, and throws `TenantNotResolvedException` without one. Set `GetConnectionStringAsync`
-when the string comes from a secrets store: `GetAsync` prefers it, and the synchronous `Get` then needs
-`GetConnectionString` as well. The default provider calls your delegate every time and does not cache.
+connection string (`Get(tenant)`, `GetAsync(tenant)`) for code that visits tenants without making each one current,
+and `CurrentTenantConnectionString<TKey>`, which returns the current tenant's (`Get()`, `GetAsync()`) for code that
+opens its own connections, and throws `TenantNotResolvedException` without one. The default provider calls your
+delegate every time and does not cache.
 
-It is tested on SQLite, SQL Server, PostgreSQL and MySQL with one pooled instance serving two tenant
-databases in turn, with concurrent leases, and with a context used as another tenant after its connection or
-transaction was opened: saving, querying, raw SQL, bulk updates and deletes, creating, migrating and deleting
-the database, and, on SQL Server and PostgreSQL, drawing HiLo keys.
+For a secrets store, set `GetConnectionStringAsync`, which `GetAsync` prefers. To use a client from DI, register your
+own provider, built from the application's services, and return `false` from its `CanGetSynchronously` if it can only
+read asynchronously. To cache or log, wrap whichever provider is registered:
 
-The runnable [`DatabasePerTenant` sample](../samples/Tenantry.Samples.DatabasePerTenant) gives each tenant
-its own SQLite file.
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .UseStore<AppTenantStore>()
+    .UseConnectionStrings(sp => new VaultConnectionStrings(sp.GetRequiredService<SecretClient>()))
+    .DecorateConnectionStrings((sp, inner) => new LoggingConnectionStrings(inner)));
+```
+
+Tests on SQLite, SQL Server, PostgreSQL and MySQL cover one pool serving two tenant databases in turn, concurrent
+leases, and a context used as another tenant after opening its connection or transaction, for saves, queries, raw SQL,
+bulk updates and deletes, creating, migrating and deleting the database, and HiLo keys (SQL Server, PostgreSQL). The
+[`DatabasePerTenant` sample](../samples/Tenantry.Samples.DatabasePerTenant) gives each tenant its own SQLite file.
 
 ## Extending: contributors
 
-Packages that build on Tenantry (Tenantry Pro, or your own) can add to every context that uses `UseTenantry()`
-without asking for another call on each one. Register implementations as singletons:
+Packages that build on Tenantry (Tenantry Pro, or your own) can add to every context that uses `UseTenantry()`.
+Register implementations as singletons:
 
-- `ITenantDbContextOptionsContributor.Configure(DbContextOptionsBuilder)` runs inside `UseTenantry()`, for
-  example to add an interceptor. `optionsBuilder.Options.ContextType` says which context.
+- `ITenantDbContextOptionsContributor.Configure(DbContextOptionsBuilder)` runs inside `UseTenantry()`, for example to
+  add an interceptor. `optionsBuilder.Options.ContextType` says which context.
 - `ITenantModelContributor.Configure(ModelBuilder, DbContext)` runs while EF Core builds the model, after
-  `OnModelCreating` and before the tenant filters, so an entity type it adds is isolated too.
+  `OnModelCreating` and before the tenant filters, so entity types it adds are isolated too.
 
-Both come from the context's application service provider, so a context built without it runs none. Several
-registrations build a context's options only once (pooling, `AddDbContextFactory`, `AddDbContextPerTenantDatabase`),
-so an options contributor must never depend on the current tenant.
+Both come from the context's application service provider; a context built without one runs none. Pooling,
+`AddDbContextFactory` and `AddDbContextPerTenantDatabase` build a context's options only once, so an options
+contributor must never depend on the current tenant.
 
-`UseTenantry()` installs its own EF Core `IModelCustomizer`, so a context that uses it must not also replace
-`IModelCustomizer` (creating it throws, rather than losing one or the other): move that configuration into
-`OnModelCreating` or a model contributor. For the same reason it cannot be combined with `UseInternalServiceProvider`
-(EF Core adds no extension's services to a provider you build), and creating such a context throws too. Compiled
-models (`dotnet ef dbcontext optimize`) are not supported: EF Core compiles no model with query filters.
+`UseTenantry()` installs its own `IModelCustomizer`, so creating a context that also replaces it throws: move that
+configuration into `OnModelCreating` or a model contributor. So does creating one with `UseInternalServiceProvider`,
+as EF Core adds no extension's services to a provider you build. Compiled models (`dotnet ef dbcontext optimize`) are
+not supported: EF Core compiles no model with query filters.
 
-## Tested providers
+Two more seams let a package fail closed:
 
-Tenantry uses only standard EF Core features, but write isolation relies on each provider reporting the
-rows an `UPDATE`/`DELETE` *matched* (the stored-tenant predicate turns a forged write into a zero-row
-update that EF Core reports as a concurrency failure). The combinations below run the write-isolation
-suite against a real database: forged updates and deletes, entities loaded under another tenant,
-unchanged-value updates, writes without a tenant, tenant-filtered `ExecuteUpdate`/`ExecuteDelete`, the
-`TenantId` bulk-update guard, `GetDatabaseValues` of another tenant's row, pooled contexts, and pooled
-contexts with a database per tenant.
-
-| Database | EF Core provider | Framework | Status |
-|----------|------------------|-----------|--------|
-| SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 8, 9, 10 | Tested (unit suite) |
-| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 8.0.31, 9.0.20, 10.0.12 | .NET 8, 9, 10 | Tested |
-| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.4, 9.0.0, 10.0.3 | .NET 8, 9, 10 | Tested |
-| MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` 8.0.2, 9.0.0 | .NET 8, 9 | Tested |
-| MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
-| MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | .NET 10 | Not tested (no EF Core 10 release) |
-
-Each framework runs the suite with its own EF Core version; MariaDB is not tested.
-
-If you use a MySQL connector option that reports *changed* rather than *matched* rows (for example `UseAffectedRows=true`), an update that changes no
-values reports zero rows and EF Core raises a false concurrency failure; keep the default.
+- `TenantContextGuard` is an interceptor that calls your `Check(DbContext)` before the context opens a connection,
+  runs a command or saves. Throw `TenantNotResolvedException` or `TenantIsolationViolationException` from it.
+  Tenantry's database-per-tenant guard is one.
+- `TenantModel` says which entity types a model isolates: `HasTenantOwnedEntityTypes`, `IsTenantOwned`, and
+  `FindUnisolatedEntityTypes`, the types neither tenant-owned nor marked as shared by every tenant. Mark such a type
+  with `[SharedAcrossTenants]` or `modelBuilder.Entity<Country>().IsSharedAcrossTenants()`. The marker changes nothing
+  in queries or saves; marking a tenant-owned type fails the model check.
 
 ## What is and isn't isolated
 
-Tenantry isolates tenants in the application, through EF Core's query pipeline and `SaveChanges`. It is
-**not** database-enforced row-level security: anything that reaches the database outside those paths is
-not tenant-checked. If you need the database itself to enforce isolation (for example against direct SQL
-access), add row-level security policies in the database as well, or use a database per tenant.
+Tenantry isolates tenants in the application, through EF Core's queries and `SaveChanges`. It is not row-level
+security in the database: anything that reaches the database another way is not checked. If the database itself must
+enforce isolation (against direct SQL access, say), add row-level security there too, or use a database per tenant.
 
 | Operation | Isolated? | Behaviour |
 |-----------|-----------|-----------|
-| LINQ queries | Yes | The query filter limits results to the current tenant; with no tenant they match nothing. |
+| LINQ queries | Yes | Limited to the current tenant; with no tenant they match nothing. |
 | `SaveChanges` insert, update, delete | Yes | Inserts are stamped; updates and deletes must belong to the current tenant, checked in memory and in the SQL `WHERE` clause. Without a tenant, `OnMissingTenant` applies. |
-| `ExecuteUpdate`, `ExecuteDelete` | Yes | The query filter limits affected rows to the current tenant; with no tenant they affect nothing. `ExecuteUpdate` may not set `TenantId`: when the query is compiled, a guard resolves each setter the way EF Core does (member access or `EF.Property`, through casts and through `Select`, `Join` and `SelectMany` projections) and throws `TenantIsolationViolationException` if it lands on `TenantId`. It fails closed on a setter it cannot resolve, such as one through a `GroupBy` projection or an `EF.Property` name it cannot read, and on setters it cannot read at all, as a new EF Core version could bring. It does not see a second property mapped to the `TenantId` column. |
-| `IgnoreQueryFilters()` | No, by design | Removes the tenant filter from that query, including `ExecuteUpdate`/`ExecuteDelete`, which then affect **every** tenant. Treat it as a privileged operation. |
-| Raw SQL (`FromSql`, `SqlQuery`, `ExecuteSql`) | No | Neither the filter nor the interceptors see raw SQL. Add the tenant predicate yourself. |
-| `Entry(…).Reload()`, `GetDatabaseValues()` | Yes | EF Core reads the row by its key without query filters; Tenantry keeps the tenant filter on that query, so another tenant's row reads as deleted: `GetDatabaseValues()` returns `null` and `Reload()` detaches the entity. On EF Core 10 the entity's other filters are still ignored (an unnamed one is named `TenantryQueryFilters.Application`); on EF Core 8 and 9 its own filter applies too, merged with the tenant filter. |
-| Entities a context already tracks | No | `Find` and `Local` answer from the change tracker, which keeps entities loaded for an earlier tenant if the same context is used after a tenant switch. Use a context for one tenant. |
-| Pooled contexts | Yes | Each use reads the tenant active at that moment; see [DbContext pooling](#dbcontext-pooling). |
-| Other `DbContext` instances | No | A context whose options do not call `UseTenantry()` gets no isolation at all. |
+| `ExecuteUpdate`, `ExecuteDelete` | Yes | Limited to the current tenant's rows; with no tenant they affect nothing. When the query is compiled, a guard resolves each `ExecuteUpdate` setter as EF Core does (member access or `EF.Property`, through casts and `Select`, `Join` and `SelectMany` projections) and throws if one sets `TenantId`. It also throws on a setter it cannot resolve (through `GroupBy`, or an `EF.Property` name it cannot read) or read at all, as a new EF Core version could bring. It misses a second property mapped to the `TenantId` column. |
+| `IgnoreQueryFilters()` | No, by design | Removes the tenant filter from that query, so `ExecuteUpdate`/`ExecuteDelete` then affect every tenant. |
+| Raw SQL (`FromSql`, `SqlQuery`, `ExecuteSql`) | No | Neither the filter nor the interceptors see it. Add the tenant predicate yourself. |
+| `Entry(…).Reload()`, `GetDatabaseValues()` | Yes | EF Core reads the row by key without query filters, but Tenantry keeps the tenant filter, so another tenant's row reads as deleted: `GetDatabaseValues()` returns `null` and `Reload()` detaches the entity. On EF Core 10 the entity's other filters are still ignored (an unnamed one is named `TenantryQueryFilters.Application`); on EF Core 8 and 9 its own filter applies too, merged with the tenant filter. |
+| Entities a context already tracks | No | `Find` and `Local` answer from the change tracker, which keeps entities loaded for an earlier tenant. Use a context for one tenant. |
+| Pooled contexts | Yes | Each use reads the tenant current at that moment. |
+| Other `DbContext` instances | No | A context whose options do not call `UseTenantry()` gets no isolation. |
 
-`UseTenantry()` adds the tenant filter and concurrency token last, but a model can still lose them afterwards, for
-example to a model-building convention. The interceptors check each model on its first query and its first save, and throw
-`TenantIsolationViolationException` instead of running either if a tenant-scoped entity type has lost its tenant
-filter or its `TenantId` concurrency token. To read across tenants on purpose, use `IgnoreQueryFilters()`.
+Some models cannot be isolated, and building them throws: see
+[Models that cannot be isolated](efcore-advanced.md#models-that-cannot-be-isolated).
 
 ## Migrations
 
-The tenant filter and the `TenantId` concurrency token are part of the model, so they participate in
-migrations normally (neither changes the schema):
+The tenant filter and the `TenantId` concurrency token are part of the model and take part in migrations as usual.
+Neither changes the schema:
 
 ```bash
 dotnet ef migrations add Initial
 dotnet ef database update
 ```
 
-A couple of notes:
+- The `TenantId` column comes from your entity (`ITenantEntity<TKey>` or `TenantEntity<TKey>`). Tenantry creates no
+  indexes.
+- `dotnet ef` builds the model with no tenant current, which does not affect the schema. A design-time factory
+  (`IDesignTimeDbContextFactory`) that builds options without the application's services can still call
+  `UseTenantry()`; only querying and saving need them. If a package adds to the model through an
+  `ITenantModelContributor`, which runs only with those services, build them in the factory and pass them with
+  `UseApplicationServiceProvider`.
+- A context registered with `AddDbContextPerTenantDatabase` needs such a factory, as it cannot be created without a
+  current tenant.
 
-- The `TenantId` column comes from your entity (via `ITenantEntity<TKey>`/`TenantEntity<TKey>`). Add
-  the indexes your queries need (see above); Tenantry does not create any.
-- Design-time tooling (`dotnet ef`) builds the model with no tenant current, which does not affect schema
-  generation. A design-time factory (`IDesignTimeDbContextFactory`) that builds options by hand, without the
-  application's services, can still call `UseTenantry()`, and only querying or saving needs the application's
-  services. The model is the same unless a package adds to it through an `ITenantModelContributor`, which runs only
-  with the application's services: then build them in the factory and pass them with `UseApplicationServiceProvider`.
-- A context registered with `AddDbContextPerTenantDatabase` needs such a factory, because `dotnet ef` cannot create
-  it without a current tenant.
-
-The [`EfCoreWeb` sample](../samples/Tenantry.Samples.EfCoreWeb) uses real migrations, a database-backed
-tenant store, mixed tenanted/global entities, cross-boundary relationships, and an admin endpoint.
+The [`EfCoreWeb` sample](../samples/Tenantry.Samples.EfCoreWeb) uses real migrations, a database-backed tenant store,
+tenanted and global entities, relationships between them, and an admin endpoint.
 
 ## Non-HTTP usage
 
-In console apps, workers, and background jobs there is no middleware to make a tenant current. Register with
-`AddTenantry`, use `UseTenantry()` exactly as above, and open a scope around each unit of work with
-`ITenantScopeFactory<TKey>`, which also gives each tenant its own `DbContext`. The runnable
-[`EfCoreConsole` sample](../samples/Tenantry.Samples.EfCoreConsole) shows stamping, read filtering, nested
-tenants, a rejected cross-tenant write, and fail-closed reads. See [Non-HTTP hosts](non-http-hosts.md).
+Console apps, workers and background jobs have no middleware to make a tenant current. Use `AddTenantry` and
+`UseTenantry()` as above, and open a scope around each unit of work with `ITenantScopeFactory<TKey>`, which also gives
+each tenant its own `DbContext`. The [`EfCoreConsole` sample](../samples/Tenantry.Samples.EfCoreConsole) shows
+stamping, read filtering, nested tenants, a rejected cross-tenant write, and fail-closed reads. See
+[Non-HTTP hosts](non-http-hosts.md).
+
+## Tested providers
+
+The write-isolation suite runs against SQLite, SQL Server, PostgreSQL and MySQL on every supported .NET version. The
+versions and caveats are in [Compatibility](compatibility.md#databases).
+
+## Owned and multi-table entities
+
+Owned entities, entities mapped to more than one table, and the saves that must succeed or fail as a whole are
+described in [Owned and multi-table entities](efcore-advanced.md).

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 
@@ -13,12 +15,64 @@ internal interface ICurrentTenantId
 {
     /// <summary>The current tenant's id, formatted by <see cref="TenantIds.Format{TKey}"/>, or null with no tenant.</summary>
     string? Current { get; }
+
+    /// <summary>Makes no tenant current until disposed.</summary>
+    IDisposable UseNoTenant();
+
+    /// <summary>
+    /// When the current tenant has been invalidated since the application started, makes the store's copy of it current
+    /// until disposed, so a value built now does not come from a copy read before the invalidation. Null otherwise.
+    /// </summary>
+    IDisposable? UseLatest();
 }
 
-internal sealed class CurrentTenantId<TKey>(ITenantContext<TKey> tenantContext) : ICurrentTenantId
+internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantContext, TenantOptionsCaches caches, IServiceProvider services)
+    : ICurrentTenantId
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
+    private ITenantLookup<TKey>? _lookup;
+    private bool _lookupResolved;
+
     public string? Current => tenantContext.CurrentTenant is { } tenant ? TenantIds.Format(tenant.TenantId) : null;
+
+    public IDisposable UseNoTenant() => tenantContext.UseNoTenant();
+
+    public IDisposable? UseLatest()
+    {
+        if (tenantContext.CurrentTenant is not { } tenant ||
+            !caches.WasInvalidated(TenantIds.Format(tenant.TenantId)) ||
+            Lookup() is not { } lookup)
+        {
+            return null;
+        }
+
+        // A request resolved before the invalidation still carries the old copy. Options have no asynchronous
+        // configuration, so the read blocks, only when a value is built and the tenant is not in CacheTenants' cache.
+        // The store is read as no tenant, as it is when a request is resolved.
+        ITenantDescriptor<TKey>? latest;
+
+        using (tenantContext.UseNoTenant())
+        {
+            var read = lookup.GetTenantAsync(tenant.TenantId);
+            latest = read.IsCompletedSuccessfully ? read.Result : read.AsTask().GetAwaiter().GetResult();
+        }
+
+        // A tenant the store does not have (set with Use, or since removed) keeps the copy the caller has.
+        return latest is null || ReferenceEquals(latest, tenant) ? null : tenantContext.Use(latest);
+    }
+
+    private ITenantLookup<TKey>? Lookup()
+    {
+        if (_lookupResolved)
+            return _lookup;
+
+        // Without a store there is nothing newer to read; the lookup's constructor would throw.
+        _lookup = services.GetService<IServiceProviderIsService>()?.IsService(typeof(ITenantStore<TKey>)) == false
+            ? null
+            : services.GetService<ITenantLookup<TKey>>();
+        _lookupResolved = true;
+        return _lookup;
+    }
 }
 
 /// <summary>A cache of one options type's values, per tenant, that a tenant's invalidation can clear.</summary>
@@ -36,17 +90,26 @@ internal interface ITenantOptionsCache
 internal sealed class TenantOptionsCaches
 {
     private readonly ConcurrentBag<ITenantOptionsCache> _caches = [];
+    private readonly ConcurrentDictionary<string, byte> _invalidated = new();
+    private volatile bool _allInvalidated;
 
     public void Add(ITenantOptionsCache cache) => _caches.Add(cache);
 
+    /// <summary>Whether the tenant's values have been invalidated since the application started, alone or with every tenant's.</summary>
+    public bool WasInvalidated(string tenantId) => _allInvalidated || _invalidated.ContainsKey(tenantId);
+
     public void Remove(string tenantId)
     {
+        _invalidated.TryAdd(tenantId, 0);
+
         foreach (var cache in _caches)
             cache.Remove(tenantId);
     }
 
     public void Clear()
     {
+        _allInvalidated = true;
+
         foreach (var cache in _caches)
             cache.Clear();
     }
@@ -54,9 +117,9 @@ internal sealed class TenantOptionsCaches
 
 /// <summary>
 /// The <see cref="IOptionsMonitorCache{TOptions}"/> of an options type configured per tenant: each value is kept per
-/// tenant (and per options name), so <see cref="IOptionsMonitor{TOptions}"/> and Tenantry's <see cref="IOptions{TOptions}"/>
-/// and <see cref="IOptionsSnapshot{TOptions}"/> give the current tenant's. A change to the configuration a name is bound
-/// to clears that name for every tenant, whether or not anything monitors it.
+/// tenant (and per options name), so <see cref="IOptionsMonitor{TOptions}"/> and Tenantry's
+/// <see cref="IOptionsSnapshot{TOptions}"/> give the current tenant's. A change to the configuration a name is bound to
+/// clears that name for every tenant, whether or not anything monitors it.
 /// </summary>
 internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions> : IOptionsMonitorCache<TOptions>, ITenantOptionsCache, IDisposable
     where TOptions : class
@@ -82,7 +145,26 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
     {
         ArgumentNullException.ThrowIfNull(createOptions);
 
-        return _values.GetOrAdd(Key(name), _ => new Lazy<TOptions>(createOptions)).Value;
+        // The entry is added before its value is built, so invalidating the tenant during the build removes it.
+        var key = Key(name);
+        var value = _values.GetOrAdd(key, _ => new Lazy<TOptions>(() => Create(createOptions)));
+
+        try
+        {
+            return value.Value;
+        }
+        catch
+        {
+            // A Lazy keeps its exception: the failed value is dropped, so the next read builds it again.
+            _values.TryRemove(KeyValuePair.Create(key, value));
+            throw;
+        }
+    }
+
+    private TOptions Create(Func<TOptions> createOptions)
+    {
+        using (_tenant.UseLatest())
+            return createOptions();
     }
 
     public bool TryAdd(string? name, TOptions options)
@@ -123,9 +205,9 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
 }
 
 /// <summary>
-/// The <see cref="IOptions{TOptions}"/> and <see cref="IOptionsSnapshot{TOptions}"/> of an options type configured per
-/// tenant: each read gives the current tenant's value, from <see cref="TenantOptionsCache{TOptions}"/>, so a singleton
-/// that holds it reads the tenant of the code that calls it.
+/// The <see cref="IOptionsSnapshot{TOptions}"/> of an options type configured per tenant: each read gives the current
+/// tenant's value, from <see cref="TenantOptionsCache{TOptions}"/>. It is scoped, so scope validation refuses a
+/// singleton that would hold it.
 /// </summary>
 internal sealed class TenantOptionsManager<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(IOptionsFactory<TOptions> factory, TenantOptionsCache<TOptions> cache)
     : IOptionsSnapshot<TOptions>
@@ -140,11 +222,58 @@ internal sealed class TenantOptionsManager<[DynamicallyAccessedMembers(Dynamical
     }
 }
 
-/// <summary>Clears every per-tenant options value of a tenant when <see cref="ITenantStoreCache{TKey}"/> invalidates it.</summary>
+/// <summary>
+/// The <see cref="IOptions{TOptions}"/> of an options type configured per tenant: the ordinary value, built once with no
+/// tenant current, as Microsoft's is. A singleton that reads <c>Value</c> in its constructor keeps it for its lifetime,
+/// so this value is never a tenant's: the tenant's comes from <see cref="IOptionsSnapshot{TOptions}"/> and
+/// <see cref="IOptionsMonitor{TOptions}"/>. The first read while a tenant is current logs a warning (event 3001), since
+/// the code that reads it most likely expects the tenant's value.
+/// </summary>
+internal sealed class TenantFreeOptions<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(
+    IOptionsFactory<TOptions> factory, ICurrentTenantId tenant, ILogger logger)
+    : IOptions<TOptions>
+    where TOptions : class
+{
+    private readonly object _gate = new();
+    private volatile TOptions? _value;
+    private int _warned;
+
+    public TOptions Value
+    {
+        get
+        {
+            if (Volatile.Read(ref _warned) == 0 && tenant.Current is { } tenantId &&
+                Interlocked.Exchange(ref _warned, 1) == 0)
+            {
+                TenantOptionsLog.OrdinaryOptionsReadAsTenant(logger, typeof(TOptions).Name, tenantId);
+            }
+
+            if (_value is { } value)
+                return value;
+
+            lock (_gate)
+            {
+                // Not kept when the build throws, so the next read tries again.
+                using (tenant.UseNoTenant())
+                    return _value ??= factory.Create(Microsoft.Extensions.Options.Options.DefaultName);
+            }
+        }
+    }
+}
+
+/// <summary>Clears every per-tenant options value of a tenant when <see cref="ITenantInvalidator{TKey}"/> invalidates it.</summary>
 internal sealed class TenantOptionsInvalidation<TKey>(TenantOptionsCaches caches) : ITenantInvalidationHandler<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public void Invalidate(TKey tenantId) => caches.Remove(TenantIds.Format(tenantId));
+    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken)
+    {
+        caches.Remove(TenantIds.Format(tenantId));
+        return ValueTask.CompletedTask;
+    }
 
-    public void InvalidateAll() => caches.Clear();
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken)
+    {
+        caches.Clear();
+        return ValueTask.CompletedTask;
+    }
 }

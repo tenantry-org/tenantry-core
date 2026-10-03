@@ -15,6 +15,27 @@
         "dotnet-coverage"
       ],
       "rollForward": false
+    },
+    "dotnet-sonarscanner": {
+      "version": "11.3.0",
+      "commands": [
+        "dotnet-sonarscanner"
+      ],
+      "rollForward": false
+    },
+    "dotnet-reportgenerator-globaltool": {
+      "version": "5.5.11",
+      "commands": [
+        "reportgenerator"
+      ],
+      "rollForward": false
+    },
+    "cyclonedx": {
+      "version": "6.2.0",
+      "commands": [
+        "dotnet-CycloneDX"
+      ],
+      "rollForward": false
     }
   }
 }

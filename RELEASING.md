@@ -8,7 +8,7 @@ rest. Only the maintainer can push `v*` tags.
 1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD` and start a new, empty
    `## [Unreleased]` above it. That section is the GitHub release's notes, and a tag without one fails before
    anything is published. A minor release's section starts with the steps to update from the previous minor.
-2. Push to `master` and wait for CI, SonarCloud included, to pass.
+2. Push to `master` and wait for CI, SonarCloud included, to pass. The release fails if it has not.
 3. Rehearse (optional): Actions → Release → Run workflow on `master`, with the tag as the version. It runs the
    release's checks, builds the same packages, and shows what a release would publish and its notes.
 
@@ -27,6 +27,14 @@ rest. Only the maintainer can push `v*` tags.
 3. NuGet.org validates and indexes the packages, which takes a few minutes. They are available once
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
+
+## After any release
+
+- Set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, and remove the
+  `<TenantryPackageBaseline />` of a package released for the first time. Pack then checks each package against that
+  release, so a patch cannot break code compiled against it (Tenantry.Pro accepts any release in the minor). A
+  minor release may break the API on purpose: record each break in the project's `CompatibilitySuppressions.xml`
+  (`dotnet pack -p:ApiCompatGenerateSuppressionFile=true`) and in the changelog.
 
 ## After a minor release
 
