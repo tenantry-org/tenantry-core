@@ -32,6 +32,18 @@ Parameters:
 
 Public so that other providers (for example a caching one) can wrap it. `UseConnectionStrings` registers it as a singleton, and forwards [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) to it.
 
+## Properties
+
+### `CanGetSynchronously`
+
+Whether [`ITenantConnectionStringProvider<TKey>.Get`](tenantry-itenantconnectionstringprovider.md) can return connection strings. When it cannot, Tenantry.EfCore's scoped database-per-tenant context reads its connection string with [`ITenantConnectionStringProvider<TKey>.GetAsync`](tenantry-itenantconnectionstringprovider.md) when it first opens a connection, so only asynchronous EF Core calls work on it. A decorator should return its inner provider's value.
+
+```csharp
+public bool CanGetSynchronously { get; }
+```
+
+Value: `bool`: By default, [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool).
+
 ## Methods
 
 ### `Get(ITenantDescriptor<TKey>)`

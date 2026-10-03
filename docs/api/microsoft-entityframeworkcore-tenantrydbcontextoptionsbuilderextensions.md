@@ -15,6 +15,8 @@ public static class TenantryDbContextOptionsBuilderExtensions
 Isolates the context's tenant-owned entities (those implementing [`ITenantEntity<TKey>`](tenantry-itenantentity.md)) by the current tenant: queries return only the current tenant's rows, new entities are saved for the current tenant, saving a change to another tenant's entity throws, and `ExecuteUpdate` cannot set `TenantId`.
 
 ```csharp
+[RequiresUnreferencedCode("EF Core and Tenantry's query filters read entity types through reflection, which trimming can break. See https://aka.ms/efcore-docs-trimming.")]
+[RequiresDynamicCode("EF Core and Tenantry's query filters build code for entity types at run time, which Native AOT does not support.")]
 public static DbContextOptionsBuilder UseTenantry(this DbContextOptionsBuilder optionsBuilder)
 ```
 
@@ -38,11 +40,38 @@ builder.Services.AddDbContext<AppDbContext>(options => options
     .UseTenantry());
 ```
 
+### `UseTenantry(DbContextOptionsBuilder, Action<EfCoreIsolationOptions>)`
+
+Isolates the context's tenant-owned entities as [`TenantryDbContextOptionsBuilderExtensions.UseTenantry`](microsoft-entityframeworkcore-tenantrydbcontextoptionsbuilderextensions.md) does, with isolation options of the context's own in place of the application's (`ConfigureEfCoreIsolation`).
+
+```csharp
+[RequiresUnreferencedCode("EF Core and Tenantry's query filters read entity types through reflection, which trimming can break. See https://aka.ms/efcore-docs-trimming.")]
+[RequiresDynamicCode("EF Core and Tenantry's query filters build code for entity types at run time, which Native AOT does not support.")]
+public static DbContextOptionsBuilder UseTenantry(this DbContextOptionsBuilder optionsBuilder, Action<EfCoreIsolationOptions> configure)
+```
+
+Parameters:
+
+- `optionsBuilder` `DbContextOptionsBuilder`: The options builder for the application's `DbContext`.
+- `configure` `Action<EfCoreIsolationOptions>`: Sets the context's options, starting from the application's. Use it to relax a policy on a context kept for maintenance code, so the rest of the application keeps the strict defaults.
+
+Returns: `DbContextOptionsBuilder`: The same `optionsBuilder` for chaining.
+
+Calling it again sets the options again, starting from the application's.
+
+```csharp
+builder.Services.AddDbContext<MaintenanceDbContext>(options => options
+    .UseSqlServer(connectionString)
+    .UseTenantry(o => o.OnMissingTenant = MissingTenantBehavior.Allow));
+```
+
 ### `UseTenantry<TContext>(DbContextOptionsBuilder<TContext>)`
 
 Isolates the context's tenant-owned entities (those implementing [`ITenantEntity<TKey>`](tenantry-itenantentity.md)) by the current tenant: queries return only the current tenant's rows, new entities are saved for the current tenant, saving a change to another tenant's entity throws, and `ExecuteUpdate` cannot set `TenantId`.
 
 ```csharp
+[RequiresUnreferencedCode("EF Core and Tenantry's query filters read entity types through reflection, which trimming can break. See https://aka.ms/efcore-docs-trimming.")]
+[RequiresDynamicCode("EF Core and Tenantry's query filters build code for entity types at run time, which Native AOT does not support.")]
 public static DbContextOptionsBuilder<TContext> UseTenantry<TContext>(this DbContextOptionsBuilder<TContext> optionsBuilder) where TContext : DbContext
 ```
 
@@ -68,4 +97,33 @@ It installs Tenantry's own EF Core model customizer, so the options must not als
 builder.Services.AddDbContext<AppDbContext>(options => options
     .UseSqlServer(connectionString)
     .UseTenantry());
+```
+
+### `UseTenantry<TContext>(DbContextOptionsBuilder<TContext>, Action<EfCoreIsolationOptions>)`
+
+Isolates the context's tenant-owned entities as [`TenantryDbContextOptionsBuilderExtensions.UseTenantry`](microsoft-entityframeworkcore-tenantrydbcontextoptionsbuilderextensions.md) does, with isolation options of the context's own in place of the application's (`ConfigureEfCoreIsolation`).
+
+```csharp
+[RequiresUnreferencedCode("EF Core and Tenantry's query filters read entity types through reflection, which trimming can break. See https://aka.ms/efcore-docs-trimming.")]
+[RequiresDynamicCode("EF Core and Tenantry's query filters build code for entity types at run time, which Native AOT does not support.")]
+public static DbContextOptionsBuilder<TContext> UseTenantry<TContext>(this DbContextOptionsBuilder<TContext> optionsBuilder, Action<EfCoreIsolationOptions> configure) where TContext : DbContext
+```
+
+Type parameters:
+
+- `TContext`: The type of context being configured.
+
+Parameters:
+
+- `optionsBuilder` `DbContextOptionsBuilder<TContext>`: The options builder for the application's `DbContext`.
+- `configure` `Action<EfCoreIsolationOptions>`: Sets the context's options, starting from the application's. Use it to relax a policy on a context kept for maintenance code, so the rest of the application keeps the strict defaults.
+
+Returns: `DbContextOptionsBuilder<TContext>`: The same `optionsBuilder` for chaining.
+
+Calling it again sets the options again, starting from the application's.
+
+```csharp
+builder.Services.AddDbContext<MaintenanceDbContext>(options => options
+    .UseSqlServer(connectionString)
+    .UseTenantry(o => o.OnMissingTenant = MissingTenantBehavior.Allow));
 ```

@@ -28,6 +28,11 @@ Parameters:
 
 - `tenants` `IEnumerable<ITenantDescriptor<TKey>>`: The tenants the store holds. The store does not change after it is created.
 
+Exceptions:
+
+- `ArgumentNullException`: `tenants` or one of its tenants is null.
+- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsUnset<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
+
 ## Methods
 
 ### `GetAllTenantsAsync(CancellationToken)`

@@ -32,7 +32,7 @@ options.GetConnectionString = tenant => $"Server=db;Database=app_{tenant.TenantI
 
 ### `GetConnectionStringAsync`
 
-Returns the connection string for a tenant asynchronously, for connection strings held elsewhere such as a secrets vault. Only the asynchronous `GetAsync` methods can use it.
+Returns the connection string for a tenant asynchronously, for connection strings held elsewhere such as a secrets vault. Only the asynchronous `GetAsync` methods can use it. To use services from DI, register a provider with `UseConnectionStrings(sp => …)` instead.
 
 ```csharp
 public Func<ITenantDescriptor<TKey>, CancellationToken, ValueTask<string>>? GetConnectionStringAsync { get; set; }
