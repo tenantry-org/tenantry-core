@@ -52,7 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Tenantry.Options`, a new package: `tenant.ConfigurePerTenant(perTenant => perTenant.Configure<TOptions>(…))` makes
   `IOptionsSnapshot<T>` and `IOptionsMonitor<T>` give the current tenant's value, built from the ordinary
   configuration and the tenant, cached per tenant and cleared when the tenant is invalidated. `IOptions<T>` keeps the ordinary value, so a singleton that
-  reads it once never keeps one tenant's settings. See [Options per tenant](docs/per-tenant-options.md).
+  reads it once never keeps one tenant's settings; reading it while a tenant is current logs a warning (event 3001),
+  once per options type. See [Options per tenant](docs/per-tenant-options.md).
 - `ITenantInvalidator<TKey>`: `InvalidateAsync(tenantId, ct)` and `InvalidateAllAsync(ct)` remove the cached tenant
   and run every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one call clears
   everything kept for a tenant. Handlers are asynchronous and take a `CancellationToken`, so removing a tenant's

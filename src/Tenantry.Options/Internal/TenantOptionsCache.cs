@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 
@@ -225,19 +226,28 @@ internal sealed class TenantOptionsManager<[DynamicallyAccessedMembers(Dynamical
 /// The <see cref="IOptions{TOptions}"/> of an options type configured per tenant: the ordinary value, built once with no
 /// tenant current, as Microsoft's is. A singleton that reads <c>Value</c> in its constructor keeps it for its lifetime,
 /// so this value is never a tenant's: the tenant's comes from <see cref="IOptionsSnapshot{TOptions}"/> and
-/// <see cref="IOptionsMonitor{TOptions}"/>.
+/// <see cref="IOptionsMonitor{TOptions}"/>. The first read while a tenant is current logs a warning (event 3001), since
+/// the code that reads it most likely expects the tenant's value.
 /// </summary>
-internal sealed class TenantFreeOptions<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(IOptionsFactory<TOptions> factory, ICurrentTenantId tenant)
+internal sealed class TenantFreeOptions<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(
+    IOptionsFactory<TOptions> factory, ICurrentTenantId tenant, ILogger logger)
     : IOptions<TOptions>
     where TOptions : class
 {
     private readonly object _gate = new();
     private volatile TOptions? _value;
+    private int _warned;
 
     public TOptions Value
     {
         get
         {
+            if (Volatile.Read(ref _warned) == 0 && tenant.Current is { } tenantId &&
+                Interlocked.Exchange(ref _warned, 1) == 0)
+            {
+                TenantOptionsLog.OrdinaryOptionsReadAsTenant(logger, typeof(TOptions).Name, tenantId);
+            }
+
             if (_value is { } value)
                 return value;
 

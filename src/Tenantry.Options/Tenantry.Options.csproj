@@ -18,6 +18,7 @@
 
   <!-- Not in the .NET 11 preview lane (IncludeNet11), where Microsoft.Extensions.Options comes with the shared framework -->
   <ItemGroup Condition="'$(TargetFramework)' != 'net11.0'">
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 

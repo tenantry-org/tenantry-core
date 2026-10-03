@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tenantry.Tests.Shared;
 
@@ -45,6 +46,27 @@ public sealed class PerTenantOptionsTests
         }
 
         _built.Should().Be(0, "no tenant's step runs for IOptions");
+    }
+
+    [Fact]
+    public void ReadingIOptionsAsATenant_LogsAWarningOnce_SinceTheCodeLikelyExpectsTheTenantsValue()
+    {
+        RecordingLoggers loggers = new();
+        using var provider = Build(services => services.AddSingleton<ILoggerFactory>(loggers));
+        var options = provider.GetRequiredService<IOptions<BrandingOptions>>();
+
+        _ = options.Value;
+        loggers.Entries.Should().BeEmpty("without a tenant the ordinary value is what is meant");
+
+        using (Use(provider, Acme))
+            _ = options.Value;
+
+        using (Use(provider, Globex))
+            _ = options.Value;
+
+        loggers.Entries.Should().ContainSingle().Which.Should().Match<(string Category, int EventId, string Message)>(e =>
+            e.Category == "Tenantry.Options" && e.EventId == 3001 &&
+            e.Message.Contains("IOptions<BrandingOptions> was read while tenant acme is current"));
     }
 
     [Fact]
@@ -385,6 +407,28 @@ public sealed class PerTenantOptionsTests
     private sealed class SnapshotBranding(IOptionsSnapshot<BrandingOptions> snapshot)
     {
         public string Colour => snapshot.Value.Colour;
+    }
+
+    private sealed class RecordingLoggers : ILoggerFactory
+    {
+        public List<(string Category, int EventId, string Message)> Entries { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
+
+        public void AddProvider(ILoggerProvider provider) { }
+
+        public void Dispose() { }
+
+        private sealed class Logger(RecordingLoggers loggers, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                loggers.Entries.Add((category, eventId.Id, formatter(state, exception)));
+        }
     }
 
     private sealed class ChangingStore(ITenantDescriptor<string> tenant) : ITenantStore<string>

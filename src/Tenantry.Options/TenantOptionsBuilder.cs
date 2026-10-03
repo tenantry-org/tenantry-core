@@ -1,6 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Tenantry.Options.Internal;
 
@@ -19,7 +21,8 @@ namespace Tenantry.Options;
 /// <c>options.Value</c> in its constructor would keep the first tenant's settings and use them for every tenant. Read
 /// <c>IOptionsSnapshot&lt;TOptions&gt;</c>, which is scoped, in request code, and hold <c>IOptionsMonitor&lt;TOptions&gt;</c>
 /// in a singleton and read <c>CurrentValue</c> each time. Reading <c>CurrentValue</c> once in a constructor keeps one
-/// tenant's value, as reading <c>Value</c> would.
+/// tenant's value, as reading <c>Value</c> would. The first read of <c>IOptions&lt;TOptions&gt;</c> while a tenant is
+/// current logs a warning, event 3001 in the category <c>Tenantry.Options</c>.
 /// </para>
 /// <para>
 /// Each tenant's value is built on first use and cached; <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> clears
@@ -183,7 +186,9 @@ public sealed class TenantOptionsBuilder<TKey>
 
         // IOptions<TOptions> stays the ordinary value: a singleton that reads it once must not keep a tenant's.
         services.TryAddSingleton<IOptions<TOptions>>(sp => new TenantFreeOptions<TOptions>(
-            sp.GetRequiredService<IOptionsFactory<TOptions>>(), sp.GetRequiredService<ICurrentTenantId>()));
+            sp.GetRequiredService<IOptionsFactory<TOptions>>(),
+            sp.GetRequiredService<ICurrentTenantId>(),
+            sp.GetService<ILoggerFactory>()?.CreateLogger(TenantOptionsLog.Category) ?? NullLogger.Instance));
         services.TryAddScoped<IOptionsSnapshot<TOptions>>(sp => new TenantOptionsManager<TOptions>(
             sp.GetRequiredService<IOptionsFactory<TOptions>>(), sp.GetRequiredService<TenantOptionsCache<TOptions>>()));
 

@@ -72,6 +72,8 @@ If `IOptions<T>` gave the tenant's value, this singleton would keep the settings
 apply them to every other tenant. Library code does the same, so the mistake could be in code you don't own. So
 `IOptions<T>` always gives the ordinary value, built with no tenant current, and a tenant's settings never reach code
 that keeps a value. Code that should see the tenant's settings reads `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`.
+The first time `IOptions<T>` is read while a tenant is current, Tenantry logs a warning (event 3001,
+[Diagnostics](diagnostics.md#logs)) naming the options type, since that code most likely expects the tenant's value.
 
 The same applies to the monitor: reading `CurrentValue` once in a constructor keeps one tenant's value. Read it where
 the value is used.
