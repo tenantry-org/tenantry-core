@@ -281,6 +281,32 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public void AReadAfterAnInvalidation_BuildsFromTheStoresTenant_NotTheCopyAnEarlierRequestCarries()
+    {
+        // A request resolved before the tenant changed reads the options after the invalidation.
+        var store = new ChangingStore(Acme);
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant
+            .UseStore(_ => store)
+            .ConfigurePerTenant<BrandingOptions>((o, t) => o.Name = t.Name));
+        using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        using (Use(provider, Acme))
+        {
+            monitor.CurrentValue.Name.Should().Be("Acme");
+
+            store.Tenant = new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Renamed" };
+            provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+
+            monitor.CurrentValue.Name.Should().Be("Acme Renamed");
+        }
+
+        using (Use(provider, store.Tenant))
+            monitor.CurrentValue.Name.Should().Be("Acme Renamed");
+    }
+
+    [Fact]
     public void EveryRegistration_Resolves_InAValidatedProvider()
     {
         using var provider = Build();
@@ -344,6 +370,17 @@ public sealed class PerTenantOptionsTests
     private sealed class SnapshotBranding(IOptionsSnapshot<BrandingOptions> snapshot)
     {
         public string Colour => snapshot.Value.Colour;
+    }
+
+    private sealed class ChangingStore(ITenantDescriptor<string> tenant) : ITenantStore<string>
+    {
+        public ITenantDescriptor<string> Tenant { get; set; } = tenant;
+
+        public ValueTask<ITenantDescriptor<string>?> GetTenantAsync(string tenantId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ITenantDescriptor<string>?>(tenantId == Tenant.TenantId ? Tenant : null);
+
+        public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([Tenant]);
     }
 
     private sealed class ColourSource : IDisposable

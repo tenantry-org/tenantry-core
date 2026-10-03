@@ -203,7 +203,8 @@ public static class TenantryOptionsTenantBuilderExtensions
             var services = tenant.Services;
             services.AddOptions();
 
-            services.TryAddSingleton<ICurrentTenantId>(sp => new CurrentTenantId<TKey>(sp.GetRequiredService<ITenantContextSetter<TKey>>()));
+            services.TryAddSingleton<ICurrentTenantId>(sp => new CurrentTenantId<TKey>(
+                sp.GetRequiredService<ITenantContextSetter<TKey>>(), sp.GetRequiredService<TenantOptionsCaches>(), sp));
             services.TryAddSingleton<TenantOptionsCaches>();
             services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<TKey>, TenantOptionsInvalidation<TKey>>());
 
