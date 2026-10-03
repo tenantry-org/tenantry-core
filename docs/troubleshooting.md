@@ -17,6 +17,11 @@ You registered request resolution (a `ResolveFrom…` or `UseResolver` method) b
 no request would have a tenant. Add it after `app.UseAuthentication()` and before your endpoints. See
 [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering).
 
+## Startup fails with "app.UseTenantResolution() is in the request pipeline but app.UseTenantry() is not"
+
+The access validators run in `app.UseTenantry()`, so without it no tenant would be checked. Add `app.UseTenantry()`
+after `app.UseAuthentication()`. See [Authentication per tenant](authentication-per-tenant.md).
+
 ## Registration fails with "A tenant store is already registered" or "already registered with tenant key type"
 
 An application has one store and one tenant key type. Remove the second `UseStore`/`UseInMemoryStore` (or the
@@ -143,6 +148,30 @@ tenant id or an `ITenantContext<TKey>` in `OnModelCreating` is compiled once and
 context, or leave it to `UseTenantry()`. See
 [How the query filter stays correct](efcore-integration.md#how-the-query-filter-stays-correct).
 
+## An endpoint returns `500` after `UseTenantResolution()` (event 1011)
+
+The request reached its endpoint without passing `app.UseTenantry()`, so its tenant was never checked, and the
+endpoint did not run. Call `app.UseTenantry()` after `app.UseAuthentication()` in every branch of the pipeline.
+
+## Authentication ignores the tenant's settings (event 1010)
+
+The authentication middleware ran before `app.UseTenantResolution()`, so it used no tenant's settings. Call
+`app.UseAuthentication()` yourself, after `app.UseTenantResolution()`: the one `WebApplication` adds on its own runs
+first. A tenant named only by a claim is resolved after authentication, so it always uses the defaults. See
+[Authentication per tenant](authentication-per-tenant.md).
+
+## A request with the tenant header has no tenant
+
+A header or query parameter sent more than once names no tenant, so a proxy must replace the client's header, not
+add another. See [Header](tenant-resolution.md#header).
+
+## A query throws "reads its tenant's connection string asynchronously"
+
+The connection strings can only be read asynchronously (only `GetConnectionStringAsync` is set), so a context from
+`AddDbContextPerTenantDatabase` reads its string when it first opens a connection, and a synchronous call cannot.
+Use the asynchronous EF Core methods, or also set `GetConnectionString`. See
+[Database per tenant](efcore-integration.md#database-per-tenant).
+
 ## Claim-based resolution or validation never matches
 
 - `UseTenantry()` runs before `UseAuthentication()`, so `HttpContext.User` is empty. Move it after. For
@@ -178,8 +207,10 @@ key type. Implement `FindByIdentifierAsync` in your store to map slugs. See
 
 ## A suspended tenant is still served
 
-With `CacheTenants`, the cached tenant is served until its entry expires. Call `ITenantStoreCache<TKey>.Invalidate`
-when you change a tenant. See [Caching](tenant-stores.md#caching).
+With `CacheTenants`, the cached tenant is served until its entry expires: call `ITenantStoreCache<TKey>.Invalidate`
+when you change a tenant (see [Caching](tenant-stores.md#caching)). If its background work still runs, refuse it with
+`ValidateTenantActivity` rather than an access validator, which only HTTP requests run (see
+[Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
 
 ## Requests have no `tenant.id` tag or `TenantId` log scope
 

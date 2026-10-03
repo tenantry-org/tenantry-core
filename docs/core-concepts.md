@@ -131,6 +131,7 @@ nullable for them. Check `HasTenant` to tell "no tenant" apart.
 public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
 {
     IDisposable Use(ITenantDescriptor<TKey> tenant);
+    IDisposable UseNoTenant();
 }
 ```
 
@@ -147,6 +148,9 @@ using (tenantContext.Use(acme))
 In ASP.NET Core the **middleware** calls `Use` for you once the tenant is resolved. In console and worker apps,
 `ITenantScopeFactory<TKey>` makes a tenant current together with a fresh DI scope, which is what most code
 wants; call `Use` yourself only when you need no new scope. See [Non-HTTP hosts](non-http-hosts.md).
+
+`UseNoTenant()` does the opposite: code inside it sees no tenant, and disposing it restores the tenant that was
+current. The middleware uses it for the rest of a request whose tenant the access validators refused.
 
 Call `Use` (or `ITenantScopeFactory.CreateScope`) in the method that does the work. Because of the
 `AsyncLocal` model below, a tenant made current inside an `async` helper is not current for the helper's caller.
@@ -217,3 +221,6 @@ The rules, stated here once:
   `Microsoft.Extensions.DependencyInjection`.
 - Calling `AddTenantry` again adds to the same registration. An application uses one tenant key type and one store:
   a second of either throws.
+- Code that needs the key type without naming it, such as a package's registration method, reads it with
+  `services.FindTenantKeyType()` while registering, or injects `ITenantKeyType` later. Its `Accept` method calls a
+  generic visitor with the key type, which works under Native AOT.

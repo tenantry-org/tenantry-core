@@ -44,9 +44,9 @@ tenant.UseInMemoryStore(
 ]);
 ```
 
-This registers `InMemoryTenantStore<TKey>` as a **singleton**. The collection is indexed by `TenantId`
-into a dictionary once, so lookups are O(1). It does not observe changes to the source collection
-after registration.
+This registers `InMemoryTenantStore<TKey>` as a **singleton**, built when you register it. It does not see later
+changes to the collection. Two tenants with the same id, or a tenant with an id Tenantry reserves for "no tenant"
+(`Guid.Empty`, `0`, an empty string), throw `ArgumentException` at registration.
 
 ## Custom store
 
@@ -105,7 +105,8 @@ tenant.ValidateTenantActivity(t => t is Tenant { IsActive: true });
 ```
 
 Check for the active status, as here, rather than the suspended one, so a descriptor of another type is refused
-rather than served. Tenantry then refuses an inactive tenant:
+rather than served. For a check that needs services, implement `ITenantActivityValidator<TKey>` and register it as a
+singleton; every registered check must allow the tenant. Tenantry then refuses an inactive tenant:
 
 - **HTTP requests** get `403 Forbidden` where a tenant is required, and run without a tenant elsewhere, as for a
   tenant an [access validator](access-control.md#validating-tenant-access) refuses.
