@@ -177,10 +177,11 @@ for every query: read the tenant through the context instead, or leave the tenan
 - The claim value does not name a tenant: `ValidateTenantAccessByClaim` compares tenant ids, and a resolved
   claim is looked up like any identifier (e.g. a non-GUID string for a `Guid` key names no tenant).
 
-## `RequireTenant()` has no effect
+## `AllowMissingTenant()` has no effect
 
-The middleware ran before routing chose the endpoint, so it saw no endpoint metadata. It logs this once (event
-1007); call `app.UseRouting()` before `app.UseTenantry()`.
+The middleware ran before routing chose the endpoint, so `RequireTenantByDefault()` applied to it. It logs this once
+(event 1007); call `app.UseRouting()` before `app.UseTenantry()`. An endpoint that requires a tenant still rejects a
+request without one.
 
 ## Route-value resolution returns null
 

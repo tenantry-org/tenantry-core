@@ -165,11 +165,12 @@ Two ordering rules matter:
   this generally just works. If you build a custom pipeline, ensure `UseRouting()` precedes
   `UseTenantry()`.
 
-Getting either wrong does not fail, so the middleware watches for it: when routing chooses an endpoint with
-Tenantry's metadata after the middleware ran, or the authentication middleware runs after it and signs in a user
-whose claim `ResolveFromClaim` would have read, it logs a warning once ([event ids](diagnostics.md#logs) 1007 and
-1008). A user signed in by other code after the middleware, such as authorization with a scheme that is not the
-default, is not seen by `ResolveFromClaim` either, and is not warned about: make that scheme the default.
+If the middleware runs before routing, a request without a tenant to an endpoint that requires one is still
+rejected, but `RequireTenantByDefault()` then applies to `AllowMissingTenant()` endpoints too, and route values are
+not there to resolve from. If the authentication middleware runs after it, `ResolveFromClaim` sees no user. The
+middleware logs each mistake once ([event ids](diagnostics.md#logs) 1007 and 1008). A user signed in by other code
+after the middleware, such as authorization with a scheme that is not the default, is not seen by `ResolveFromClaim`
+either, and is not warned about: make that scheme the default.
 
 A typical order:
 

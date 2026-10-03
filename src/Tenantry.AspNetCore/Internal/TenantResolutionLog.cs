@@ -41,8 +41,9 @@ internal static partial class TenantResolutionLog
     public static partial void ContinuingWithoutTenant(ILogger logger, string method, string path, string reason);
 
     [LoggerMessage(1007, LogLevel.Warning,
-        "app.UseTenantry() ran before routing chose an endpoint, so it ignored the RequireTenant or " +
-        "AllowMissingTenant of {Endpoint}. Call app.UseRouting() before app.UseTenantry(). Logged once",
+        "app.UseTenantry() ran before routing chose {Endpoint}. A request without a tenant to an endpoint that " +
+        "requires one is still rejected, but RequireTenantByDefault overrides AllowMissingTenant. Call " +
+        "app.UseRouting() before app.UseTenantry(). Logged once",
         EventName = "TenantryBeforeRouting")]
     public static partial void TenantryBeforeRouting(ILogger logger, string endpoint);
 

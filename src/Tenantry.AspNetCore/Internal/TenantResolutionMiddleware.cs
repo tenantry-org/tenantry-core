@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -72,11 +74,15 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         // Captured first: the resolution's own activity is the current one while it runs.
         var requestActivity = Activity.Current;
-        var endpointWasNull = context.GetEndpoint() is null;
-        var required = IsTenantRequired(context);
+        var endpoint = context.GetEndpoint();
+        var required = IsTenantRequired(endpoint);
         var resolution = await ResolveAsync(context);
 
-        _metrics.Record(resolution.Result, rejected: required && resolution.Result != ResolutionResult.Resolved);
+        // Before routing, whether the request is rejected is known only once routing has chosen its endpoint.
+        if (endpoint is not null || required || resolution.Result == ResolutionResult.Resolved)
+        {
+            _metrics.Record(resolution.Result, rejected: required && resolution.Result != ResolutionResult.Resolved);
+        }
 
         if (resolution.Tenant is { } tenant && resolution.Result == ResolutionResult.Resolved)
         {
@@ -93,7 +99,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 await onResolved(new TenantResolvedContext<TKey>(context, tenant));
             }
 
-            await NextAsync(context, endpointWasNull, resolution);
+            await NextAsync(context, endpoint is null, resolution);
             return;
         }
 
@@ -130,7 +136,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 break;
         }
 
-        await NextAsync(context, endpointWasNull, resolution);
+        await NextAsync(context, endpoint is null, resolution);
     }
 
     private async ValueTask<Resolution> ResolveAsync(HttpContext context)
@@ -222,9 +228,40 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     // chose after this middleware ran, or a user the authentication middleware signed in after it (it sets
     // IAuthenticationFeature on every request it runs for, so a user signed in later by other code, such as
     // authorization with a scheme that is not the default, is not mistaken for it). Each is logged once.
+    // Before routing, a request without a tenant still fails closed: an endpoint routing chooses that requires one is
+    // replaced by one that rejects the request.
     private async Task NextAsync(HttpContext context, bool endpointWasNull, Resolution resolution)
     {
-        await _next(context);
+        RejectingEndpointFeature? routed = null;
+        IEndpointFeature? previous = null;
+
+        if (endpointWasNull && resolution.Result != ResolutionResult.Resolved)
+        {
+            previous = context.Features.Get<IEndpointFeature>();
+            routed = new RejectingEndpointFeature(previous, endpoint => IsTenantRequired(endpoint)
+                ? RejectingEndpoint(endpoint, resolution)
+                : null);
+            context.Features.Set<IEndpointFeature>(routed);
+        }
+
+        try
+        {
+            await _next(context);
+        }
+        finally
+        {
+            if (routed is not null)
+            {
+                context.Features.Set(previous);
+
+                if (previous is null)
+                {
+                    context.SetEndpoint(routed.Endpoint);
+                }
+
+                _metrics.Record(resolution.Result, routed.Rejected);
+            }
+        }
 
         if (endpointWasNull &&
             Volatile.Read(ref _warnedBeforeRouting) == 0 &&
@@ -252,14 +289,22 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         }
     }
 
+    // Keeps the endpoint's metadata, so authorization and the rest of the pipeline treat the request as before.
+    private Endpoint RejectingEndpoint(Endpoint endpoint, Resolution resolution)
+    {
+        RequestDelegate reject = context => RejectAsync(context, resolution);
+
+        return endpoint is RouteEndpoint route
+            ? new RouteEndpoint(reject, route.RoutePattern, route.Order, route.Metadata, route.DisplayName)
+            : new Endpoint(reject, endpoint.Metadata, endpoint.DisplayName);
+    }
+
     private static bool HasTenantMetadata(Endpoint endpoint) =>
         endpoint.Metadata.GetMetadata<RequireTenantAttribute>() is not null ||
         endpoint.Metadata.GetMetadata<AllowMissingTenantAttribute>() is not null;
 
-    private bool IsTenantRequired(HttpContext context)
+    private bool IsTenantRequired(Endpoint? endpoint)
     {
-        var endpoint = context.GetEndpoint();
-
         if (endpoint is null)
         {
             return _options.RequireTenantByDefault;
@@ -338,6 +383,39 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 HttpContext = context,
                 ProblemDetails = new ProblemDetails { Status = rejected.StatusCode, Title = title, Detail = detail },
             });
+        }
+    }
+
+    /// <summary>
+    /// The endpoint feature while routing runs after this middleware: an endpoint routing sets that requires a
+    /// tenant is replaced by the one the replacement function gives.
+    /// </summary>
+    private sealed class RejectingEndpointFeature(IEndpointFeature? inner, Func<Endpoint, Endpoint?> replace) : IEndpointFeature
+    {
+        private Endpoint? _endpoint;
+
+        public bool Rejected { get; private set; }
+
+        public Endpoint? Endpoint
+        {
+            get => inner is null ? _endpoint : inner.Endpoint;
+            set
+            {
+                if (value is not null && replace(value) is { } replacement)
+                {
+                    value = replacement;
+                    Rejected = true;
+                }
+
+                if (inner is null)
+                {
+                    _endpoint = value;
+                }
+                else
+                {
+                    inner.Endpoint = value;
+                }
+            }
         }
     }
 

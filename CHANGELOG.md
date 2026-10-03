@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ITenantStoreCache<TKey>.Invalidate` refuses an id Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty
   string), which no tenant has.
 
+### Fixed
+
+- `app.UseTenantry()` before `app.UseRouting()` no longer lets a request without a tenant reach an endpoint that
+  requires one: the request is rejected as it would be with routing first. Before, it ran without a tenant and
+  event 1007 was logged.
+
 ## [0.5.0] - 2026-10-03
 
 ### Upgrading from 0.4

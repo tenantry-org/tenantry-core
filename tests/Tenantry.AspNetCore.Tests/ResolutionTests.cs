@@ -235,11 +235,31 @@ public sealed class ResolutionTests
         await using var _ = app;
         using var client = app.GetTestClient();
 
-        // The endpoint requires a tenant, but the middleware ran before routing chose it, so it ran without one.
-        (await client.GetStringAsync("/required", TestContext.Current.CancellationToken)).Should().Be("(none)");
-        (await client.GetStringAsync("/required", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        // The middleware ran before routing chose the endpoint, which requires a tenant: the request is still rejected.
+        (await client.GetAsync("/required", TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await client.GetAsync("/required", TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         logs.For(1007).Should().ContainSingle().Which.Message.Should().Contain("/required").And.Contain("app.UseRouting()");
+    }
+
+    [Fact]
+    public async Task UseTenantryBeforeRouting_ServesTenantsAndEndpointsThatNeedNone()
+    {
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme]),
+            pipeline: a =>
+            {
+                a.UseTenantry();
+                a.UseRouting();
+            });
+        await using var _ = app;
+        using var client = app.GetTestClient();
+
+        (await Get(client, "acme", "/required")).Should().Be(HttpStatusCode.OK);
+        (await Get(client, "globex", "/required")).Should().Be(HttpStatusCode.NotFound);
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetAsync("/nowhere", TestContext.Current.CancellationToken)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        logs.For(1003).Should().BeEmpty();
     }
 
     [Fact]
