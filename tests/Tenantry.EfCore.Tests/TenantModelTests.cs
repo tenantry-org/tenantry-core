@@ -64,6 +64,29 @@ public sealed class TenantModelTests : IDisposable
         guard.Checks.Should().BeGreaterThanOrEqualTo(2);
     }
 
+    [Fact]
+    public async Task ASaveAGuardRefuses_LeavesItsNewEntitiesUnstamped_ThoughTheGuardWasAddedAfterTenantry()
+    {
+        RefusingGuard guard = new();
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(DbContextFactory.Services(TestTenantContext.For("acme")))
+            .UseTenantry()
+            .AddInterceptors(guard)
+            .Options;
+
+        await using TestDbContext db = new(options);
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        Order order = new() { Description = "Refused" };
+        db.Orders.Add(order);
+        guard.Refuse = true;
+
+        db.Invoking(context => context.SaveChanges()).Should().Throw<TenantIsolationViolationException>();
+        await db.Awaiting(context => context.SaveChangesAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<TenantIsolationViolationException>();
+        order.TenantId.Should().BeEmpty();
+    }
+
     private sealed class RefusingGuard : TenantContextGuard
     {
         public bool Refuse { get; set; }

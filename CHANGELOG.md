@@ -81,6 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Seams for packages that build on Tenantry, Tenantry.Pro among them:
   - `TenantContextGuard` (Tenantry.EfCore), an interceptor base that checks a context before it opens a connection,
     runs a command or saves, and the violation kind `TenantSchemaMismatch`, for a context on another tenant's schema.
+    A guard checks a save before Tenantry stamps its new entities, wherever it is among the context's interceptors,
+    so a save it refuses leaves them as they were.
   - `TenantModel` (Tenantry.EfCore): `HasTenantOwnedEntityTypes`, `IsTenantOwned`, `IsSharedAcrossTenants` and
     `FindUnisolatedEntityTypes`; and `[SharedAcrossTenants]` or `IsSharedAcrossTenants()` to mark an entity type every
     tenant shares. Marking a tenant-owned type fails the model check.

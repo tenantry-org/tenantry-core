@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace Tenantry.EfCore;
 
@@ -17,6 +18,12 @@ namespace Tenantry.EfCore;
 /// under another is caught at its next command. <c>SaveChanges</c> is checked before it starts, because EF Core wraps
 /// an exception thrown while a save runs its commands in a <c>DbUpdateException</c>. A command EF Core runs without a
 /// context (a HiLo sequence fetch) is checked against the context that opened its connection.
+/// </para>
+/// <para>
+/// In a context that uses <c>UseTenantry()</c>, the check runs before Tenantry stamps the save's new entities with the
+/// current tenant, wherever the guard is among the context's interceptors, so a save it refuses leaves the tracked
+/// entities as they were. Interceptors of your own run in the order they were added: add the guard before one that
+/// changes entities when a save starts.
 /// </para>
 /// <para>
 /// Throw <see cref="TenantNotResolvedException"/> when the context needs a tenant and none is current, and
@@ -159,6 +166,28 @@ public abstract class TenantContextGuard : IDbConnectionInterceptor, IDbCommandI
     /// <returns>The context, or <see langword="null"/> when none is known.</returns>
     protected virtual DbContext? FindContext(DbConnection? connection) =>
         connection is not null && Openers.TryGetValue(connection, out var context) ? context : null;
+
+    /// <summary>
+    /// Runs the check of every guard among <paramref name="context"/>'s interceptors, for Tenantry to call before it
+    /// changes the save's entities.
+    /// </summary>
+    internal static void CheckAll(DbContext context)
+    {
+        var interceptors = context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.Interceptors;
+
+        if (interceptors is null)
+        {
+            return;
+        }
+
+        foreach (var interceptor in interceptors)
+        {
+            if (interceptor is TenantContextGuard guard)
+            {
+                guard.Check(context);
+            }
+        }
+    }
 
     private DbContext? Running(DbCommand command, CommandEventData eventData) =>
         eventData.Context ?? FindContext(command.Connection);

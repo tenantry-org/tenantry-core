@@ -10,6 +10,7 @@ namespace Tenantry.EfCore.Internal;
 /// <remarks>
 /// On every <c>SaveChanges</c> or <c>SaveChangesAsync</c>:
 /// <list type="bullet">
+///   <item>Runs the check of every <see cref="TenantContextGuard"/> among the context's interceptors first, wherever it was added, so a save a guard refuses leaves the tracked entities unstamped.</item>
 ///   <item>Checks, once per model, that every tenant-owned entity type still has the tenant filter and concurrency token (<see cref="TenantModelCheck"/>).</item>
 ///   <item>Runs <see cref="TenantWriteGuard{TKey}"/>: it applies the configured <see cref="EfCoreIsolationOptions.OnMissingTenant"/> policy (default <c>Reject</c>) when tenant-owned entities are written without a resolved tenant; stamps <see cref="ITenantEntity{TKey}.TenantId"/> on all <c>Added</c> tenant-owned entities, and rejects one that already names another tenant; validates that every <c>Modified</c> or <c>Deleted</c> entity was loaded or attached as, and still belongs to, the current tenant; and checks owned entities through their owner, reading the stored tenant of an owner whose <c>TenantId</c> is part of a key.</item>
 ///   <item>Relies on the <c>TenantId</c> concurrency token so that a forged <c>TenantId</c> matches no row; EF Core then throws <see cref="DbUpdateConcurrencyException"/>, which is logged. When other statements of the save rely on that check (<see cref="AtomicSave"/>), no interceptor can suppress it, and the save is kept all-or-nothing.</item>
@@ -41,9 +42,14 @@ internal sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        if (eventData.Context is { } context && TenantModelCheck.Verify(context) is { } isolation)
+        if (eventData.Context is { } context)
         {
-            await isolation.SavingChangesAsync(context, cancellationToken);
+            TenantContextGuard.CheckAll(context);
+
+            if (TenantModelCheck.Verify(context) is { } isolation)
+            {
+                await isolation.SavingChangesAsync(context, cancellationToken);
+            }
         }
 
         return await base.SavingChangesAsync(eventData, result, cancellationToken);
@@ -111,6 +117,7 @@ internal sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
     {
         if (context is not null)
         {
+            TenantContextGuard.CheckAll(context);
             TenantModelCheck.Verify(context)?.SavingChanges(context);
         }
     }
