@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Tenantry.Caching.Internal;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.Caching.Tests;
@@ -244,7 +245,7 @@ public sealed class IsolateCachesTests
         await using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
         var cache = provider.GetRequiredKeyedService<HybridCache>("reports");
 
-        provider.GetRequiredService<IStartupValidator>().Validate();
+        RunStartupChecks(provider);
         await AsAsync(provider, Acme, () => cache.SetAsync("monthly", 1, cancellationToken: Ct).AsTask());
         await provider.GetRequiredKeyedService<SharedHybridCache>("reports").SetAsync("template", 2, cancellationToken: Ct);
         (await AsAsync(provider, Globex, () => cache.GetOrCreateAsync("monthly", _ => ValueTask.FromResult(0), cancellationToken: Ct)))
@@ -266,7 +267,7 @@ public sealed class IsolateCachesTests
         after.AddKeyedSingleton<HybridCache>("reports", new InMemoryHybridCache());
         using (var provider = after.BuildServiceProvider(Conformance.ProviderOptions))
         {
-            provider.Invoking(p => p.GetRequiredService<IStartupValidator>().Validate())
+            provider.Invoking(RunStartupChecks)
                 .Should().Throw<InvalidOperationException>().WithMessage("*key 'reports' was registered after AddTenantry*");
         }
 
@@ -276,21 +277,25 @@ public sealed class IsolateCachesTests
         anyKey.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
         using (var provider = anyKey.BuildServiceProvider(Conformance.ProviderOptions))
         {
-            provider.Invoking(p => p.GetRequiredService<IStartupValidator>().Validate())
+            provider.Invoking(RunStartupChecks)
                 .Should().Throw<InvalidOperationException>().WithMessage("*any key*");
         }
     }
+
+    // The check a host runs before it starts (ValidateOnStart), without building one: reading the options validates them.
+    private static void RunStartupChecks(IServiceProvider provider) =>
+        _ = provider.GetRequiredService<IOptions<CacheIsolationCheck>>().Value;
 
     [Fact]
     public async Task TheHostStarts_WithTheCacheRegisteredFirst_OrWithNoHybridCacheAtAll()
     {
         await using (var provider = Build())
-            provider.GetRequiredService<IStartupValidator>().Validate();
+            RunStartupChecks(provider);
 
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
         await using (var provider = services.BuildServiceProvider(Conformance.ProviderOptions))
-            provider.GetRequiredService<IStartupValidator>().Validate();
+            RunStartupChecks(provider);
     }
 
     [Theory]
