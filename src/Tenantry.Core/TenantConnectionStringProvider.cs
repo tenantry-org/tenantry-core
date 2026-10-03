@@ -21,6 +21,10 @@ public sealed class TenantConnectionStringProvider<TKey>(TenantConnectionStringO
         "UseConnectionStrings, for example: options.GetConnectionString = tenant => $\"...Database=app_{tenant.TenantId}\".";
 
     /// <inheritdoc />
+    /// <value>Whether <see cref="TenantConnectionStringOptions{TKey}.GetConnectionString"/> is set.</value>
+    public bool CanGetSynchronously => options.GetConnectionString is not null;
+
+    /// <inheritdoc />
     public string Get(ITenantDescriptor<TKey> tenant)
     {
         ArgumentNullException.ThrowIfNull(tenant);

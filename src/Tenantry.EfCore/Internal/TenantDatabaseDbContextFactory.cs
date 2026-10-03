@@ -35,7 +35,7 @@ internal sealed class TenantDatabaseContexts<
         // The guard goes first, so a context used under the wrong tenant is rejected before any other interceptor
         // acts on it (for example, stamping pending inserts with the current tenant). Tenantry's own interceptors come
         // next, so the application's (an audit log, say) see new entities already stamped.
-        builder.AddInterceptors(new TenantDatabaseGuard<TKey>(_tenantContext));
+        builder.AddInterceptors(new TenantDatabaseGuard<TKey>(_tenantContext, _connectionStrings));
         builder.UseTenantry();
         configure(services, builder);
         _options = builder.Options;
@@ -57,9 +57,12 @@ internal sealed class TenantDatabaseContexts<
     /// </param>
     public TContext Create(IServiceProvider services)
     {
-        // The connection string first: without a tenant this throws before a context is created.
+        // The tenant and connection string first: without either this throws before a context is created.
         var tenant = CurrentTenant();
-        var connectionString = _connectionStrings.Get(tenant);
+
+        // A provider that reads connection strings only asynchronously is asked when the context first opens a
+        // connection (TenantDatabaseGuard), so a scoped context can be injected; only asynchronous calls work on it.
+        var connectionString = _connectionStrings.CanGetSynchronously ? _connectionStrings.Get(tenant) : null;
         return Connect(_pool?.CreateDbContext() ?? New(services), tenant, connectionString);
     }
 
@@ -83,12 +86,14 @@ internal sealed class TenantDatabaseContexts<
             $"No tenant is current, so there is no tenant database to connect this '{typeof(TContext).Name}' to. " +
             "Create it during a request (after app.UseTenantry()) or inside a scope from ITenantScopeFactory.");
 
-    private static TContext Connect(TContext context, ITenantDescriptor<TKey> tenant, string connectionString)
+    // A null connection string is read later, when the context opens a connection.
+    private static TContext Connect(TContext context, ITenantDescriptor<TKey> tenant, string? connectionString)
     {
         try
         {
+            // Set even when null, so a pooled context never keeps the previous lease's.
             context.Database.SetConnectionString(connectionString);
-            TenantDatabaseLeases.Record(context, context.ContextId.Lease, tenant.TenantId);
+            TenantDatabaseLeases.Record(context, context.ContextId.Lease, tenant.TenantId, connectionString is null ? tenant : null);
             return context;
         }
         catch

@@ -86,9 +86,10 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// (an audit log, say) see new entities already stamped with their tenant.
     /// </para>
     /// <para>
-    /// The scoped <typeparamref name="TContext"/> reads the connection string synchronously, so it needs
-    /// <see cref="TenantConnectionStringOptions{TKey}.GetConnectionString"/>. With only an asynchronous delegate,
-    /// use <c>IDbContextFactory&lt;TContext&gt;.CreateDbContextAsync</c>.
+    /// When the provider cannot read connection strings synchronously
+    /// (<see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>), a context created synchronously, the
+    /// scoped <typeparamref name="TContext"/> among them, reads its connection string when it first opens a
+    /// connection, so only asynchronous EF Core calls work on it.
     /// </para>
     /// <para>
     /// A guard checks each context before it opens a connection and before every command it runs, including on a

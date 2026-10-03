@@ -24,19 +24,34 @@ internal static class TenantDatabaseLeases
     // across leases (the pool closes it but does not dispose it).
     private static readonly ConditionalWeakTable<DbConnection, DbContext> Connections = [];
 
-    public static void Record(DbContext context, int lease, object? tenantId)
+    /// <param name="context">The context.</param>
+    /// <param name="lease">Its lease.</param>
+    /// <param name="tenantId">The tenant it was connected for.</param>
+    /// <param name="pendingTenant">
+    /// The tenant whose connection string is still to be read, when the context opens a connection; otherwise null.
+    /// </param>
+    public static void Record(DbContext context, int lease, object? tenantId, object? pendingTenant = null)
     {
         var connection = context.Database.GetDbConnection();
-        Leases.AddOrUpdate(context, new Lease(lease, tenantId, connection, context.Database.GetConnectionString()));
+        Leases.AddOrUpdate(context, new Lease(lease, tenantId, connection, context.Database.GetConnectionString(), pendingTenant));
         Connections.AddOrUpdate(connection, context);
     }
+
+    /// <summary>Records the connection string read for a lease that was pending.</summary>
+    public static void Connected(DbContext context, Lease lease) =>
+        Leases.AddOrUpdate(context, lease with { ConnectionString = context.Database.GetConnectionString(), PendingTenant = null });
 
     public static bool TryGet(DbContext context, out Lease lease) => Leases.TryGetValue(context, out lease!);
 
     public static DbContext? FindContext(DbConnection? connection) =>
         connection is not null && Connections.TryGetValue(connection, out var context) ? context : null;
 
-    internal sealed record Lease(int Number, object? TenantId, DbConnection Connection, string? ConnectionString);
+    internal sealed record Lease(
+        int Number,
+        object? TenantId,
+        DbConnection Connection,
+        string? ConnectionString,
+        object? PendingTenant);
 }
 
 /// <summary>
@@ -52,7 +67,9 @@ internal static class TenantDatabaseLeases
 /// context (a HiLo sequence fetch) is attributed to the context that owns its connection. The check also fails
 /// if the application replaced the lease's connection or connection string.
 /// </remarks>
-internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantContext)
+internal sealed class TenantDatabaseGuard<TKey>(
+    ITenantContext<TKey> tenantContext,
+    ITenantConnectionStringProvider<TKey> connectionStrings)
     : IDbConnectionInterceptor, IDbCommandInterceptor, ISaveChangesInterceptor
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
@@ -76,18 +93,36 @@ internal sealed class TenantDatabaseGuard<TKey>(ITenantContext<TKey> tenantConte
         ConnectionEventData eventData,
         InterceptionResult result)
     {
-        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(connection));
+        var context = eventData.Context ?? TenantDatabaseLeases.FindContext(connection);
+        Check(context);
+
+        if (context is not null && TenantDatabaseLeases.TryGet(context, out var lease) && lease.PendingTenant is not null)
+        {
+            throw new InvalidOperationException(
+                $"This '{context.GetType().Name}' reads its tenant's connection string asynchronously (only " +
+                "GetConnectionStringAsync is configured), so it cannot open a connection synchronously. Use the " +
+                "asynchronous EF Core methods (ToListAsync, SaveChangesAsync), or also set GetConnectionString.");
+        }
+
         return result;
     }
 
-    public ValueTask<InterceptionResult> ConnectionOpeningAsync(
+    public async ValueTask<InterceptionResult> ConnectionOpeningAsync(
         DbConnection connection,
         ConnectionEventData eventData,
         InterceptionResult result,
         CancellationToken cancellationToken = default)
     {
-        Check(eventData.Context ?? TenantDatabaseLeases.FindContext(connection));
-        return ValueTask.FromResult(result);
+        var context = eventData.Context ?? TenantDatabaseLeases.FindContext(connection);
+        Check(context);
+
+        if (context is not null && TenantDatabaseLeases.TryGet(context, out var lease) && lease.PendingTenant is ITenantDescriptor<TKey> tenant)
+        {
+            context.Database.SetConnectionString(await connectionStrings.GetAsync(tenant, cancellationToken));
+            TenantDatabaseLeases.Connected(context, lease);
+        }
+
+        return result;
     }
 
     public InterceptionResult<DbDataReader> ReaderExecuting(

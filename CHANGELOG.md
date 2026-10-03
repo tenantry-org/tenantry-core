@@ -45,6 +45,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   background services, schedulers and message integrations among it, asks the new `ITenantActivity<TKey>`.
   `CreateScope` does not check, so migrations and provisioning still reach suspended tenants.
 
+- `UseConnectionStrings(sp => provider)` registers an `ITenantConnectionStringProvider<TKey>` built from the
+  application's services, for connection strings read with a client registered in DI, and
+  `DecorateConnectionStrings((sp, inner) => …)` wraps whichever provider is registered, before or after it, for
+  caching or logging.
+- `ITenantConnectionStringProvider<TKey>.CanGetSynchronously` (default `true`). When it is `false`, as for
+  `UseConnectionStrings` with only `GetConnectionStringAsync`, the scoped context of `AddDbContextPerTenantDatabase`
+  reads its connection string when it first opens a connection. It can now be injected; only asynchronous EF Core
+  calls work on it. Before, injecting it threw.
+
 ### Changed
 
 - `ConfigureEfCoreIsolation` configures `IOptions<EfCoreIsolationOptions>`, so `services.Configure` sets the same

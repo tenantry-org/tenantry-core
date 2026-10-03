@@ -367,8 +367,9 @@ builder.Services.AddTenantry<string>(tenant => tenant
 - `dotnet ef` cannot create the context, because no tenant is current at design time: give it an
   `IDesignTimeDbContextFactory` (see [Migrations](#migrations)).
 - Creating a context without a current tenant throws `TenantNotResolvedException`.
-- The scoped context reads the connection string synchronously, so it needs `GetConnectionString`. With only
-  `GetConnectionStringAsync`, create contexts with `IDbContextFactory<T>.CreateDbContextAsync()`.
+- With only `GetConnectionStringAsync`, the scoped context reads its connection string when it first opens a
+  connection, so it can still be injected, but only asynchronous EF Core calls (`ToListAsync`, `SaveChangesAsync`)
+  work on it. A synchronous one throws `InvalidOperationException`.
 
 The tenant filter and write checks still apply, as a second line of defence: a connection string that points at
 the wrong database then shows no rows and rejects writes instead of mixing tenants. So does a guard: before a
@@ -388,12 +389,21 @@ runs once, and EF Core keeps a pooled context's connection string between leases
 keep the first tenant's database.
 
 `UseConnectionStrings` also registers `ITenantConnectionStringProvider<TKey>`, which returns a given tenant's
-connection string (`Get(tenant)`, `GetAsync(tenant)`) for code that visits tenants without making each one
-current (implement it to decorate the default provider, for example to cache), and
-`CurrentTenantConnectionString<TKey>`, which returns the current tenant's (`Get()`, `GetAsync()`) for code that
-opens its own connections, and throws `TenantNotResolvedException` without one. Set `GetConnectionStringAsync`
-when the string comes from a secrets store: `GetAsync` prefers it, and the synchronous `Get` then needs
-`GetConnectionString` as well. The default provider calls your delegate every time and does not cache.
+connection string (`Get(tenant)`, `GetAsync(tenant)`) for code that visits tenants without making each one current,
+and `CurrentTenantConnectionString<TKey>`, which returns the current tenant's (`Get()`, `GetAsync()`) for code that
+opens its own connections, and throws `TenantNotResolvedException` without one. The default provider calls your
+delegate every time and does not cache.
+
+When the strings come from a secrets store, set `GetConnectionStringAsync`: `GetAsync` prefers it. To use a client
+registered in DI, register a provider of your own, built from the application's services, and return `false` from
+its `CanGetSynchronously` if it can only read asynchronously. To cache or log, wrap whichever provider is registered:
+
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .UseStore<AppTenantStore>()
+    .UseConnectionStrings(sp => new VaultConnectionStrings(sp.GetRequiredService<SecretClient>()))
+    .DecorateConnectionStrings((sp, inner) => new LoggingConnectionStrings(inner)));
+```
 
 It is tested on SQLite, SQL Server, PostgreSQL and MySQL with one pooled instance serving two tenant
 databases in turn, with concurrent leases, and with a context used as another tenant after its connection or

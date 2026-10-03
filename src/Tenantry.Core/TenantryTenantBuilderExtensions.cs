@@ -225,9 +225,74 @@ public static class TenantryTenantBuilderExtensions
         }
 
         services.TryAddSingleton<TenantConnectionStringProvider<TKey>>();
-        services.TryAddSingleton<ITenantConnectionStringProvider<TKey>>(sp =>
-            sp.GetRequiredService<TenantConnectionStringProvider<TKey>>());
+        TenantConnectionStrings.SetBase<TKey>(
+            services, sp => sp.GetRequiredService<TenantConnectionStringProvider<TKey>>(), replace: false);
         services.TryAddSingleton<CurrentTenantConnectionString<TKey>>();
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Registers the provider that returns each tenant's connection string, built from the application's services,
+    /// so it can use a secrets client or other services registered in DI. Registers
+    /// <see cref="ITenantConnectionStringProvider{TKey}"/> and <see cref="CurrentTenantConnectionString{TKey}"/> as
+    /// singletons.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="factory">Creates the provider, once, from the application's services.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// It replaces a provider set before, by this method or by <c>UseConnectionStrings(options =&gt; …)</c>. A provider
+    /// that can only read connection strings asynchronously returns <see langword="false"/> from
+    /// <see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .UseConnectionStrings(sp =&gt; new VaultConnectionStrings(sp.GetRequiredService&lt;SecretClient&gt;())));
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> UseConnectionStrings<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<IServiceProvider, ITenantConnectionStringProvider<TKey>> factory)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(factory);
+
+        TenantConnectionStrings.SetBase(builder.Services, factory, replace: true);
+        builder.Services.TryAddSingleton<CurrentTenantConnectionString<TKey>>();
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Wraps the registered <see cref="ITenantConnectionStringProvider{TKey}"/>, for example to cache or log. The
+    /// decorator applies whether this is called before or after <c>UseConnectionStrings</c>; several decorators
+    /// wrap in the order they are added, so the last one added is called first.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="decorate">
+    /// Returns the provider to use in place of the one it is given. It runs once, when the provider is first resolved.
+    /// </param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// A decorator should forward <see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/> to the
+    /// provider it wraps. Resolving the provider without any connection strings configured throws
+    /// <see cref="InvalidOperationException"/>.
+    /// </remarks>
+    public static ITenantBuilder<TKey> DecorateConnectionStrings<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<IServiceProvider, ITenantConnectionStringProvider<TKey>, ITenantConnectionStringProvider<TKey>> decorate)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(decorate);
+
+        TenantConnectionStrings.Register<TKey>(builder.Services).All.Add(decorate);
 
         return builder;
     }

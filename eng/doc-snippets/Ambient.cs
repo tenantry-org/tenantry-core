@@ -135,3 +135,30 @@ public sealed class AppTenantStore : ITenantStore<string>
     public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken ct = default) =>
         ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([]);
 }
+
+/// <summary>A secrets client, as Azure Key Vault's or AWS Secrets Manager's.</summary>
+public sealed class SecretClient
+{
+    public Task<string> GetSecretAsync(string name, CancellationToken ct = default) => Task.FromResult("");
+}
+
+/// <summary>A connection-string provider over a secrets client.</summary>
+public sealed class VaultConnectionStrings(SecretClient secrets) : ITenantConnectionStringProvider<string>
+{
+    public bool CanGetSynchronously => false;
+
+    public string Get(ITenantDescriptor<string> tenant) => throw new NotSupportedException();
+
+    public async ValueTask<string> GetAsync(ITenantDescriptor<string> tenant, CancellationToken ct = default) =>
+        await secrets.GetSecretAsync($"connstr-{tenant.TenantId}", ct);
+}
+
+/// <summary>A decorator that logs each connection string read.</summary>
+public sealed class LoggingConnectionStrings(ITenantConnectionStringProvider<string> inner) : ITenantConnectionStringProvider<string>
+{
+    public bool CanGetSynchronously => inner.CanGetSynchronously;
+
+    public string Get(ITenantDescriptor<string> tenant) => inner.Get(tenant);
+
+    public ValueTask<string> GetAsync(ITenantDescriptor<string> tenant, CancellationToken ct = default) => inner.GetAsync(tenant, ct);
+}
