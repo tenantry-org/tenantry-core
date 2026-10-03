@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- First released in 0.6.0: nothing to check its API against yet -->
+    <TenantryPackageBaseline />
     <PackageDescription>HTTP and gRPC integration for Tenantry: UseTenantry() on an HttpClient or gRPC client sends the current tenant to the service it calls, in the tenantry-tenant-id header, which Tenantry.AspNetCore's ResolveFromPropagationHeader() reads.</PackageDescription>
     <PackageTags>multi-tenancy;httpclient;grpc;saas;tenantry;tenant-propagation</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>

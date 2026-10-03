@@ -28,6 +28,14 @@ rest. Only the maintainer can push `v*` tags.
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
 
+## After any release
+
+- Set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, and remove the
+  `<TenantryPackageBaseline />` of a package released for the first time. Pack then checks each package against that
+  release, so a patch cannot break code compiled against it (Tenantry.Pro accepts any release in the minor). A
+  minor release may break the API on purpose: record each break in the project's `CompatibilitySuppressions.xml`
+  (`dotnet pack -p:ApiCompatGenerateSuppressionFile=true`) and in the changelog.
+
 ## After a minor release
 
 - Tenantry.Pro depends on Tenantry up to the next minor in 0.x (`[0.y.0, 0.(y+1).0)`), so each minor release of

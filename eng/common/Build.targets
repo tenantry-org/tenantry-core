@@ -1,6 +1,18 @@
 <Project>
 
   <!--
+    Pack compares each package with the release TenantryPackageBaseline names (the repository's Directory.Build.props
+    sets it, and each release raises it), and fails on a change that would break code compiled against that release,
+    such as a removed member or a new optional parameter. An intended break, allowed in a 0.x minor release, is
+    recorded in the project's CompatibilitySuppressions.xml: run dotnet pack -p:ApiCompatGenerateSuppressionFile=true
+    and review what it writes. A package first released after the baseline sets TenantryPackageBaseline to nothing in
+    its project file, until its first release.
+  -->
+  <PropertyGroup Condition="'$(EnablePackageValidation)' == 'true' and '$(TenantryPackageBaseline)' != ''">
+    <PackageValidationBaselineVersion>$(TenantryPackageBaseline)</PackageValidationBaselineVersion>
+  </PropertyGroup>
+
+  <!--
     Packs each project reference with a version range instead of NuGet's default minimum (">= x.y.z"): this release up
     to the next one that may break it, [x.y.z, x.(y+1).0) in 0.x and [x.y.z, (x+1).0.0) from 1.0, so a consumer can
     update one package of the set within that band. A reference marked PinExact="true" packs as exactly this release,

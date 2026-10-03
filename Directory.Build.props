@@ -11,6 +11,9 @@
     <!-- The README each package carries: for NuGet.org (eng/package-readme.md, with absolute links), not the
          repository README -->
     <TenantryPackageReadme>$(MSBuildThisFileDirectory)eng/package-readme.md</TenantryPackageReadme>
+    <!-- The last release, which pack checks each package's API against (eng/common/Build.targets). Raise it after each
+         release (RELEASING.md). -->
+    <TenantryPackageBaseline>0.5.0</TenantryPackageBaseline>
   </PropertyGroup>
 
 </Project>
