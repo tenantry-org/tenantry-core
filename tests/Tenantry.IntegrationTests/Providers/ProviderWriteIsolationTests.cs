@@ -4,7 +4,6 @@ using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Tenantry;
@@ -49,11 +48,10 @@ public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : P
     public async Task ARefusedTransactionThatEnded_DoesNotRefuseTheNextOne_ThoughNpgsqlHandsOutItsObjectAgain()
     {
         // EF Core fails to roll a forged save back to its savepoint, so that transaction may not commit. It is disposed
-        // instead, and Npgsql hands the same transaction object to the next transaction on the connection, which must
-        // commit.
+        // instead, and Npgsql may hand the same transaction object to the next transaction on the connection, which
+        // must commit. (AtomicSaveTests cover a handed-on object either way.)
         var id = await AddDogAsync(Acme, "acme detail");
         var connectionString = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { MaxPoolSize = 1 }.ConnectionString;
-        DbTransaction first;
 
         using (Tenants.Use(Tenant(Globex)))
         {
@@ -64,7 +62,6 @@ public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : P
                 .UseTenantry()
                 .Options);
             await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
-            first = transaction.GetDbTransaction();
             ProviderDog stub = new() { Id = id, TenantId = Globex, Detail = "acme detail" };
             db.Animals.Attach(stub);
             stub.Detail = "overwritten";
@@ -75,7 +72,6 @@ public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : P
         {
             await connection.OpenAsync(TestContext.Current.CancellationToken);
             await using var next = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
-            next.Should().BeSameAs(first, "Npgsql hands out its transaction object again");
 
             using (Tenants.Use(Tenant(Acme)))
             {

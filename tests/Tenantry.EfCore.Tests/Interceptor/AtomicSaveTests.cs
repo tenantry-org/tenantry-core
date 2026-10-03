@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
 
@@ -356,6 +357,49 @@ public sealed class AtomicSaveTests : IDisposable
         transactions.Started.Should().Be(0);
         await using var check = await CreateAsync(_tenant.As("acme"));
         (await check.Set<Dog>().SingleAsync(TestContext.Current.CancellationToken)).Name.Should().Be("renamed");
+    }
+
+    [Fact]
+    public async Task ARefusedTransactionItsContextBegan_IsForgottenOnceEnded_WhenItsObjectIsHandedOn()
+    {
+        // Npgsql hands a transaction object out again for the next transaction on its connection: once the context
+        // that began the refused transaction has ended it, a context the object is handed to must be able to commit.
+        await SeedAcmeAsync();
+        DbTransaction first;
+
+        await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { Transactions = new SavepointRollbackFails() }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            first = transaction.GetDbTransaction();
+            Forge(db, Forgery.StubOwnerAddsOwnedRow);
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+            AtomicSave.Refusal(first).Should().NotBeNull();
+        }
+
+        AtomicSave.Used(first);
+
+        AtomicSave.Refusal(first).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ARefusedTransactionItsContextDidNotBegin_IsStillRefused_WhenHandedToAnother()
+    {
+        // A transaction handed to the context may outlive it, shared with another context that commits it.
+        await SeedAcmeAsync();
+        await using var shared = await _connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { Transactions = new SavepointRollbackFails() }))
+        {
+            await db.Database.UseTransactionAsync(shared, TestContext.Current.CancellationToken);
+            Forge(db, Forgery.StubOwnerAddsOwnedRow);
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+        }
+
+        AtomicSave.Used(shared);
+
+        AtomicSave.Refusal(shared).Should().NotBeNull();
+        await shared.RollbackAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
