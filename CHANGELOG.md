@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tenant.TagRequestMetrics()` (Tenantry.AspNetCore) tags ASP.NET Core's request metric, `http.server.request.duration`,
+  with the request's tenant as `tenant.id`, or with a value of your own per tenant to keep the series few. It replaces
+  Tenantry.Pro's `AddTenantMetrics()`, whose package, Tenantry.Pro.AspNetCore, existed only for it. See
+  [Diagnostics](docs/diagnostics.md#request-metrics-per-tenant).
+
 ## [0.6.0] - 2026-10-03
 
 ### Upgrading from 0.5

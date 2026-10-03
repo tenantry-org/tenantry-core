@@ -195,6 +195,42 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     }
 
     /// <summary>
+    /// Tags ASP.NET Core's request metric (<c>http.server.request.duration</c>) with the request's tenant, as
+    /// <c>tenant.id</c>, when <c>app.UseTenantry()</c> makes it current. A request without a tenant gets no tag.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="getTagValue">
+    /// Returns the tag's value for a tenant's requests, or <see langword="null"/> to leave the tag off them; without it,
+    /// the tag is the tenant id. Each value is a series of its own for every route, method and status code, so with many
+    /// tenants, tag the ones you watch and group the rest. It runs for every request with a tenant, so it must be fast.
+    /// </param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;string&gt;(tenant =&gt; tenant
+    ///     .ResolveFromSubdomain()
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .TagRequestMetrics(t =&gt; t.TenantId.StartsWith("enterprise-") ? t.TenantId : "other"));
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> TagRequestMetrics<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<ITenantDescriptor<TKey>, string?>? getTagValue = null)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        TenantResolutionMiddlewareConfigurator<TKey>.Register(builder.Services);
+        builder.Services.Configure<TenantRequestMetricsOptions<TKey>>(options =>
+        {
+            options.Enabled = true;
+            options.GetTagValue = getTagValue;
+        });
+        return builder;
+    }
+
+    /// <summary>
     /// Resolves the tenant from a query string parameter.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
