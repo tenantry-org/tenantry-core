@@ -28,7 +28,7 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-It wraps the `HybridCache` registered before it, so call `AddHybridCache()` before `AddTenantry`. Without one, the `HybridCache` it registers throws when used, naming the fix, and a later `AddHybridCache()`, which adds a cache only if none is registered, leaves it in place. A `HybridCache` registered later with `AddSingleton` replaces it, unisolated: keep cache registrations before `AddTenantry`.
+It wraps the `HybridCache` registered before it, so call `AddHybridCache()` before `AddTenantry`. When the host starts, it checks that `HybridCache` resolves to the cache it keys by tenant, and throws `InvalidOperationException` otherwise: for a `HybridCache` registered after it (which would replace it), for `AddHybridCache()` called after it, and for a keyed `HybridCache`, which it does not isolate. With no `HybridCache` registered at all, the one it registers throws when used, naming the fix.
 
 A `HybridCache` call with no current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), rather than writing an entry no tenant owns. The tenant's prefix makes keys longer: keep them within the cache's maximum key length (1,024 characters by default) with the id added.
 
