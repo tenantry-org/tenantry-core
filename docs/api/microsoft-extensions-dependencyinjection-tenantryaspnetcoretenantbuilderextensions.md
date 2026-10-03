@@ -229,6 +229,32 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
+### `TagRequestMetrics<TKey>(ITenantBuilder<TKey>, Func<ITenantDescriptor<TKey>, string?>?)`
+
+Tags ASP.NET Core's request metric (`http.server.request.duration`) with the request's tenant, as `tenant.id`, when `app.UseTenantry()` makes it current. A request without a tenant gets no tag.
+
+```csharp
+public static ITenantBuilder<TKey> TagRequestMetrics<TKey>(this ITenantBuilder<TKey> builder, Func<ITenantDescriptor<TKey>, string?>? getTagValue = null) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `getTagValue` `Func<ITenantDescriptor<TKey>, string>`: Returns the tag's value for a tenant's requests, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) to leave the tag off them; without it, the tag is the tenant id. Each value is a series of its own for every route, method and status code, so with many tenants, tag the ones you watch and group the rest. It runs for every request with a tenant, so it must be fast.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .ResolveFromSubdomain()
+    .UseStore<AppTenantStore>()
+    .TagRequestMetrics(t => t.TenantId.StartsWith("enterprise-") ? t.TenantId : "other"));
+```
+
 ### `UseResolver<TResolver>(ITenantBuilder)`
 
 Registers a custom [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md) implementation, created through dependency injection in each request's scope, so it can depend on scoped services such as a `DbContext`.
