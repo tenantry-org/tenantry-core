@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+      The Native AOT check for the packages the Aot sample cannot show (run in CI): publishes this app with PublishAot,
+      which must produce no IL2xxx/IL3xxx warning (warnings are errors here), then runs the native binary.
+      Tenantry.Core, Tenantry.Http and Tenantry.Caching are rooted whole, so the trimmer analyses all their code, and the
+      app calls their generic paths (a HybridCache wrapped by IsolateCaches, with and without state), which only a
+      whole-program compile checks. Microsoft's HybridCache implementation has trim warnings of its own, so the app
+      brings a small cache instead. Not part of the solution.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework Condition="'$(IncludeNet11)' == 'true'">net11.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishAot>true</PublishAot>
+    <!-- One warning per problem, not one per assembly -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <IsPackable>false</IsPackable>
+    <!-- No lock file: the AOT compiler and trimmer packages follow the installed SDK and host platform -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Tenantry.Core/Tenantry.Core.csproj" />
+    <ProjectReference Include="../../src/Tenantry.Http/Tenantry.Http.csproj" />
+    <ProjectReference Include="../../src/Tenantry.Caching/Tenantry.Caching.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+
+    <TrimmerRootAssembly Include="Tenantry.Core" />
+    <TrimmerRootAssembly Include="Tenantry.Http" />
+    <TrimmerRootAssembly Include="Tenantry.Caching" />
+  </ItemGroup>
+
+</Project>

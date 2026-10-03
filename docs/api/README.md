@@ -39,6 +39,21 @@ the pieces fit together; this reference is for the details of each type and memb
 | [`TenantResolutionOptions<TKey>`](tenantry-aspnetcore-tenantresolutionoptions.md) | class | How `app.UseTenantry()` treats requests: whether they need a tenant, the status code of each rejection, and the events it raises. Configure it with `tenant.ConfigureResolution(o => …)` or `tenant.RequireTenantByDefault()`. |
 | [`TenantResolvedContext<TKey>`](tenantry-aspnetcore-tenantresolvedcontext.md) | class | The request whose tenant `app.UseTenantry()` made current, passed to [`TenantResolutionOptions<TKey>.OnResolved`](tenantry-aspnetcore-tenantresolutionoptions.md). |
 
+## Tenantry.Caching
+
+### `Microsoft.Extensions.DependencyInjection`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`TenantryCachingTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantrycachingtenantbuilderextensions.md) | class | Keeps cached data per tenant. |
+
+### `Tenantry.Caching`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`ITenantDistributedCache`](tenantry-caching-itenantdistributedcache.md) | interface | The registered `IDistributedCache`, with every key under the current tenant's prefix, for code that uses `IDistributedCache` directly and keeps data per tenant. Without a tenant, every call throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md). |
+| [`SharedHybridCache`](tenantry-caching-sharedhybridcache.md) | class | The `HybridCache` for entries every tenant shares (exchange rates, reference data), where `IsolateCaches()` makes the injected `HybridCache` keep entries per tenant. |
+
 ## Tenantry.Core
 
 ### `Microsoft.Extensions.DependencyInjection`

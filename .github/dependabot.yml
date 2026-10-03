@@ -26,6 +26,8 @@ updates:
       - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
       - dependency-name: "Microsoft.EntityFrameworkCore.Sqlite"
       - dependency-name: "Microsoft.EntityFrameworkCore.SqlServer"
+      - dependency-name: "Microsoft.Extensions.Caching.Abstractions"
+      - dependency-name: "Microsoft.Extensions.Caching.Hybrid"
       - dependency-name: "Microsoft.Extensions.DependencyInjection"
       - dependency-name: "Microsoft.Extensions.DependencyInjection.Abstractions"
       - dependency-name: "Microsoft.Extensions.Hosting"
@@ -35,6 +37,7 @@ updates:
       - dependency-name: "Tenantry.AspNetCore"
       - dependency-name: "Tenantry.Core"
       - dependency-name: "Tenantry.EfCore"
+      - dependency-name: "Tenantry.Caching"
       - dependency-name: "Tenantry.Http"
       # Banded packages: end
     groups:

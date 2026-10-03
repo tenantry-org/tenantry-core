@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is refused. See [Calling other services](docs/http-propagation.md).
 - `ResolveFromPropagationHeader()` (Tenantry.AspNetCore) resolves the tenant another service sent, by id with the
   store's `GetTenantAsync`, so a store whose identifiers are slugs still finds it.
+- `Tenantry.Caching`, a new package: `IsolateCaches()` keeps the application's `HybridCache` entries per tenant (keys
+  and tags under the tenant's prefix, a factory run as the tenant, and no call without a tenant), with
+  `SharedHybridCache` for entries every tenant shares and `ITenantDistributedCache` for code that uses
+  `IDistributedCache` directly. Invalidating a tenant removes its entries. See [Caching per tenant](docs/caching.md).
+- `IsolateOutputCache()` (Tenantry.AspNetCore) makes cached responses vary by tenant, and invalidating a tenant
+  evicts its responses. The output cache before `UseTenantry()` throws, rather than caching for every tenant.
 - `ITenantInvalidationHandler<TKey>`: `ITenantStoreCache<TKey>.Invalidate` and `InvalidateAll` run every registered
   handler, with or without `CacheTenants`, so one call clears everything kept for a tenant. Tenantry.Caching and
   Tenantry.Options register one.

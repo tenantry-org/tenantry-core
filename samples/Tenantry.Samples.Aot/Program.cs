@@ -13,6 +13,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 // Rejected requests get problem details (application/problem+json) instead of an empty body.
 builder.Services.AddProblemDetails();
 
+// The output cache, which Tenantry keeps per tenant (IsolateOutputCache below).
+builder.Services.AddOutputCache();
+
 // Every Tenantry builder method used here is trimming- and Native AOT-safe.
 builder.Services.AddTenantry<string>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
@@ -26,6 +29,7 @@ builder.Services.AddTenantry<string>(tenant => tenant
     .UseConnectionStrings(options => options.GetConnectionString = t => $"Database=orders_{t.TenantId}")
     .ConfigureResolution(options => options.TenantNotFoundStatusCode = StatusCodes.Status403Forbidden) // hide which tenants exist
     .AddHttpPropagation()                                                // clients with UseTenantry() send the tenant
+    .IsolateOutputCache()                                                // cached responses per tenant
     .UseResolver<TenantCookieResolver>());                               // a custom resolver, created by DI
 
 // A client for another service: its requests carry the current tenant, which that service reads with
@@ -36,6 +40,7 @@ builder.Services.AddHttpClient("self", client => client.BaseAddress = new Uri(bu
 var app = builder.Build();
 
 app.UseTenantry();
+app.UseOutputCache();   // after UseTenantry(), so cached responses are kept per tenant
 
 var orders = new List<Order>
 {
@@ -57,6 +62,11 @@ app.MapGet("/me", (ITenantContext<string> ctx) =>
 // /me again, through the HTTP client: the request it sends carries this request's tenant.
 app.MapGet("/me/via-http", async (IHttpClientFactory clients, CancellationToken ct) =>
         await clients.CreateClient("self").GetStringAsync("/me", ct))
+    .RequireTenant();
+
+// The tenant's order count: the response is cached for the tenant (output caching, kept per tenant).
+app.MapGet("/orders/count", (ITenantContext<string> ctx) => orders.Count(o => o.TenantId == ctx.CurrentTenantId).ToString())
+    .CacheOutput()
     .RequireTenant();
 
 // The database a database-per-tenant application would connect this request to.

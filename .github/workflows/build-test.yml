@@ -136,11 +136,11 @@ jobs:
       - name: Consumer check
         # A stand-in application restores these packages from an empty cache with package source mapping,
         # builds for every target framework and runs, as an application would (see the script)
-        run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http'
+        run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http' 'Tenantry.Caching'
 
       - name: Check the documentation's code blocks
         # Every ```csharp block in the README and docs builds against these packages (see the script)
-        run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http'
+        run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http' 'Tenantry.Caching'
 
       - name: Upload packages
         # The release job publishes exactly these packages: the ones built, tested and checked above
@@ -155,3 +155,10 @@ jobs:
 
       - name: Verify AOT publish
         run: dotnet publish samples/Tenantry.Samples.Aot -c Release
+
+      # Tenantry.Http and Tenantry.Caching, rooted whole, and their generic paths, which only a whole-program compile
+      # checks; then the native binary runs them (eng/aot-smoke).
+      - name: Native AOT smoke test
+        run: |
+          dotnet publish eng/aot-smoke -c Release -o ./artifacts/aot-smoke
+          ./artifacts/aot-smoke/AotSmoke

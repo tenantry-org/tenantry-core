@@ -33,3 +33,4 @@ may receive fixes at the maintainers' discretion.
 | `Tenantry.AspNetCore` | latest minor |
 | `Tenantry.EfCore` | latest minor |
 | `Tenantry.Http` | latest minor |
+| `Tenantry.Caching` | latest minor |

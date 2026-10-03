@@ -29,6 +29,35 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
+### `IsolateOutputCache<TKey>(ITenantBuilder<TKey>)`
+
+Keeps ASP.NET Core's output cache per tenant: a response cached while a tenant is current varies by the tenant, so it is served only to that tenant, and invalidating the tenant ([`ITenantStoreCache<TKey>.Invalidate`](tenantry-itenantstorecache.md)) evicts it. A response for a request without a tenant (an endpoint that allows one to be missing) is cached apart from every tenant's.
+
+```csharp
+public static ITenantBuilder<TKey> IsolateOutputCache<TKey>(this ITenantBuilder<TKey> builder) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+Add the output cache after Tenantry in the pipeline (`app.UseTenantry()`, then `app.UseOutputCache()`), so the tenant is known when the cache runs. In the other order, a request the output cache handles throws, naming the fix, rather than being cached for every tenant. Endpoints still opt in to output caching themselves (`CacheOutput()`, `[OutputCache]`).
+
+```csharp
+builder.Services.AddOutputCache();
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromSubdomain()
+    .UseStore<AppTenantStore>()
+    .IsolateOutputCache());
+
+app.UseTenantry(); app.UseOutputCache(); ```
+
 ### `RequireTenantByDefault<TKey>(ITenantBuilder<TKey>)`
 
 Requires a tenant on every endpoint that does not allow a missing one with `AllowMissingTenant()`.

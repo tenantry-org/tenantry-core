@@ -9,12 +9,14 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />
+    <Project Path="src\Tenantry.Caching\Tenantry.Caching.csproj" />
     <Project Path="src\Tenantry.Core\Tenantry.Core.csproj" />
     <Project Path="src\Tenantry.EfCore\Tenantry.EfCore.csproj" />
     <Project Path="src\Tenantry.Http\Tenantry.Http.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests\Tenantry.AspNetCore.Tests\Tenantry.AspNetCore.Tests.csproj" />
+    <Project Path="tests\Tenantry.Caching.Tests\Tenantry.Caching.Tests.csproj" />
     <Project Path="tests\Tenantry.Core.Tests\Tenantry.Core.Tests.csproj" />
     <Project Path="tests\Tenantry.EfCore.Tests\Tenantry.EfCore.Tests.csproj" />
     <Project Path="tests\Tenantry.Http.Tests\Tenantry.Http.Tests.csproj" />

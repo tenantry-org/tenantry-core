@@ -12,7 +12,8 @@
 //   - Microsoft.Extensions.* take a minimum only (">= x.y.z", no upper bound). Microsoft ships every
 //     Microsoft.Extensions major for every supported framework and keeps it compatible, and current Azure SDKs need
 //     Microsoft.Extensions 10.x even on net8.0, so a cap would stop consumers restoring. The minimum must be the
-//     target framework's own major (net8.0 needs 8.x or later, not 10.x).
+//     target framework's own major (net8.0 needs 8.x or later, not 10.x), except where an API arrived in a later
+//     major that still supports the framework (HybridCache, in Microsoft.Extensions.Caching.Abstractions 9.0).
 //   - Every other dependency must be bounded below its next breaking version: [a.b.c, (a+1).0.0), or for a 0.x
 //     package, where a minor release may break (SemVer), [0.b.c, 0.(b+1).0) (Tenantry Core in beta). Microsoft.AspNetCore.*
 //     and Microsoft.EntityFrameworkCore* must also match the target framework's major version (net10.0 depends on
@@ -149,11 +150,22 @@ static string? CheckMinimum(Dependency dependency)
     }
 
     var frameworkMajor = Regex.Match(dependency.Framework, @"^net(?<major>\d+)\.\d+$");
-    return dependency.Id.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase)
-        && frameworkMajor.Success && int.Parse(frameworkMajor.Groups["major"].Value) != Major(dependency.Version)
-        ? $"expected a minimum of {frameworkMajor.Groups["major"].Value}.x, the target framework's own major"
+    if (!dependency.Id.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase) || !frameworkMajor.Success)
+    {
+        return null;
+    }
+
+    var expected = int.Parse(frameworkMajor.Groups["major"].Value);
+    expected = Math.Max(expected, FirstMajorWithTheApi(dependency.Id));
+    return Major(dependency.Version) != expected
+        ? $"expected a minimum of {expected}.x, the target framework's own major or the first with the API"
         : null;
 }
+
+// For a package whose API the packages use arrived in a later major than some framework's, which still supports it:
+// that major (0 for the rest).
+static int FirstMajorWithTheApi(string id) =>
+    id.Equals("Microsoft.Extensions.Caching.Abstractions", StringComparison.OrdinalIgnoreCase) ? 9 : 0;   // HybridCache
 
 static int Major(string version) => int.Parse(version.Split('.', '-')[0]);
 

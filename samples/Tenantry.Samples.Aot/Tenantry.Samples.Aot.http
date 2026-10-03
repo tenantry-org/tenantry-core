@@ -19,6 +19,10 @@ Accept: application/json
 GET {{host}}/me/via-http
 X-Tenant-Id: acme
 
+### Acme's order count, cached for Acme (output caching per tenant)
+GET {{host}}/orders/count
+X-Tenant-Id: acme
+
 ### Health check (no tenant needed)
 GET {{host}}/health
 Accept: application/json

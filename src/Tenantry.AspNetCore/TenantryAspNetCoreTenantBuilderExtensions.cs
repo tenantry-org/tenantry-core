@@ -1,5 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Tenantry;
 using Tenantry.AspNetCore;
 using Tenantry.AspNetCore.Internal;
@@ -137,6 +140,44 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     public static ITenantBuilder<TKey> ResolveFromPropagationHeader<TKey>(this ITenantBuilder<TKey> builder)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         builder.UseResolver(new PropagationHeaderTenantResolver());
+
+    /// <summary>
+    /// Keeps ASP.NET Core's output cache per tenant: a response cached while a tenant is current varies by the tenant,
+    /// so it is served only to that tenant, and invalidating the tenant (<see cref="ITenantStoreCache{TKey}.Invalidate"/>)
+    /// evicts it. A response for a request without a tenant (an endpoint that allows one to be missing) is cached apart
+    /// from every tenant's.
+    /// </summary>
+    /// <remarks>
+    /// Add the output cache after Tenantry in the pipeline (<c>app.UseTenantry()</c>, then <c>app.UseOutputCache()</c>),
+    /// so the tenant is known when the cache runs. In the other order, a request the output cache handles throws,
+    /// naming the fix, rather than being cached for every tenant. Endpoints still opt in to output caching themselves
+    /// (<c>CacheOutput()</c>, <c>[OutputCache]</c>).
+    /// </remarks>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddOutputCache();
+    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
+    ///     .ResolveFromSubdomain()
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .IsolateOutputCache());
+    ///
+    /// app.UseTenantry();
+    /// app.UseOutputCache();
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> IsolateOutputCache<TKey>(this ITenantBuilder<TKey> builder)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<OutputCacheOptions>, TenantOutputCacheSetup<TKey>>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<TKey>, TenantOutputCacheInvalidation<TKey>>());
+
+        return builder;
+    }
 
     /// <summary>
     /// Resolves the tenant from a query string parameter.

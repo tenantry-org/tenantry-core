@@ -68,6 +68,8 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
+        context.Features.Set(TenantResolutionFeature.Instance);
+
         // Captured first: the resolution's own activity is the current one while it runs.
         var requestActivity = Activity.Current;
         var endpointWasNull = context.GetEndpoint() is null;

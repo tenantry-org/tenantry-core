@@ -10,13 +10,14 @@ package, and why EF Core is different.
 |-----------------------|:-------------:|:-----------------:|:----------:|-------|
 | `Tenantry.Core`       | ✅ | ✅ | ✅ | No reflection beyond annotated, AOT-safe DI patterns. |
 | `Tenantry.AspNetCore` | ✅ | ✅ | ✅ | Demonstrated by the `Aot` sample. |
-| `Tenantry.Http`       | ✅ | ✅ | ✅ | Demonstrated by the `Aot` sample. |
+| `Tenantry.Http`       | ✅ | ✅ | ✅ | Demonstrated by the `Aot` sample, and checked by a Native AOT build in CI. |
+| `Tenantry.Caching`    | ✅ | ✅ | ✅ | Checked by a Native AOT build in CI. Microsoft's `HybridCache` implementation has trim warnings of its own (its default JSON serializer). |
 | `Tenantry.EfCore`     | ✅ | — | ⚠️ Not supported | Query filters require dynamic code; matches EF Core's own AOT stance. |
 
 "Trimmable" means the package is safe to include in a trimmed app and produces no trim warnings of its
 own. "AOT-compatible" means the same for Native AOT (which also implies no run-time code generation).
 
-## `Tenantry.Core`, `Tenantry.AspNetCore` and `Tenantry.Http` — fully AOT & trim safe
+## `Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http` and `Tenantry.Caching` — fully AOT & trim safe
 
 Each is marked `IsAotCompatible` and `IsTrimmable` and compile clean under both analyzers. Where the
 public API accepts a type that DI must construct, it is annotated so the trimmer preserves the needed
