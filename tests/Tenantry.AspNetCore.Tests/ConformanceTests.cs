@@ -34,6 +34,7 @@ public sealed class ConformanceTests
             tenant.ResolveFromSubdomain();
             tenant.ResolveFromQueryString();
             tenant.ResolveFromHost();
+            tenant.ResolveFromPropagationHeader();
             tenant.UseResolver<NoTenantResolver>();
             tenant.UseResolver(new NoTenantResolver());
             tenant.UseResolver(_ => new NoTenantResolver());

@@ -112,6 +112,33 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     }
 
     /// <summary>
+    /// Resolves the tenant another service sent with its request: the tenant id in the
+    /// <see cref="TenantPropagation.HeaderName"/> header, which Tenantry.Http's <c>UseTenantry()</c> adds to an
+    /// HttpClient's or gRPC client's requests. The value is read as a tenant id (<see cref="TenantIds.TryParse{TKey}"/>)
+    /// and looked up with the store's <see cref="ITenantStore{TKey}.GetTenantAsync"/>, not its
+    /// <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/>; a value that is not a tenant id finds no tenant.
+    /// </summary>
+    /// <remarks>
+    /// A header is a claim, not proof: any caller that reaches the service can set it. Accept it only from callers you
+    /// authenticate (a token, mutual TLS), and check that the caller may act for the tenant with
+    /// <c>ValidateTenantAccess</c>. Resolvers run in the order they are added, and the first that finds a value wins.
+    /// </remarks>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
+    ///     .ResolveFromPropagationHeader()
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .ValidateTenantAccess&lt;CallingServiceValidator&gt;());
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> ResolveFromPropagationHeader<TKey>(this ITenantBuilder<TKey> builder)
+        where TKey : IEquatable<TKey>, IParsable<TKey> =>
+        builder.UseResolver(new PropagationHeaderTenantResolver());
+
+    /// <summary>
     /// Resolves the tenant from a query string parameter.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>

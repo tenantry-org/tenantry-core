@@ -17,6 +17,7 @@
     <PackageReference Include="Tenantry.Core" Version="[$(TenantryVersion)]" />
     <PackageReference Include="Tenantry.EfCore" Version="[$(TenantryVersion)]" />
     <PackageReference Include="Tenantry.AspNetCore" Version="[$(TenantryVersion)]" />
+    <PackageReference Include="Tenantry.Http" Version="[$(TenantryVersion)]" />
   </ItemGroup>
 
 </Project>

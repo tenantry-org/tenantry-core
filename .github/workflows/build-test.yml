@@ -136,11 +136,11 @@ jobs:
       - name: Consumer check
         # A stand-in application restores these packages from an empty cache with package source mapping,
         # builds for every target framework and runs, as an application would (see the script)
-        run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'
+        run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http'
 
       - name: Check the documentation's code blocks
         # Every ```csharp block in the README and docs builds against these packages (see the script)
-        run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore'
+        run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http'
 
       - name: Upload packages
         # The release job publishes exactly these packages: the ones built, tested and checked above

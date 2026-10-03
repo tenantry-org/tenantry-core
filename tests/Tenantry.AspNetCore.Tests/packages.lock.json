@@ -149,6 +149,12 @@
       },
       "tenantry.core": {
         "type": "Project"
+      },
+      "tenantry.http": {
+        "type": "Project",
+        "dependencies": {
+          "Tenantry.Core": "[1.0.0, )"
+        }
       }
     },
     "net8.0": {
@@ -299,6 +305,12 @@
       },
       "tenantry.core": {
         "type": "Project"
+      },
+      "tenantry.http": {
+        "type": "Project",
+        "dependencies": {
+          "Tenantry.Core": "[1.0.0, )"
+        }
       }
     },
     "net9.0": {
@@ -449,6 +461,12 @@
       },
       "tenantry.core": {
         "type": "Project"
+      },
+      "tenantry.http": {
+        "type": "Project",
+        "dependencies": {
+          "Tenantry.Core": "[1.0.0, )"
+        }
       }
     }
   }

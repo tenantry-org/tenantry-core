@@ -38,6 +38,8 @@ The names are public, in `TenantTelemetry`, so your own code can record the tena
 id as Tenantry does.
 
 ```csharp
+using Tenantry;
+
 using (logger.BeginScope(TenantTelemetry.CreateLogScope(TenantIds.Format(tenantId))))
 {
     logger.LogInformation("Invoicing");

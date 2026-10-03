@@ -15,6 +15,10 @@ GET {{host}}/me
 X-Tenant-Id: acme
 Accept: application/json
 
+### The current tenant, from a call the sample makes to itself with the tenant it propagates
+GET {{host}}/me/via-http
+X-Tenant-Id: acme
+
 ### Health check (no tenant needed)
 GET {{host}}/health
 Accept: application/json

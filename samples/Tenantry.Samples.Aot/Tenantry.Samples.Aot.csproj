@@ -14,6 +14,7 @@
     <ItemGroup>
       <ProjectReference Include="..\..\src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />
       <ProjectReference Include="..\..\src\Tenantry.Core\Tenantry.Core.csproj" />
+      <ProjectReference Include="..\..\src\Tenantry.Http\Tenantry.Http.csproj" />
     </ItemGroup>
 
 </Project>

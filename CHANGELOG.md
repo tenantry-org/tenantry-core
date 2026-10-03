@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CreateLogScope`, the scope's state, to record it the same way in your own code.
 - `TenantPropagation.HeaderName` (`tenantry-tenant-id`), the header that carries a tenant between processes. It was
   Tenantry.Pro's; Tenantry.Http and Tenantry.Pro's integrations now read it from Tenantry.Core.
+- `Tenantry.Http`, a new package: `UseTenantry()` on an `HttpClient` or gRPC client sends the current tenant's id
+  with its requests, in the `tenantry-tenant-id` header, after `tenant.AddHttpPropagation()` in `AddTenantry`. Only
+  requests to the client's base address carry it, a header the caller set is kept, and `ConfigureHttpClientDefaults`
+  is refused. See [Calling other services](docs/http-propagation.md).
+- `ResolveFromPropagationHeader()` (Tenantry.AspNetCore) resolves the tenant another service sent, by id with the
+  store's `GetTenantAsync`, so a store whose identifiers are slugs still finds it.
 
 ## [0.5.0] - 2026-10-03
 

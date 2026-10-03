@@ -106,3 +106,12 @@ the pieces fit together; this reference is for the details of each type and memb
 | [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) | class | Thrown when EF Core would read or write across tenants: before `SaveChanges` writes another tenant's entity, before an `ExecuteUpdate` that could move rows between tenants, before a pooled database-per-tenant context uses another tenant's database, on the first use of a model that does not isolate a tenant-owned entity type, before a save that must succeed or fail as a whole runs without a transaction it may not begin, or instead of committing a transaction that holds a save whose tenant check failed and could not be undone. Nothing has been written when it is thrown, or, for a commit, kept: the transaction is rolled back. [`TenantIsolationViolationException.Kind`](tenantry-efcore-tenantisolationviolationexception.md) says which. |
 | [`TenantIsolationViolationKind`](tenantry-efcore-tenantisolationviolationkind.md) | enum | Which isolation check threw a [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md). |
 | [`TenantryQueryFilters`](tenantry-efcore-tenantryqueryfilters.md) | class | The names of the query filters Tenantry adds or names on EF Core 10 and later. |
+
+## Tenantry.Http
+
+### `Microsoft.Extensions.DependencyInjection`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`TenantryHttpClientBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryhttpclientbuilderextensions.md) | class | Sends the current tenant with an HTTP or gRPC client's requests. |
+| [`TenantryHttpTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryhttptenantbuilderextensions.md) | class | Sends the current tenant to the services an application calls over HTTP or gRPC. |

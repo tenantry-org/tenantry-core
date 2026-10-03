@@ -10,7 +10,9 @@ services.AddLogging();
 services.AddTenantry<string>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }])
+    .AddHttpPropagation()
     .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Reject));
+services.AddHttpClient("service", client => client.BaseAddress = new Uri("https://service.internal")).UseTenantry();
 _ = new DbContextOptionsBuilder().UseTenantry();
 
 await using var provider = services.BuildServiceProvider();

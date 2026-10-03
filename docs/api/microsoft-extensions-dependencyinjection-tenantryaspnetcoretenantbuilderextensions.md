@@ -112,6 +112,33 @@ tenant
     .ResolveFromHost(o => o.ExcludedDomains.Add("example.com"));   // app.acme.com
 ```
 
+### `ResolveFromPropagationHeader<TKey>(ITenantBuilder<TKey>)`
+
+Resolves the tenant another service sent with its request: the tenant id in the [`TenantPropagation.HeaderName`](tenantry-tenantpropagation.md) header, which Tenantry.Http's `UseTenantry()` adds to an HttpClient's or gRPC client's requests. The value is read as a tenant id ([`TenantIds.TryParse<TKey>`](tenantry-tenantids.md)) and looked up with the store's [`ITenantStore<TKey>.GetTenantAsync`](tenantry-itenantstore.md), not its [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md); a value that is not a tenant id finds no tenant.
+
+```csharp
+public static ITenantBuilder<TKey> ResolveFromPropagationHeader<TKey>(this ITenantBuilder<TKey> builder) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+A header is a claim, not proof: any caller that reaches the service can set it. Accept it only from callers you authenticate (a token, mutual TLS), and check that the caller may act for the tenant with `ValidateTenantAccess`. Resolvers run in the order they are added, and the first that finds a value wins.
+
+```csharp
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromPropagationHeader()
+    .UseStore<AppTenantStore>()
+    .ValidateTenantAccess<CallingServiceValidator>());
+```
+
 ### `ResolveFromQueryString<TKey>(ITenantBuilder<TKey>, string)`
 
 Resolves the tenant from a query string parameter.

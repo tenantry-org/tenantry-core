@@ -58,6 +58,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="[$(EfCoreFloor), $(FrameworkNextMajor))" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="[$(MicrosoftExtensionsFloor), )" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="[$(MicrosoftExtensionsFloor), )" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="[$(MicrosoftExtensionsFloor), )" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">

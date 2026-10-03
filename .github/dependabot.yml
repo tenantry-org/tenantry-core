@@ -29,11 +29,13 @@ updates:
       - dependency-name: "Microsoft.Extensions.DependencyInjection"
       - dependency-name: "Microsoft.Extensions.DependencyInjection.Abstractions"
       - dependency-name: "Microsoft.Extensions.Hosting"
+      - dependency-name: "Microsoft.Extensions.Http"
       - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
       - dependency-name: "Pomelo.EntityFrameworkCore.MySql"
       - dependency-name: "Tenantry.AspNetCore"
       - dependency-name: "Tenantry.Core"
       - dependency-name: "Tenantry.EfCore"
+      - dependency-name: "Tenantry.Http"
       # Banded packages: end
     groups:
       # Minor and patch updates arrive as one pull request a week; each major update gets its own.

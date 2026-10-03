@@ -154,6 +154,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     {
         var cancellationToken = context.RequestAborted;
         string? identifier = null;
+        var isTenantId = false;
         List<ClaimTenantResolver>? claimResolvers = null;
 
         foreach (var resolver in context.RequestServices.GetServices<ITenantResolver>())
@@ -163,6 +164,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             // An empty identifier is no identifier: the next resolver may have one.
             if (!string.IsNullOrWhiteSpace(identifier))
             {
+                isTenantId = resolver is PropagationHeaderTenantResolver;
                 break;
             }
 
@@ -180,7 +182,12 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             return new Resolution(ResolutionResult.Missing, null, null, claimResolvers);
         }
 
-        var tenant = await _tenants.FindByIdentifierAsync(identifier, cancellationToken);
+        // Another service sent a tenant id, which the store may not accept as an identifier (it may map slugs only).
+        var tenant = !isTenantId
+            ? await _tenants.FindByIdentifierAsync(identifier, cancellationToken)
+            : TenantIds.TryParse<TKey>(identifier, out var tenantId)
+                ? await _tenants.GetTenantAsync(tenantId, cancellationToken)
+                : null;
 
         if (tenant is null)
         {
