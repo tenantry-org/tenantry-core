@@ -64,7 +64,7 @@ tenant than the current one. `Kind` is `EntityWrite`; `OffendingTenantId` and `E
 "No row with its key is stored for the current tenant" comes from reading the stored row of an owner, or of an entity
 over more than one table, before the save: the row is another tenant's, or gone. The read ignores your own query
 filters, so a soft-deleted row of the current tenant still passes. See
-[Advanced](efcore-integration.md#advanced-owned-and-multi-table-entities).
+[Advanced](efcore-advanced.md).
 
 ## `Commit` throws `TenantIsolationViolationException`: "rolled back, not committed"
 
@@ -74,7 +74,7 @@ undo just that save (for example SQL Server with MARS), or could not roll back t
 transaction. This happens whatever the failure was, a duplicate key included, and also when a save never reported
 success. Run the unit of work again. In a `TransactionScope`, disposing the scope throws `TransactionAbortedException`
 instead. See
-[Saves that succeed or fail as a whole](efcore-integration.md#saves-that-succeed-or-fail-as-a-whole).
+[Saves that succeed or fail as a whole](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole).
 
 ## `TenantIsolationViolationException` of kind `SaveWithoutTransaction`
 
@@ -82,7 +82,7 @@ instead. See
 depend on another statement's tenant check (owned rows in their own table, or an entity split across tables). Without a
 transaction, a failed check could leave the other rows written, so nothing was sent. Save in a transaction, or set
 `OnSaveWithoutTransaction` back to its default, `UseTransaction`. See
-[Saves that succeed or fail as a whole](efcore-integration.md#saves-that-succeed-or-fail-as-a-whole).
+[Saves that succeed or fail as a whole](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole).
 
 ## `TenantIsolationViolationException`: "has no tenant query filter" or "is not a concurrency token"
 
@@ -93,7 +93,7 @@ check stops the query or save before it runs.
 ## The model fails to build with `TenantIsolationViolationException` or "Tenantry is not registered"
 
 `UseTenantry()` refuses models it cannot isolate, usually on the first query. The full list, with reasons, is in
-[Models that cannot be isolated](efcore-integration.md#models-that-cannot-be-isolated). The usual fixes:
+[Models that cannot be isolated](efcore-advanced.md#models-that-cannot-be-isolated). The usual fixes:
 
 - "implements ITenantEntity&lt;X&gt;, but '…' implements ITenantEntity&lt;Y&gt;": use one key type, the one you
   register.

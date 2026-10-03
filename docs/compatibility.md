@@ -34,23 +34,30 @@ Core that matches your target framework, as you would in any EF Core application
 
 ## Databases
 
-Tenantry uses only standard EF Core features, so it works with any relational EF Core provider that reports
-the rows an `UPDATE` or `DELETE` matched. The write-isolation suite runs against:
+Tenantry uses only standard EF Core features, so it works with any relational EF Core provider that reports the rows
+an `UPDATE` or `DELETE` matched: a forged write matches no row, which EF Core reports as a concurrency failure. These
+combinations run the write-isolation suite (forged writes,
+entities loaded under another tenant, unchanged-value updates, writes without a tenant, `ExecuteUpdate`/`ExecuteDelete`
+and the `TenantId` guard, `GetDatabaseValues` of another tenant's row, pooled contexts, and a database per tenant)
+against a real database:
 
-| Database | EF Core provider | .NET |
-|----------|------------------|------|
-| SQLite | `Microsoft.EntityFrameworkCore.Sqlite` | 8, 9, 10 |
-| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` | 8, 9, 10 |
-| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` | 8, 9, 10 |
-| MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` | 8, 9 |
-| MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) | 10 |
+| Database | EF Core provider | Framework | Status |
+|----------|------------------|-----------|--------|
+| SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 8, 9, 10 | Tested (unit suite) |
+| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 8.0.31, 9.0.20, 10.0.12 | .NET 8, 9, 10 | Tested |
+| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.4, 9.0.0, 10.0.3 | .NET 8, 9, 10 | Tested |
+| MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` 8.0.2, 9.0.0 | .NET 8, 9 | Tested |
+| MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
+| MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | .NET 10 | Not tested (no EF Core 10 release) |
 
-Details and caveats are in [Tested providers](efcore-integration.md#tested-providers).
+Each framework runs the suite with its own EF Core version. MariaDB is not tested. Keep MySQL's default of reporting
+matched rows: with an option that reports changed rows (such as `UseAffectedRows=true`), an update that changes no
+values reports zero rows and EF Core raises a false concurrency failure.
 
 ## Native AOT and trimming
 
-`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` are trim- and Native AOT-compatible; `Tenantry.EfCore` is not,
-because EF Core is not. See [AOT & trimming](aot-and-trimming.md).
+`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` support trimming
+and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does. See [AOT & trimming](aot-and-trimming.md).
 
 ## Dependency versions
 

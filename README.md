@@ -158,6 +158,7 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and i
 | [Tenant resolution](docs/tenant-resolution.md) | Header, subdomain, host, route, claim, query-string, and custom resolvers; slugs and custom domains |
 | [Access control](docs/access-control.md) | Requiring tenants, access validators, claim-based validation |
 | [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
+| [Owned and multi-table entities](docs/efcore-advanced.md) | How owned entities and split tables are checked, all-or-nothing saves, unsupported models |
 | [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantry` in console apps, workers, and background jobs |
 | [Testing](docs/testing.md) | Tests with Tenantry's real services: scopes, `WebApplicationFactory`, EF Core isolation |
 | [Diagnostics](docs/diagnostics.md) | Log event ids, the `tenant.id` trace tag and log scope, the resolution metric |

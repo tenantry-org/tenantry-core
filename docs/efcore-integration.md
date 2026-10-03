@@ -78,8 +78,8 @@ modelBuilder.Entity<Order>().HasIndex(o => new { o.TenantId, o.Reference }).IsUn
 
 Derived types are covered by their root's filter. Owned types are read and checked through their owner: a save that
 adds, moves, changes or deletes an owned entity needs its owner loaded or attached as the current tenant, and Tenantry
-has the database confirm the owner's tenant. Details: [Advanced](#advanced-owned-and-multi-table-entities). Some
-models cannot be isolated at all: see [the list](#models-that-cannot-be-isolated).
+has the database confirm the owner's tenant. Details: [Advanced](efcore-advanced.md). Some
+models cannot be isolated at all: see [the list](efcore-advanced.md#models-that-cannot-be-isolated).
 
 ### Fail-closed behaviour
 
@@ -143,7 +143,7 @@ The database checks too. `TenantId` is a concurrency token, so every `UPDATE` an
 with the current tenant's `TenantId` passes the in-memory check but matches no row, so EF Core throws
 `DbUpdateConcurrencyException` and nothing changes. The interceptor logs a warning when a tenant-scoped write matches
 no row. No schema change is needed; your next migration's snapshot records the concurrency token. Entities mapped to
-more than one table get extra checks: see [Advanced](#entities-mapped-to-more-than-one-table).
+more than one table get extra checks: see [Advanced](efcore-advanced.md#entities-mapped-to-more-than-one-table).
 
 Call `UseTenantry()` after adding your own `SaveChanges` interceptors. An interceptor that runs after Tenantry's and
 changes what a save writes, such as a soft delete that turns a delete into an update, is not checked.
@@ -157,9 +157,9 @@ after Tenantry's: they see new entities already stamped, and their changes are n
 | `EntityWrite` | `SaveChanges` would write another tenant's entity | the entity | the entity's and the current tenant |
 | `BulkUpdate` | `ExecuteUpdate` would set `TenantId`, or sets a property the guard cannot identify | the entity | `null` |
 | `TenantDatabaseMismatch` | A context would use another tenant's database ([database per tenant](#database-per-tenant)) | the `DbContext` | the database's and the current tenant (`null` when none) |
-| `ModelConfiguration` | The model does not isolate a tenant-scoped entity type ([list](#models-that-cannot-be-isolated)) | the entity | `null` |
-| `SaveWithoutTransaction` | An [all-or-nothing save](#saves-that-succeed-or-fail-as-a-whole) would run without a transaction, and `OnSaveWithoutTransaction` is `Reject` | the `DbContext` | `null` |
-| `TransactionRolledBack` | A transaction would commit or complete after an [all-or-nothing save](#saves-that-succeed-or-fail-as-a-whole) in it failed and EF Core could not undo it | the entity whose check failed, or the `DbContext` | `null` |
+| `ModelConfiguration` | The model does not isolate a tenant-scoped entity type ([list](efcore-advanced.md#models-that-cannot-be-isolated)) | the entity | `null` |
+| `SaveWithoutTransaction` | An [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) would run without a transaction, and `OnSaveWithoutTransaction` is `Reject` | the `DbContext` | `null` |
+| `TransactionRolledBack` | A transaction would commit or complete after an [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) in it failed and EF Core could not undo it | the entity whose check failed, or the `DbContext` | `null` |
 
 `OffendingTenantId` and `ExpectedTenantId` are strings for logging. When it is thrown, nothing has been written; a
 refused commit's transaction is rolled back, so nothing is kept.
@@ -182,7 +182,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 
 `OnSaveWithoutTransaction` applies to an all-or-nothing save when `Database.AutoTransactionBehavior` is `Never`: run
 it in a transaction EF Core begins (`UseTransaction`, the default), or throw before anything is sent (`Reject`). See
-[Saves that succeed or fail as a whole](#saves-that-succeed-or-fail-as-a-whole).
+[Saves that succeed or fail as a whole](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole).
 
 ### `OnMissingTenant`: writes with no tenant
 
@@ -336,33 +336,8 @@ enforce isolation (against direct SQL access, say), add row-level security there
 | Pooled contexts | Yes | Each use reads the tenant current at that moment. |
 | Other `DbContext` instances | No | A context whose options do not call `UseTenantry()` gets no isolation. |
 
-### Models that cannot be isolated
-
-Building these models throws `TenantIsolationViolationException` (or `InvalidOperationException` for the registration):
-
-- a tenant-scoped type whose base entity type is not tenant-scoped;
-- a tenant-scoped owned type whose owner is not tenant-scoped;
-- an owned type with no `TenantId`, under a tenant-scoped owner, whose key does not include its owner's key
-  (`OwnsMany(…, b => b.HasKey(x => x.Id))`): an update or delete by that key could reach another tenant's row. Keep EF
-  Core's default key, or implement `ITenantEntity<TKey>` on it;
-- an owned type owned by a tenant-scoped type through a key that neither includes nor is part of the owner's primary
-  key, nor includes its `TenantId` (`WithOwner().HasPrincipalKey(o => o.Code)`): Tenantry checks the owner by its
-  primary key, which need not be the row the owned rows name;
-- a tenant-scoped owned type mapped to JSON (`ToJson()`): it lives in its owner's row, under the owner's `TenantId`,
-  and EF Core cannot check a `TenantId` of its own (EF Core 10 rejects the concurrency token itself), so do not
-  implement `ITenantEntity<TKey>` on it;
-- a type that is not tenant-scoped mapped to a tenant-scoped entity's table (table splitting): with no filter or
-  `TenantId`, it would read and change every tenant's rows there. This fails on the first query or save, as only the
-  finished model says which tables a type is mapped to;
-- entities that implement `ITenantEntity<TKey>` with more than one key type;
-- entities whose key type Tenantry is not registered for (`AddTenantry<Guid>` with `ITenantEntity<string>`);
-- a tenant-scoped entity whose `TenantId` is not a mapped public property of the key type, such as one implemented
-  explicitly (`Guid ITenantEntity<Guid>.TenantId => OrganizationId`);
-- on EF Core 10, a filter of your own named `TenantryQueryFilters.Tenant`, which the tenant filter would replace.
-
-Something that runs after `UseTenantry()`, such as a model-building convention, can still remove the tenant filter or
-concurrency token. The interceptors check each model on its first query and first save, and throw
-`TenantIsolationViolationException` instead of running either if a tenant-scoped entity type has lost one.
+Some models cannot be isolated, and building them throws: see
+[Models that cannot be isolated](efcore-advanced.md#models-that-cannot-be-isolated).
 
 ## Migrations
 
@@ -397,99 +372,10 @@ stamping, read filtering, nested tenants, a rejected cross-tenant write, and fai
 
 ## Tested providers
 
-Write isolation relies on the provider reporting the rows an `UPDATE` or `DELETE` matched: a forged write matches no
-row, which EF Core reports as a concurrency failure. These combinations run the write-isolation suite (forged writes,
-entities loaded under another tenant, unchanged-value updates, writes without a tenant, `ExecuteUpdate`/`ExecuteDelete`
-and the `TenantId` guard, `GetDatabaseValues` of another tenant's row, pooled contexts, and a database per tenant)
-against a real database:
+The write-isolation suite runs against SQLite, SQL Server, PostgreSQL and MySQL on every supported .NET version. The
+versions and caveats are in [Compatibility](compatibility.md#databases).
 
-| Database | EF Core provider | Framework | Status |
-|----------|------------------|-----------|--------|
-| SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 8, 9, 10 | Tested (unit suite) |
-| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 8.0.31, 9.0.20, 10.0.12 | .NET 8, 9, 10 | Tested |
-| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.4, 9.0.0, 10.0.3 | .NET 8, 9, 10 | Tested |
-| MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` 8.0.2, 9.0.0 | .NET 8, 9 | Tested |
-| MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
-| MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | .NET 10 | Not tested (no EF Core 10 release) |
+## Owned and multi-table entities
 
-Each framework runs the suite with its own EF Core version. MariaDB is not tested. Keep MySQL's default of reporting
-matched rows: with an option that reports changed rows (such as `UseAffectedRows=true`), an update that changes no
-values reports zero rows and EF Core raises a false concurrency failure.
-
-## Advanced: owned and multi-table entities
-
-Owned rows in a table of their own, and the rows of an entity mapped to more than one table, have no tenant check of
-their own. Tenantry checks them through another statement and keeps the save all-or-nothing.
-
-### Owned entities
-
-EF Core reads owned rows only through their owner and allows them no filter of their own, so an owned type is isolated
-through its owner whether or not it implements `ITenantEntity<TKey>`. A tenant-scoped owned type's `TenantId` is still
-a concurrency token.
-
-Writes are checked through the nearest tenant-scoped owner. A save that adds an owned entity, moves one with its own
-key to another owner (by changing its foreign key), or changes or deletes one with no `TenantId` of its own needs that
-owner loaded or attached as the current tenant. The database then confirms the owner's tenant:
-
-- An owner the save does not otherwise write (loaded or only attached, or modified with nothing EF Core writes) has
-  its `TenantId` written back with its concurrency token, so an audit log sees an update of the owner.
-- An owner deleted and added again under the same key, which EF Core saves as one `UPDATE` of what differs, has its
-  stored row read.
-- An owner whose `TenantId` is part of the key its owned types are owned through needs neither: their foreign key
-  names the tenant.
-- An owner whose `TenantId` EF Core does not write after an insert (it is part of another key, such as an alternate key
-  on `(TenantId, Id)`, or is configured not to be saved) has its stored row read before the save, one query per owner.
-  The read names the current tenant and ignores every query filter, yours too, as EF Core's own writes do, so an owner
-  your filter hides (an archived one, say) can still be given owned entities.
-
-An owned entity saved without its owner in the same context is rejected. With no tenant, `OnMissingTenant` treats
-owned entities as tenant-scoped. Owned rows in their own table rely on the owner's statement, so the save must succeed
-or fail as a whole (below).
-
-### Entities mapped to more than one table
-
-An entity mapped to more than one table (table-per-type inheritance, entity splitting) is updated only in the tables
-whose columns changed. So when one changes, its `TenantId` is also written back to its table to be checked there, or,
-when EF Core does not save `TenantId`, its stored row is read before the save. One keyed by its `TenantId` needs
-neither: every table's key names the tenant. A save that deletes such an entity and adds one under the same key, which
-EF Core saves as an `UPDATE` of what differs, table by table, has the deleted one's stored row read. Rows outside the
-table with `TenantId` rely on that table's statement, so the save must succeed or fail as a whole.
-
-### Saves that succeed or fail as a whole
-
-Rows checked through another statement are safe only if the whole save is undone when the check fails. EF Core
-usually ensures this with a transaction, but not in every setup. For these saves:
-
-- The failed check cannot be suppressed. An interceptor of yours that suppresses concurrency failures
-  (`ThrowingConcurrencyException`), such as "last write wins" or EF Core's sample that ignores rows already deleted,
-  still works for other entities, but Tenantry throws a failed check that other rows depend on, wherever yours is
-  registered. Interceptors added after `UseTenantry()`, including those packages add through it, do not see it.
-- With `Database.AutoTransactionBehavior` set to `Never`, EF Core still runs the save in a transaction of its own, and
-  the setting goes back to `Never` when the save ends (event 2005, at `Debug`). Other saves still run without one. If
-  your database or connection pooler cannot run transactions, set `OnSaveWithoutTransaction` to `Reject`: such a save
-  then throws `TenantIsolationViolationException` of kind `SaveWithoutTransaction` before anything is sent.
-  - Hand a transaction you began through ADO.NET to EF Core with `Database.UseTransaction`, or EF Core cannot begin
-    its own and the save fails.
-  - If a `SavingChanges` interceptor registered after Tenantry's stops the save, the setting stays `WhenNeeded` until
-    the context's next save sets it back to `Never`.
-- In your own transaction, EF Core rolls a failed save back to a savepoint it creates first, and Tenantry turns
-  savepoints on for the save if you turned them off (`AutoSavepointsEnabled = false`). A transaction without
-  savepoints, such as SQL Server with multiple active result sets (MARS), is rolled back instead of committed if such a
-  save in it failed after sending any statement, or if EF Core could not roll back to its savepoint. `Commit` then
-  throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
-  - Any failure of such a save counts. A save can fail before EF Core reads the check (on a duplicate key, say), so
-    Tenantry cannot know whether the check held, and a forged write looks like a real conflict.
-  - So does a save Tenantry never learns succeeded, as when an interceptor added before `UseTenantry()` throws from
-    `SavedChanges`.
-- In a `TransactionScope`, or a transaction the connection was enlisted in, EF Core creates no savepoint. The same
-  failures roll the transaction back when it completes, so disposing the completed scope throws
-  `TransactionAbortedException`.
-
-Not covered:
-
-- EF Core's in-memory provider, which has no transactions;
-- SQLite, or another provider that cannot join a `TransactionScope`, used inside one with EF Core's
-  `AmbientTransactionWarning` turned off: it then saves with no transaction at all;
-- storage without transactions, such as MySQL's MyISAM tables;
-- an interceptor that suppresses EF Core's savepoint commands;
-- a transaction handed to EF Core with `UseTransaction` and then committed directly through ADO.NET.
+Owned entities, entities mapped to more than one table, and the saves that must succeed or fail as a whole are
+described in [Owned and multi-table entities](efcore-advanced.md).
