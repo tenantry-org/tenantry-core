@@ -28,7 +28,11 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// <param name="builder">The tenant builder.</param>
     /// <param name="configure">Sets the options.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
-    /// <remarks>Calling it again configures the same options instance.</remarks>
+    /// <remarks>
+    /// These are the defaults for every context. A context registered with <c>UseTenantry(configure)</c> uses its own
+    /// instead, so keep the defaults strict and relax them only on a context for maintenance code. The options are
+    /// ordinary <c>IOptions&lt;EfCoreIsolationOptions&gt;</c>, so <c>services.Configure</c> also sets them.
+    /// </remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
@@ -45,19 +49,7 @@ public static class TenantryEfCoreTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configure);
 
-        // The interceptor reads the options at SaveChanges time, so register one instance and configure it in
-        // place: calling this again changes the same options rather than being ignored.
-        var options = builder.Services
-            .FirstOrDefault(d => d.ServiceType == typeof(EfCoreIsolationOptions) && !d.IsKeyedService)
-            ?.ImplementationInstance as EfCoreIsolationOptions;
-
-        if (options is null)
-        {
-            options = new EfCoreIsolationOptions();
-            builder.Services.TryAddSingleton(options);
-        }
-
-        configure(options);
+        builder.Services.AddOptions<EfCoreIsolationOptions>().Configure(configure);
 
         return builder;
     }

@@ -1,8 +1,9 @@
 namespace Tenantry.EfCore;
 
 /// <summary>
-/// Options for EF Core tenant isolation, set with <c>tenant.ConfigureEfCoreIsolation(options =&gt; …)</c>. Every
-/// context that uses <c>UseTenantry()</c> follows them.
+/// Options for EF Core tenant isolation: the application's, set with
+/// <c>tenant.ConfigureEfCoreIsolation(options =&gt; …)</c>, or one context's, set with
+/// <c>options.UseTenantry(o =&gt; …)</c>.
 /// </summary>
 /// <remarks>
 /// These protections are <strong>always</strong> on, independent of these options: reads fail closed
@@ -44,4 +45,6 @@ public sealed class EfCoreIsolationOptions
     /// <c>Database.UseTransaction</c>, or EF Core cannot begin its own and the save fails.
     /// </summary>
     public SaveWithoutTransactionBehavior OnSaveWithoutTransaction { get; set; } = SaveWithoutTransactionBehavior.UseTransaction;
+
+    internal EfCoreIsolationOptions Clone() => (EfCoreIsolationOptions)MemberwiseClone();
 }

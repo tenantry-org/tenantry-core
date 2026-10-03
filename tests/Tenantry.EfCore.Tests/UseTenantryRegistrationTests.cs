@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests;
@@ -27,6 +28,49 @@ public sealed class UseTenantryRegistrationTests : IDisposable
     }
 
     [Fact]
+    public async Task UseTenantryWithOptions_RelaxesOnlyThatContext()
+    {
+        var services = DbContextFactory.Services(TestTenantContext.Empty().AsNone());
+
+        DbContextOptions<TestDbContext> Options(bool maintenance)
+        {
+            var builder = new DbContextOptionsBuilder<TestDbContext>().UseSqlite(_connection).UseApplicationServiceProvider(services);
+            return (maintenance ? builder.UseTenantry(o => o.OnMissingTenant = MissingTenantBehavior.Allow) : builder.UseTenantry()).Options;
+        }
+
+        await using (TestDbContext setup = new(Options(maintenance: false)))
+        {
+            await setup.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using TestDbContext maintenance = new(Options(maintenance: true));
+        maintenance.Orders.Add(new Order { Description = "for acme", TenantId = "acme" });
+        await maintenance.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        await using TestDbContext ordinary = new(Options(maintenance: false));
+        ordinary.Orders.Add(new Order { Description = "for acme", TenantId = "acme" });
+        await ordinary.Awaiting(context => context.SaveChangesAsync()).Should().ThrowAsync<TenantNotResolvedException>();
+    }
+
+    [Fact]
+    public void UseTenantryWithOptions_StartsFromTheApplicationsOptions()
+    {
+        var services = DbContextFactory.Services(
+            TestTenantContext.Empty().AsNone(),
+            new EfCoreIsolationOptions { OnSaveWithoutTransaction = SaveWithoutTransactionBehavior.Reject });
+
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(services)
+            .UseTenantry(o => o.OnMissingTenant = MissingTenantBehavior.Warn)
+            .Options;
+
+        var isolation = options.FindExtension<TenantryOptionsExtension>()!.Isolation!;
+        isolation.OnMissingTenant.Should().Be(MissingTenantBehavior.Warn);
+        isolation.OnSaveWithoutTransaction.Should().Be(SaveWithoutTransactionBehavior.Reject);
+    }
+
+    [Fact]
     public void ConfigureEfCoreIsolation_CapturesTheConfiguredPolicy()
     {
         ServiceCollection services = new();
@@ -34,7 +78,7 @@ public sealed class UseTenantryRegistrationTests : IDisposable
         services.AddTenantry<string>(tenant => tenant.ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Warn));
 
         using var sp = services.BuildServiceProvider();
-        sp.GetRequiredService<EfCoreIsolationOptions>().OnMissingTenant.Should().Be(MissingTenantBehavior.Warn);
+        sp.GetRequiredService<IOptions<EfCoreIsolationOptions>>().Value.OnMissingTenant.Should().Be(MissingTenantBehavior.Warn);
     }
 
     [Fact]
@@ -46,9 +90,8 @@ public sealed class UseTenantryRegistrationTests : IDisposable
             .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Allow)
             .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Warn));
 
-        services.Count(sd => sd.ServiceType == typeof(EfCoreIsolationOptions)).Should().Be(1);
         using var sp = services.BuildServiceProvider();
-        sp.GetRequiredService<EfCoreIsolationOptions>().OnMissingTenant.Should().Be(MissingTenantBehavior.Warn);
+        sp.GetRequiredService<IOptions<EfCoreIsolationOptions>>().Value.OnMissingTenant.Should().Be(MissingTenantBehavior.Warn);
     }
 
     [Fact]

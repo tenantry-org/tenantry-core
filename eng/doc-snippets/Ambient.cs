@@ -111,6 +111,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Tenant> Tenants => Set<Tenant>();
 }
 
+/// <summary>A context for maintenance code that writes across tenants.</summary>
+public class MaintenanceDbContext(DbContextOptions<MaintenanceDbContext> options) : DbContext(options)
+{
+    public DbSet<Order> Orders => Set<Order>();
+}
+
 public sealed class EfCoreTenantStore : ITenantStore<Guid>
 {
     public ValueTask<ITenantDescriptor<Guid>?> GetTenantAsync(Guid tenantId, CancellationToken ct = default) =>

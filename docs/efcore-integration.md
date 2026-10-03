@@ -307,14 +307,21 @@ need a tenant and are unaffected. The `MissingTenantBehavior` values:
 | `Warn` | The save proceeds and a structured warning is logged. |
 | `Allow` | The save proceeds silently. |
 
-`Warn` and `Allow` are opt-ins for maintenance code that deliberately writes across tenants. Updates and
-deletes are then not tenant-checked, and a new entity must set `TenantId` explicitly: an unowned row is
-always rejected, whatever the policy. Prefer running maintenance per tenant with `ITenantScopeFactory`
-instead.
+`Warn` and `Allow` are for maintenance code that deliberately writes across tenants. Updates and deletes are then
+not tenant-checked, and a new entity must set `TenantId` explicitly: an unowned row is always rejected. Reads always
+fail closed (a query with no tenant matches nothing).
 
-Reads are unaffected by this setting — they always fail closed (a query with no tenant matches nothing).
+`ConfigureEfCoreIsolation` sets the policy for every context in the application, so keep it at `Reject`. Relax it
+only on a context kept for maintenance code, with `UseTenantry(configure)`, which starts from the application's
+options:
 
-Keep `OnMissingTenant` at `Reject` except in maintenance code.
+```csharp
+builder.Services.AddDbContext<MaintenanceDbContext>(options => options
+    .UseSqlServer(connectionString)
+    .UseTenantry(o => o.OnMissingTenant = MissingTenantBehavior.Allow));
+```
+
+Better still, run maintenance one tenant at a time with `ITenantScopeFactory`.
 
 ## DbContext pooling
 

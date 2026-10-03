@@ -9,12 +9,18 @@ namespace Tenantry.EfCore.Internal;
 /// model customizer.
 /// </summary>
 /// <remarks>
-/// It holds no state, so every context that uses Tenantry can share one EF Core internal service provider: the
-/// customizer and the interceptors find the tenant through each context's application service provider.
+/// Its only state is the context's own isolation options, which change no EF Core service, so every context that uses
+/// Tenantry can share one EF Core internal service provider: the customizer and the interceptors find the tenant
+/// through each context's application service provider.
 /// </remarks>
-internal sealed class TenantryOptionsExtension : IDbContextOptionsExtension
+internal sealed class TenantryOptionsExtension(EfCoreIsolationOptions? isolation = null) : IDbContextOptionsExtension
 {
     private DbContextOptionsExtensionInfo? _info;
+
+    /// <summary>
+    /// The isolation options <c>UseTenantry(configure)</c> set for this context, or null to follow the application's.
+    /// </summary>
+    public EfCoreIsolationOptions? Isolation { get; } = isolation;
 
     public DbContextOptionsExtensionInfo Info => _info ??= new ExtensionInfo(this);
 

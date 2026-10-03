@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Tenantry;
 using Tenantry.EfCore;
 using Tenantry.EfCore.Internal;
@@ -63,7 +64,64 @@ public static class TenantryDbContextOptionsBuilderExtensions
             return optionsBuilder;
         }
 
-        ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(new TenantryOptionsExtension());
+        return Add(optionsBuilder, new TenantryOptionsExtension());
+    }
+
+    /// <summary>
+    /// Isolates the context's tenant-owned entities as <see cref="UseTenantry(DbContextOptionsBuilder)"/> does, with
+    /// isolation options of the context's own in place of the application's (<c>ConfigureEfCoreIsolation</c>).
+    /// </summary>
+    /// <param name="optionsBuilder">The options builder for the application's <see cref="DbContext"/>.</param>
+    /// <param name="configure">
+    /// Sets the context's options, starting from the application's. Use it to relax a policy on a context kept for
+    /// maintenance code, so the rest of the application keeps the strict defaults.
+    /// </param>
+    /// <returns>The same <paramref name="optionsBuilder"/> for chaining.</returns>
+    /// <remarks>Calling it again sets the options again, starting from the application's.</remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddDbContext&lt;MaintenanceDbContext&gt;(options =&gt; options
+    ///     .UseSqlServer(connectionString)
+    ///     .UseTenantry(o =&gt; o.OnMissingTenant = MissingTenantBehavior.Allow));
+    /// </code>
+    /// </example>
+    public static DbContextOptionsBuilder UseTenantry(
+        this DbContextOptionsBuilder optionsBuilder,
+        Action<EfCoreIsolationOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(optionsBuilder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var services = ApplicationServices.Find(optionsBuilder.Options);
+        var isolation = services?.GetService<IOptions<EfCoreIsolationOptions>>()?.Value.Clone() ?? new EfCoreIsolationOptions();
+        configure(isolation);
+
+        if (optionsBuilder.Options.FindExtension<TenantryOptionsExtension>() is not null)
+        {
+            ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(new TenantryOptionsExtension(isolation));
+            return optionsBuilder;
+        }
+
+        return Add(optionsBuilder, new TenantryOptionsExtension(isolation));
+    }
+
+    /// <inheritdoc cref="UseTenantry(DbContextOptionsBuilder)"/>
+    /// <typeparam name="TContext">The type of context being configured.</typeparam>
+    public static DbContextOptionsBuilder<TContext> UseTenantry<TContext>(this DbContextOptionsBuilder<TContext> optionsBuilder)
+        where TContext : DbContext =>
+        (DbContextOptionsBuilder<TContext>)UseTenantry((DbContextOptionsBuilder)optionsBuilder);
+
+    /// <inheritdoc cref="UseTenantry(DbContextOptionsBuilder, Action{EfCoreIsolationOptions})"/>
+    /// <typeparam name="TContext">The type of context being configured.</typeparam>
+    public static DbContextOptionsBuilder<TContext> UseTenantry<TContext>(
+        this DbContextOptionsBuilder<TContext> optionsBuilder,
+        Action<EfCoreIsolationOptions> configure)
+        where TContext : DbContext =>
+        (DbContextOptionsBuilder<TContext>)UseTenantry((DbContextOptionsBuilder)optionsBuilder, configure);
+
+    private static DbContextOptionsBuilder Add(DbContextOptionsBuilder optionsBuilder, TenantryOptionsExtension extension)
+    {
+        ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(extension);
         optionsBuilder.AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance, TenantTransactionInterceptor.Instance);
 
         if (ApplicationServices.Find(optionsBuilder.Options) is { } services)
@@ -76,10 +134,4 @@ public static class TenantryDbContextOptionsBuilderExtensions
 
         return optionsBuilder;
     }
-
-    /// <inheritdoc cref="UseTenantry(DbContextOptionsBuilder)"/>
-    /// <typeparam name="TContext">The type of context being configured.</typeparam>
-    public static DbContextOptionsBuilder<TContext> UseTenantry<TContext>(this DbContextOptionsBuilder<TContext> optionsBuilder)
-        where TContext : DbContext =>
-        (DbContextOptionsBuilder<TContext>)UseTenantry((DbContextOptionsBuilder)optionsBuilder);
 }

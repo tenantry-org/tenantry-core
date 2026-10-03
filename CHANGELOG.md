@@ -36,8 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   handler, with or without `CacheTenants`, so one call clears everything kept for a tenant. Tenantry.Caching,
   `IsolateOutputCache()` and Tenantry.Options register one.
 
+- `options.UseTenantry(o => …)` sets a context's own isolation options, starting from the application's, so a
+  context kept for maintenance code can allow writes without a tenant while every other context keeps `Reject`.
+
 ### Changed
 
+- `ConfigureEfCoreIsolation` configures `IOptions<EfCoreIsolationOptions>`, so `services.Configure` sets the same
+  options, and the options can no longer be changed through a registered instance at run time. The
+  `TenantNotResolvedException` for a write without a tenant now points at a maintenance context, not the global switch.
 - `ITenantStoreCache<TKey>.Invalidate` refuses an id Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty
   string), which no tenant has.
 
