@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -55,6 +56,8 @@ public static class TenantryDbContextOptionsBuilderExtensions
     ///     .UseTenantry());
     /// </code>
     /// </example>
+    [RequiresUnreferencedCode(EfCoreRequirements.UnreferencedCode)]
+    [RequiresDynamicCode(EfCoreRequirements.DynamicCode)]
     public static DbContextOptionsBuilder UseTenantry(this DbContextOptionsBuilder optionsBuilder)
     {
         ArgumentNullException.ThrowIfNull(optionsBuilder);
@@ -85,6 +88,8 @@ public static class TenantryDbContextOptionsBuilderExtensions
     ///     .UseTenantry(o =&gt; o.OnMissingTenant = MissingTenantBehavior.Allow));
     /// </code>
     /// </example>
+    [RequiresUnreferencedCode(EfCoreRequirements.UnreferencedCode)]
+    [RequiresDynamicCode(EfCoreRequirements.DynamicCode)]
     public static DbContextOptionsBuilder UseTenantry(
         this DbContextOptionsBuilder optionsBuilder,
         Action<EfCoreIsolationOptions> configure)
@@ -107,12 +112,16 @@ public static class TenantryDbContextOptionsBuilderExtensions
 
     /// <inheritdoc cref="UseTenantry(DbContextOptionsBuilder)"/>
     /// <typeparam name="TContext">The type of context being configured.</typeparam>
+    [RequiresUnreferencedCode(EfCoreRequirements.UnreferencedCode)]
+    [RequiresDynamicCode(EfCoreRequirements.DynamicCode)]
     public static DbContextOptionsBuilder<TContext> UseTenantry<TContext>(this DbContextOptionsBuilder<TContext> optionsBuilder)
         where TContext : DbContext =>
         (DbContextOptionsBuilder<TContext>)UseTenantry((DbContextOptionsBuilder)optionsBuilder);
 
     /// <inheritdoc cref="UseTenantry(DbContextOptionsBuilder, Action{EfCoreIsolationOptions})"/>
     /// <typeparam name="TContext">The type of context being configured.</typeparam>
+    [RequiresUnreferencedCode(EfCoreRequirements.UnreferencedCode)]
+    [RequiresDynamicCode(EfCoreRequirements.DynamicCode)]
     public static DbContextOptionsBuilder<TContext> UseTenantry<TContext>(
         this DbContextOptionsBuilder<TContext> optionsBuilder,
         Action<EfCoreIsolationOptions> configure)

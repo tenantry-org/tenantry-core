@@ -20,6 +20,8 @@ internal sealed class TenantDatabaseContexts<
     private readonly PooledDbContextFactory<TContext>? _pool;
     private readonly ObjectFactory<TContext>? _activator;
 
+    [RequiresUnreferencedCode(EfCoreRequirements.UnreferencedCode)]
+    [RequiresDynamicCode(EfCoreRequirements.DynamicCode)]
     public TenantDatabaseContexts(
         IServiceProvider services,
         Action<IServiceProvider, DbContextOptionsBuilder> configure,

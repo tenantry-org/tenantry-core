@@ -66,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `UseTenantry()`, `AddDbContextPerTenantDatabase` and `IsSharedAcrossTenants()` carry `[RequiresUnreferencedCode]`
+  and `[RequiresDynamicCode]`, as EF Core's `DbContext` does, so the analyzers warn where an app calls them. Before,
+  Tenantry.EfCore relied on EF Core's own annotations. See [AOT & trimming](docs/aot-and-trimming.md).
 - `ConfigureEfCoreIsolation` configures `IOptions<EfCoreIsolationOptions>`, so `services.Configure` sets the same
   options, and the options can no longer be changed through a registered instance at run time. The
   `TenantNotResolvedException` for a write without a tenant now points at a maintenance context, not the global switch.

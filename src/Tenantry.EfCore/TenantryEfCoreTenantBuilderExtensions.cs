@@ -112,6 +112,8 @@ public static class TenantryEfCoreTenantBuilderExtensions
     ///     .AddDbContextPerTenantDatabase&lt;AppDbContext&gt;((sp, options) =&gt; options.UseSqlServer(), pooled: true));
     /// </code>
     /// </example>
+    [RequiresUnreferencedCode(EfCoreRequirements.UnreferencedCode)]
+    [RequiresDynamicCode(EfCoreRequirements.DynamicCode)]
     public static ITenantBuilder AddDbContextPerTenantDatabase<[DynamicallyAccessedMembers(ContextMembers)] TContext>(
         this ITenantBuilder builder,
         Action<IServiceProvider, DbContextOptionsBuilder> configure,
@@ -134,6 +136,8 @@ public static class TenantryEfCoreTenantBuilderExtensions
         : ITenantRegistration
         where TContext : DbContext
     {
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "AddDbContextPerTenantDatabase, which adds this registration, carries the annotation.")]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "AddDbContextPerTenantDatabase, which adds this registration, carries the annotation.")]
         public void Apply<TKey>(ITenantBuilder<TKey> tenant)
             where TKey : IEquatable<TKey>, IParsable<TKey>
         {
