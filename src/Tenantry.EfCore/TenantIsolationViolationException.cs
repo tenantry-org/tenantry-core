@@ -1,13 +1,8 @@
 namespace Tenantry.EfCore;
 
 /// <summary>
-/// Thrown when EF Core would read or write across tenants: before <c>SaveChanges</c> writes another tenant's
-/// entity, before an <c>ExecuteUpdate</c> that could move rows between tenants, before a database-per-tenant
-/// context uses another tenant's database, on the first use of a model that does not isolate a tenant-owned
-/// entity type, before a save that must succeed or fail as a whole runs without a transaction it may not begin, or
-/// instead of committing a transaction that holds a save whose tenant check failed and could not be undone. Nothing
-/// has been written when it is thrown, or, for a commit, kept: the transaction is rolled back. <see cref="Kind"/> says
-/// which.
+/// Thrown when EF Core would read or write across tenants. <see cref="Kind"/> says which check failed. Nothing has
+/// been written; a refused commit is rolled back.
 /// </summary>
 public sealed class TenantIsolationViolationException : InvalidOperationException
 {
@@ -77,12 +72,8 @@ public enum TenantIsolationViolationKind
     TenantDatabaseMismatch,
 
     /// <summary>
-    /// The model does not isolate a tenant-owned entity type: it has no tenant query filter or <c>TenantId</c>
-    /// concurrency token, it uses another tenant key type, or it inherits from or is owned by an entity type that
-    /// is not tenant-owned; an entity type that is not tenant-owned shares its table; or an owned type's writes cannot
-    /// be checked through its owner: it has no <c>TenantId</c>
-    /// of its own and a key that does not include its owner's, it is owned through a key of a tenant-owned type
-    /// that is neither its primary key nor includes its <c>TenantId</c>, or it is tenant-owned and mapped to JSON.
+    /// The model cannot isolate a tenant-owned entity type: for example a missing tenant filter, a base type or owner
+    /// that is not tenant-owned, or a tenant-owned type mapped to JSON. The message names the type and the cause.
     /// </summary>
     ModelConfiguration,
 

@@ -163,14 +163,16 @@ work, jobs and messages. See [Suspended and inactive tenants](tenant-stores.md#s
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant =>
 {
-    tenant.ResolveFromClaim("tenant_id");        // bind tenant to the token
-    tenant.ResolveFromHeader("X-Tenant-Id");     // fallback for service calls
+    tenant.ResolveFromHeader("X-Tenant-Id");     // the tenant the caller asks for
     tenant.UseStore<EfCoreTenantStore>();
     tenant.RequireTenantByDefault();             // no anonymous tenant access
-    tenant.ValidateTenantAccessByClaim("tenant_id"); // caller must be entitled to the tenant
+    tenant.ValidateTenantAccessByClaim("tenant_id"); // the token must list that tenant
     tenant.ValidateTenantActivity(t => !t.As<AppTenant>().IsSuspended); // and it must be active
 });
 ```
+
+A user whose token lists several tenants picks one with the header, and the validator checks it against all of
+them. This is what the [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does.
 
 See the [`Quickstart` sample](../samples/Tenantry.Samples.Quickstart) for a runnable demonstration of
 required tenants, chained (AND) validators, and endpoint metadata.

@@ -111,8 +111,9 @@ response of your own in [`OnRejected`](#events).
 
 - `OnResolved` runs when a request's tenant has been made current, before the rest of the pipeline, with the
   request and the tenant: to add the tenant to your own telemetry, say. Changes it makes to ambient state, such as
-  `CultureInfo.CurrentCulture` or an `AsyncLocal`, reach the rest of the pipeline only if made before its first
-  `await` (an `async` method's changes do not flow back to its caller); for a per-tenant culture, use
+  `CultureInfo.CurrentCulture` or an `AsyncLocal`, reach the rest of the pipeline only if the handler is not an
+  `async` method (set them and `return Task.CompletedTask;`): an `async` handler's changes are undone when it
+  returns, even those made before its first `await`. For a per-tenant culture, use
   `UseRequestLocalization` with a culture provider that reads `ITenantContext<TKey>`. To refuse a tenant, use an
   [access validator](access-control.md#validating-tenant-access).
 - `OnRejected` runs when an endpoint that requires a tenant rejects a request, before Tenantry writes its response.

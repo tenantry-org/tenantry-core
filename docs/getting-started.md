@@ -21,12 +21,12 @@ Tenantry targets **.NET 8, 9, and 10**. EF Core integration requires the matchin
 
 ## 2. Choose your tenant key type
 
-Every Tenantry API is generic over `TKey`, the type of your tenant identifier. `TKey` must implement
+Tenantry's tenant types are generic over `TKey`, the type of your tenant identifier. `TKey` must implement
 both `IEquatable<TKey>` (so EF Core can translate equality to SQL) and `IParsable<TKey>` (so Tenantry can
 parse the id a request carries in a header, route, etc.).
 
 `Guid`, `int`, `long`, and `string` all qualify out of the box. Pick one and use it consistently —
-it appears in your entities, your `DbContext`, and your registration.
+it appears in your entities, your store and your registration.
 
 This guide uses `Guid`.
 

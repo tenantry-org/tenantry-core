@@ -122,12 +122,18 @@ You can register several resolvers. The middleware tries them **in registration 
 **first identifier** one returns (`null`, an empty string or whitespace counts as none):
 
 ```csharp
-tenant.ResolveFromClaim("tenant_id");     // 1. prefer the authenticated identity
-tenant.ResolveFromHeader("X-Tenant-Id");  // 2. fall back to an explicit header
+tenant.ResolveFromClaim("tenant_id");             // 1. the tenant in the caller's token
+tenant.ResolveFromHeader("X-Tenant-Id");          // 2. otherwise, the header
+tenant.ValidateTenantAccessByClaim("tenant_id");  // the caller must be entitled to it
 ```
 
-Order by trust and specificity: put the most authoritative source first. If none match, the request
-proceeds without a tenant unless a tenant is required (see [Access control](access-control.md)).
+Put the most trusted source first. If none match, the request proceeds without a tenant unless a tenant is
+required (see [Access control](access-control.md)).
+
+- `ResolveFromClaim` reads the first matching claim, so use it only for tokens that carry exactly one tenant. For
+  tokens that list several, resolve from the header and validate against the claims.
+- A header fallback lets any caller without the claim, anonymous ones too, name a tenant. Pair it with an access
+  validator such as `ValidateTenantAccessByClaim`.
 
 At least one resolver must be registered, or `app.UseTenantry()` throws at startup.
 

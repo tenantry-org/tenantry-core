@@ -20,7 +20,7 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 7. **[Calling other services](http-propagation.md)** — sending the current tenant with `HttpClient` and gRPC calls (`Tenantry.Http`), and resolving it in the called service.
 8. **[Caching per tenant](caching.md)** — `HybridCache` entries and output-cached responses kept per tenant (`Tenantry.Caching`, `IsolateOutputCache()`), shared entries, and invalidation.
 9. **[Options per tenant](per-tenant-options.md)** — `IOptions<T>` values per tenant (`Tenantry.Options`), built from your configuration and the tenant, and cleared when the tenant changes.
-10. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, the isolation policy, the optional base context, pooling, a database per tenant, migrations, and admin/cross-tenant queries.
+10. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, isolation options, pooling, a database per tenant, migrations, and cross-tenant queries.
 11. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantry` for console apps, worker services, and background jobs.
 12. **[Testing](testing.md)** — tests with Tenantry's real services: tenant scopes, `WebApplicationFactory`, and EF Core isolation.
 13. **[Diagnostics](diagnostics.md)** — log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.

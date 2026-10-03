@@ -1,9 +1,8 @@
 namespace Tenantry;
 
 /// <summary>
-/// Provides read-only access to the currently resolved tenant for the active request scope.
-/// Registered as a singleton backed by <see cref="System.Threading.AsyncLocal{T}"/> — the
-/// value is per-async-context (effectively per HTTP request) rather than per-instance.
+/// The current tenant, for a request or an <see cref="ITenantScopeFactory{TKey}"/> scope. A singleton over an
+/// <see cref="System.Threading.AsyncLocal{T}"/>: the value belongs to the async flow, not to the instance.
 /// </summary>
 /// <typeparam name="TKey">
 /// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.
@@ -12,8 +11,8 @@ public interface ITenantContext<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     /// <summary>
-    /// The currently resolved tenant, or <c>null</c> if no tenant has been resolved
-    /// (e.g. before the middleware has run, or on anonymous endpoints).
+    /// The current tenant, or <c>null</c> when none is current: no tenant was resolved for the request, or the code
+    /// runs outside a tenant scope.
     /// </summary>
     ITenantDescriptor<TKey>? CurrentTenant { get; }
 

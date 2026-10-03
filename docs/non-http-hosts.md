@@ -133,8 +133,9 @@ call within the scope, across threads, automatically. It never flows back **up**
 consequences:
 
 - **Fire-and-forget started inside a scope** inherits the tenant at the moment the `Task` is created.
-- **Deferred work** (queued to run after the scope disposes) does **not** keep the tenant. Capture the
-  tenant id, then run the work by id when it actually happens:
+- **Deferred work** (queued to run after the scope disposes) must not rely on the ambient tenant: depending on
+  how it was queued, it has none, or a stale one whose scope's services are already disposed. Capture the tenant
+  id, then run the work by id when it actually happens:
 
   ```csharp
   queue.Enqueue(tenant.TenantId);   // capture the id, not the ambient scope

@@ -83,7 +83,8 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// </para>
     /// <para>
     /// The options get <c>UseTenantry()</c> before <paramref name="configure"/> runs, so interceptors added there
-    /// (an audit log, say) see new entities already stamped with their tenant.
+    /// (an audit log, say) see new entities already stamped with their tenant. For the same reason, an interceptor
+    /// added there that changes what a save writes (a soft delete) runs after Tenantry's checks and is not checked.
     /// </para>
     /// <para>
     /// When the provider cannot read connection strings synchronously

@@ -5,7 +5,7 @@ Understanding them makes the EF Core and ASP.NET Core layers obvious.
 
 ## The tenant key (`TKey`)
 
-Every Tenantry type is generic over `TKey`, the type of your tenant identifier. The constraint is:
+Tenantry's tenant types are generic over `TKey`, the type of your tenant identifier. The constraint is:
 
 ```csharp no-compile
 where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -21,7 +21,7 @@ true for the ids Tenantry reserves for "no tenant": `null`, the key type's defau
 empty string.
 
 `Guid`, `int`, `long`, `string`, and most numeric types satisfy this. Choose one type and use it
-everywhere — the same `TKey` flows through your entities, store, `DbContext`, and registration. An application
+everywhere: the same `TKey` flows through your entities, store and registration. An application
 has one key type: calling `AddTenantry` with a second one throws, and an entity that implements
 `ITenantEntity<string>` in a `Guid` application fails its model's first query or save instead of going
 unisolated.
@@ -105,8 +105,8 @@ public interface ITenantEntity<TKey>
 
 ## `ITenantContext<TKey>` — reading the current tenant
 
-This is the read-only view of "who is the tenant right now", and the type you inject into endpoints,
-services, and your `DbContext`:
+This is the read-only view of "who is the tenant right now", and the type you inject into endpoints and
+services:
 
 ```csharp no-compile
 public interface ITenantContext<TKey>

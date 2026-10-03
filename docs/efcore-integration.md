@@ -182,8 +182,8 @@ var perTenant = await db.Orders
 On EF Core 10, `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes only the tenant filter and keeps your
 other named filters. `IgnoreQueryFilters()` removes them all.
 
-This bypasses the read filter only. Use it consciously and guard such endpoints with appropriate
-authorization — it is the one place the isolation is intentionally off.
+This turns the read filter off for that query only. Treat it as privileged and guard such endpoints with
+authorization.
 
 ## Write isolation: the interceptor
 
@@ -198,7 +198,7 @@ for entities implementing `ITenantEntity<TKey>`:
 - **Modified / Deleted** entities are **validated**: the entity must have been loaded or attached as the
   current tenant and must still belong to it. Otherwise the interceptor throws
   `TenantIsolationViolationException` **before any data is written** and the whole `SaveChanges` is
-  aborted. This is **always on**, regardless of configuration.
+  aborted. With a tenant current, this check always runs; without one, `OnMissingTenant` decides (below).
 - **The database enforces ownership too.** `TenantId` is a concurrency token, so every `UPDATE` and `DELETE`
   includes `AND TenantId = <tenant the entity was loaded or attached with>`. A detached entity that pairs another
   tenant's primary key with the current tenant's `TenantId` passes the in-memory check but matches no row, so EF
@@ -258,8 +258,9 @@ These cases are not covered:
 - an interceptor that suppresses EF Core's savepoint commands;
 - a transaction handed to EF Core with `UseTransaction` and then committed directly through ADO.NET.
 
-Call `UseTenantry()` after adding your own `SaveChanges` interceptors. An interceptor that runs after Tenantry's and
-changes what the save writes, such as a soft-delete interceptor that turns a delete into an update, is not checked.
+Call `UseTenantry()` after adding your own `SaveChanges` interceptors (`AddDbContextPerTenantDatabase` cannot; see
+[Database per tenant](#database-per-tenant)). An interceptor that runs after Tenantry's and changes what the save
+writes, such as a soft-delete interceptor that turns a delete into an update, is not checked.
 
 `TenantIsolationViolationException` (namespace `Tenantry.EfCore`) says which check failed in `Kind`:
 
@@ -357,7 +358,9 @@ builder.Services.AddTenantry<string>(tenant => tenant
 ```
 
 - It registers a scoped `AppDbContext` and an `IDbContextFactory<AppDbContext>`, and applies `UseTenantry()` before
-  your configuration, so interceptors you add see new entities already stamped. Use it instead of `AddDbContext`,
+  your configuration, so interceptors you add see new entities already stamped. For the same reason, an
+  interceptor you add there that changes what a save writes (a soft delete) runs after Tenantry's checks and is not
+  checked. Use it instead of `AddDbContext`,
   `AddDbContextPool` or `AddPooledDbContextFactory` for that context. Call `UseConnectionStrings` first; without it,
   `AddDbContextPerTenantDatabase` throws. It returns the builder without its key type, so put it last (see
   [Registration](core-concepts.md#registration)).
