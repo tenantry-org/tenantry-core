@@ -55,8 +55,14 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   stamped, and a context that is not pooled has its scope as its application service provider, as with
   `AddDbContext`.
 - On EF Core 10 the tenant filter is named `TenantryQueryFilters.Tenant`, so
-  `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes it alone. An entity with an unnamed filter of its
-  own gets the tenant filter merged into it instead, and Tenantry logs this once per model.
+  `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes it alone. EF Core does not allow a named filter beside
+  an unnamed one, so an entity's unnamed filter of its own is named `TenantryQueryFilters.Application`: each can be
+  ignored alone, and `Reload()` and `GetDatabaseValues()` ignore it, as EF Core documents.
+- `EfCoreIsolationOptions.OnSaveWithoutTransaction` (`SaveWithoutTransactionBehavior.UseTransaction`, the default, or
+  `Reject`, which throws `TenantIsolationViolationException` of the new kind `SaveWithoutTransaction`), for a save
+  that must succeed or fail as a whole while `Database.AutoTransactionBehavior` is `Never`; the kind
+  `TransactionRolledBack`, for a transaction Tenantry rolls back instead of committing; log events 2004
+  (`TransactionNotCommitted`) and 2005 (`SaveInTransaction`).
 - `ITenantDbContextOptionsContributor` and `ITenantModelContributor`, so packages that build on Tenantry can add
   to the options and model of every context that uses `UseTenantry()`.
 - Contexts that use `UseTenantry()` check each model on their first query and first save, and throw
@@ -100,7 +106,7 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   `ITenantContext<TKey>.GetCurrentTenant<AppTenant>()` reads the current one. Both throw an error naming both
   types when the store returns another type.
 - Diagnostics (`docs/diagnostics.md`): the middleware's and the EF Core isolation's log messages have stable
-  event ids (1001–1008 under `Tenantry.AspNetCore`, 2001–2004 under `Tenantry.EfCore`; 2001 is an isolation
+  event ids (1001–1008 under `Tenantry.AspNetCore`, 2001–2005 under `Tenantry.EfCore`; 2001 is an isolation
   violation), written with `[LoggerMessage]`. While a request's tenant is current, its trace span is tagged
   `tenant.id` and a log scope with `TenantId` is open (the names Tenantry.Pro's jobs and messages use). The
   `Tenantry.AspNetCore` activity source has a `Tenantry.ResolveTenant` span, and its meter counts requests by
@@ -196,10 +202,29 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   columns changed, and `TenantId`'s concurrency token is checked only in its own table, so a change to another
   table's columns matched the row by its key alone. Its `TenantId` is now written back to its table too, in EF
   Core's transaction, so the database checks it (and, when EF Core does not save `TenantId` after an insert, its
-  stored row is read through the tenant filter before the save); one keyed by its `TenantId` needs neither. The same
+  stored row is read before the save); one keyed by its `TenantId` needs neither. The same
   went for a stub deleted and added again under the same key, which EF Core saves as an `UPDATE` of what differs,
   table by table: the deleted one's stored row is now read. Owners and these pairs were also not found for a byte
   array key, which Tenantry compared by reference: keys are now compared as EF Core compares them.
+- Owned rows in a table of their own, and the rows of an entity mapped to more than one table outside the table with
+  `TenantId`, rely on another statement of the save for their tenant check: the owner's, or the one on `TenantId`'s
+  table. A forged write of them stayed written wherever a failed save was not undone as a whole: with
+  `Database.AutoTransactionBehavior` set to `Never` (on a provider that batches statements, whatever their order), in a
+  transaction without savepoints (SQL Server with MARS, or `AutoSavepointsEnabled` off) or a `TransactionScope` that
+  the application committed after catching the exception, and, in any setup, when an interceptor suppressed the
+  concurrency failure. A deleted entity over more than one table relied on this alone. Tenantry now makes such a save
+  succeed or fail as a whole: the check's failure cannot be suppressed; without a transaction, EF Core runs the save
+  in one (or, with `OnSaveWithoutTransaction = Reject`, it throws before anything is sent); savepoints are turned on
+  for it; and a transaction without them, or a `TransactionScope`, in which such a save failed after sending some of
+  its statements is rolled back instead of committed, as the save may have failed before its check was read.
+- The stored row Tenantry reads before some saves (an owner, or an entity over more than one table, whose `TenantId`
+  is not written back, and a deleted and added pair over more than one table) was read through the tenant filter, and
+  on EF Core 8 and 9, or for an unnamed filter of the application's on EF Core 10, through that filter too, so the
+  current tenant's row that it hid (a soft-deleted one) could not be changed. The read now names the tenant itself and
+  ignores every query filter.
+- A tenant-scoped owned type mapped to JSON crashed a save that read its stored row (EF Core 8 and 9), or failed to
+  build the model with EF Core's own error (EF Core 10). It now fails to build the model on every version, saying
+  why: its owner's row holds it, under the owner's `TenantId`.
 - An entity type that is not tenant-scoped could share a tenant-scoped entity's table (table splitting), with no tenant
   filter or `TenantId`, and read or change every tenant's rows of it. Such a model now fails on its first query or
   save.
@@ -207,8 +232,7 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   so an entity attached with another tenant's key, as in a forged write that fails with
   `DbUpdateConcurrencyException`, got that tenant's values. Tenantry now keeps the tenant filter on that query:
   another tenant's row reads as deleted (`GetDatabaseValues()` returns `null`, `Reload()` detaches the entity). On
-  EF Core 8 and 9, and for an entity whose own filter is unnamed, the entity's own filter applies to these reads as
-  well.
+  EF Core 8 and 9 the entity's own filter, merged with the tenant filter, applies to these reads as well.
 - An owned type that does not implement `ITenantEntity<TKey>` (an owned value object in its own table, or in its
   owner's row) was not checked through its owner: through an attached stub of another tenant's owner, a tenant
   could add, change or delete that tenant's owned rows, and an owned entity attached without its owner, whatever
@@ -237,8 +261,8 @@ entity and handler code needs `using Tenantry;` (and `using Tenantry.EfCore;` fo
   (no UPDATE carries its token), and an owner deleted and added again under the same key in one save (EF Core sends
   one UPDATE of what differs, which can be nothing; its stored row is read). An owner whose `TenantId` is part of the key its
   owned types are owned through needs no write, as their foreign key names the tenant; one whose `TenantId` EF Core
-  does not write after an insert (in another key, such as an alternate key, or configured so) is read through the
-  tenant filter before the save instead. Owning a type through a key of a tenant-scoped owner that neither includes
+  does not write after an insert (in another key, such as an alternate key, or configured so) is read before the
+  save instead. Owning a type through a key of a tenant-scoped owner that neither includes
   nor is part of its primary key, nor includes `TenantId`, fails to build the model.
 - The documented order, `base.OnModelCreating` (and so `ApplyTenantFilters`) first, lost the tenant filter: on
   EF Core 8 and 9 a later `HasQueryFilter` replaced it, so the tenant's queries returned every tenant's rows,

@@ -58,7 +58,7 @@ public sealed class UseTenantryRegistrationTests : IDisposable
 
         options.FindExtension<TenantryOptionsExtension>().Should().NotBeNull();
         options.FindExtension<CoreOptionsExtension>()!.Interceptors
-            .Should().BeEquivalentTo(new IInterceptor[] { TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance });
+            .Should().BeEquivalentTo(new IInterceptor[] { TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance, TenantTransactionInterceptor.Instance });
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class UseTenantryRegistrationTests : IDisposable
             .UseTenantry()
             .Options;
 
-        options.FindExtension<CoreOptionsExtension>()!.Interceptors.Should().HaveCount(2);
+        options.FindExtension<CoreOptionsExtension>()!.Interceptors.Should().HaveCount(3);
         contributor.Calls.Should().Be(1);
     }
 

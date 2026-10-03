@@ -56,6 +56,46 @@ public sealed class NonRelationalProviderTests
         await db.Awaiting(context => context.Set<Archive.Note>().ToListAsync()).Should().NotThrowAsync();
     }
 
+    [Fact]
+    public async Task AnOwnerItsOwnFilterHides_WhoseStoredTenantIsRead_CanBeGivenOwnedEntities_ButAnotherTenantsCannot()
+    {
+        // Keyed on (TenantId, Id), the owner's TenantId is not written back: its stored row is read, past the
+        // application's filter.
+        await using (var db = CreateOrders(_tenant.As("acme")))
+        {
+            db.Add(new Order { Id = 1, Archived = true, Lines = { new Line { Id = 1, Text = "acme line" } } });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var db = CreateOrders(_tenant.As("acme")))
+        {
+            (await db.Set<Order>().IgnoreQueryFilters().SingleAsync(TestContext.Current.CancellationToken)).Lines.Add(new Line { Id = 2, Text = "added" });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var db = CreateOrders(_tenant.As("globex")))
+        {
+            Order stub = new() { Id = 1, TenantId = "globex" };
+            db.Attach(stub);
+            stub.Lines.Add(new Line { Id = 3, Text = "from globex" });
+
+            await db.Awaiting(context => context.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        }
+
+        await using (var db = CreateOrders(_tenant.As("acme")))
+        {
+            (await db.Set<Order>().IgnoreQueryFilters().AsNoTracking().SingleAsync(TestContext.Current.CancellationToken)).Lines
+                .Select(line => line.Text).Should().BeEquivalentTo("acme line", "added");
+        }
+    }
+
+    private OrdersContext CreateOrders(TestTenantContext tenant) =>
+        new(new DbContextOptionsBuilder<OrdersContext>()
+            .UseInMemoryDatabase(_database)
+            .UseApplicationServiceProvider(DbContextFactory.Services(tenant))
+            .UseTenantry()
+            .Options);
+
     private NotesContext Create(TestTenantContext tenant) =>
         new(new DbContextOptionsBuilder<NotesContext>()
             .UseInMemoryDatabase(_database)
@@ -77,6 +117,38 @@ public sealed class NonRelationalProviderTests
     private sealed class NotesContext(DbContextOptions<NotesContext> options) : DbContext(options)
     {
         public DbSet<Note> Notes => Set<Note>();
+    }
+
+    public sealed class Order : ITenantEntity<string>
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string TenantId { get; set; } = string.Empty;
+
+        public bool Archived { get; set; }
+
+        public List<Line> Lines { get; } = [];
+    }
+
+    public sealed class Line
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string Text { get; set; } = string.Empty;
+    }
+
+    private sealed class OrdersContext(DbContextOptions<OrdersContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<Order>(order =>
+            {
+                order.Property(o => o.Id).ValueGeneratedNever();
+                order.HasAlternateKey(o => new { o.TenantId, o.Id });
+                order.HasQueryFilter(o => !o.Archived);
+                order.OwnsMany(o => o.Lines, line => line.Property(l => l.Id).ValueGeneratedNever());
+            });
     }
 
     private sealed class SameNameContext(DbContextOptions<SameNameContext> options) : DbContext(options)

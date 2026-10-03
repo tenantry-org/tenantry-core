@@ -4,7 +4,6 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.Extensions.Logging;
 
 namespace Tenantry.EfCore.Internal;
 
@@ -91,13 +90,10 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
 
     public override void ConfigureModel(ModelBuilder modelBuilder, DbContext context, IServiceProvider? services)
     {
-        ILogger? logger = null;
-
         if (services is not null)
         {
             // Fail now, naming the missing registration, rather than on the first query.
             ApplicationServices.TenantContext<TKey>(services);
-            logger = TenantIsolationLog.Find(services);
         }
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes().ToList())
@@ -118,6 +114,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
             if (entityType.IsOwned())
             {
                 TenantEntityTypes.ThrowIfOwnerIsNotTenantEntity(entityType, typeof(TKey));
+                TenantEntityTypes.ThrowIfMappedToJson(entityType, typeof(TKey));
                 continue;
             }
 
@@ -134,7 +131,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
                 ? modelBuilder.SharedTypeEntity(entityType.Name, entityType.ClrType)
                 : modelBuilder.Entity(entityType.ClrType);
 
-            AddTenantFilter(builder, entityType, context, logger);
+            AddTenantFilter(builder, entityType, context);
         }
     }
 
@@ -143,14 +140,13 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
     private static void AddTenantFilter(
         Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder builder,
         IMutableEntityType entityType,
-        DbContext context,
-        ILogger? logger)
+        DbContext context)
     {
         var tenantFilter = BuildFilter(entityType.ClrType, context);
 
 #if EFCORE10_OR_GREATER
         // EF Core 10 names filters, so the tenant filter can be removed on its own. It does not allow a named filter
-        // beside an unnamed one, though, so then the tenant filter joins the unnamed filter.
+        // beside an unnamed one, so an unnamed filter of the application's is given a name, to keep the two apart.
         var declared = entityType.GetDeclaredQueryFilters();
 
         // The name is Tenantry's: a filter of the application's by that name would be replaced without a trace.
@@ -163,20 +159,14 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
                 "the tenant filter Tenantry adds, which would replace it. Give your filter another name.");
         }
 
-        if (declared.FirstOrDefault(filter => filter.Key is null) is not { Expression: { } unnamed })
+        if (declared.FirstOrDefault(filter => filter.Key is null) is { Expression: { } unnamed })
         {
-            builder.HasQueryFilter(TenantryQueryFilters.Tenant, tenantFilter);
-            return;
+            builder.HasQueryFilter((LambdaExpression?)null);
+            builder.HasQueryFilter(TenantryQueryFilters.Application, unnamed);
         }
 
-        builder.HasQueryFilter(Combine(unnamed, tenantFilter));
-
-        if (logger is not null)
-        {
-            TenantIsolationLog.TenantFilterMerged(logger, entityType.ClrType.Name);
-        }
+        builder.HasQueryFilter(TenantryQueryFilters.Tenant, tenantFilter);
 #else
-        _ = logger;
         builder.HasQueryFilter(entityType.GetQueryFilter() is { } existing ? Combine(existing, tenantFilter) : tenantFilter);
 #endif
     }
@@ -227,11 +217,13 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
         return Expression.Lambda(body, entity);
     }
 
+#if !EFCORE10_OR_GREATER
     [RequiresDynamicCode("Builds a lambda for an entity type known only at run time.")]
     private static LambdaExpression Combine(LambdaExpression existing, LambdaExpression tenant) =>
         Expression.Lambda(
             Expression.AndAlso(existing.Body, ParameterReplacer.Replace(tenant.Body, tenant.Parameters[0], existing.Parameters[0])),
             existing.Parameters);
+#endif
 
     public override void SavingChanges(DbContext context) => TenantWriteGuard<TKey>.Check(context);
 

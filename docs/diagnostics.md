@@ -22,7 +22,8 @@ alert on it. Alert on **2001** above all: a save that tried to write another ten
 | 2001 | `TenantIsolationViolation` | Error | `SaveChanges` refused to write an entity of another tenant. |
 | 2002 | `WriteWithoutTenant` | Warning | `SaveChanges` wrote tenant-owned entities without a tenant, under `OnMissingTenant = Warn`. |
 | 2003 | `WriteMatchedNoRow` | Warning | An update or delete of a tenant-owned entity matched no row: it does not exist, belongs to another tenant, or changed concurrently. |
-| 2004 | `TenantFilterMerged` | Information | An entity's unnamed query filter was merged with the tenant filter (EF Core 10). |
+| 2004 | `TransactionNotCommitted` | Error | A save whose rows rely on another of its statements' tenant check failed, or never ended, after sending some of them, in a transaction EF Core could not roll that save back in (no savepoint, or a `TransactionScope`): the transaction is rolled back instead of committed. |
+| 2005 | `SaveInTransaction` | Debug | A save whose rows rely on another of its statements' tenant check runs in a transaction although `AutoTransactionBehavior` is `Never` (`OnSaveWithoutTransaction = UseTransaction`). |
 
 While a request's tenant is current, a log scope with one property, `TenantId`, is open, so every entry the request
 writes carries it. A logging provider adds scope properties to its entries when it records scopes: Serilog's, or the

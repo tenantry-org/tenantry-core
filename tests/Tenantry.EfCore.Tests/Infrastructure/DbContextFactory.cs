@@ -47,7 +47,11 @@ public static class DbContextFactory
         {
             if (isolationOptions is not null)
             {
-                tenant.ConfigureEfCoreIsolation(options => options.OnMissingTenant = isolationOptions.OnMissingTenant);
+                tenant.ConfigureEfCoreIsolation(options =>
+                {
+                    options.OnMissingTenant = isolationOptions.OnMissingTenant;
+                    options.OnSaveWithoutTransaction = isolationOptions.OnSaveWithoutTransaction;
+                });
             }
         });
         configure?.Invoke(services);

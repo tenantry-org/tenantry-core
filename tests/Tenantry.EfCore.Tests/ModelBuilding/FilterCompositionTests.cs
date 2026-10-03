@@ -3,8 +3,6 @@ using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Tenantry;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
@@ -78,11 +76,12 @@ public sealed class FilterCompositionTests : IDisposable
         (await db.Items.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).TenantId.Should().Be("acme");
     }
 
+#if !EFCORE10_OR_GREATER
     [Fact]
     public async Task DatabaseValues_KeepTheTenantFilter_AndTheOwnFilterItWasMergedWith()
     {
-        // On EF Core 8 and 9, and for an unnamed own filter on any version, the tenant filter is part of the
-        // entity's one filter, so Reload and GetDatabaseValues apply all of it.
+        // On EF Core 8 and 9 the tenant filter is part of the entity's one filter, so Reload and GetDatabaseValues
+        // apply all of it.
         await using var db = await CreateAsync<UnnamedFilterContext>();
         await SeedAsync(db);
         var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id, cancellationToken: TestContext.Current.CancellationToken);
@@ -91,8 +90,35 @@ public sealed class FilterCompositionTests : IDisposable
         db.Attach(new Item { Id = rows["acme deleted"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
         db.Attach(new Item { Id = rows["globex active"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
     }
+#else
+    [Fact]
+    public async Task DatabaseValues_KeepTheTenantFilter_AndIgnoreAnUnnamedOwnFilter()
+    {
+        // EF Core 10: the unnamed filter is named, so EF Core's read ignores it as EF Core documents, and keeps the
+        // tenant filter alone.
+        await using var db = await CreateAsync<UnnamedFilterContext>();
+        await SeedAsync(db);
+        var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id, cancellationToken: TestContext.Current.CancellationToken);
 
-#if EFCORE10_OR_GREATER
+        db.Attach(new Item { Id = rows["acme active"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
+        db.Attach(new Item { Id = rows["acme deleted"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
+        db.Attach(new Item { Id = rows["globex active"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Reload_OfASoftDeletedRow_ReadsIt_WhenTheOwnFilterIsUnnamed()
+    {
+        await using var db = await CreateAsync<UnnamedFilterContext>();
+        await SeedAsync(db);
+        var deleted = await db.Items.IgnoreQueryFilters().SingleAsync(item => item.Name == "acme deleted", TestContext.Current.CancellationToken);
+        deleted.Name = "changed in memory";
+
+        await db.Entry(deleted).ReloadAsync(TestContext.Current.CancellationToken);
+
+        db.Entry(deleted).State.Should().Be(EntityState.Unchanged);
+        deleted.Name.Should().Be("acme deleted");
+    }
+
     [Fact]
     public async Task DatabaseValues_KeepTheTenantFilter_AndStillIgnoreANamedOwnFilter()
     {
@@ -128,26 +154,17 @@ public sealed class FilterCompositionTests : IDisposable
     }
 
     [Fact]
-    public async Task UnnamedOwnFilter_TheTenantFilterIsMergedIntoIt_AndThatIsLoggedOnce()
+    public async Task UnnamedOwnFilter_IsNamed_SoEachCanBeIgnoredAlone()
     {
-        ListLogger logger = new();
-        var services = DbContextFactory.Services<string>(
-            _tenant,
-            configure: collection => collection.AddLogging(logging => logging.AddProvider(logger)));
-        var options = new DbContextOptionsBuilder<UnnamedFilterContext>()
-            .UseSqlite(_connection)
-            .UseApplicationServiceProvider(services)
-            .UseTenantry()
-            .Options;
+        await using var db = await CreateAsync<UnnamedFilterContext>();
+        await SeedAsync(db);
 
-        // A context type of this test's own, so this test builds its model.
-        await using var db = new LoggedUnnamedFilterContext(options);
-        _ = db.Model;
-        _ = new LoggedUnnamedFilterContext(options).Model;
-
-        db.Model.FindEntityType(typeof(Item))!.GetDeclaredQueryFilters().Should().ContainSingle().Which.Key.Should().BeNull();
-        logger.Messages.Should().ContainSingle(message => message.Contains("'Item' has an unnamed query filter"));
-        logger.Events.Should().ContainSingle(e => e.Id == 2004).Which.Name.Should().Be("TenantFilterMerged");
+        db.Model.FindEntityType(typeof(Item))!.GetDeclaredQueryFilters().Select(filter => filter.Key)
+            .Should().BeEquivalentTo(TenantryQueryFilters.Application, TenantryQueryFilters.Tenant);
+        (await db.Items.IgnoreQueryFilters([TenantryQueryFilters.Tenant]).Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken))
+            .Should().BeEquivalentTo("acme active", "globex active");
+        (await db.Items.IgnoreQueryFilters([TenantryQueryFilters.Application]).Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken))
+            .Should().BeEquivalentTo("acme active", "acme deleted");
     }
 #endif
 
@@ -198,8 +215,6 @@ public sealed class FilterCompositionTests : IDisposable
             modelBuilder.Entity<Item>().HasQueryFilter(item => !item.IsDeleted);
     }
 
-    public sealed class LoggedUnnamedFilterContext(DbContextOptions options) : UnnamedFilterContext(options);
-
     public sealed class ComplexFilterContext(DbContextOptions<ComplexFilterContext> options) : ItemsContext(options)
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
@@ -230,33 +245,6 @@ public sealed class FilterCompositionTests : IDisposable
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
             modelBuilder.Entity<Item>().HasQueryFilter("SoftDelete", item => !item.IsDeleted);
-    }
-
-    private sealed class ListLogger : ILoggerProvider, ILogger
-    {
-        public List<string> Messages { get; } = [];
-
-        public List<EventId> Events { get; } = [];
-
-        public ILogger CreateLogger(string categoryName) => this;
-
-        public void Dispose()
-        {
-        }
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            lock (Messages)
-            {
-                Messages.Add(formatter(state, exception));
-                Events.Add(eventId);
-            }
-        }
     }
 #endif
 }

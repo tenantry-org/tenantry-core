@@ -32,10 +32,16 @@ internal static partial class TenantIsolationLog
         EventName = "WriteMatchedNoRow")]
     public static partial void WriteMatchedNoRow(ILogger logger, string state, string entityType, string? tenantId);
 
-    [LoggerMessage(2004, LogLevel.Information,
-        "Entity '{EntityType}' has an unnamed query filter, so Tenantry merged its tenant filter into it: " +
-        "IgnoreQueryFilters([TenantryQueryFilters.Tenant]) cannot remove the tenant filter alone for it. Name the " +
-        "entity's filter to keep the two apart",
-        EventName = "TenantFilterMerged")]
-    public static partial void TenantFilterMerged(ILogger logger, string entityType);
+    [LoggerMessage(2004, LogLevel.Error,
+        "A SaveChanges ({EntityType}) whose rows rely on another of its statements' tenant check failed, or never ended, " +
+        "after sending some of them, in a transaction EF Core could not undo it in (no savepoint, or an ambient " +
+        "transaction): the transaction was rolled back, not committed",
+        EventName = "TransactionNotCommitted")]
+    public static partial void TransactionNotCommitted(ILogger logger, string entityType);
+
+    [LoggerMessage(2005, LogLevel.Debug,
+        "SaveChanges writes rows whose tenant is checked by another of its statements, so it runs in a transaction " +
+        "although Database.AutoTransactionBehavior is Never (EfCoreIsolationOptions.OnSaveWithoutTransaction = UseTransaction)",
+        EventName = "SaveInTransaction")]
+    public static partial void SaveInTransaction(ILogger logger);
 }

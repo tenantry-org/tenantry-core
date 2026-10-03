@@ -1,4 +1,6 @@
+using System.Transactions;
 using AwesomeAssertions;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
@@ -6,7 +8,36 @@ using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;
 
-public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : ProviderWriteIsolationTests(fixture);
+public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : ProviderWriteIsolationTests(fixture)
+{
+    [Fact]
+    public async Task InATransactionWithMultipleActiveResultSets_AFailedCheckStopsItsCommit()
+    {
+        // With MARS, SQL Server has no savepoints, so EF Core cannot undo a failed save inside the transaction: the
+        // derived table's UPDATE stays in it, and the application's commit would keep it.
+        var id = await AddDogAsync(Acme, "acme detail");
+        var options = new DbContextOptionsBuilder<ProviderOrdersContext>()
+            .UseSqlServer(new SqlConnectionStringBuilder(fixture.ConnectionString) { MultipleActiveResultSets = true }.ConnectionString)
+            .UseApplicationServiceProvider(Services)
+            .UseTenantry()
+            .Options;
+
+        using (Tenants.Use(Tenant(Globex)))
+        {
+            await using ProviderOrdersContext db = new(options);
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            ProviderDog stub = new() { Id = id, TenantId = Globex, Detail = "acme detail" };
+            db.Animals.Attach(stub);
+            stub.Detail = "overwritten";
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+            db.Database.CurrentTransaction.Should().BeNull();
+        }
+
+        (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+}
 
 public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : ProviderWriteIsolationTests(fixture);
 
@@ -22,6 +53,14 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     private readonly ITenantContextSetter<string> _tenants;
     private readonly string _acme = $"acme-{Guid.NewGuid():N}";
     private readonly string _globex = $"globex-{Guid.NewGuid():N}";
+
+    protected IServiceProvider Services => _services;
+
+    protected ITenantContextSetter<string> Tenants => _tenants;
+
+    protected string Acme => _acme;
+
+    protected string Globex => _globex;
 
     protected ProviderWriteIsolationTests(DatabaseFixture fixture)
     {
@@ -86,6 +125,69 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
         });
 
         await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+
+    [Fact]
+    public async Task WithoutATransaction_AForgedUpdateOfADerivedTable_ChangesNothing()
+    {
+        // The provider sends both UPDATEs in one batch and runs them all before EF Core reads what each matched, so
+        // without a transaction the derived table's would stay: Tenantry has EF Core run the save in one.
+        var id = await AddDogAsync(_acme, "acme detail");
+
+        var act = () => AsTenantAsync(_globex, db =>
+        {
+            db.Database.AutoTransactionBehavior = AutoTransactionBehavior.Never;
+            ProviderDog stub = new() { Id = id, TenantId = _globex, Detail = "acme detail" };
+            db.Animals.Attach(stub);
+            stub.Detail = "overwritten";
+            return db.SaveChangesAsync();
+        });
+
+        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+
+    [Fact]
+    public async Task WithoutATransaction_AForgedDeleteOfATablePerTypeEntity_DeletesNothing()
+    {
+        var id = await AddDogAsync(_acme, "acme detail");
+
+        var act = () => AsTenantAsync(_globex, db =>
+        {
+            db.Database.AutoTransactionBehavior = AutoTransactionBehavior.Never;
+            db.Animals.Remove(new ProviderDog { Id = id, TenantId = _globex });
+            return db.SaveChangesAsync();
+        });
+
+        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+
+    [Fact]
+    public async Task InATransactionScope_AFailedCheck_RollsTheScopeBack()
+    {
+        // EF Core sets no savepoint in an ambient transaction, so completing the scope would keep the derived table's
+        // UPDATE: Tenantry rolls the transaction back.
+        var id = await AddDogAsync(_acme, "acme detail");
+
+        var act = async () =>
+        {
+            using TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled);
+
+            await AsTenantAsync(_globex, async db =>
+            {
+                ProviderDog stub = new() { Id = id, TenantId = _globex, Detail = "acme detail" };
+                db.Animals.Attach(stub);
+                stub.Detail = "overwritten";
+                await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+                return 0;
+            });
+
+            scope.Complete();
+        };
+
+        await act.Should().ThrowAsync<TransactionAbortedException>();
         (await DogDetailAsync(id)).Should().Be("acme detail");
     }
 
@@ -245,7 +347,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
             return order.Id;
         });
 
-    private async Task<int> AddDogAsync(string tenantId, string detail) =>
+    protected async Task<int> AddDogAsync(string tenantId, string detail) =>
         await AsTenantAsync(tenantId, async db =>
         {
             ProviderDog dog = new() { Detail = detail };
@@ -254,7 +356,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
             return dog.Id;
         });
 
-    private async Task<string?> DogDetailAsync(int id)
+    protected async Task<string?> DogDetailAsync(int id)
     {
         await using var scope = _services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ProviderOrdersContext>();
@@ -284,5 +386,5 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
         return await db.Orders.IgnoreQueryFilters().CountAsync(predicate);
     }
 
-    private static TenantDescriptor<string> Tenant(string id) => new() { TenantId = id, Name = id };
+    protected static TenantDescriptor<string> Tenant(string id) => new() { TenantId = id, Name = id };
 }

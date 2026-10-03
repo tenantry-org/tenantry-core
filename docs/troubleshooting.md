@@ -71,6 +71,30 @@ to a different tenant than the current one. The exception's `Kind` is `EntityWri
   current scope, but `IgnoreQueryFilters()` combined with `ExecuteUpdate`/`ExecuteDelete` affects every
   tenant, so treat it as privileged.
 
+A message that **no row with its key is stored for the current tenant** comes from a read of the stored row, before
+the save, of an owner or an entity over more than one table whose `TenantId` cannot be written back: the row is
+another tenant's, or no longer exists. The read ignores your own query filters, so a soft-deleted row of the current
+tenant's still passes.
+
+## `Commit` throws `TenantIsolationViolationException`: "rolled back, not committed"
+
+The exception's `Kind` is `TransactionRolledBack`. A `SaveChanges` in the transaction failed, or never ended, after
+sending some of its statements, and among them were rows whose tenant another of its statements checks (owned rows in
+a table of their own, or an entity over more than one table). The transaction has no savepoint for EF Core to undo
+that save with (SQL Server with `MultipleActiveResultSets=True`), or EF Core failed to roll back to it, so those rows
+may be in it, and Tenantry rolled it back instead. The save may have failed before EF Core read the check, so Tenantry
+refuses whatever the failure was: a write to another tenant's row, a genuine concurrency conflict, or a duplicate key
+in your own rows. Run the unit of work again. In a `TransactionScope`, the same failure rolls the ambient transaction
+back, and disposing the scope throws `TransactionAbortedException`.
+
+## `TenantIsolationViolationException` of kind `SaveWithoutTransaction`
+
+`Database.AutoTransactionBehavior` is `Never`, `EfCoreIsolationOptions.OnSaveWithoutTransaction` is `Reject`, and the
+save writes owned rows in a table of their own, or an entity over more than one table, whose tenant another of its
+statements checks: without a transaction, a statement sent beside a check that failed would stay written. Nothing was
+sent. Save such changes in a transaction, or set `OnSaveWithoutTransaction` back to `UseTransaction`, its default, so
+EF Core runs these saves in a transaction of its own.
+
 ## `TenantIsolationViolationException`: "has no tenant query filter" or "is not a concurrency token"
 
 The model check found a tenant-scoped entity type that would not be isolated, and stopped the query or save
@@ -103,6 +127,9 @@ the model is one `UseTenantry()` did not build: a compiled model (`UseModel`), w
   type. Make it a public property of the key type; its setter can be private or init-only.
 - **"has a query filter named 'Tenantry.Tenant'"** (EF Core 10): that name is the tenant filter's. Name your filter
   something else.
+- **"Owned entity … is tenant-owned and mapped to JSON":** its owner's row holds it, under the owner's `TenantId`, and
+  EF Core cannot check a `TenantId` of its own (EF Core 10 rejects the concurrency token itself). Remove
+  `ITenantEntity<TKey>` from it: its owner isolates it.
 
 ## Creating the context fails with "replaces EF Core's IModelCustomizer" or "UseInternalServiceProvider"
 
@@ -121,9 +148,10 @@ context is created:
 EF Core reads an entity's database values by its key, and Tenantry keeps the tenant filter on that read, so a row
 it cannot see reads as deleted: `GetDatabaseValues()` returns `null` and `Reload()` detaches the entity. The row
 belongs to another tenant (a write whose key belongs to another tenant also matches no row, so EF Core throws
-`DbUpdateConcurrencyException` first), or no tenant is current. On EF Core 8 and 9, and for an entity whose own
-query filter is unnamed, that filter applies to the read as well, so a soft-deleted row also reads as deleted. In a
-`DbUpdateConcurrencyException` handler, treat `null` as "not found".
+`DbUpdateConcurrencyException` first), or no tenant is current. On EF Core 8 and 9, the entity's own query filter is
+merged with the tenant filter, so it applies to the read as well, and a soft-deleted row also reads as deleted; read
+such a row with `IgnoreQueryFilters()` and a key and `TenantId` predicate of your own. On EF Core 10 your filters are
+ignored, as EF Core documents. In a `DbUpdateConcurrencyException` handler, treat `null` as "not found".
 
 ## "has no application service provider"
 

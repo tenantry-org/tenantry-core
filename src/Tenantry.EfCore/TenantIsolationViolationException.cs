@@ -3,8 +3,11 @@ namespace Tenantry.EfCore;
 /// <summary>
 /// Thrown when EF Core would read or write across tenants: before <c>SaveChanges</c> writes another tenant's
 /// entity, before an <c>ExecuteUpdate</c> that could move rows between tenants, before a pooled database-per-tenant
-/// context uses another tenant's database, or on the first use of a model that does not isolate a tenant-owned
-/// entity type. Nothing has been written when it is thrown. <see cref="Kind"/> says which.
+/// context uses another tenant's database, on the first use of a model that does not isolate a tenant-owned
+/// entity type, before a save that must succeed or fail as a whole runs without a transaction it may not begin, or
+/// instead of committing a transaction that holds a save whose tenant check failed and could not be undone. Nothing
+/// has been written when it is thrown, or, for a commit, kept: the transaction is rolled back. <see cref="Kind"/> says
+/// which.
 /// </summary>
 public sealed class TenantIsolationViolationException : InvalidOperationException
 {
@@ -78,8 +81,24 @@ public enum TenantIsolationViolationKind
     /// concurrency token, it uses another tenant key type, or it inherits from or is owned by an entity type that
     /// is not tenant-owned; an entity type that is not tenant-owned shares its table; or an owned type's writes cannot
     /// be checked through its owner: it has no <c>TenantId</c>
-    /// of its own and a key that does not include its owner's, or it is owned through a key of a tenant-owned type
-    /// that is neither its primary key nor includes its <c>TenantId</c>.
+    /// of its own and a key that does not include its owner's, it is owned through a key of a tenant-owned type
+    /// that is neither its primary key nor includes its <c>TenantId</c>, or it is tenant-owned and mapped to JSON.
     /// </summary>
     ModelConfiguration,
+
+    /// <summary>
+    /// <c>SaveChanges</c> would write rows whose tenant check is another of its statements without a transaction
+    /// (<c>Database.AutoTransactionBehavior</c> is <c>Never</c>), and
+    /// <see cref="EfCoreIsolationOptions.OnSaveWithoutTransaction"/> is
+    /// <see cref="SaveWithoutTransactionBehavior.Reject"/>.
+    /// </summary>
+    SaveWithoutTransaction,
+
+    /// <summary>
+    /// A transaction was about to commit, or an ambient one to complete, holding a <c>SaveChanges</c> that failed, or
+    /// did not end, after sending some of its statements, among them rows whose tenant another of its statements
+    /// checks, and EF Core could not undo that save in it (no savepoint, or an ambient transaction). It was rolled back
+    /// instead.
+    /// </summary>
+    TransactionRolledBack,
 }

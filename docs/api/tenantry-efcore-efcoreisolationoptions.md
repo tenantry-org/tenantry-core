@@ -27,3 +27,18 @@ public MissingTenantBehavior OnMissingTenant { get; set; }
 ```
 
 Value: [`MissingTenantBehavior`](tenantry-efcore-missingtenantbehavior.md)
+
+### `OnSaveWithoutTransaction`
+
+What happens when, with `Database.AutoTransactionBehavior` set to `Never` and no transaction, `SaveChanges` writes rows whose tenant check is another of its statements: owned rows in a table of their own, or an entity mapped to more than one table.
+
+- [`SaveWithoutTransactionBehavior.UseTransaction`](tenantry-efcore-savewithouttransactionbehavior.md) — EF Core runs that save in a transaction of its own, as it does by default. **Default.**
+- [`SaveWithoutTransactionBehavior.Reject`](tenantry-efcore-savewithouttransactionbehavior.md) — throw [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) before anything is sent.
+
+Without a transaction, a statement sent beside a tenant check that fails would stay written. Saves whose rows each carry their own check are never affected, nor are saves with any other `AutoTransactionBehavior` or in a transaction. A transaction begun on the connection through ADO.NET must be handed to EF Core with `Database.UseTransaction`, or EF Core cannot begin its own and the save fails.
+
+```csharp
+public SaveWithoutTransactionBehavior OnSaveWithoutTransaction { get; set; }
+```
+
+Value: [`SaveWithoutTransactionBehavior`](tenantry-efcore-savewithouttransactionbehavior.md)

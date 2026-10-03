@@ -492,7 +492,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             db.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()!.Interceptors!
-                .Should().HaveCount(3, "the database guard, and Tenantry's save and query interceptors");
+                .Should().HaveCount(4, "the database guard, and Tenantry's save, query and transaction interceptors");
         }
 
         RowsIn("acme").Should().Equal("acme:once");

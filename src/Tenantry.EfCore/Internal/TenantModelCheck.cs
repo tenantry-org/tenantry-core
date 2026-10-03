@@ -76,6 +76,7 @@ internal static class TenantModelCheck
             // EF Core reads an owned type's rows only through its owner and does not let it have a filter of its
             // own. The owner is itself checked as a tenant-owned entity type of this model.
             TenantEntityTypes.ThrowIfOwnerIsNotTenantEntity(entityType, keyType);
+            TenantEntityTypes.ThrowIfMappedToJson(entityType, keyType);
         }
         else if (!HasTenantFilter(entityType.GetRootType(), keyType))
         {
@@ -213,6 +214,24 @@ internal static class TenantEntityTypes
                 $"Owned entity '{owned.ClrType.Name}' is tenant-owned but its owner '{owner.ClrType.Name}' is not. " +
                 "EF Core reads owned rows only through their owner and filters only the owner, so implement " +
                 $"ITenantEntity<{keyType.Name}> on '{owner.ClrType.Name}'.");
+        }
+    }
+
+    /// <summary>
+    /// Throws when the tenant-owned owned type <paramref name="owned"/> is mapped to JSON: EF Core stores it in a column
+    /// of its owner's row, which its owner's <c>TenantId</c> already covers, and can neither check a concurrency token
+    /// of its own (EF Core 10 rejects one) nor read its stored row by its key.
+    /// </summary>
+    public static void ThrowIfMappedToJson(IReadOnlyEntityType owned, Type keyType)
+    {
+        if (owned.IsMappedToJson())
+        {
+            throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.ModelConfiguration,
+                owned.ClrType.Name,
+                $"Owned entity '{owned.ClrType.Name}' is tenant-owned and mapped to JSON. EF Core stores it in its " +
+                $"owner's row, which the owner's TenantId covers, and cannot check a TenantId of its own, so do not " +
+                $"implement ITenantEntity<{keyType.Name}> on it.");
         }
     }
 

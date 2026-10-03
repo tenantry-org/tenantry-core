@@ -146,6 +146,18 @@ public sealed class TenantModelCheckTests : IDisposable
             .Where(e => e.Kind == TenantIsolationViolationKind.ModelConfiguration);
     }
 
+    [Fact]
+    public void TenantOwnedOwnedTypeMappedToJson_FailsToBuildTheModel()
+    {
+        // Its owner's row, which carries the owner's TenantId, holds it; EF Core cannot check a TenantId of its own.
+        var db = new JsonOwnedContext(DbContextFactory.Options<JsonOwnedContext>(_tenant, _connection));
+
+        db.Invoking(context => context.Model)
+            .Should().Throw<TenantIsolationViolationException>()
+            .WithMessage("Owned entity 'JsonLine' is tenant-owned and mapped to JSON*do not implement ITenantEntity<String> on it.")
+            .Where(e => e.Kind == TenantIsolationViolationKind.ModelConfiguration);
+    }
+
 #if EFCORE10_OR_GREATER
     [Fact]
     public void OwnFilterNamedLikeTheTenantFilter_FailsToBuildTheModel()
@@ -668,6 +680,31 @@ public sealed class TenantModelCheckTests : IDisposable
     private sealed class ExplicitTenantIdContext(DbContextOptions<ExplicitTenantIdContext> options) : DbContext(options)
     {
         public DbSet<ExplicitItem> Items => Set<ExplicitItem>();
+    }
+
+    public sealed class JsonOrder : ITenantEntity<string>
+    {
+        public int Id { get; set; }
+
+        [MaxLength(64)]
+        public string TenantId { get; set; } = string.Empty;
+
+        public List<JsonLine> Lines { get; } = [];
+    }
+
+    public sealed class JsonLine : ITenantEntity<string>
+    {
+        [MaxLength(64)]
+        public string TenantId { get; set; } = string.Empty;
+
+        [MaxLength(64)]
+        public string Text { get; set; } = string.Empty;
+    }
+
+    private sealed class JsonOwnedContext(DbContextOptions<JsonOwnedContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<JsonOrder>().OwnsMany(order => order.Lines, line => line.ToJson());
     }
 
 #if EFCORE10_OR_GREATER

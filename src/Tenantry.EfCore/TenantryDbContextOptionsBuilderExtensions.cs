@@ -25,8 +25,8 @@ public static class TenantryDbContextOptionsBuilderExtensions
     /// Any <see cref="DbContext"/> works, pooled or not, with no base class or interface. Tenantry adds the tenant
     /// query filter after <c>OnModelCreating</c>, so your own configuration can come in any order, and it combines
     /// the tenant filter with your own filters. On EF Core 10 and later the tenant filter is named
-    /// <see cref="TenantryQueryFilters.Tenant"/>, unless the entity also has an unnamed filter, which it is merged
-    /// into. It also makes each tenant-owned entity's <c>TenantId</c> a concurrency token, so every <c>UPDATE</c>
+    /// <see cref="TenantryQueryFilters.Tenant"/>, and an unnamed filter of your own beside it is named
+    /// <see cref="TenantryQueryFilters.Application"/>; on EF Core 8 and 9 it is merged into your filter. It also makes each tenant-owned entity's <c>TenantId</c> a concurrency token, so every <c>UPDATE</c>
     /// and <c>DELETE</c> matches only a row stored under the tenant the entity was loaded as.
     /// </para>
     /// <para>
@@ -64,7 +64,7 @@ public static class TenantryDbContextOptionsBuilderExtensions
         }
 
         ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(new TenantryOptionsExtension());
-        optionsBuilder.AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance);
+        optionsBuilder.AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance, TenantTransactionInterceptor.Instance);
 
         if (ApplicationServices.Find(optionsBuilder.Options) is { } services)
         {
