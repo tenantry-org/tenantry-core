@@ -216,42 +216,50 @@ If there is **no resolved tenant**, behaviour follows the `OnMissingTenant` poli
 
 ### Saves that succeed or fail as a whole
 
-Some rows a save writes carry no tenant check of their own: owned rows in a table of their own, which their owner's
-statement checks, and an entity's rows outside the table with `TenantId` when it is mapped to more than one table.
-They are safe only if none of the save's statements stay written when that check fails. EF Core runs a save in a
-transaction and rolls it back when it fails, but not in every setup, so for such a save Tenantry makes sure:
+Some rows have no tenant check of their own. Owned rows stored in a table of their own are checked through their
+owner's statement, and when an entity is mapped to more than one table, only the table with `TenantId` is checked.
+Those rows are safe only if the whole save is undone when the check fails. EF Core normally runs a save in a
+transaction and rolls it back when it fails, but not in every setup. For such saves, Tenantry does the following:
 
-- **Its check's failure is not suppressed.** An interceptor that suppresses concurrency failures
-  (`ThrowingConcurrencyException`), as a "last write wins" policy or EF Core's sample that ignores rows already deleted
-  does, still suppresses them for other entities, but not for a check other statements rely on: Tenantry's interceptor
-  throws it, wherever yours is registered. Interceptors added after `UseTenantry()` (including the ones packages add
-  through it) then do not see that failure.
-- **Without a transaction** (`Database.AutoTransactionBehavior` set to `Never`), EF Core runs it in a transaction of
-  its own, as it does by default, and the setting is `Never` again once the save ends (event 2005, at `Debug`). Other
-  saves still run without one. If your database or connection pooler cannot run transactions, set
-  `EfCoreIsolationOptions.OnSaveWithoutTransaction` to `Reject`: such a save then throws
-  `TenantIsolationViolationException`, of kind `SaveWithoutTransaction`, before anything is sent. A transaction you
-  began on the connection through ADO.NET must be handed to EF Core with `Database.UseTransaction`, or EF Core's own
-  cannot begin and the save fails. A save that a `SavingChanges` interceptor after Tenantry's stops leaves the setting
-  at `WhenNeeded` until the context's next save, which sets `Never` back.
-- **In your transaction**, EF Core rolls a failed save back to a savepoint it sets before it, and Tenantry turns
-  savepoints on for such a save if you turned them off (`AutoSavepointsEnabled = false`). A transaction without
-  savepoints, as on SQL Server with multiple active result sets (MARS), is rolled back instead of committed when such a
-  save in it failed after sending some of its statements, or EF Core failed to roll it back to its savepoint: `Commit`
-  throws `TenantIsolationViolationException`, of kind `TransactionRolledBack` (event 2004). A save can fail before EF
-  Core reads the check, on a duplicate key, say, so whether the check held is unknown, and a forged write and a genuine
-  conflict look the same: any failure of such a save stops the commit. So does one Tenantry is not told succeeded,
-  when an interceptor added before `UseTenantry()` throws from `SavedChanges`.
-- **In a `TransactionScope`**, or a transaction the connection was enlisted in, where EF Core sets no savepoint, the
-  same failure rolls the transaction back when it completes, so disposing the completed scope throws
+- **The failed check cannot be suppressed.** An interceptor of yours that suppresses concurrency failures
+  (`ThrowingConcurrencyException`), such as a "last write wins" policy or EF Core's sample that ignores rows already
+  deleted, still works for other entities. For a check that other rows depend on, Tenantry's interceptor throws the
+  failure anyway, wherever yours is registered. Interceptors added after `UseTenantry()`, including those that packages
+  add through it, do not see that failure.
+- **Without a transaction** (`Database.AutoTransactionBehavior` set to `Never`), EF Core runs the save in a
+  transaction of its own, as it does by default, and the setting goes back to `Never` when the save ends (event 2005,
+  at `Debug`). Other saves still run without a transaction. If your database or connection pooler cannot run
+  transactions, set `EfCoreIsolationOptions.OnSaveWithoutTransaction` to `Reject`: such a save then throws
+  `TenantIsolationViolationException` of kind `SaveWithoutTransaction` before anything is sent.
+  - If you began a transaction on the connection through ADO.NET, hand it to EF Core with `Database.UseTransaction`;
+    otherwise EF Core cannot begin its own, and the save fails.
+  - If a `SavingChanges` interceptor registered after Tenantry's stops the save, the setting stays `WhenNeeded` until
+    the context's next save, which sets it back to `Never`.
+- **In your own transaction**, EF Core rolls a failed save back to a savepoint it creates first. If you turned
+  savepoints off (`AutoSavepointsEnabled = false`), Tenantry turns them on for such a save. A transaction without
+  savepoints, such as one on SQL Server with multiple active result sets (MARS), is rolled back instead of committed if
+  such a save in it failed after sending any of its statements, or if EF Core could not roll back to its savepoint.
+  `Commit` then throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
+  - This applies to any failure of such a save, not only a failed tenant check. A save can fail before EF Core reads
+    the check (on a duplicate key, for example), so Tenantry cannot know whether the check held, and a forged write
+    looks the same as a genuine conflict.
+  - It also applies when Tenantry never learns that the save succeeded, which happens if an interceptor added before
+    `UseTenantry()` throws from `SavedChanges`.
+- **In a `TransactionScope`**, or a transaction the connection was enlisted in, EF Core creates no savepoint. The same
+  failures roll the transaction back when it completes, so disposing the completed scope throws
   `TransactionAbortedException`.
 
-Beyond reach are EF Core's in-memory provider, which has no transactions; SQLite, or another provider that cannot
-join a `TransactionScope`, inside one with EF Core's `AmbientTransactionWarning` turned off, which then saves with no
-transaction at all; storage without transactions, such as MySQL's MyISAM tables; an interceptor that suppresses EF
-Core's savepoint commands; and a transaction handed to EF Core with `UseTransaction` and committed through ADO.NET.
-Call `UseTenantry()` after adding your own `SaveChanges` interceptors: one that runs after Tenantry's and changes what
-the save writes, such as a soft-delete interceptor that turns a delete into an update, is not checked.
+These cases are not covered:
+
+- EF Core's in-memory provider, which has no transactions;
+- SQLite, or another provider that cannot join a `TransactionScope`, used inside one with EF Core's
+  `AmbientTransactionWarning` turned off: it then saves with no transaction at all;
+- storage without transactions, such as MySQL's MyISAM tables;
+- an interceptor that suppresses EF Core's savepoint commands;
+- a transaction handed to EF Core with `UseTransaction` and then committed directly through ADO.NET.
+
+Call `UseTenantry()` after adding your own `SaveChanges` interceptors. An interceptor that runs after Tenantry's and
+changes what the save writes, such as a soft-delete interceptor that turns a delete into an update, is not checked.
 
 `TenantIsolationViolationException` (namespace `Tenantry.EfCore`) says which check failed in `Kind`:
 
