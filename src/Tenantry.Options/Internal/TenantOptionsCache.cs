@@ -13,12 +13,17 @@ internal interface ICurrentTenantId
 {
     /// <summary>The current tenant's id, formatted by <see cref="TenantIds.Format{TKey}"/>, or null with no tenant.</summary>
     string? Current { get; }
+
+    /// <summary>Makes no tenant current until disposed.</summary>
+    IDisposable UseNoTenant();
 }
 
-internal sealed class CurrentTenantId<TKey>(ITenantContext<TKey> tenantContext) : ICurrentTenantId
+internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantContext) : ICurrentTenantId
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     public string? Current => tenantContext.CurrentTenant is { } tenant ? TenantIds.Format(tenant.TenantId) : null;
+
+    public IDisposable UseNoTenant() => tenantContext.UseNoTenant();
 }
 
 /// <summary>A cache of one options type's values, per tenant, that a tenant's invalidation can clear.</summary>
@@ -54,9 +59,9 @@ internal sealed class TenantOptionsCaches
 
 /// <summary>
 /// The <see cref="IOptionsMonitorCache{TOptions}"/> of an options type configured per tenant: each value is kept per
-/// tenant (and per options name), so <see cref="IOptionsMonitor{TOptions}"/> and Tenantry's <see cref="IOptions{TOptions}"/>
-/// and <see cref="IOptionsSnapshot{TOptions}"/> give the current tenant's. A change to the configuration a name is bound
-/// to clears that name for every tenant, whether or not anything monitors it.
+/// tenant (and per options name), so <see cref="IOptionsMonitor{TOptions}"/> and Tenantry's
+/// <see cref="IOptionsSnapshot{TOptions}"/> give the current tenant's. A change to the configuration a name is bound to
+/// clears that name for every tenant, whether or not anything monitors it.
 /// </summary>
 internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions> : IOptionsMonitorCache<TOptions>, ITenantOptionsCache, IDisposable
     where TOptions : class
@@ -135,9 +140,9 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
 }
 
 /// <summary>
-/// The <see cref="IOptions{TOptions}"/> and <see cref="IOptionsSnapshot{TOptions}"/> of an options type configured per
-/// tenant: each read gives the current tenant's value, from <see cref="TenantOptionsCache{TOptions}"/>, so a singleton
-/// that holds it reads the tenant of the code that calls it.
+/// The <see cref="IOptionsSnapshot{TOptions}"/> of an options type configured per tenant: each read gives the current
+/// tenant's value, from <see cref="TenantOptionsCache{TOptions}"/>. It is scoped, so scope validation refuses a
+/// singleton that would hold it.
 /// </summary>
 internal sealed class TenantOptionsManager<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(IOptionsFactory<TOptions> factory, TenantOptionsCache<TOptions> cache)
     : IOptionsSnapshot<TOptions>
@@ -149,6 +154,36 @@ internal sealed class TenantOptionsManager<[DynamicallyAccessedMembers(Dynamical
     {
         name ??= Microsoft.Extensions.Options.Options.DefaultName;
         return cache.GetOrAdd(name, () => factory.Create(name));
+    }
+}
+
+/// <summary>
+/// The <see cref="IOptions{TOptions}"/> of an options type configured per tenant: the ordinary value, built once with no
+/// tenant current, as Microsoft's is. A singleton that reads <c>Value</c> in its constructor keeps it for its lifetime,
+/// so this value is never a tenant's: the tenant's comes from <see cref="IOptionsSnapshot{TOptions}"/> and
+/// <see cref="IOptionsMonitor{TOptions}"/>.
+/// </summary>
+internal sealed class TenantFreeOptions<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(IOptionsFactory<TOptions> factory, ICurrentTenantId tenant)
+    : IOptions<TOptions>
+    where TOptions : class
+{
+    private readonly object _gate = new();
+    private volatile TOptions? _value;
+
+    public TOptions Value
+    {
+        get
+        {
+            if (_value is { } value)
+                return value;
+
+            lock (_gate)
+            {
+                // Not kept when the build throws, so the next read tries again.
+                using (tenant.UseNoTenant())
+                    return _value ??= factory.Create(Microsoft.Extensions.Options.Options.DefaultName);
+            }
+        }
     }
 }
 

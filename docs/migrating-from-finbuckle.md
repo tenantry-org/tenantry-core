@@ -276,8 +276,9 @@ the migration makes `TenantId` nullable, your project does not use nullable refe
 `tenant.ConfigurePerTenant<TOptions>((options, t) => …)` inside `AddTenantry`. Call it after the builder methods that
 need the key type, such as `UseStore`. Read your tenant type with `t.As<AppTenant>()`. Finbuckle's `Reset()` and
 `Clear(tenantId)` become `ITenantStoreCache<string>.Invalidate(tenantId)`. The named variants become
-`ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)`. See
-[Options per tenant](per-tenant-options.md).
+`ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)`. Code that reads the tenant's
+value through `IOptions<TOptions>` changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a
+singleton: in Tenantry, `IOptions<TOptions>` keeps the ordinary value. See [Options per tenant](per-tenant-options.md).
 
 `WithPerTenantAuthentication()` becomes `ConfigurePerTenant` on each scheme's options, such as
 `ConfigurePerTenant<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before

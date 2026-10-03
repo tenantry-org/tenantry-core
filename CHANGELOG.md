@@ -46,9 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `IsolateOutputCache()` (Tenantry.AspNetCore) makes cached responses vary by tenant, and invalidating a tenant
   evicts its responses. A response for a request `UseTenantry()` did not handle first is not cached (log event 1009,
   once).
-- `Tenantry.Options`, a new package: `ConfigurePerTenant<TOptions>()` makes `IOptions<T>`, `IOptionsSnapshot<T>` and
+- `Tenantry.Options`, a new package: `ConfigurePerTenant<TOptions>()` makes `IOptionsSnapshot<T>` and
   `IOptionsMonitor<T>` give the current tenant's value, built from the ordinary configuration and the tenant, cached
-  per tenant and cleared when the tenant is invalidated. See [Options per tenant](docs/per-tenant-options.md).
+  per tenant and cleared when the tenant is invalidated. `IOptions<T>` keeps the ordinary value, so a singleton that
+  reads it once never keeps one tenant's settings. See [Options per tenant](docs/per-tenant-options.md).
 - `ITenantInvalidationHandler<TKey>`: `ITenantStoreCache<TKey>.Invalidate` and `InvalidateAll` run every registered
   handler, with or without `CacheTenants`, so one call clears everything kept for a tenant. Tenantry.Caching,
   `IsolateOutputCache()` and Tenantry.Options register one.

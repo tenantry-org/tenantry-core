@@ -1,8 +1,9 @@
 # Options per tenant
 
 Settings that differ between tenants (a limit that follows the tenant's plan, a brand colour, an upstream endpoint) can
-stay in the options pattern your code already reads. `Tenantry.Options` makes `IOptions<T>`, `IOptionsSnapshot<T>` and
-`IOptionsMonitor<T>` give the current tenant's value for the options types you name.
+stay in the options pattern. `Tenantry.Options` makes `IOptionsSnapshot<T>` and `IOptionsMonitor<T>` give the current
+tenant's value for the options types you name. `IOptions<T>` keeps the ordinary value: see
+[Why IOptions keeps the ordinary value](#why-ioptions-keeps-the-ordinary-value).
 
 ```bash
 dotnet add package Tenantry.Options
@@ -31,19 +32,19 @@ public sealed class LimitsOptions
 }
 ```
 
-Code that reads the options is unchanged:
+Read the tenant's value with `IOptionsSnapshot<T>` in request code, or with `IOptionsMonitor<T>`:
 
 ```csharp
 using Microsoft.Extensions.Options;
 
-app.MapGet("/limits", (IOptions<LimitsOptions> limits) => limits.Value.MaxUsers).RequireTenant();
+app.MapGet("/limits", (IOptionsSnapshot<LimitsOptions> limits) => limits.Value.MaxUsers).RequireTenant();
 ```
 
 - **Built from the ordinary configuration, then the tenant.** Each tenant's value starts from the ordinary
   configuration, then the tenant's steps run, in the order added.
 - **No tenant, no change.** Without a current tenant, the readers give the ordinary value.
-- **Read where it is used.** `IOptions<T>.Value` reads the current tenant each time, so a singleton that holds
-  `IOptions<T>` sees the tenant of the code that calls it, not the one it was created under.
+- **A singleton holds the monitor.** `IOptionsSnapshot<T>` is scoped, so scope validation refuses a singleton that
+  depends on it. A singleton holds `IOptionsMonitor<T>` and reads `CurrentValue` each time it needs the value.
 - **Only the types you name.** Every other options type behaves as before.
 - **After `Configure`, before `PostConfigure`.** The tenant's steps run after every `Configure`, in any order they were
   added, and before every `PostConfigure`.
@@ -52,6 +53,27 @@ app.MapGet("/limits", (IOptions<LimitsOptions> limits) => limits.Value.MaxUsers)
   every name. For authentication schemes, see [Authentication per tenant](authentication-per-tenant.md).
 - `ConfigurePerTenant` has a type parameter of its own, so it returns the non-generic builder: call it after the
   methods that need the tenant key type, such as `UseStore`.
+
+### Why IOptions keeps the ordinary value
+
+Code reads `IOptions<T>.Value` once and keeps it, often in a singleton's constructor:
+
+```csharp
+public sealed class LimitsChecker(IOptions<LimitsOptions> options)
+{
+    private readonly LimitsOptions _limits = options.Value;   // read once, kept for every caller
+
+    public bool Allows(int users) => users <= _limits.MaxUsers;
+}
+```
+
+If `IOptions<T>` gave the tenant's value, this singleton would keep the settings of the first tenant that used it and
+apply them to every other tenant. Library code does the same, so the mistake could be in code you don't own. So
+`IOptions<T>` always gives the ordinary value, built with no tenant current, and a tenant's settings never reach code
+that keeps a value. Code that should see the tenant's settings reads `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`.
+
+The same applies to the monitor: reading `CurrentValue` once in a constructor keeps one tenant's value. Read it where
+the value is used.
 
 ### Settings from a database
 

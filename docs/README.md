@@ -17,7 +17,7 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 6. **[Access control](access-control.md)** — requiring tenants per-endpoint or globally, access validators, and claim-based validation.
 7. **[Calling other services](http-propagation.md)** — sending the current tenant with `HttpClient` and gRPC calls (`Tenantry.Http`), and resolving it in the called service.
 8. **[Caching per tenant](caching.md)** — `HybridCache` entries and output-cached responses kept per tenant (`Tenantry.Caching`, `IsolateOutputCache()`), shared entries, and invalidation.
-9. **[Options per tenant](per-tenant-options.md)** — `IOptions<T>` values per tenant (`Tenantry.Options`), built from your configuration and the tenant, and cleared when the tenant changes.
+9. **[Options per tenant](per-tenant-options.md)** — `IOptionsSnapshot<T>` and `IOptionsMonitor<T>` values per tenant (`Tenantry.Options`), built from your configuration and the tenant, and cleared when the tenant changes.
 10. **[Authentication per tenant](authentication-per-tenant.md)** — JWT bearer, OpenID Connect and cookie settings per tenant, with `UseTenantResolution()` before authentication, and a scheme per tenant.
 11. **[ASP.NET Core Identity](aspnetcore-identity.md)** — users kept per tenant in a shared database, user names unique within a tenant, and sign-in cookies tied to their tenant.
 12. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, isolation options, pooling, a database per tenant, migrations, and cross-tenant queries.

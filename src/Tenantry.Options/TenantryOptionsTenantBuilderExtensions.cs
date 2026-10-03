@@ -14,12 +14,19 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class TenantryOptionsTenantBuilderExtensions
 {
     /// <summary>
-    /// Configures <typeparamref name="TOptions"/> per tenant: <c>IOptions&lt;TOptions&gt;</c>,
-    /// <c>IOptionsSnapshot&lt;TOptions&gt;</c> and <c>IOptionsMonitor&lt;TOptions&gt;</c> give the current tenant's
-    /// value, built from the ordinary configuration (every <c>Configure</c>), then <paramref name="configure"/> with the
-    /// tenant. Without a tenant they give the ordinary value.
+    /// Configures <typeparamref name="TOptions"/> per tenant: <c>IOptionsSnapshot&lt;TOptions&gt;</c> and
+    /// <c>IOptionsMonitor&lt;TOptions&gt;</c> give the current tenant's value, built from the ordinary configuration
+    /// (every <c>Configure</c>), then <paramref name="configure"/> with the tenant. Without a tenant they give the
+    /// ordinary value. <c>IOptions&lt;TOptions&gt;</c> always gives the ordinary value.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// <c>IOptions&lt;TOptions&gt;</c> is not per tenant because its value is read once and kept: a singleton that reads
+    /// <c>options.Value</c> in its constructor would keep the first tenant's settings and use them for every tenant.
+    /// Read <c>IOptionsSnapshot&lt;TOptions&gt;</c>, which is scoped, in request code, and hold
+    /// <c>IOptionsMonitor&lt;TOptions&gt;</c> in a singleton and read <c>CurrentValue</c> each time. Reading
+    /// <c>CurrentValue</c> once in a constructor keeps one tenant's value, as reading <c>Value</c> would.
+    /// </para>
     /// <para>
     /// Each tenant's value is built on first use and cached; <see cref="ITenantStoreCache{TKey}.Invalidate"/> clears it,
     /// so changing a tenant's settings is followed by invalidating the tenant. A change to the configuration the options
@@ -196,7 +203,7 @@ public static class TenantryOptionsTenantBuilderExtensions
             var services = tenant.Services;
             services.AddOptions();
 
-            services.TryAddSingleton<ICurrentTenantId>(sp => new CurrentTenantId<TKey>(sp.GetRequiredService<ITenantContext<TKey>>()));
+            services.TryAddSingleton<ICurrentTenantId>(sp => new CurrentTenantId<TKey>(sp.GetRequiredService<ITenantContextSetter<TKey>>()));
             services.TryAddSingleton<TenantOptionsCaches>();
             services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<TKey>, TenantOptionsInvalidation<TKey>>());
 
@@ -206,8 +213,9 @@ public static class TenantryOptionsTenantBuilderExtensions
                 sp.GetRequiredService<TenantOptionsCaches>(),
                 sp.GetServices<IOptionsChangeTokenSource<TOptions>>()));
             services.TryAddSingleton<IOptionsMonitorCache<TOptions>>(sp => sp.GetRequiredService<TenantOptionsCache<TOptions>>());
-            services.TryAddSingleton<IOptions<TOptions>>(sp => new TenantOptionsManager<TOptions>(
-                sp.GetRequiredService<IOptionsFactory<TOptions>>(), sp.GetRequiredService<TenantOptionsCache<TOptions>>()));
+            // IOptions<TOptions> stays the ordinary value: a singleton that reads it once must not keep a tenant's.
+            services.TryAddSingleton<IOptions<TOptions>>(sp => new TenantFreeOptions<TOptions>(
+                sp.GetRequiredService<IOptionsFactory<TOptions>>(), sp.GetRequiredService<ICurrentTenantId>()));
             services.TryAddScoped<IOptionsSnapshot<TOptions>>(sp => new TenantOptionsManager<TOptions>(
                 sp.GetRequiredService<IOptionsFactory<TOptions>>(), sp.GetRequiredService<TenantOptionsCache<TOptions>>()));
 

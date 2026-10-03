@@ -28,10 +28,11 @@ using (tenantContext.Use(acme))
     Expect("HybridCache", await cache.GetOrCreateAsync("plan", _ => ValueTask.FromResult(tenantContext.CurrentTenantId)), "acme");
     Expect("HybridCache with state", await cache.GetOrCreateAsync("double", 21, (n, _) => ValueTask.FromResult(n * 2)), 42);
     Expect("HTTP propagation", await provider.GetRequiredService<IHttpClientFactory>().CreateClient("service").GetStringAsync("/"), "acme");
-    Expect("options per tenant", provider.GetRequiredService<IOptions<PlanOptions>>().Value.Name, "Acme's plan");
+    Expect("options per tenant", provider.GetRequiredService<IOptionsMonitor<PlanOptions>>().CurrentValue.Name, "Acme's plan");
+    Expect("IOptions keeps the ordinary value", provider.GetRequiredService<IOptions<PlanOptions>>().Value.Name, "default");
 }
 
-Expect("options without a tenant", provider.GetRequiredService<IOptions<PlanOptions>>().Value.Name, "default");
+Expect("options without a tenant", provider.GetRequiredService<IOptionsMonitor<PlanOptions>>().CurrentValue.Name, "default");
 
 Expect("SharedHybridCache", await provider.GetRequiredService<SharedHybridCache>().GetOrCreateAsync("rates", _ => ValueTask.FromResult("shared")), "shared");
 provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");

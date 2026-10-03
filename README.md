@@ -47,7 +47,7 @@ tenant databases, and the tenant in background jobs and messages.
 | `Tenantry.AspNetCore` | [![NuGet](https://img.shields.io/nuget/v/Tenantry.AspNetCore.svg)](https://www.nuget.org/packages/Tenantry.AspNetCore) | Resolves each request's tenant: middleware, resolvers, access validation        |
 | `Tenantry.Http`       | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Http.svg)](https://www.nuget.org/packages/Tenantry.Http)             | Sends the current tenant to the services an `HttpClient` or gRPC client calls |
 | `Tenantry.Caching`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Caching.svg)](https://www.nuget.org/packages/Tenantry.Caching)       | Keeps `HybridCache` entries per tenant                                         |
-| `Tenantry.Options`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Options.svg)](https://www.nuget.org/packages/Tenantry.Options)       | `IOptions<T>` values per tenant                                                |
+| `Tenantry.Options`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Options.svg)](https://www.nuget.org/packages/Tenantry.Options)       | Options values per tenant                                                      |
 
 Each depends on `Tenantry.Core`. Reference whichever combination matches your host:
 
