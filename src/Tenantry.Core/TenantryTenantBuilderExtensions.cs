@@ -22,7 +22,7 @@ public static class TenantryTenantBuilderExtensions
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="InvalidOperationException">A tenant store is already registered.</exception>
     /// <exception cref="ArgumentException">
-    /// A tenant has an id Tenantry reserves for "no tenant" (<see cref="TenantIds.IsUnset{TKey}"/>), or two tenants
+    /// A tenant has an id Tenantry reserves for "no tenant" (<see cref="TenantIds.IsReserved{TKey}"/>), or two tenants
     /// have the same id.
     /// </exception>
     public static ITenantBuilder<TKey> UseInMemoryStore<TKey>(

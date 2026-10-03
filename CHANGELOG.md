@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `TenantIds`: `Format` writes a tenant id with the invariant culture, `TryParse` reads one back and refuses the ids
-  Tenantry reserves for "no tenant", and `IsUnset` tells those ids apart. They are what Tenantry itself uses, for code
+  Tenantry reserves for "no tenant", and `IsReserved` tells those ids apart. They are what Tenantry itself uses, for code
   of your own that carries tenant ids as text.
 - `TenantTelemetry`: the `tenant.id` tag and `TenantId` log-scope names Tenantry records a tenant under, and
   `CreateLogScope`, the scope's state, to record it the same way in your own code.

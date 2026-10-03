@@ -19,7 +19,7 @@ public sealed class InMemoryTenantStore<TKey> : ITenantStore<TKey>
     /// <param name="tenants">The tenants the store holds. The store does not change after it is created.</param>
     /// <exception cref="ArgumentNullException"><paramref name="tenants"/> or one of its tenants is null.</exception>
     /// <exception cref="ArgumentException">
-    /// A tenant has an id Tenantry reserves for "no tenant" (<see cref="TenantIds.IsUnset{TKey}"/>), or two tenants
+    /// A tenant has an id Tenantry reserves for "no tenant" (<see cref="TenantIds.IsReserved{TKey}"/>), or two tenants
     /// have the same id.
     /// </exception>
     public InMemoryTenantStore(IEnumerable<ITenantDescriptor<TKey>> tenants)
@@ -35,7 +35,7 @@ public sealed class InMemoryTenantStore<TKey> : ITenantStore<TKey>
                 throw new ArgumentNullException(nameof(tenants), "The tenants include null.");
             }
 
-            TenantIds.ThrowIfUnset(tenant, nameof(tenants));
+            TenantIds.ThrowIfReserved(tenant, nameof(tenants));
 
             if (!byId.TryAdd(tenant.TenantId, tenant))
             {

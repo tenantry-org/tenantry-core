@@ -15,7 +15,7 @@ where TKey : IEquatable<TKey>, IParsable<TKey>
   claim, into a `TKey`, with the invariant culture.
 
 `TenantIds` does this the way Tenantry does, for code of your own that carries tenant ids as text: `Format` writes
-an id with the invariant culture, and `TryParse` reads one back, refusing text that names no tenant. `IsUnset` is
+an id with the invariant culture, and `TryParse` reads one back, refusing text that names no tenant. `IsReserved` is
 true for the ids Tenantry reserves for "no tenant": `null`, the key type's default (`Guid.Empty`, `0`) and an
 empty string.
 

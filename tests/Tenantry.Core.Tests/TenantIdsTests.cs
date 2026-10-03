@@ -63,14 +63,14 @@ public sealed class TenantIdsTests
     [Fact]
     public void IsUnset_IsTrueForNull_TheKeyTypesDefault_AndAnEmptyString()
     {
-        TenantIds.IsUnset<string>(null).Should().BeTrue();
-        TenantIds.IsUnset("").Should().BeTrue();
-        TenantIds.IsUnset(0).Should().BeTrue();
-        TenantIds.IsUnset(Guid.Empty).Should().BeTrue();
+        TenantIds.IsReserved<string>(null).Should().BeTrue();
+        TenantIds.IsReserved("").Should().BeTrue();
+        TenantIds.IsReserved(0).Should().BeTrue();
+        TenantIds.IsReserved(Guid.Empty).Should().BeTrue();
 
-        TenantIds.IsUnset(" ").Should().BeFalse();
-        TenantIds.IsUnset(7).Should().BeFalse();
-        TenantIds.IsUnset(Guid.NewGuid()).Should().BeFalse();
+        TenantIds.IsReserved(" ").Should().BeFalse();
+        TenantIds.IsReserved(7).Should().BeFalse();
+        TenantIds.IsReserved(Guid.NewGuid()).Should().BeFalse();
     }
 
     [Fact]
@@ -84,6 +84,15 @@ public sealed class TenantIdsTests
         scope.Single().Should().Be(scope[0]);
         scope.ToString().Should().Be("TenantId:acme");
         FluentActions.Invoking(() => scope[1]).Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void TheLogScope_FormatsAnIdOfAnyKeyType_AsTenantryDoes()
+    {
+        var id = Guid.Parse("6f9619ff-8b86-d011-b42d-00cf4fc964ff");
+
+        TenantTelemetry.CreateLogScope(id)[0].Value.Should().Be(TenantIds.Format(id));
+        TenantTelemetry.CreateLogScope(1234567)[0].Value.Should().Be("1234567");
     }
 
     [Fact]

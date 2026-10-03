@@ -35,7 +35,7 @@ internal sealed class TenantScopeFactory<TKey>(
         ArgumentNullException.ThrowIfNull(tenant);
 
         // Checked before the services are created, so a tenant Use rejects leaves nothing to dispose.
-        TenantIds.ThrowIfUnset(tenant, nameof(tenant));
+        TenantIds.ThrowIfReserved(tenant, nameof(tenant));
         var scope = serviceScopes.CreateAsyncScope();
 
         return new TenantScope<TKey>(scope, tenantContext.Use(tenant), tenant);
@@ -70,7 +70,7 @@ internal sealed class TenantScopeFactory<TKey>(
             throw new ArgumentNullException(nameof(tenantId));
         }
 
-        if (TenantIds.IsUnset(tenantId))
+        if (TenantIds.IsReserved(tenantId))
         {
             throw new ArgumentException(
                 $"'{tenantId}' is the default value of {typeof(TKey).Name}, which Tenantry reserves for \"no tenant\", " +

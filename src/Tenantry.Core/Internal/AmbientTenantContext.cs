@@ -39,7 +39,7 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
     public IDisposable Use(ITenantDescriptor<TKey> tenant)
     {
         ArgumentNullException.ThrowIfNull(tenant);
-        TenantIds.ThrowIfUnset(tenant, nameof(tenant));
+        TenantIds.ThrowIfReserved(tenant, nameof(tenant));
 
         Frame frame = new(tenant, CurrentFrame.Value);
         CurrentFrame.Value = frame;

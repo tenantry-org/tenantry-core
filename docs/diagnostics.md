@@ -37,13 +37,13 @@ builder.Logging.AddJsonConsole(o => o.IncludeScopes = true);
 ```
 
 The names are public, in `TenantTelemetry`, so your own code can record the tenant the same way: `TenantIdTag`
-(`tenant.id`), `LogScopeName` (`TenantId`), and `CreateLogScope`, the scope's state. `TenantIds.Format` writes the
-id as Tenantry does.
+(`tenant.id`), `LogScopeName` (`TenantId`), and `CreateLogScope`, the scope's state, which formats the id as Tenantry
+does (`TenantIds.Format`).
 
 ```csharp
 using Tenantry;
 
-using (logger.BeginScope(TenantTelemetry.CreateLogScope(TenantIds.Format(tenantId))))
+using (logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId)))
 {
     logger.LogInformation("Invoicing");
 }

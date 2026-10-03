@@ -44,7 +44,7 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
 
     public void Invalidate(TKey tenantId)
     {
-        TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
+        TenantInvalidationHandlers<TKey>.ThrowIfReserved(tenantId);
         Remove(tenantId);
         _handlers.Invalidate(tenantId);
     }
@@ -161,7 +161,7 @@ internal sealed class NoTenantStoreCache<TKey>(TenantInvalidationHandlers<TKey> 
 {
     public void Invalidate(TKey tenantId)
     {
-        TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
+        TenantInvalidationHandlers<TKey>.ThrowIfReserved(tenantId);
         handlers.Invalidate(tenantId);
     }
 
@@ -178,7 +178,7 @@ internal sealed class TenantInvalidator<TKey>(TenantStoreCache<TKey>? cache, Ten
 {
     public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken = default)
     {
-        TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
+        TenantInvalidationHandlers<TKey>.ThrowIfReserved(tenantId);
         cache?.Remove(tenantId);
         return handlers.InvalidateAsync(tenantId, cancellationToken);
     }
