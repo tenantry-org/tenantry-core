@@ -45,19 +45,30 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
     public void Invalidate(TKey tenantId)
     {
         TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
-
-        Interlocked.Increment(ref _generation);
-        _byId.RemoveWhere((key, entry) => key.Equals(tenantId) || entry.Tenant.TenantId.Equals(tenantId));
-        _byIdentifier.RemoveWhere((_, entry) => entry.Tenant.TenantId.Equals(tenantId));
+        Remove(tenantId);
         _handlers.Invalidate(tenantId);
     }
 
     public void InvalidateAll()
     {
+        RemoveAll();
+        _handlers.InvalidateAll();
+    }
+
+    /// <summary>Removes the tenant's cached copies, by its id and every identifier, without running the handlers.</summary>
+    public void Remove(TKey tenantId)
+    {
+        Interlocked.Increment(ref _generation);
+        _byId.RemoveWhere((key, entry) => key.Equals(tenantId) || entry.Tenant.TenantId.Equals(tenantId));
+        _byIdentifier.RemoveWhere((_, entry) => entry.Tenant.TenantId.Equals(tenantId));
+    }
+
+    /// <summary>Removes every cached tenant, without running the handlers.</summary>
+    public void RemoveAll()
+    {
         Interlocked.Increment(ref _generation);
         _byId.Entries.Clear();
         _byIdentifier.Entries.Clear();
-        _handlers.InvalidateAll();
     }
 
     private void Set<TLookup>(Map<TLookup> map, TLookup key, ITenantDescriptor<TKey> tenant, long generation)
@@ -155,4 +166,26 @@ internal sealed class NoTenantStoreCache<TKey>(TenantInvalidationHandlers<TKey> 
     }
 
     public void InvalidateAll() => handlers.InvalidateAll();
+}
+
+/// <summary>
+/// The <see cref="ITenantInvalidator{TKey}"/>: removes the tenant from <c>CacheTenants</c>' cache, when there is one,
+/// then runs every <see cref="ITenantInvalidationHandler{TKey}"/>.
+/// </summary>
+internal sealed class TenantInvalidator<TKey>(TenantStoreCache<TKey>? cache, TenantInvalidationHandlers<TKey> handlers)
+    : ITenantInvalidator<TKey>
+    where TKey : IEquatable<TKey>, IParsable<TKey>
+{
+    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken = default)
+    {
+        TenantInvalidationHandlers<TKey>.ThrowIfUnset(tenantId);
+        cache?.Remove(tenantId);
+        return handlers.InvalidateAsync(tenantId, cancellationToken);
+    }
+
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken = default)
+    {
+        cache?.RemoveAll();
+        return handlers.InvalidateAllAsync(cancellationToken);
+    }
 }

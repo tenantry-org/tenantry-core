@@ -28,7 +28,7 @@ public static class TenantryOptionsTenantBuilderExtensions
     /// <c>CurrentValue</c> once in a constructor keeps one tenant's value, as reading <c>Value</c> would.
     /// </para>
     /// <para>
-    /// Each tenant's value is built on first use and cached; <see cref="ITenantStoreCache{TKey}.Invalidate"/> clears it,
+    /// Each tenant's value is built on first use and cached; <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> clears it,
     /// so changing a tenant's settings is followed by invalidating the tenant. A change to the configuration the options
     /// are bound to clears every tenant's value. Validation (<c>Validate</c>, <c>IValidateOptions</c>) runs on each
     /// tenant's value when it is built, and <c>ValidateOnStart</c> validates the ordinary one.

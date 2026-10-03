@@ -19,7 +19,7 @@ public static class TenantryCachingTenantBuilderExtensions
     /// only while that tenant is current, so one tenant's cached data is never served to another. Entries every tenant
     /// shares go through <see cref="SharedHybridCache"/>; code that uses <see cref="IDistributedCache"/> directly can
     /// inject <see cref="ITenantDistributedCache"/>. Invalidating a tenant
-    /// (<see cref="ITenantStoreCache{TKey}.Invalidate"/>) removes its <see cref="HybridCache"/> entries.
+    /// (<see cref="ITenantInvalidator{TKey}.InvalidateAsync"/>) removes its <see cref="HybridCache"/> entries.
     /// </summary>
     /// <remarks>
     /// <para>

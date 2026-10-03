@@ -117,7 +117,7 @@ public static class TenantryTenantBuilderExtensions
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
     /// Lookups that find nothing, and <see cref="ITenantStore{TKey}.GetAllTenantsAsync"/>, are not cached. Call
-    /// <see cref="ITenantStoreCache{TKey}.Invalidate"/> when a tenant changes. It uses a registered
+    /// <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> when a tenant changes. It uses a registered
     /// <see cref="TimeProvider"/> if there is one.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"><see cref="TenantStoreCacheOptions.Duration"/> is not positive.</exception>

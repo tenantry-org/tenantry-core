@@ -251,11 +251,19 @@ internal sealed class TenantFreeOptions<[DynamicallyAccessedMembers(DynamicallyA
     }
 }
 
-/// <summary>Clears every per-tenant options value of a tenant when <see cref="ITenantStoreCache{TKey}"/> invalidates it.</summary>
+/// <summary>Clears every per-tenant options value of a tenant when <see cref="ITenantInvalidator{TKey}"/> invalidates it.</summary>
 internal sealed class TenantOptionsInvalidation<TKey>(TenantOptionsCaches caches) : ITenantInvalidationHandler<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public void Invalidate(TKey tenantId) => caches.Remove(TenantIds.Format(tenantId));
+    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken)
+    {
+        caches.Remove(TenantIds.Format(tenantId));
+        return ValueTask.CompletedTask;
+    }
 
-    public void InvalidateAll() => caches.Clear();
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken)
+    {
+        caches.Clear();
+        return ValueTask.CompletedTask;
+    }
 }

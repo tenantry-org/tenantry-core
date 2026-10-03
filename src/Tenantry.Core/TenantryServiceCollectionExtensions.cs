@@ -27,8 +27,8 @@ public static class TenantryServiceCollectionExtensions
     /// <para>
     /// The core services are the ambient tenant (<see cref="ITenantContext{TKey}"/> and
     /// <see cref="ITenantContextSetter{TKey}"/>), <see cref="ITenantScopeFactory{TKey}"/>,
-    /// <see cref="ITenantLookup{TKey}"/>, <see cref="ITenantStoreCache{TKey}"/>, <see cref="ITenantActivity{TKey}"/> and
-    /// <see cref="ITenantKeyType"/>, all singletons. They serve web applications, workers and console
+    /// <see cref="ITenantLookup{TKey}"/>, <see cref="ITenantInvalidator{TKey}"/>, <see cref="ITenantStoreCache{TKey}"/>,
+    /// <see cref="ITenantActivity{TKey}"/> and <see cref="ITenantKeyType"/>, all singletons. They serve web applications, workers and console
     /// tools alike; the ASP.NET Core features come from the Tenantry.AspNetCore package.
     /// </para>
     /// <para>
@@ -74,6 +74,8 @@ public static class TenantryServiceCollectionExtensions
         services.TryAddSingleton(sp => new TenantInvalidationHandlers<TKey>(sp));
         services.TryAddSingleton<ITenantStoreCache<TKey>>(sp =>
             new NoTenantStoreCache<TKey>(sp.GetRequiredService<TenantInvalidationHandlers<TKey>>()));
+        services.TryAddSingleton<ITenantInvalidator<TKey>>(sp => new TenantInvalidator<TKey>(
+            sp.GetService<TenantStoreCache<TKey>>(), sp.GetRequiredService<TenantInvalidationHandlers<TKey>>()));
 
         configure?.Invoke(new TenantBuilder<TKey>(services));
 

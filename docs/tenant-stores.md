@@ -154,46 +154,61 @@ looked up with. It serves Tenantry's own lookups: the request middleware's and `
 tenant is not cached, so a tenant you add is found at once, and `GetAllTenantsAsync` is never cached. Code that
 injects `ITenantStore<TKey>` itself reads the store.
 
-When a tenant changes (it is suspended, renamed or deleted, or its slug changes), remove it from the cache, or it
-is served as it was until its entry expires: an access validator reads the status from the cached descriptor.
+When a tenant changes (it is suspended, renamed or deleted, or its slug changes), invalidate it with
+`ITenantInvalidator<TKey>`, or it is served as it was until its entry expires: an access validator reads the status
+from the cached descriptor.
 
 ```csharp
-app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, ITenantStoreCache<string> cache) =>
+app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, ITenantInvalidator<string> tenants, CancellationToken ct) =>
 {
-    var t = await db.Tenants.SingleOrDefaultAsync(t => t.TenantId == id);
+    var t = await db.Tenants.SingleOrDefaultAsync(t => t.TenantId == id, ct);
     if (t is null) return Results.NotFound();
 
     t.IsActive = false;
-    await db.SaveChangesAsync();
-    cache.Invalidate(id);   // by its id and every identifier it was found by
+    await db.SaveChangesAsync(ct);
+    await tenants.InvalidateAsync(id, ct);   // by its id and every identifier it was found by
     return Results.NoContent();
 });
 ```
 
-`AddTenantry` always registers `ITenantStoreCache<TKey>`, so this code runs with caching off too, when there is
-nothing to remove. Each instance of the application has its own cache, so `Invalidate` clears this instance's copy;
-other instances serve theirs until it expires. Keep the duration as short as that staleness allows. The cache reads the time from
-a registered `TimeProvider`, so tests can control expiry.
+`AddTenantry` always registers `ITenantInvalidator<TKey>`, so this code runs with caching off too, when there is no
+cached copy to remove. Each instance of the application has its own cache, so `InvalidateAsync` clears this instance's
+copy; other instances serve theirs until it expires. Keep the duration as short as that staleness allows. The cache
+reads the time from a registered `TimeProvider`, so tests can control expiry. `ITenantStoreCache<TKey>.Invalidate`
+does the same synchronously, blocking until every handler below is done.
 
 ### Everything kept for a tenant
 
-`Invalidate` also runs every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one
-call clears everything kept for a tenant: Tenantry.Caching's cache entries, the responses `IsolateOutputCache()` caches,
-and Tenantry.Options' options register a handler, and so can your own code that keeps data per tenant:
+`InvalidateAsync` also runs every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`.
+Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options each register one, so one call clears all of them.
+Register your own for data you keep per tenant. When your code also injects the class to read from it, register it
+once and point the handler registration at that instance, so both use the same data:
 
 ```csharp
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<Guid>, PriceListCache>());
+builder.Services.AddSingleton<PriceListCache>();
+builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<Guid>, PriceListCache>(
+    sp => sp.GetRequiredService<PriceListCache>()));
 
 public sealed class PriceListCache : ITenantInvalidationHandler<Guid>
 {
     private readonly ConcurrentDictionary<Guid, decimal[]> _prices = new();
 
-    public void Invalidate(Guid tenantId) => _prices.TryRemove(tenantId, out _);
+    public decimal[] GetOrAdd(Guid tenantId, Func<Guid, decimal[]> load) => _prices.GetOrAdd(tenantId, load);
 
-    public void InvalidateAll() => _prices.Clear();
+    public ValueTask InvalidateAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        _prices.TryRemove(tenantId, out _);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken)
+    {
+        _prices.Clear();
+        return ValueTask.CompletedTask;
+    }
 }
 ```
 

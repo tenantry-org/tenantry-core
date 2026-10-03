@@ -143,7 +143,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
 
     /// <summary>
     /// Keeps ASP.NET Core's output cache per tenant: a response cached while a tenant is current varies by the tenant,
-    /// so it is served only to that tenant, and invalidating the tenant (<see cref="ITenantStoreCache{TKey}.Invalidate"/>)
+    /// so it is served only to that tenant, and invalidating the tenant (<see cref="ITenantInvalidator{TKey}.InvalidateAsync"/>)
     /// evicts it. A response for a request without a tenant (an endpoint that allows one to be missing) is cached apart
     /// from every tenant's.
     /// </summary>

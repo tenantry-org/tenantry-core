@@ -90,7 +90,7 @@ authentication handler was created with the tenant current, so it writes the ten
 
 JWT bearer and OpenID Connect fetch the provider's metadata (its signing keys) and cache it in their options. With
 per-tenant options, each tenant has its own copy, fetched on its first request. Invalidating the tenant
-(`ITenantStoreCache<TKey>.Invalidate`) clears it with the tenant's other options.
+(`ITenantInvalidator<TKey>.InvalidateAsync`) clears it with the tenant's other options.
 
 ## A scheme per tenant
 

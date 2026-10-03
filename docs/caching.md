@@ -112,9 +112,9 @@ is cached apart from every tenant's.
 
 ## Invalidating a tenant
 
-`ITenantStoreCache<TKey>.Invalidate(tenantId)` removes the tenant's `HybridCache` entries (by a tag every tenant entry
-carries) and evicts its cached responses, along with its cached descriptor; `InvalidateAll()` does it for every
-tenant, and leaves shared entries. Call it when a tenant changes or is removed (see
+`ITenantInvalidator<TKey>.InvalidateAsync(tenantId)` removes the tenant's `HybridCache` entries (by a tag every tenant
+entry carries) and evicts its cached responses, along with its cached descriptor; `InvalidateAllAsync()` does it for
+every tenant, and leaves shared entries. Call it when a tenant changes or is removed (see
 [Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)).
 
 - **On the instance that calls it.** Microsoft's `HybridCache` marks the tag invalid in its second level, but each

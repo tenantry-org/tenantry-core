@@ -91,24 +91,21 @@ internal sealed class TenantOutputCacheSetup<TKey>(ITenantContext<TKey> tenantCo
 }
 
 /// <summary>
-/// Evicts a tenant's cached responses, by its tag, when <see cref="ITenantStoreCache{TKey}"/> invalidates the tenant,
-/// and every tenant's when it invalidates them all. Waits for the eviction: invalidation is rare, and offboarding relies
-/// on it being done. Without output caching (<c>AddOutputCache()</c>) there is nothing to evict.
+/// Evicts a tenant's cached responses, by its tag, when <see cref="ITenantInvalidator{TKey}"/> invalidates the tenant,
+/// and every tenant's when it invalidates them all. Without output caching (<c>AddOutputCache()</c>) there is nothing to
+/// evict.
 /// </summary>
 internal sealed class TenantOutputCacheInvalidation<TKey>(IServiceProvider services) : ITenantInvalidationHandler<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public void Invalidate(TKey tenantId) => Evict(TenantOutputCachePolicy<TKey>.TenantTag(TenantIds.Format(tenantId)));
+    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken) =>
+        Evict(TenantOutputCachePolicy<TKey>.TenantTag(TenantIds.Format(tenantId)), cancellationToken);
 
-    public void InvalidateAll() => Evict(TenantOutputCachePolicy<TKey>.AllTenantsTag);
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken) =>
+        Evict(TenantOutputCachePolicy<TKey>.AllTenantsTag, cancellationToken);
 
-    private void Evict(string tag)
-    {
-        if (services.GetService(typeof(IOutputCacheStore)) is not IOutputCacheStore store)
-            return;
-
-        var eviction = store.EvictByTagAsync(tag, CancellationToken.None);
-        if (!eviction.IsCompletedSuccessfully)
-            eviction.AsTask().GetAwaiter().GetResult();
-    }
+    private ValueTask Evict(string tag, CancellationToken cancellationToken) =>
+        services.GetService(typeof(IOutputCacheStore)) is IOutputCacheStore store
+            ? store.EvictByTagAsync(tag, cancellationToken)
+            : ValueTask.CompletedTask;
 }

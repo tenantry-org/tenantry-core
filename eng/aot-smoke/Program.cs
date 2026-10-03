@@ -35,7 +35,7 @@ using (tenantContext.Use(acme))
 Expect("options without a tenant", provider.GetRequiredService<IOptionsMonitor<PlanOptions>>().CurrentValue.Name, "default");
 
 Expect("SharedHybridCache", await provider.GetRequiredService<SharedHybridCache>().GetOrCreateAsync("rates", _ => ValueTask.FromResult("shared")), "shared");
-provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+await provider.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme");
 Expect("invalidating the tenant leaves the shared entry", string.Join(",", DictionaryCache.Last!.Keys), "s:rates");
 Console.WriteLine("Native AOT smoke test passed.");
 return 0;

@@ -207,7 +207,7 @@ key type. Implement `FindByIdentifierAsync` in your store to map slugs. See
 
 ## A suspended tenant is still served
 
-With `CacheTenants`, the cached tenant is served until its entry expires: call `ITenantStoreCache<TKey>.Invalidate`
+With `CacheTenants`, the cached tenant is served until its entry expires: call `ITenantInvalidator<TKey>.InvalidateAsync`
 when you change a tenant (see [Caching](tenant-stores.md#caching)). If its background work still runs, refuse it with
 `ValidateTenantActivity` rather than an access validator, which only HTTP requests run (see
 [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).

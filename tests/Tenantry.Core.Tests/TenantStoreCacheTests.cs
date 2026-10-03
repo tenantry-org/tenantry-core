@@ -302,6 +302,55 @@ public sealed class TenantStoreCacheTests
         provider.GetServices<ITenantInvalidationHandler<string>>().OfType<NeedsTheCache>().Single().Calls.Should().Be(1);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TheInvalidator_RemovesTheCachedTenant_AndAwaitsEveryHandler(bool cacheTenants)
+    {
+        ServiceCollection services = new();
+        Slow slow = new();
+        Recorder recorder = new();
+        services.AddSingleton<ITenantInvalidationHandler<string>>(slow);
+        services.AddSingleton<ITenantInvalidationHandler<string>>(recorder);
+        services.AddTenantry<string>(tenant =>
+        {
+            tenant.UseStore(_ => _store);
+            if (cacheTenants)
+                tenant.CacheTenants();
+        });
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
+        var invalidator = provider.GetRequiredService<ITenantInvalidator<string>>();
+        var ct = TestContext.Current.CancellationToken;
+        await tenants.GetTenantAsync("acme", ct);
+
+        await invalidator.InvalidateAsync("acme", ct);
+        await tenants.GetTenantAsync("acme", ct);
+        await invalidator.InvalidateAllAsync(ct);
+
+        slow.Calls.Should().Equal("acme", "*");
+        recorder.Calls.Should().Equal("acme", "*");
+        _store.Reads.Should().HaveCount(2, "the cached tenant, if any, was removed");
+        await FluentActions.Awaiting(() => invalidator.InvalidateAsync("", ct).AsTask()).Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task ACancelledInvalidation_StopsAtTheHandlerItReached()
+    {
+        ServiceCollection services = new();
+        Recorder after = new();
+        services.AddSingleton<ITenantInvalidationHandler<string>>(new Slow());
+        services.AddSingleton<ITenantInvalidationHandler<string>>(after);
+        services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store));
+        await using var provider = services.BuildServiceProvider();
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await FluentActions.Awaiting(() => provider.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", cancelled.Token).AsTask())
+            .Should().ThrowAsync<OperationCanceledException>();
+        after.Calls.Should().BeEmpty();
+    }
+
     private ServiceProvider Build(Action<TenantStoreCacheOptions>? configure = null)
     {
         ServiceCollection services = new();
@@ -320,27 +369,59 @@ public sealed class TenantStoreCacheTests
     {
         public List<string> Calls { get; } = [];
 
-        public void Invalidate(string tenantId) => Calls.Add(tenantId);
+        public ValueTask InvalidateAsync(string tenantId, CancellationToken cancellationToken) => Record(tenantId);
 
-        public void Invalidate(int tenantId) => Calls.Add($"{tenantId}");
+        public ValueTask InvalidateAsync(int tenantId, CancellationToken cancellationToken) => Record($"{tenantId}");
 
-        public void InvalidateAll() => Calls.Add("*");
+        public ValueTask InvalidateAllAsync(CancellationToken cancellationToken) => Record("*");
+
+        private ValueTask Record(string call)
+        {
+            Calls.Add(call);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    // Completes later, as a remote cache's removal does.
+    private sealed class Slow : ITenantInvalidationHandler<string>
+    {
+        public List<string> Calls { get; } = [];
+
+        public async ValueTask InvalidateAsync(string tenantId, CancellationToken cancellationToken)
+        {
+            await Task.Delay(10, cancellationToken);
+            Calls.Add(tenantId);
+        }
+
+        public async ValueTask InvalidateAllAsync(CancellationToken cancellationToken)
+        {
+            await Task.Delay(10, cancellationToken);
+            Calls.Add("*");
+        }
     }
 
     private sealed class Throwing(string message) : ITenantInvalidationHandler<string>
     {
-        public void Invalidate(string tenantId) => throw new InvalidOperationException(message);
+        public ValueTask InvalidateAsync(string tenantId, CancellationToken cancellationToken) => throw new InvalidOperationException(message);
 
-        public void InvalidateAll() => throw new InvalidOperationException(message);
+        public ValueTask InvalidateAllAsync(CancellationToken cancellationToken) => ValueTask.FromException(new InvalidOperationException(message));
     }
 
-    private sealed class NeedsTheCache(ITenantStoreCache<string> cache) : ITenantInvalidationHandler<string>
+    private sealed class NeedsTheCache(ITenantStoreCache<string> cache, ITenantInvalidator<string> invalidator) : ITenantInvalidationHandler<string>
     {
         public int Calls { get; private set; }
 
-        public void Invalidate(string tenantId) => Calls += cache is not null ? 1 : 0;
+        public ValueTask InvalidateAsync(string tenantId, CancellationToken cancellationToken)
+        {
+            Calls += cache is not null && invalidator is not null ? 1 : 0;
+            return ValueTask.CompletedTask;
+        }
 
-        public void InvalidateAll() => Calls++;
+        public ValueTask InvalidateAllAsync(CancellationToken cancellationToken)
+        {
+            Calls++;
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class ManualTime : TimeProvider

@@ -96,8 +96,9 @@ the tenant is invalidated (below). A step that throws is run again on the next r
 ## When settings change
 
 Each tenant's value is built on first use and cached. To rebuild it after a tenant's settings change, invalidate the
-tenant: `ITenantStoreCache<TKey>.Invalidate(tenantId)` clears its options with everything else Tenantry keeps for it
-(see [Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)), and `InvalidateAll()` clears every tenant's.
+tenant: `ITenantInvalidator<TKey>.InvalidateAsync(tenantId)` clears its options with everything else Tenantry keeps for
+it (see [Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)), and `InvalidateAllAsync()` clears every
+tenant's.
 After an invalidation, a value is built from the tenant as the store has it then, even in a request that was resolved
 before the invalidation and still carries the old copy. A change to the configuration the options are bound to (a
 reloaded `appsettings.json`) clears every tenant's value of that options type. Each instance of the application has its

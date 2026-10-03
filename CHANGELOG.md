@@ -52,9 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IOptionsMonitor<T>` give the current tenant's value, built from the ordinary configuration and the tenant, cached
   per tenant and cleared when the tenant is invalidated. `IOptions<T>` keeps the ordinary value, so a singleton that
   reads it once never keeps one tenant's settings. See [Options per tenant](docs/per-tenant-options.md).
-- `ITenantInvalidationHandler<TKey>`: `ITenantStoreCache<TKey>.Invalidate` and `InvalidateAll` run every registered
-  handler, with or without `CacheTenants`, so one call clears everything kept for a tenant. Tenantry.Caching,
-  `IsolateOutputCache()` and Tenantry.Options register one.
+- `ITenantInvalidator<TKey>`: `InvalidateAsync(tenantId, ct)` and `InvalidateAllAsync(ct)` remove the cached tenant
+  and run every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one call clears
+  everything kept for a tenant. Handlers are asynchronous and take a `CancellationToken`, so removing a tenant's
+  entries from a remote cache does not block a thread. Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options
+  register one. `ITenantStoreCache<TKey>.Invalidate` runs the same handlers and waits for them.
 
 - `options.UseTenantry(o => …)` sets a context's own isolation options, starting from the application's, so a
   context kept for maintenance code can allow writes without a tenant while every other context keeps `Reject`.
