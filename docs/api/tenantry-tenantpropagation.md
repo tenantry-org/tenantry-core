@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-How Tenantry carries a tenant from one process to another: Tenantry.Http's outgoing requests, Tenantry.AspNetCore's `ResolveFromPropagationHeader()` on the receiving side, and Tenantry.Pro's Hangfire, MassTransit, Quartz.NET and Rebus integrations.
+How Tenantry carries a tenant from one process to another: Tenantry.Http's outgoing requests, Tenantry.AspNetCore's `ResolveFromPropagationHeader(...)` on the receiving side, and Tenantry.Pro's Hangfire, MassTransit, Quartz.NET and Rebus integrations.
 
 ```csharp
 public static class TenantPropagation

@@ -32,6 +32,8 @@ It wraps the `HybridCache` registered before it, so call `AddHybridCache()` befo
 
 A `HybridCache` call with no current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), rather than writing an entry no tenant owns. The tenant's prefix makes keys longer: keep them within the cache's maximum key length (1,024 characters by default) with the id added.
 
+`AddHybridCache()` is in the Microsoft.Extensions.Caching.Hybrid package.
+
 ```csharp
 builder.Services.AddHybridCache();
 builder.Services.AddTenantry<Guid>(tenant => tenant

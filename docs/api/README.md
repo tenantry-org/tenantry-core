@@ -99,7 +99,7 @@ the pieces fit together; this reference is for the details of each type and memb
 | [`TenantInactiveException`](tenantry-tenantinactiveexception.md) | class | Thrown when work is to run for a tenant that an [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) refuses, such as a suspended tenant, for example by [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md). |
 | [`TenantNotFoundException`](tenantry-tenantnotfoundexception.md) | class | Thrown when a tenant is looked up by its id and the tenant store has no tenant with that id, for example by [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md). |
 | [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md) | class | Thrown when an operation needs a current tenant and none is current, or when the tenant it names does not exist ([`TenantNotFoundException`](tenantry-tenantnotfoundexception.md)). |
-| [`TenantPropagation`](tenantry-tenantpropagation.md) | class | How Tenantry carries a tenant from one process to another: Tenantry.Http's outgoing requests, Tenantry.AspNetCore's `ResolveFromPropagationHeader()` on the receiving side, and Tenantry.Pro's Hangfire, MassTransit, Quartz.NET and Rebus integrations. |
+| [`TenantPropagation`](tenantry-tenantpropagation.md) | class | How Tenantry carries a tenant from one process to another: Tenantry.Http's outgoing requests, Tenantry.AspNetCore's `ResolveFromPropagationHeader(...)` on the receiving side, and Tenantry.Pro's Hangfire, MassTransit, Quartz.NET and Rebus integrations. |
 | [`TenantStoreCacheOptions`](tenantry-tenantstorecacheoptions.md) | class | How Tenantry caches the tenants it reads from the tenant store. Set with `tenant.CacheTenants(o => …)`. |
 | [`TenantTelemetry`](tenantry-tenanttelemetry.md) | class | The names Tenantry records a tenant under in traces and logs: Tenantry.AspNetCore's `app.UseTenantry()` for a request, and Tenantry.Pro for jobs, messages and background work. |
 
@@ -150,3 +150,9 @@ the pieces fit together; this reference is for the details of each type and memb
 | Type | Kind | Summary |
 |------|------|---------|
 | [`TenantryOptionsTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryoptionstenantbuilderextensions.md) | class | Options with values per tenant. |
+
+### `Tenantry.Options`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`TenantOptionsBuilder<TKey>`](tenantry-options-tenantoptionsbuilder.md) | class | Sets options per tenant, in `tenant.ConfigurePerTenant(...)`: each `Configure` or `ConfigureAll` names an options type and what differs for each tenant. `IOptionsSnapshot<TOptions>` and `IOptionsMonitor<TOptions>` then give the current tenant's value, built from the ordinary configuration (every `Configure`), then these steps with the tenant. Without a tenant they give the ordinary value. `IOptions<TOptions>` always gives the ordinary value. |
