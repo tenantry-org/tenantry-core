@@ -31,7 +31,7 @@ jobs:
       actions: read   # the tagged commit's CI runs
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # all branches, so origin/master is available
 
@@ -80,18 +80,19 @@ jobs:
     permissions:
       id-token: write      # GitHub OIDC tokens, for NuGet.org's trusted publishing and the provenance attestation
       contents: write      # needed for creating the release
-      attestations: write  # the packages' build provenance
+      attestations: write        # the packages' build provenance
+      artifact-metadata: write   # the attestation's artifact storage record
 
     steps:
       # Before the packages: checkout empties the folder it checks out into.
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false   # only CHANGELOG.md and the script are needed
 
       # Publish the packages the ci job built, tested and checked (build-test.yml), not a rebuild.
       - name: Download the tested packages
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: nuget-packages
           path: ./artifacts
@@ -99,7 +100,7 @@ jobs:
       - name: Attest the packages' build provenance
         # Signed with this workflow's identity: `gh attestation verify <package> --repo tenantry-org/tenantry-core`
         # shows a package was built by this workflow from the tagged commit.
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
             ./artifacts/*.nupkg
@@ -124,7 +125,7 @@ jobs:
           done
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
 
@@ -160,10 +161,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download the tested packages
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: nuget-packages
           path: ./artifacts
