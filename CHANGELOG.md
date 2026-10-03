@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading from 0.5
+
+0.6 adds to the API more than it changes it. Most applications build and run as before; check these:
+
+- Code that resolved `EfCoreIsolationOptions` from DI reads `IOptions<EfCoreIsolationOptions>`. To let maintenance code
+  write without a tenant, give it a context of its own, registered with `options.UseTenantry(o => …)`, rather than
+  relaxing the application's options.
+- A class of your own that implements `ITenantContextSetter<TKey>` adds `UseNoTenant()`.
+- A tenant header or query parameter sent more than once names no tenant. A proxy that sets the tenant header must
+  replace the client's, not add another.
+- `UseInMemoryStore` reads its tenants when it is called, and refuses duplicate ids and the ids Tenantry reserves for
+  "no tenant" there.
+- With trimming or Native AOT, `UseTenantry()`, `AddDbContextPerTenantDatabase` and `IsSharedAcrossTenants()` warn
+  where you call them, as EF Core's own methods do.
+- A post-configuration of an options type you configure per tenant sees the tenant's values.
+- If an access validator refuses suspended tenants, `ValidateTenantActivity` also stops their background work.
+
 ### Added
 
 - `TenantIds`: `Format` writes a tenant id with the invariant culture, `TryParse` reads one back and refuses the ids
