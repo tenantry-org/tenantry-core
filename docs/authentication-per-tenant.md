@@ -11,7 +11,7 @@ dotnet add package Tenantry.Options
 
 ## Setup
 
-Register the scheme as usual, with the defaults, then set what differs per tenant with `ConfigurePerTenant`, naming
+Register the scheme as usual, with the defaults, then set what differs per tenant in `ConfigurePerTenant`, naming
 the scheme:
 
 ```csharp
@@ -24,11 +24,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
     .UseStore<EfCoreTenantStore>()
-    .ConfigurePerTenant<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, (o, t) =>
-        o.Authority = t.As<AppTenant>().Authority));
+    .ConfigurePerTenant(perTenant => perTenant
+        .Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, (o, t) => o.Authority = t.As<AppTenant>().Authority)));
 ```
 
-`ConfigureAllPerTenant<TOptions>` sets every scheme of a type at once. The tenant's settings apply after every
+`ConfigureAll<TOptions>` sets every scheme of a type at once. The tenant's settings apply after every
 `Configure` and before the handler's own post-configuration, which builds the scheme's metadata manager and data
 protector from them.
 
@@ -112,8 +112,8 @@ builder.Services.AddAuthentication("tenant")
 ```
 
 Give each scheme a callback path of its own. Each can still take settings per tenant, with
-`ConfigurePerTenant<OpenIdConnectOptions>("entra", …)`. The schemes themselves are registered at startup, so a tenant on
-a new provider needs a scheme added and a restart.
+`Configure<OpenIdConnectOptions>("entra", …)` in `ConfigurePerTenant`. The schemes themselves are registered at startup,
+so a tenant on a new provider needs a scheme added and a restart.
 
 ## See also
 

@@ -13,7 +13,7 @@ services.AddTenantry<string>(tenant => tenant
     .AddHttpPropagation()
     .IsolateCaches()
     .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Reject)
-    .ConfigurePerTenant<ConsumerOptions>((options, t) => options.Name = t.Name));
+    .ConfigurePerTenant(perTenant => perTenant.Configure<ConsumerOptions>((options, t) => options.Name = t.Name)));
 services.AddHttpClient("service", client => client.BaseAddress = new Uri("https://service.internal")).UseTenantry();
 _ = new DbContextOptionsBuilder().UseTenantry();
 

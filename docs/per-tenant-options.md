@@ -11,7 +11,8 @@ dotnet add package Tenantry.Options
 
 ## Configuring options per tenant
 
-Configure the defaults as usual, then `ConfigurePerTenant<TOptions>` in `AddTenantry` with what differs per tenant:
+Configure the defaults as usual, then, in `AddTenantry`, name each options type in `ConfigurePerTenant` with what
+differs per tenant:
 
 ```csharp
 using Tenantry;
@@ -20,11 +21,11 @@ builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limi
 
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .UseStore<EfCoreTenantStore>()
-    .ConfigurePerTenant<LimitsOptions>((options, t) =>
+    .ConfigurePerTenant(perTenant => perTenant.Configure<LimitsOptions>((options, t) =>
     {
         if (t.As<AppTenant>().Plan == "enterprise")
             options.MaxUsers = 500;
-    }));
+    })));
 
 public sealed class LimitsOptions
 {
@@ -46,13 +47,13 @@ app.MapGet("/limits", (IOptionsSnapshot<LimitsOptions> limits) => limits.Value.M
 - **A singleton holds the monitor.** `IOptionsSnapshot<T>` is scoped, so scope validation refuses a singleton that
   depends on it. A singleton holds `IOptionsMonitor<T>` and reads `CurrentValue` each time it needs the value.
 - **Only the types you name.** Every other options type behaves as before.
-- **After `Configure`, before `PostConfigure`.** The tenant's steps run after every `Configure`, in any order they were
-  added, and before every `PostConfigure`.
-- **The default name, or a name you give.** `ConfigurePerTenant<T>(configure)` applies to the default-named options,
-  `ConfigurePerTenant<T>(name, configure)` to one name (`Get("name")`), and `ConfigureAllPerTenant<T>(configure)` to
-  every name. For authentication schemes, see [Authentication per tenant](authentication-per-tenant.md).
-- `ConfigurePerTenant` has a type parameter of its own, so it returns the non-generic builder: call it after the
-  methods that need the tenant key type, such as `UseStore`.
+- **After `services.Configure`, before `PostConfigure`.** The tenant's steps run after every `services.Configure`, in
+  any order they were added, and before every `PostConfigure`.
+- **The default name, or a name you give.** `Configure<T>(configure)` applies to the default-named options,
+  `Configure<T>(name, configure)` to one name (`Get("name")`), and `ConfigureAll<T>(configure)` to every name. For
+  authentication schemes, see [Authentication per tenant](authentication-per-tenant.md).
+- **Several types in one call.** `Configure` returns the builder, so one `ConfigurePerTenant` can set several options
+  types, and `ConfigurePerTenant` returns the tenant builder, so the chain goes on after it.
 
 ### Why IOptions keeps the ordinary value
 
@@ -83,11 +84,11 @@ database:
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .UseStore<EfCoreTenantStore>()
-    .ConfigurePerTenant<LimitsOptions>((options, t, services) =>
+    .ConfigurePerTenant(perTenant => perTenant.Configure<LimitsOptions>((options, t, services) =>
     {
         var catalog = services.GetRequiredService<CatalogDbContext>();
         options.MaxUsers = catalog.Tenants.Where(x => x.Name == t.Name).Select(x => x.Plan).Single() == "enterprise" ? 500 : 20;
-    }));
+    })));
 ```
 
 The options pattern has no asynchronous configuration, so the step runs synchronously; it runs once per tenant, until

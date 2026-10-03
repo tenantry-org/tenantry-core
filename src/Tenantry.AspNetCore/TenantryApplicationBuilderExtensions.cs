@@ -36,8 +36,8 @@ public static class TenantryApplicationBuilderExtensions
 
     /// <summary>
     /// Resolves the request's tenant before authentication and makes it current, so authentication handlers read the
-    /// tenant's options (<c>ConfigurePerTenant&lt;JwtBearerOptions&gt;(scheme, …)</c> in Tenantry.Options). Call it before
-    /// <c>app.UseAuthentication()</c>, and <see cref="UseTenantry"/> after it: that runs the access validators, and the
+    /// tenant's options (<c>Configure&lt;JwtBearerOptions&gt;(scheme, …)</c> in Tenantry.Options' <c>ConfigurePerTenant</c>).
+    /// Call it before <c>app.UseAuthentication()</c>, and <see cref="UseTenantry"/> after it: that runs the access validators, and the
     /// claim resolvers if nothing else named a tenant, then rejects or continues as it does alone.
     /// </summary>
     /// <param name="app">The application's request pipeline.</param>

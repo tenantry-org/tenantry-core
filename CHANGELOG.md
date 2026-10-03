@@ -49,9 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `IsolateOutputCache()` (Tenantry.AspNetCore) makes cached responses vary by tenant, and invalidating a tenant
   evicts its responses. A response for a request `UseTenantry()` did not handle first is not cached (log event 1009,
   once).
-- `Tenantry.Options`, a new package: `ConfigurePerTenant<TOptions>()` makes `IOptionsSnapshot<T>` and
-  `IOptionsMonitor<T>` give the current tenant's value, built from the ordinary configuration and the tenant, cached
-  per tenant and cleared when the tenant is invalidated. `IOptions<T>` keeps the ordinary value, so a singleton that
+- `Tenantry.Options`, a new package: `tenant.ConfigurePerTenant(perTenant => perTenant.Configure<TOptions>(…))` makes
+  `IOptionsSnapshot<T>` and `IOptionsMonitor<T>` give the current tenant's value, built from the ordinary
+  configuration and the tenant, cached per tenant and cleared when the tenant is invalidated. `IOptions<T>` keeps the ordinary value, so a singleton that
   reads it once never keeps one tenant's settings. See [Options per tenant](docs/per-tenant-options.md).
 - `ITenantInvalidator<TKey>`: `InvalidateAsync(tenantId, ct)` and `InvalidateAllAsync(ct)` remove the cached tenant
   and run every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one call clears
@@ -93,8 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pack checks each package's API against the last release (`TenantryPackageBaseline`, 0.5.0), so a patch release
   cannot break code compiled against an earlier one in its minor, as Tenantry.Pro's version range assumes.
 
-- `ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)` (Tenantry.Options) configure named
-  options per tenant, such as an authentication scheme's, which its handler reads with `IOptionsMonitor<T>.Get(scheme)`.
+- `Configure<TOptions>(name, …)` and `ConfigureAll<TOptions>(…)` in `ConfigurePerTenant` (Tenantry.Options) configure
+  named options per tenant, such as an authentication scheme's, which its handler reads with
+  `IOptionsMonitor<T>.Get(scheme)`.
 
 - `app.UseTenantResolution()` (Tenantry.AspNetCore) resolves the tenant before `app.UseAuthentication()`, so
   authentication handlers read the tenant's options, and `app.UseTenantry()` after it runs the access validators. Only

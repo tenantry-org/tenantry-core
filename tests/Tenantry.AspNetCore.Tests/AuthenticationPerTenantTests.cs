@@ -266,9 +266,9 @@ public sealed class AuthenticationPerTenantTests
                 .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
                 .UseInMemoryStore([Acme, Globex])
                 .ValidateTenantAccessByClaim("tenant_id")
-                .ConfigurePerTenant<CookieAuthenticationOptions>(
+                .ConfigurePerTenant(perTenant => perTenant.Configure<CookieAuthenticationOptions>(
                     CookieAuthenticationDefaults.AuthenticationScheme,
-                    (o, t) => o.Cookie.Name = $"auth-{t.Name.ToLowerInvariant()}"),
+                    (o, t) => o.Cookie.Name = $"auth-{t.Name.ToLowerInvariant()}")),
             services => services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(),
             pipeline: a =>
             {
@@ -309,11 +309,11 @@ public sealed class AuthenticationPerTenantTests
         tenant
             .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
             .UseInMemoryStore([Acme, Globex])
-            .ConfigurePerTenant<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, (o, t) =>
+            .ConfigurePerTenant(perTenant => perTenant.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, (o, t) =>
             {
                 o.TokenValidationParameters.ValidIssuer = Issuer(t.Name.ToLowerInvariant());
                 o.TokenValidationParameters.IssuerSigningKey = Keys[t.Name.ToLowerInvariant()];
-            });
+            }));
 
     private static void AddJwt(IServiceCollection services)
     {

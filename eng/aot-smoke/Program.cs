@@ -14,7 +14,7 @@ services.AddTenantry<string>(tenant => tenant
     .UseInMemoryStore([acme])
     .AddHttpPropagation()
     .IsolateCaches()
-    .ConfigurePerTenant<PlanOptions>((options, tenant) => options.Name = $"{tenant.Name}'s plan"));
+    .ConfigurePerTenant(perTenant => perTenant.Configure<PlanOptions>((options, tenant) => options.Name = $"{tenant.Name}'s plan")));
 services.AddHttpClient("service", client => client.BaseAddress = new Uri("http://service.internal"))
     .UseTenantry()
     .ConfigurePrimaryHttpMessageHandler(() => new EchoTenant());

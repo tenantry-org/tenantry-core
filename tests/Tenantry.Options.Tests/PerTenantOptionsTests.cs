@@ -7,7 +7,7 @@ using Tenantry.Tests.Shared;
 namespace Tenantry.Options.Tests;
 
 /// <summary>
-/// <c>ConfigurePerTenant</c>: the options readers give the current tenant's value, built once per tenant from the
+/// <c>ConfigurePerTenant</c>: the snapshot and the monitor give the current tenant's value, built once per tenant from the
 /// ordinary configuration and the tenant, until the tenant is invalidated or the configuration changes.
 /// </summary>
 public sealed class PerTenantOptionsTests
@@ -116,8 +116,9 @@ public sealed class PerTenantOptionsTests
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant
             .UseInMemoryStore([Acme])
-            .ConfigurePerTenant<BrandingOptions>((o, t) => o.Colour = "red")
-            .ConfigurePerTenant<BrandingOptions>((o, t) => o.Colour += $"-{t.Name}"));
+            .ConfigurePerTenant(perTenant => perTenant
+                .Configure<BrandingOptions>((o, t) => o.Colour = "red")
+                .Configure<BrandingOptions>((o, t) => o.Colour += $"-{t.Name}")));
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
 
         using (Use(provider, Acme))
@@ -127,13 +128,27 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public void TheBuilder_KeepsTheKeyType_ForTheStepsAndTheMethodsAfterIt()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant
+            .UseInMemoryStore([Acme])
+            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) => o.Name = t.TenantId.ToUpperInvariant()))
+            .CacheTenants());
+        using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
+
+        using (Use(provider, Acme))
+            provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>().CurrentValue.Name.Should().Be("ACME");
+    }
+
+    [Fact]
     public void AStepWithServices_GetsAScopeOfItsOwn_WhichIsDisposedAfterIt()
     {
         ServiceCollection services = new();
         services.AddScoped<ColourSource>();
         services.AddTenantry<string>(tenant => tenant
             .UseInMemoryStore([Acme])
-            .ConfigurePerTenant<BrandingOptions>((o, t, sp) => o.Colour = sp.GetRequiredService<ColourSource>().For(t)));
+            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t, sp) => o.Colour = sp.GetRequiredService<ColourSource>().For(t))));
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
 
         using (Use(provider, Acme))
@@ -189,7 +204,7 @@ public sealed class PerTenantOptionsTests
         {
             services.Configure<BrandingOptions>("print", o => o.Name = "print");
             services.Configure<BrandingOptions>("web", o => o.Name = "web");
-            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant<BrandingOptions>("print", (o, t) => o.Colour = $"ink-{t.Name}"));
+            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>("print", (o, t) => o.Colour = $"ink-{t.Name}")));
         });
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
@@ -210,7 +225,7 @@ public sealed class PerTenantOptionsTests
     public void AStepForEveryName_AppliesToTheDefaultAndEveryNamedValue()
     {
         using var provider = Build(services => services.AddTenantry<string>(tenant =>
-            tenant.ConfigureAllPerTenant<BrandingOptions>((o, t, sp) => o.Name = $"all-{t.Name}")));
+            tenant.ConfigurePerTenant(perTenant => perTenant.ConfigureAll<BrandingOptions>((o, t, sp) => o.Name = $"all-{t.Name}"))));
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
         using (Use(provider, Acme))
@@ -227,7 +242,7 @@ public sealed class PerTenantOptionsTests
         using var provider = Build(services =>
         {
             services.PostConfigureAll<BrandingOptions>(o => o.Name = $"built-from-{o.Colour}");
-            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant<BrandingOptions>("print", (o, t) => o.Colour = "ink"));
+            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>("print", (o, t) => o.Colour = "ink")));
         });
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
@@ -258,13 +273,13 @@ public sealed class PerTenantOptionsTests
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant
             .UseInMemoryStore([Acme])
-            .ConfigurePerTenant<BrandingOptions>((o, t) =>
+            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) =>
             {
                 if (++calls == 1)
                     throw new TimeoutException("The database did not answer.");
 
                 o.Colour = "red";
-            }));
+            })));
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
@@ -288,7 +303,7 @@ public sealed class PerTenantOptionsTests
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant
             .UseStore(_ => store)
-            .ConfigurePerTenant<BrandingOptions>((o, t) => o.Name = t.Name));
+            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) => o.Name = t.Name)));
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
@@ -321,11 +336,11 @@ public sealed class PerTenantOptionsTests
         services.Configure<BrandingOptions>(o => o.Name = "default");
         services.AddTenantry<string>(tenant => tenant
             .UseInMemoryStore([Acme, Globex])
-            .ConfigurePerTenant<BrandingOptions>((o, t) =>
+            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) =>
             {
                 _built++;
                 o.Colour = t.Name == "Acme" ? "red" : "blue";
-            }));
+            })));
         configure?.Invoke(services);
         return services;
     }

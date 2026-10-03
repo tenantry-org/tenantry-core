@@ -20,8 +20,8 @@ not have.
 | `IsNotMultiTenant()` | Nothing: an entity without `ITenantEntity<TKey>` is shared |
 | `TenantMismatchMode` | No setting: a write to another tenant's row always throws |
 | `TenantNotSetMode` | No setting: a new entity is stamped, a changed one without the tenant throws |
-| `ConfigurePerTenant<TOptions, TTenantInfo>(…)`, its named and `ConfigureAllPerTenant` variants | `ConfigurePerTenant<TOptions>(…)`, `ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)` in `AddTenantry` (Tenantry.Options) |
-| `WithPerTenantAuthentication()` | `ConfigurePerTenant<TOptions>(scheme, …)` with `UseTenantResolution()` ([Authentication per tenant](authentication-per-tenant.md)) |
+| `ConfigurePerTenant<TOptions, TTenantInfo>(…)`, its named and `ConfigureAllPerTenant` variants | `ConfigurePerTenant(perTenant => perTenant.Configure<TOptions>(…))`, with `Configure<TOptions>(name, …)` and `ConfigureAll<TOptions>(…)`, in `AddTenantry` (Tenantry.Options) |
+| `WithPerTenantAuthentication()` | `Configure<TOptions>(scheme, …)` in `ConfigurePerTenant`, with `UseTenantResolution()` ([Authentication per tenant](authentication-per-tenant.md)) |
 | `MultiTenantIdentityDbContext` (Finbuckle.MultiTenant.Identity.EntityFrameworkCore) | `IdentityDbContext<TUser>` with a tenant-owned user type ([ASP.NET Core Identity](aspnetcore-identity.md)) |
 | `ShortCircuitWhenTenantNotResolved()` | `RequireTenantByDefault()` |
 | `ExcludeFromMultiTenantResolution()` | `AllowMissingTenant()` |
@@ -273,15 +273,14 @@ the migration makes `TenantId` nullable, your project does not use nullable refe
 ## 6. Move per-tenant options
 
 `services.ConfigurePerTenant<TOptions, TTenantInfo>((options, tenantInfo) => …)` becomes
-`tenant.ConfigurePerTenant<TOptions>((options, t) => …)` inside `AddTenantry`. Call it after the builder methods that
-need the key type, such as `UseStore`. Read your tenant type with `t.As<AppTenant>()`. Finbuckle's `Reset()` and
-`Clear(tenantId)` become `ITenantInvalidator<string>.InvalidateAsync(tenantId)`. The named variants become
-`ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)`. Code that reads the tenant's
-value through `IOptions<TOptions>` changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a
+`tenant.ConfigurePerTenant(perTenant => perTenant.Configure<TOptions>((options, t) => …))` inside `AddTenantry`. Read
+your tenant type with `t.As<AppTenant>()`. Finbuckle's `Reset()` and `Clear(tenantId)` become
+`ITenantInvalidator<string>.InvalidateAsync(tenantId)`. The named variants become `Configure<TOptions>(name, …)` and
+`ConfigureAll<TOptions>(…)` on the same builder. Code that reads the tenant's value through `IOptions<TOptions>` changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a
 singleton: in Tenantry, `IOptions<TOptions>` keeps the ordinary value. See [Options per tenant](per-tenant-options.md).
 
 `WithPerTenantAuthentication()` becomes `ConfigurePerTenant` on each scheme's options, such as
-`ConfigurePerTenant<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before
+`Configure<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before
 `app.UseAuthentication()`, so the tenant is known when the scheme authenticates. A tenant's own challenge scheme
 becomes a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)). Finbuckle also refused a cookie signed
 in under another tenant. To keep that check, add the tenant id as a claim when the user signs in, and validate it with
@@ -341,6 +340,6 @@ again. See [Authentication per tenant](authentication-per-tenant.md).
 7. Keys and indexes that Finbuckle adjusted are declared, and the new migration has no operations.
 8. Ignored query filters name `TenantryQueryFilters.Tenant`.
 9. Code that relied on `TenantMismatchMode` or `TenantNotSetMode` uses a maintenance context.
-10. Per-tenant options use `ConfigurePerTenant<TOptions>`, per-tenant authentication names its scheme, and per-tenant
+10. Per-tenant options use `ConfigurePerTenant`, per-tenant authentication names its scheme, and per-tenant
     sign-in is checked with a tenant claim.
 11. Tests that expected an exception without a tenant expect empty results.

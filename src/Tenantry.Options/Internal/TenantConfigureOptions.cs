@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.Options.Internal;
 
-/// <summary>A <c>ConfigurePerTenant</c> step, which the options factory applies while a tenant is current.</summary>
+/// <summary>A step of <c>ConfigurePerTenant</c>, which the options factory applies while a tenant is current.</summary>
 internal interface ITenantOptionsStep<TOptions>
     where TOptions : class
 {
@@ -11,14 +11,14 @@ internal interface ITenantOptionsStep<TOptions>
 }
 
 /// <summary>
-/// One <c>ConfigurePerTenant</c> or <c>ConfigureAllPerTenant</c> step: applied to the options of its name (or of every
+/// One <see cref="TenantOptionsBuilder{TKey}"/> <c>Configure</c> or <c>ConfigureAll</c> step: applied to the options of its name (or of every
 /// name), while a tenant is current, with the tenant (and, for a step that asks, the services of a scope of its own).
 /// </summary>
 internal sealed class TenantConfigureOptions<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions, TKey>(
     ITenantContext<TKey> tenantContext,
     IServiceScopeFactory scopes,
     string? optionsName,
-    Action<TOptions, ITenantDescriptor, IServiceProvider?> configure,
+    Action<TOptions, ITenantDescriptor<TKey>, IServiceProvider?> configure,
     bool withServices)
     : ITenantOptionsStep<TOptions>
     where TOptions : class
