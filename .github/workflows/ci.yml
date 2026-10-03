@@ -12,15 +12,22 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true   # superseded PR pushes can be cancelled
+  # A newer push to a pull request cancels its older run; every commit on master finishes, so each can be released.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
     uses: ./.github/workflows/build-test.yml
-    secrets: inherit
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
-      # SonarCloud analyses pushes to master and pull requests; a manual run on a branch is neither.
-      run_sonar: ${{ github.event_name != 'workflow_dispatch' }}
+      # SonarCloud analyses pushes to master and pull requests from this repository. A fork's or Dependabot's pull
+      # request gets no secrets, so it skips Sonar and still builds and tests; a manual run on a branch is neither.
+      run_sonar: >-
+        ${{ github.event_name == 'push' ||
+            (github.event_name == 'pull_request' &&
+             github.event.pull_request.head.repo.full_name == github.repository &&
+             github.actor != 'dependabot[bot]') }}
 
   # Windows, where paths use backslashes: restore and build only (the tests need Docker with Linux containers).
   windows-build:

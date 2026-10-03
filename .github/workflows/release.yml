@@ -26,6 +26,9 @@ jobs:
   on-master:
     name: Tag is on master
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read   # the tagged commit's CI runs
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -39,6 +42,20 @@ jobs:
             exit 1
           fi
 
+      - name: Require CI, SonarCloud included, to have passed on the tagged commit
+        # The rerun below skips SonarCloud, so this is where its quality gate is required: CI on master runs it in the
+        # Build & Test job, which fails when the gate does.
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --event push \
+            --status success --json databaseId --jq 'length')"
+          if [ "$passed" = "0" ]; then
+            echo "::error::CI has not passed on $GITHUB_SHA, a push to master. Wait for it, or rerun it, before tagging."
+            exit 1
+          fi
+
       - name: Require the release's notes in CHANGELOG.md
         # Its "## [x.y.z]" section is the GitHub release's notes (scripts/release-notes.sh)
         if: github.event_name == 'push'
@@ -46,12 +63,11 @@ jobs:
 
   # Re-run build + tests + coverage gate + AOT publish against the tagged commit before
   # publishing. SonarCloud is skipped: it cannot analyze a tag ref (auto-detection fails with
-  # "Not authorized or project not found"), and the tagged commit already passed the Sonar
-  # quality gate on master before it was tagged.
+  # "Not authorized or project not found"), and on-master checked that the tagged commit passed
+  # CI, the Sonar quality gate included, on master.
   ci:
     needs: on-master
     uses: ./.github/workflows/build-test.yml
-    secrets: inherit
     with:
       run_sonar: false
 
@@ -62,8 +78,9 @@ jobs:
     if: github.event_name == 'push'
     environment: release   # manual-approval gate + OIDC scoped to this environment (see repo settings)
     permissions:
-      id-token: write  # enable GitHub OIDC token issuance for this job
-      contents: write  # needed for creating the release
+      id-token: write      # GitHub OIDC tokens, for NuGet.org's trusted publishing and the provenance attestation
+      contents: write      # needed for creating the release
+      attestations: write  # the packages' build provenance
 
     steps:
       # Before the packages: checkout empties the folder it checks out into.
@@ -78,6 +95,18 @@ jobs:
         with:
           name: nuget-packages
           path: ./artifacts
+
+      - name: Attest the packages' build provenance
+        # Signed with this workflow's identity: `gh attestation verify <package> --repo tenantry-org/tenantry-core`
+        # shows a package was built by this workflow from the tagged commit.
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ./artifacts/*.nupkg
+            ./artifacts/*.snupkg
+
+      - name: Write the packages' checksums
+        run: cd artifacts && sha256sum *.nupkg *.snupkg > SHA256SUMS
 
       - name: Write the release notes
         # The tag's section of CHANGELOG.md, before anything is published
@@ -112,10 +141,16 @@ jobs:
         run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create GitHub Release
-        # Release notes only: the packages and their symbols are on NuGet.org, so nothing is attached.
+        # The packages are on NuGet.org; the release carries their checksums and SBOMs. A version with a
+        # prerelease suffix (v0.6.0-rc.1) is a prerelease and never the latest release.
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           body_path: ${{ runner.temp }}/release-notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
+          files: |
+            ./artifacts/SHA256SUMS
+            ./artifacts/sbom/*.cdx.json
 
   dry-run:
     name: Dry run (nothing is published)
@@ -139,8 +174,10 @@ jobs:
             version="$(unzip -p "$package" '*.nuspec' | sed -n 's:.*<version>\(.*\)</version>.*:\1:p' | head -n 1)"
             echo "$(basename "$package")  (version $version)"
           done
-          echo "A release would push each .nupkg to NuGet.org, with its .snupkg to the NuGet.org symbol"
-          echo "server, and create a GitHub release with its CHANGELOG.md section as notes and no attached files."
+          ls ./artifacts/sbom
+          echo "A release would attest each package's provenance, push each .nupkg to NuGet.org, with its .snupkg"
+          echo "to the NuGet.org symbol server, and create a GitHub release with its CHANGELOG.md section as notes and"
+          echo "the packages' checksums and SBOMs attached."
 
       - name: Show the release notes
         if: inputs.version != ''

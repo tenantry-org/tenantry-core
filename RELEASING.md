@@ -8,7 +8,7 @@ rest. Only the maintainer can push `v*` tags.
 1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD` and start a new, empty
    `## [Unreleased]` above it. That section is the GitHub release's notes, and a tag without one fails before
    anything is published. A minor release's section starts with the steps to update from the previous minor.
-2. Push to `master` and wait for CI, SonarCloud included, to pass.
+2. Push to `master` and wait for CI, SonarCloud included, to pass. The release fails if it has not.
 3. Rehearse (optional): Actions → Release → Run workflow on `master`, with the tag as the version. It runs the
    release's checks, builds the same packages, and shows what a release would publish and its notes.
 

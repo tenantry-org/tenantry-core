@@ -10,6 +10,10 @@ on:
           not found". The tagged commit already passed the Sonar gate on master before tagging.
         type: boolean
         default: true
+    secrets:
+      SONAR_TOKEN:
+        description: SonarCloud's token, needed only when run_sonar is true.
+        required: false
 
 permissions:
   contents: read   # least privilege; this workflow only reads the repo
@@ -38,16 +42,16 @@ jobs:
         run: dotnet --version
 
       - name: Setup Java (required by the Sonar scanner)
+        if: ${{ inputs.run_sonar }}
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Install tooling
-        run: |
-          dotnet tool install --global dotnet-sonarscanner
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - name: Restore tools
+        # The versions dotnet-tools.json pins (the Sonar scanner, ReportGenerator, CycloneDX, docfx, dotnet-coverage),
+        # so a new release of a tool never changes a build, a release build included
+        run: dotnet tool restore
 
       - name: Check the Dependabot configuration
         # Its list of banded packages (version ranges, per-framework versions) must match the project files
@@ -105,7 +109,7 @@ jobs:
 
       - name: Coverage gate (>= 90% line coverage)
         run: |
-          reportgenerator \
+          dotnet reportgenerator \
             -reports:coverage/coverage.xml \
             -targetdir:coverage/report \
             -reporttypes:JsonSummary
@@ -121,6 +125,18 @@ jobs:
         run: |
           for project in src/*/*.csproj; do
             dotnet pack "$project" -c Release --no-build -o ./artifacts
+          done
+
+      - name: Software bills of materials
+        # A CycloneDX SBOM per package, which the release attaches to the GitHub release with the packages' checksums
+        run: |
+          mkdir -p ./artifacts/sbom
+          for project in src/*/*.csproj; do
+            name="$(basename "$project" .csproj)"
+            package="$(ls ./artifacts/"$name".[0-9]*.nupkg)"
+            version="$(unzip -p "$package" '*.nuspec' | sed -n 's:.*<version>\(.*\)</version>.*:\1:p' | head -n 1)"
+            dotnet CycloneDX "$project" -o ./artifacts/sbom -fn "$name.cdx.json" -F Json -ed \
+              -st Library -sn "$name" -sv "$version" --set-nuget-purl
           done
 
       - name: Check package dependency ranges
@@ -150,6 +166,7 @@ jobs:
           path: |
             ./artifacts/*.nupkg
             ./artifacts/*.snupkg
+            ./artifacts/sbom/*.cdx.json
           if-no-files-found: error
           retention-days: 7
 
