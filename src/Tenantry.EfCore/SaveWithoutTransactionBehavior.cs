@@ -12,7 +12,8 @@ public enum SaveWithoutTransactionBehavior
     /// <summary>
     /// Run that save in a transaction EF Core begins and commits itself, as it does by default
     /// (<c>AutoTransactionBehavior.WhenNeeded</c>), and set <c>Never</c> back when the save ends. Other saves stay
-    /// without one. The default.
+    /// without one. A transaction begun on the connection through ADO.NET must be handed to EF Core with
+    /// <c>Database.UseTransaction</c>, or EF Core cannot begin its own and the save fails. The default.
     /// </summary>
     UseTransaction,
 

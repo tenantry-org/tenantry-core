@@ -108,29 +108,17 @@ public static class TenantryTenantBuilderExtensions
     }
 
     /// <summary>
-    /// Caches the tenants Tenantry reads from the tenant store, so a request does not ask the store for its tenant
-    /// each time. <see cref="ITenantStoreCache{TKey}"/> then removes a tenant that changes (<c>AddTenantry</c> always
-    /// registers it, so code that invalidates runs with caching off too).
+    /// Caches the tenants that Tenantry's own lookups (<c>app.UseTenantry()</c> and <see cref="ITenantLookup{TKey}"/>)
+    /// find in the store, for <see cref="TenantStoreCacheOptions.Duration"/> (5 minutes by default).
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="configure">Sets how long a tenant is cached, or <see langword="null"/> for the default (5 minutes).</param>
+    /// <param name="configure">Sets how long a tenant is cached, or <see langword="null"/> for the default.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// <para>
-    /// The cache serves Tenantry's own lookups: <c>app.UseTenantry()</c>'s, and <see cref="ITenantLookup{TKey}"/>'s,
-    /// which <see cref="ITenantScopeFactory{TKey}.RunInScopeAsync(TKey, Func{ITenantScope{TKey}, CancellationToken, Task}, CancellationToken)"/>
-    /// and background work use. It keeps each tenant the store finds, by the id or identifier it was looked up with,
-    /// in memory for <see cref="TenantStoreCacheOptions.Duration"/>. A lookup that finds no tenant is not cached, so a
-    /// tenant added to the store is found at once; <see cref="ITenantStore{TKey}.GetAllTenantsAsync"/> is never
-    /// cached. Code that injects <see cref="ITenantStore{TKey}"/> reads the store itself.
-    /// </para>
-    /// <para>
-    /// A tenant that changes (is suspended, say, which an access validator reads) is served as it was until its entry
-    /// expires: call <see cref="ITenantStoreCache{TKey}.Invalidate"/> when you change it. Each instance of the
-    /// application has its own cache. Calling it again configures the same options. It reads the time from a
-    /// registered <see cref="TimeProvider"/>, if there is one.
-    /// </para>
+    /// Lookups that find nothing, and <see cref="ITenantStore{TKey}.GetAllTenantsAsync"/>, are not cached. Call
+    /// <see cref="ITenantStoreCache{TKey}.Invalidate"/> when a tenant changes. It uses a registered
+    /// <see cref="TimeProvider"/> if there is one.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"><see cref="TenantStoreCacheOptions.Duration"/> is not positive.</exception>
     /// <example>
