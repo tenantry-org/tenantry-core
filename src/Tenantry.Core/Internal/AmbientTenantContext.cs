@@ -21,10 +21,10 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
     public ITenantDescriptor<TKey>? CurrentTenant => CurrentFrame.Value?.Tenant;
 
     /// <inheritdoc />
-    public bool HasTenant => CurrentFrame.Value is not null;
+    public bool HasTenant => CurrentFrame.Value?.Tenant is not null;
 
     /// <inheritdoc />
-    public TKey? CurrentTenantId => CurrentFrame.Value is { } frame ? frame.Tenant.TenantId : default;
+    public TKey? CurrentTenantId => CurrentFrame.Value?.Tenant is { } tenant ? tenant.TenantId : default;
 
     /// <inheritdoc />
     /// <remarks>
@@ -46,11 +46,21 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
         return frame;
     }
 
-    private sealed class Frame(ITenantDescriptor<TKey> tenant, Frame? parent) : IDisposable
+    /// <inheritdoc />
+    /// <remarks>A scope like any other, with no tenant: it nests, and closes in any order, as <see cref="Use"/>'s do.</remarks>
+    public IDisposable UseNoTenant()
+    {
+        Frame frame = new(null, CurrentFrame.Value);
+        CurrentFrame.Value = frame;
+        return frame;
+    }
+
+    // A frame with no tenant is one UseNoTenant opened.
+    private sealed class Frame(ITenantDescriptor<TKey>? tenant, Frame? parent) : IDisposable
     {
         private int _disposed;
 
-        public ITenantDescriptor<TKey> Tenant { get; } = tenant;
+        public ITenantDescriptor<TKey>? Tenant { get; } = tenant;
 
         private Frame? Parent { get; } = parent;
 

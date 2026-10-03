@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ITenantContextSetter<TKey>.UseNoTenant()` makes no tenant current until it is disposed, as `Use(tenant)` makes one
+  current. A class of your own that implements `ITenantContextSetter<TKey>` must add it.
 - `UseTenantry()`, `AddDbContextPerTenantDatabase` and `IsSharedAcrossTenants()` carry `[RequiresUnreferencedCode]`
   and `[RequiresDynamicCode]`, as EF Core's `DbContext` does, so the analyzers warn where an app calls them. Before,
   Tenantry.EfCore relied on EF Core's own annotations. See [AOT & trimming](docs/aot-and-trimming.md).
