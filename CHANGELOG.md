@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Tenantry.Pro's `AddTenantMetrics()`, whose package, Tenantry.Pro.AspNetCore, existed only for it. See
   [Diagnostics](docs/diagnostics.md#request-metrics-per-tenant).
 
+### Fixed
+
+- `IsolateCaches()` throws for a `HybridCache` registered as scoped or transient. It accepted one before, and
+  invalidating a tenant then failed, because invalidation clears the cache outside any scope.
+
 ## [0.6.0] - 2026-10-03
 
 ### Upgrading from 0.5

@@ -28,6 +28,10 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
+Exceptions:
+
+- `InvalidOperationException`: A `HybridCache`, keyed or not, is registered as scoped or transient.
+
 It wraps the `HybridCache` registered before it, so call `AddHybridCache()` before `AddTenantry`. When the host starts, it checks that `HybridCache` resolves to the cache it keys by tenant, and throws `InvalidOperationException` otherwise: for a `HybridCache`, keyed or not, registered after it (which would replace it), for one registered for any key, and for `AddHybridCache()` called after it. With no `HybridCache` registered at all, the one it registers throws when used, naming the fix.
 
 A keyed `HybridCache` registered before it is kept per tenant the same way, and the same key gives a [`SharedHybridCache`](tenantry-caching-sharedhybridcache.md) for that cache's shared entries.

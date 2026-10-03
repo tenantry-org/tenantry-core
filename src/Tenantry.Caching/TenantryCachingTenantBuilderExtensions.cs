@@ -43,6 +43,7 @@ public static class TenantryCachingTenantBuilderExtensions
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <exception cref="InvalidOperationException">A <see cref="HybridCache"/>, keyed or not, is registered as scoped or transient.</exception>
     /// <example>
     /// <c>AddHybridCache()</c> is in the Microsoft.Extensions.Caching.Hybrid package.
     /// <code>
@@ -78,6 +79,8 @@ public static class TenantryCachingTenantBuilderExtensions
             return builder;
         }
 
+        ThrowIfNotSingleton(registered);
+
         // The registered cache becomes the shared one, which the tenants' cache writes through.
         services.Remove(registered);
         services.Add(ServiceDescriptor.Describe(typeof(SharedHybridCache), sp => Create(sp, registered), registered.Lifetime));
@@ -105,6 +108,8 @@ public static class TenantryCachingTenantBuilderExtensions
 
         foreach (var registered in keyed)
         {
+            ThrowIfNotSingleton(registered);
+
             foreach (var earlier in services.Where(d => d.ServiceType == typeof(HybridCache) && d.IsKeyedService && Equals(d.ServiceKey, registered.ServiceKey)).ToList())
                 services.Remove(earlier);
 
@@ -117,6 +122,20 @@ public static class TenantryCachingTenantBuilderExtensions
                     sp.GetRequiredKeyedService<SharedHybridCache>(key).Inner, sp.GetRequiredService<ICurrentTenant>()),
                 registered.Lifetime));
         }
+    }
+
+    // Invalidating a tenant clears its entries from outside any scope, so the cache has to be the application's one.
+    private static void ThrowIfNotSingleton(ServiceDescriptor registered)
+    {
+        if (registered.Lifetime == ServiceLifetime.Singleton)
+            return;
+
+        var which = registered.IsKeyedService ? $"The HybridCache with the key '{registered.ServiceKey}'" : "The HybridCache";
+
+        throw new InvalidOperationException(
+            $"{which} is registered as {registered.Lifetime.ToString().ToLowerInvariant()}, and IsolateCaches() needs a " +
+            "singleton: invalidating a tenant clears its entries from the application's cache, outside any scope. " +
+            "Register it as a singleton, as AddHybridCache() does.");
     }
 
     private static SharedHybridCache Create(IServiceProvider services, ServiceDescriptor registered)

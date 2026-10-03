@@ -50,6 +50,8 @@ public sealed class RecentOrders(HybridCache cache, AppDbContext db)
   `InvalidOperationException` if not: for a `HybridCache`, keyed or not, registered after `AddTenantry`, which would
   replace it, and for `AddHybridCache()` called after `AddTenantry`. A service provider built without a host skips this
   check.
+- **A singleton cache.** `AddHybridCache()` registers a singleton. `IsolateCaches()` throws for a `HybridCache`, keyed
+  or not, registered as scoped or transient, because invalidating a tenant clears the cache outside any scope.
 - **Keyed caches too.** A keyed `HybridCache` registered before `AddTenantry` is kept per tenant the same way:
   `[FromKeyedServices("reports")] HybridCache` holds the current tenant's entries, and
   `[FromKeyedServices("reports")] SharedHybridCache` holds entries every tenant shares in that cache. Invalidating a tenant
