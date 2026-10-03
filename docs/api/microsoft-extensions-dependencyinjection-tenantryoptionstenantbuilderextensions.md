@@ -76,7 +76,7 @@ tenant.ConfigurePerTenant<BrandingOptions>((options, t, services) =>
 
 ### `ConfigurePerTenant<TOptions>(ITenantBuilder, Action<TOptions, ITenantDescriptor>)`
 
-Configures `TOptions` per tenant: `IOptions<TOptions>`, `IOptionsSnapshot<TOptions>` and `IOptionsMonitor<TOptions>` give the current tenant's value, built from the ordinary configuration (every `Configure`), then `configure` with the tenant. Without a tenant they give the ordinary value.
+Configures `TOptions` per tenant: `IOptionsSnapshot<TOptions>` and `IOptionsMonitor<TOptions>` give the current tenant's value, built from the ordinary configuration (every `Configure`), then `configure` with the tenant. Without a tenant they give the ordinary value. `IOptions<TOptions>` always gives the ordinary value.
 
 ```csharp
 public static ITenantBuilder ConfigurePerTenant<TOptions>(this ITenantBuilder builder, Action<TOptions, ITenantDescriptor> configure) where TOptions : class
@@ -92,6 +92,8 @@ Parameters:
 - `configure` `Action<TOptions, ITenantDescriptor>`: Sets the tenant's values, with the tenant (read your tenant type with `As<T>()`).
 
 Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder` for chaining.
+
+`IOptions<TOptions>` is not per tenant because its value is read once and kept: a singleton that reads `options.Value` in its constructor would keep the first tenant's settings and use them for every tenant. Read `IOptionsSnapshot<TOptions>`, which is scoped, in request code, and hold `IOptionsMonitor<TOptions>` in a singleton and read `CurrentValue` each time. Reading `CurrentValue` once in a constructor keeps one tenant's value, as reading `Value` would.
 
 Each tenant's value is built on first use and cached; [`ITenantStoreCache<TKey>.Invalidate`](tenantry-itenantstorecache.md) clears it, so changing a tenant's settings is followed by invalidating the tenant. A change to the configuration the options are bound to clears every tenant's value. Validation (`Validate`, `IValidateOptions`) runs on each tenant's value when it is built, and `ValidateOnStart` validates the ordinary one.
 
