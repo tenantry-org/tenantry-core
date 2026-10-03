@@ -152,6 +152,19 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         return resolution;
     }
 
+    // Another service sent a tenant id, which the store may not accept as an identifier (it may map slugs only).
+    private ValueTask<ITenantDescriptor<TKey>?> LookUpAsync(string identifier, bool isTenantId, CancellationToken cancellationToken)
+    {
+        if (!isTenantId)
+        {
+            return _tenants.FindByIdentifierAsync(identifier, cancellationToken);
+        }
+
+        return TenantIds.TryParse<TKey>(identifier, out var tenantId)
+            ? _tenants.GetTenantAsync(tenantId, cancellationToken)
+            : ValueTask.FromResult<ITenantDescriptor<TKey>?>(null);
+    }
+
     private async ValueTask<Resolution> FindTenantAsync(HttpContext context)
     {
         var cancellationToken = context.RequestAborted;
@@ -184,12 +197,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             return new Resolution(ResolutionResult.Missing, null, null, claimResolvers);
         }
 
-        // Another service sent a tenant id, which the store may not accept as an identifier (it may map slugs only).
-        var tenant = !isTenantId
-            ? await _tenants.FindByIdentifierAsync(identifier, cancellationToken)
-            : TenantIds.TryParse<TKey>(identifier, out var tenantId)
-                ? await _tenants.GetTenantAsync(tenantId, cancellationToken)
-                : null;
+        var tenant = await LookUpAsync(identifier, isTenantId, cancellationToken);
 
         if (tenant is null)
         {

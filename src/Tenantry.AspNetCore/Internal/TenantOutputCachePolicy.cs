@@ -13,6 +13,12 @@ internal sealed class TenantResolutionFeature
     public static readonly TenantResolutionFeature Instance = new();
 }
 
+/// <summary>Marks a request the output cache saw before <c>app.UseTenantry()</c> handled it.</summary>
+internal sealed class UnresolvedRequest
+{
+    public static readonly UnresolvedRequest Instance = new();
+}
+
 /// <summary>
 /// The base policy <c>IsolateOutputCache()</c> adds: every cached response varies by the request's tenant, or by its
 /// having none, and a tenant's responses are tagged with it, so invalidating the tenant evicts them. A response for a
@@ -72,12 +78,6 @@ internal sealed class TenantOutputCachePolicy<TKey>(ITenantContext<TKey> tenantC
         }
 
         return ValueTask.CompletedTask;
-    }
-
-    // A request the output cache saw before app.UseTenantry() handled it.
-    private sealed class UnresolvedRequest
-    {
-        public static readonly UnresolvedRequest Instance = new();
     }
 }
 

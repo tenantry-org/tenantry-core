@@ -34,7 +34,7 @@ builder.Services.AddTenantry<string>(tenant => tenant
 
 // A client for another service: its requests carry the current tenant, which that service reads with
 // ResolveFromPropagationHeader(). This sample calls itself, at the address it listens on.
-builder.Services.AddHttpClient("self", client => client.BaseAddress = new Uri(builder.Configuration["SelfUrl"] ?? "http://localhost:5268"))
+builder.Services.AddHttpClient("self", client => client.BaseAddress = new Uri(builder.Configuration["SelfUrl"]!))
     .UseTenantry();
 
 var app = builder.Build();

@@ -84,8 +84,8 @@ internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant curren
     {
         List<string> tenantTags = [prefix[..^1], TenantCacheKeys.AllTenantsTag];
 
-        if (tags is not null)
-            tenantTags.AddRange(tags.Select(tag => prefix + (tag ?? throw new ArgumentException("A tag is null.", nameof(tags)))));
+        foreach (var tag in tags ?? [])
+            tenantTags.Add(prefix + (tag ?? throw new ArgumentException("A tag is null.", nameof(tags))));
 
         return tenantTags;
     }
