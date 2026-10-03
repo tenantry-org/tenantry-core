@@ -71,7 +71,9 @@ public static class TenantryServiceCollectionExtensions
         services.TryAddSingleton<ITenantContextSetter<TKey>>(sp => sp.GetRequiredService<AmbientTenantContext<TKey>>());
         services.TryAddSingleton<ITenantLookup<TKey>, TenantLookup<TKey>>();
         services.TryAddSingleton<ITenantScopeFactory<TKey>, TenantScopeFactory<TKey>>();
-        services.TryAddSingleton<ITenantStoreCache<TKey>>(NoTenantStoreCache<TKey>.Instance);
+        services.TryAddSingleton(sp => new TenantInvalidationHandlers<TKey>(sp));
+        services.TryAddSingleton<ITenantStoreCache<TKey>>(sp =>
+            new NoTenantStoreCache<TKey>(sp.GetRequiredService<TenantInvalidationHandlers<TKey>>()));
 
         configure?.Invoke(new TenantBuilder<TKey>(services));
 

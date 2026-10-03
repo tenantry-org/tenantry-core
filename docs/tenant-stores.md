@@ -180,3 +180,27 @@ app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, IT
 nothing to remove. Each instance of the application has its own cache, so `Invalidate` clears this instance's copy;
 other instances serve theirs until it expires. Keep the duration as short as that staleness allows. The cache reads the time from
 a registered `TimeProvider`, so tests can control expiry.
+
+### Everything kept for a tenant
+
+`Invalidate` also runs every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one
+call clears everything kept for a tenant: Tenantry.Caching's cache entries and Tenantry.Options' options register a
+handler, and so can your own code that keeps data per tenant:
+
+```csharp
+using System.Collections.Concurrent;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<Guid>, PriceListCache>());
+
+public sealed class PriceListCache : ITenantInvalidationHandler<Guid>
+{
+    private readonly ConcurrentDictionary<Guid, decimal[]> _prices = new();
+
+    public void Invalidate(Guid tenantId) => _prices.TryRemove(tenantId, out _);
+
+    public void InvalidateAll() => _prices.Clear();
+}
+```
+
+Each handler runs even when another throws; the exception is thrown once they have all run.

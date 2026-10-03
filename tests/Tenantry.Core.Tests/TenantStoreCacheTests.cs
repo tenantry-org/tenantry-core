@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Tenantry.Internal;
 
 namespace Tenantry.Core.Tests;
@@ -200,7 +201,10 @@ public sealed class TenantStoreCacheTests
     [Fact]
     public void AFullCache_StopsGrowing_UntilItsEntriesExpire()
     {
-        TenantStoreCache<string> cache = new(new TenantStoreCacheOptions { Duration = TimeSpan.FromMinutes(1) }, _time);
+        TenantStoreCache<string> cache = new(
+            new TenantStoreCacheOptions { Duration = TimeSpan.FromMinutes(1) },
+            _time,
+            new TenantInvalidationHandlers<string>(new ServiceCollection().BuildServiceProvider()));
 
         for (var i = 0; i < TenantStoreCache<string>.MaxEntries; i++)
         {
@@ -221,6 +225,68 @@ public sealed class TenantStoreCacheTests
         cache.TryGetByIdentifier("acme-0", out _).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Invalidating_RunsEveryHandler_WithOrWithoutCachedTenants(bool cacheTenants)
+    {
+        ServiceCollection services = new();
+        Recorder first = new(), second = new();
+        services.AddSingleton<ITenantInvalidationHandler<string>>(first);
+        services.AddSingleton<ITenantInvalidationHandler<string>>(second);
+        services.AddTenantry<string>(tenant =>
+        {
+            tenant.UseStore(_ => _store);
+            if (cacheTenants)
+                tenant.CacheTenants();
+        });
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
+
+        cache.Invalidate("acme");
+        cache.InvalidateAll();
+
+        first.Calls.Should().Equal("acme", "*");
+        second.Calls.Should().Equal("acme", "*");
+    }
+
+    [Fact]
+    public async Task EveryHandlerRuns_WhenOneThrows_AndTheErrorsAreThrownAfterwards()
+    {
+        ServiceCollection services = new();
+        Recorder last = new();
+        services.AddSingleton<ITenantInvalidationHandler<string>>(new Throwing("first"));
+        services.AddSingleton<ITenantInvalidationHandler<string>>(last);
+        services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store).CacheTenants());
+        await using var provider = services.BuildServiceProvider();
+        var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
+
+        cache.Invoking(c => c.Invalidate("acme")).Should().Throw<InvalidOperationException>().WithMessage("first");
+        last.Calls.Should().Equal("acme");
+        await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
+        _store.Reads.Should().HaveCount(2, "the tenant was removed before the handlers ran");
+
+        services.AddSingleton<ITenantInvalidationHandler<string>>(new Throwing("second"));
+        await using var twoThrow = services.BuildServiceProvider();
+        twoThrow.GetRequiredService<ITenantStoreCache<string>>().Invoking(c => c.InvalidateAll())
+            .Should().Throw<AggregateException>().Which.InnerExceptions.Select(e => e.Message).Should().Equal("first", "second");
+    }
+
+    [Fact]
+    public async Task AHandler_CanDependOnTheCacheItself()
+    {
+        ServiceCollection services = new();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<string>, NeedsTheCache>());
+        services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store).CacheTenants());
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+
+        provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+
+        provider.GetServices<ITenantInvalidationHandler<string>>().OfType<NeedsTheCache>().Single().Calls.Should().Be(1);
+    }
+
     private ServiceProvider Build(Action<TenantStoreCacheOptions>? configure = null)
     {
         ServiceCollection services = new();
@@ -233,6 +299,31 @@ public sealed class TenantStoreCacheTests
             })
             .CacheTenants(configure));
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+    }
+
+    private sealed class Recorder : ITenantInvalidationHandler<string>
+    {
+        public List<string> Calls { get; } = [];
+
+        public void Invalidate(string tenantId) => Calls.Add(tenantId);
+
+        public void InvalidateAll() => Calls.Add("*");
+    }
+
+    private sealed class Throwing(string message) : ITenantInvalidationHandler<string>
+    {
+        public void Invalidate(string tenantId) => throw new InvalidOperationException(message);
+
+        public void InvalidateAll() => throw new InvalidOperationException(message);
+    }
+
+    private sealed class NeedsTheCache(ITenantStoreCache<string> cache) : ITenantInvalidationHandler<string>
+    {
+        public int Calls { get; private set; }
+
+        public void Invalidate(string tenantId) => Calls += cache is not null ? 1 : 0;
+
+        public void InvalidateAll() => Calls++;
     }
 
     private sealed class ManualTime : TimeProvider

@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is refused. See [Calling other services](docs/http-propagation.md).
 - `ResolveFromPropagationHeader()` (Tenantry.AspNetCore) resolves the tenant another service sent, by id with the
   store's `GetTenantAsync`, so a store whose identifiers are slugs still finds it.
+- `ITenantInvalidationHandler<TKey>`: `ITenantStoreCache<TKey>.Invalidate` and `InvalidateAll` run every registered
+  handler, with or without `CacheTenants`, so one call clears everything kept for a tenant. Tenantry.Caching and
+  Tenantry.Options register one.
 
 ## [0.5.0] - 2026-10-03
 

@@ -19,12 +19,14 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
     private readonly Map<string> _byIdentifier = new(StringComparer.Ordinal);
     private readonly TenantStoreCacheOptions _options;
     private readonly TimeProvider _time;
+    private readonly TenantInvalidationHandlers<TKey> _handlers;
     private long _generation;
 
-    public TenantStoreCache(TenantStoreCacheOptions options, TimeProvider time)
+    public TenantStoreCache(TenantStoreCacheOptions options, TimeProvider time, TenantInvalidationHandlers<TKey> handlers)
     {
         _options = options;
         _time = time;
+        _handlers = handlers;
     }
 
     /// <summary>Changes whenever entries are invalidated; read it before a store lookup and pass it to Set.</summary>
@@ -47,6 +49,7 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
         Interlocked.Increment(ref _generation);
         _byId.RemoveWhere((key, entry) => key.Equals(tenantId) || entry.Tenant.TenantId.Equals(tenantId));
         _byIdentifier.RemoveWhere((_, entry) => entry.Tenant.TenantId.Equals(tenantId));
+        _handlers.Invalidate(tenantId);
     }
 
     public void InvalidateAll()
@@ -54,6 +57,7 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
         Interlocked.Increment(ref _generation);
         _byId.Entries.Clear();
         _byIdentifier.Entries.Clear();
+        _handlers.InvalidateAll();
     }
 
     private void Set<TLookup>(Map<TLookup> map, TLookup key, ITenantDescriptor<TKey> tenant, long generation)
@@ -137,17 +141,18 @@ internal sealed class TenantStoreCache<TKey> : ITenantStoreCache<TKey>
 }
 
 /// <summary>
-/// The <see cref="ITenantStoreCache{TKey}"/> of an application that does not cache tenants: there is nothing to
-/// remove, so invalidation code runs whether or not <c>CacheTenants</c> is called.
+/// The <see cref="ITenantStoreCache{TKey}"/> of an application that does not cache tenants: there are no tenants to
+/// remove, so invalidation code runs whether or not <c>CacheTenants</c> is called, and the invalidation handlers still
+/// run.
 /// </summary>
-internal sealed class NoTenantStoreCache<TKey> : ITenantStoreCache<TKey>
+internal sealed class NoTenantStoreCache<TKey>(TenantInvalidationHandlers<TKey> handlers) : ITenantStoreCache<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public static NoTenantStoreCache<TKey> Instance { get; } = new();
-
-    public void Invalidate(TKey tenantId) => ArgumentNullException.ThrowIfNull(tenantId);
-
-    public void InvalidateAll()
+    public void Invalidate(TKey tenantId)
     {
+        ArgumentNullException.ThrowIfNull(tenantId);
+        handlers.Invalidate(tenantId);
     }
+
+    public void InvalidateAll() => handlers.InvalidateAll();
 }
