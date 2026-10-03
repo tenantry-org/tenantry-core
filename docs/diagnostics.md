@@ -59,11 +59,12 @@ resolvers, the store lookup and the access validators. It has the tags `tenantry
 
 ```csharp
 using OpenTelemetry.Trace;
+using Tenantry.AspNetCore;
 
 builder.Services.AddOpenTelemetry()
     .WithTracing(t => t
         .AddAspNetCoreInstrumentation()
-        .AddSource("Tenantry.AspNetCore"));
+        .AddSource(TenantryAspNetCoreTelemetry.ActivitySourceName));
 ```
 
 ## Metrics
@@ -82,7 +83,7 @@ add the tenant to ASP.NET Core's own request metric.
 using OpenTelemetry.Metrics;
 
 builder.Services.AddOpenTelemetry()
-    .WithMetrics(m => m.AddMeter("Tenantry.AspNetCore"));
+    .WithMetrics(m => m.AddMeter(TenantryAspNetCoreTelemetry.MeterName));
 ```
 
 ```bash

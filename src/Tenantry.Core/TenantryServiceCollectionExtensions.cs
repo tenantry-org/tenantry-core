@@ -27,7 +27,8 @@ public static class TenantryServiceCollectionExtensions
     /// <para>
     /// The core services are the ambient tenant (<see cref="ITenantContext{TKey}"/> and
     /// <see cref="ITenantContextSetter{TKey}"/>), <see cref="ITenantScopeFactory{TKey}"/>,
-    /// <see cref="ITenantLookup{TKey}"/>, <see cref="ITenantStoreCache{TKey}"/> and <see cref="ITenantActivity{TKey}"/>, all singletons. They serve web applications, workers and console
+    /// <see cref="ITenantLookup{TKey}"/>, <see cref="ITenantStoreCache{TKey}"/>, <see cref="ITenantActivity{TKey}"/> and
+    /// <see cref="ITenantKeyType"/>, all singletons. They serve web applications, workers and console
     /// tools alike; the ASP.NET Core features come from the Tenantry.AspNetCore package.
     /// </para>
     /// <para>
@@ -50,18 +51,16 @@ public static class TenantryServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var registered = services
-            .FirstOrDefault(descriptor => descriptor.ServiceType == typeof(TenantryRegistration) && !descriptor.IsKeyedService)
-            ?.ImplementationInstance as TenantryRegistration;
+        var registered = services.FindTenantKeyType();
 
         if (registered is null)
         {
-            services.AddSingleton(new TenantryRegistration(typeof(TKey)));
+            services.AddSingleton<ITenantKeyType>(new TenantKeyType<TKey>());
         }
-        else if (registered.KeyType != typeof(TKey))
+        else if (registered.Type != typeof(TKey))
         {
             throw new InvalidOperationException(
-                $"Tenantry is already registered with tenant key type '{registered.KeyType.Name}', so it cannot also " +
+                $"Tenantry is already registered with tenant key type '{registered.Type.Name}', so it cannot also " +
                 $"use '{typeof(TKey).Name}'. An application uses one tenant key type: call AddTenantry with the same " +
                 "type everywhere.");
         }
@@ -79,5 +78,20 @@ public static class TenantryServiceCollectionExtensions
         configure?.Invoke(new TenantBuilder<TKey>(services));
 
         return services;
+    }
+
+    /// <summary>
+    /// Returns the tenant key type Tenantry is registered with in <paramref name="services"/>, or
+    /// <see langword="null"/> when <c>AddTenantry</c> has not been called.
+    /// </summary>
+    /// <param name="services">The application's service collection.</param>
+    /// <returns>The key type, or <see langword="null"/>.</returns>
+    public static ITenantKeyType? FindTenantKeyType(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        return services
+            .FirstOrDefault(descriptor => descriptor.ServiceType == typeof(ITenantKeyType) && !descriptor.IsKeyedService)
+            ?.ImplementationInstance as ITenantKeyType;
     }
 }

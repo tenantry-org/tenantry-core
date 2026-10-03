@@ -54,6 +54,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads its connection string when it first opens a connection. It can now be injected; only asynchronous EF Core
   calls work on it. Before, injecting it threw.
 
+- Seams for packages that build on Tenantry, Tenantry.Pro among them:
+  - `TenantContextGuard` (Tenantry.EfCore), an interceptor base that checks a context before it opens a connection,
+    runs a command or saves, and the violation kind `TenantSchemaMismatch`, for a context on another tenant's schema.
+  - `TenantModel` (Tenantry.EfCore): `HasTenantOwnedEntityTypes`, `IsTenantOwned`, `IsSharedAcrossTenants` and
+    `FindUnisolatedEntityTypes`; and `[SharedAcrossTenants]` or `IsSharedAcrossTenants()` to mark an entity type every
+    tenant shares. Marking a tenant-owned type fails the model check.
+  - `ITenantKeyType`, registered by `AddTenantry`, and `services.FindTenantKeyType()`: the tenant key type, for code
+    that has only a service provider or collection, with an AOT-safe visitor.
+  - `TenantryAspNetCoreTelemetry`: the activity source, meter and log category names of `app.UseTenantry()`.
+
 ### Changed
 
 - `ConfigureEfCoreIsolation` configures `IOptions<EfCoreIsolationOptions>`, so `services.Configure` sets the same

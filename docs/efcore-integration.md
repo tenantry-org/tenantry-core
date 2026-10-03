@@ -433,6 +433,16 @@ so an options contributor must never depend on the current tenant.
 (EF Core adds no extension's services to a provider you build), and creating such a context throws too. Compiled
 models (`dotnet ef dbcontext optimize`) are not supported: EF Core compiles no model with query filters.
 
+Two more seams let a package fail closed:
+
+- `TenantContextGuard` is an interceptor that calls your `Check(DbContext)` before the context opens a connection,
+  runs a command or saves. Throw `TenantNotResolvedException` or `TenantIsolationViolationException` from it.
+  Tenantry's database-per-tenant guard is one.
+- `TenantModel` says which entity types a model isolates: `HasTenantOwnedEntityTypes`, `IsTenantOwned`, and
+  `FindUnisolatedEntityTypes`, the types that are neither tenant-owned nor marked as shared by every tenant. Mark
+  such a type with `[SharedAcrossTenants]` or `modelBuilder.Entity<Country>().IsSharedAcrossTenants()`. The marker
+  changes nothing in queries or saves; marking a tenant-owned type fails the model check.
+
 ## Tested providers
 
 Tenantry uses only standard EF Core features, but write isolation relies on each provider reporting the

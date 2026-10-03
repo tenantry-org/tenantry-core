@@ -10,7 +10,7 @@ namespace Tenantry.AspNetCore.Internal;
 /// </summary>
 internal static class TenantryHttpTelemetry
 {
-    public const string Name = "Tenantry.AspNetCore";
+    public const string Name = TenantryAspNetCoreTelemetry.ActivitySourceName;
 
     public const string ResolveActivityName = "Tenantry.ResolveTenant";
 
@@ -51,7 +51,7 @@ internal sealed class TenantResolutionMetrics
     // A host registers IMeterFactory (AddMetrics); without one, the meter is the process's own.
     public TenantResolutionMetrics(IMeterFactory? meterFactory)
     {
-        var meter = meterFactory?.Create(TenantryHttpTelemetry.Name) ?? new Meter(TenantryHttpTelemetry.Name);
+        var meter = meterFactory?.Create(TenantryAspNetCoreTelemetry.MeterName) ?? new Meter(TenantryAspNetCoreTelemetry.MeterName);
 
         _resolutions = meter.CreateCounter<long>(
             "tenantry.resolutions",

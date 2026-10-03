@@ -71,6 +71,15 @@ internal static class TenantModelCheck
             return;
         }
 
+        if (TenantModel.IsMarked(entityType))
+        {
+            throw new TenantIsolationViolationException(
+                TenantIsolationViolationKind.ModelConfiguration,
+                clrType.Name,
+                $"Entity '{clrType.Name}' is tenant-owned (it implements ITenantEntity), but it is also marked as shared " +
+                "across tenants. Remove [SharedAcrossTenants] or IsSharedAcrossTenants(), or stop implementing ITenantEntity.");
+        }
+
         if (entityType.IsOwned())
         {
             // EF Core reads an owned type's rows only through its owner and does not let it have a filter of its

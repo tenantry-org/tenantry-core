@@ -8,7 +8,7 @@ namespace Tenantry.AspNetCore.Internal;
 /// </summary>
 internal static partial class TenantResolutionLog
 {
-    public const string Category = "Tenantry.AspNetCore";
+    public const string Category = TenantryAspNetCoreTelemetry.LogCategory;
 
     [LoggerMessage(1001, LogLevel.Debug, "Tenant {TenantId} resolved for {Method} {Path}", EventName = "TenantResolved")]
     public static partial void TenantResolved(ILogger logger, string tenantId, string method, string path);

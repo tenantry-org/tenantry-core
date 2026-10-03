@@ -2,7 +2,7 @@ namespace Tenantry.EfCore;
 
 /// <summary>
 /// Thrown when EF Core would read or write across tenants: before <c>SaveChanges</c> writes another tenant's
-/// entity, before an <c>ExecuteUpdate</c> that could move rows between tenants, before a pooled database-per-tenant
+/// entity, before an <c>ExecuteUpdate</c> that could move rows between tenants, before a database-per-tenant
 /// context uses another tenant's database, on the first use of a model that does not isolate a tenant-owned
 /// entity type, before a save that must succeed or fail as a whole runs without a transaction it may not begin, or
 /// instead of committing a transaction that holds a save whose tenant check failed and could not be undone. Nothing
@@ -71,8 +71,8 @@ public enum TenantIsolationViolationKind
     BulkUpdate,
 
     /// <summary>
-    /// A pooled database-per-tenant context would use a connection that was not set for its current lease and
-    /// the current tenant.
+    /// A database-per-tenant context would use a connection that was not set for it (and, pooled, for its current
+    /// lease) or for the current tenant.
     /// </summary>
     TenantDatabaseMismatch,
 
@@ -101,4 +101,11 @@ public enum TenantIsolationViolationKind
     /// instead.
     /// </summary>
     TransactionRolledBack,
+
+    /// <summary>
+    /// A schema-per-tenant context would use a schema other than the current tenant's, such as one built for the
+    /// tenant that was current when it was first used. Thrown by packages that put tenants in schemas of their own,
+    /// from a <see cref="TenantContextGuard"/>.
+    /// </summary>
+    TenantSchemaMismatch,
 }
