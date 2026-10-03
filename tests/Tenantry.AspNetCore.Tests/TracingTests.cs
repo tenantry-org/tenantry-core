@@ -61,8 +61,9 @@ public sealed class TracingTests
             (CultureInfo.CurrentCulture, CultureInfo.DefaultThreadCurrentCulture) = (previous, previousDefault);
         }
 
-        var requests = stopped.Where(a => a.OperationName == "Microsoft.AspNetCore.Hosting.HttpRequestIn").ToList();
-        var resolutions = stopped.Where(a => a.Source.Name == "Tenantry.AspNetCore").ToList();
+        // In the order the requests were sent: the test server can stop a request's span after the next one's.
+        var requests = stopped.Where(a => a.OperationName == "Microsoft.AspNetCore.Hosting.HttpRequestIn").OrderBy(a => a.StartTimeUtc).ToList();
+        var resolutions = stopped.Where(a => a.Source.Name == "Tenantry.AspNetCore").OrderBy(a => a.StartTimeUtc).ToList();
         requests.Should().HaveCount(2);
         resolutions.Should().HaveCount(2);
 
