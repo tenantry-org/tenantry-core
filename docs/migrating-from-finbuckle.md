@@ -12,7 +12,7 @@ not have.
 | `AddMultiTenant<TTenantInfo>()` | `AddTenantry<TKey>(tenant => …)`, generic over the key type |
 | Strategies: `WithHeaderStrategy()`, `WithHostStrategy()`, … | Resolvers: `ResolveFromHeader(…)`, `ResolveFromSubdomain()`, … |
 | One or more stores: `WithInMemoryStore()`, `WithEFCoreStore<…>()`, … | One `ITenantStore<TKey>`: `UseInMemoryStore(…)` or `UseStore<TStore>()` |
-| `UseMultiTenant()`, before `UseAuthentication()` | `UseTenantry()`, after `UseAuthentication()` |
+| `UseMultiTenant()`, before `UseAuthentication()` | `UseTenantry()`, after `UseAuthentication()`; with per-tenant authentication, `UseTenantResolution()` before it too |
 | `IMultiTenantContextAccessor<TTenantInfo>`, `HttpContext.GetMultiTenantContext<TTenantInfo>()` | `ITenantContext<TKey>` |
 | `IMultiTenantContextSetter`, `HttpContext.SetTenantInfo(…)` | `ITenantContextSetter<TKey>.Use(tenant)`, or `ITenantScopeFactory<TKey>` for a new DI scope |
 | Finbuckle's base context class, or `IMultiTenantDbContext` with `EnforceMultiTenant()` | A plain `DbContext` registered with `options.UseTenantry()` |
@@ -20,8 +20,8 @@ not have.
 | `IsNotMultiTenant()` | Nothing: an entity without `ITenantEntity<TKey>` is shared |
 | `TenantMismatchMode` | No setting: a write to another tenant's row always throws |
 | `TenantNotSetMode` | No setting: a new entity is stamped, a changed one without the tenant throws |
-| `ConfigurePerTenant<TOptions, TTenantInfo>(…)` | `ConfigurePerTenant<TOptions>(…)` in `AddTenantry` (Tenantry.Options) |
-| `WithPerTenantAuthentication()` | None (see [What Tenantry does not have](#what-tenantry-does-not-have)) |
+| `ConfigurePerTenant<TOptions, TTenantInfo>(…)`, its named and `ConfigureAllPerTenant` variants | `ConfigurePerTenant<TOptions>(…)`, `ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)` in `AddTenantry` (Tenantry.Options) |
+| `WithPerTenantAuthentication()` | `ConfigurePerTenant<TOptions>(scheme, …)` with `UseTenantResolution()` ([Authentication per tenant](authentication-per-tenant.md)) |
 | `ShortCircuitWhenTenantNotResolved()` | `RequireTenantByDefault()` |
 | `ExcludeFromMultiTenantResolution()` | `AllowMissingTenant()` |
 | `MultiTenantOptions.Events` | `ConfigureResolution(o => o.OnResolved = …)`, and `OnRejected` |
@@ -272,8 +272,17 @@ the migration makes `TenantId` nullable, your project does not use nullable refe
 `services.ConfigurePerTenant<TOptions, TTenantInfo>((options, tenantInfo) => …)` becomes
 `tenant.ConfigurePerTenant<TOptions>((options, t) => …)` inside `AddTenantry`. Call it after the builder methods that
 need the key type, such as `UseStore`. Read your tenant type with `t.As<AppTenant>()`. Finbuckle's `Reset()` and
-`Clear(tenantId)` become `ITenantStoreCache<string>.Invalidate(tenantId)`. See
+`Clear(tenantId)` become `ITenantStoreCache<string>.Invalidate(tenantId)`. The named variants become
+`ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)`. See
 [Options per tenant](per-tenant-options.md).
+
+`WithPerTenantAuthentication()` becomes `ConfigurePerTenant` on each scheme's options, such as
+`ConfigurePerTenant<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before
+`app.UseAuthentication()`, so the tenant is known when the scheme authenticates. Finbuckle also refused a cookie signed
+in under another tenant. To keep that check, add the tenant id as a claim when the user signs in, and validate it with
+`ValidateTenantAccessByClaim`. A request for another tenant then gets `403` where a tenant is required; Finbuckle
+treated the same user as signed out. Sessions signed in before the change lack the claim, so their users sign in
+again. See [Authentication per tenant](authentication-per-tenant.md).
 
 ## Behaviour that changes
 
@@ -303,16 +312,9 @@ need the key type, such as `UseStore`. Read your tenant type with `t.As<AppTenan
 
 ## What Tenantry does not have
 
-- **Per-tenant authentication.** Nothing replaces `WithPerTenantAuthentication()`. Authentication options are named
-  per scheme, and `ConfigurePerTenant` configures default-named options only. A login path, challenge scheme or OpenID
-  Connect authority per tenant has no Tenantry equivalent: register an ASP.NET Core authentication scheme per identity
-  provider and choose between them yourself. Finbuckle also refused a cookie signed in under another tenant. To keep
-  that check, add the tenant id as a claim when the user signs in, and validate it with `ValidateTenantAccessByClaim`
-  ([Claim-based validation](access-control.md#claim-based-validation)). A request for another tenant then gets `403`
-  where a tenant is required. Finbuckle treated the same user as signed out. Sessions signed in before the change lack
-  the claim, so their users sign in again.
-- **Named per-tenant options.** Finbuckle's named and `ConfigureAllPerTenant` variants have no equivalent. Move those
-  settings to a default-named options type of your own.
+- **A default scheme per tenant.** Each scheme's settings can differ per tenant, but the schemes and the default and
+  challenge schemes are the same for every tenant. For tenants on different identity providers, use one scheme whose
+  `Authority` differs per tenant, or register a scheme per provider and choose between them yourself.
 - **ASP.NET Core Identity.** Tenantry has no counterpart to `Finbuckle.MultiTenant.Identity.EntityFrameworkCore`.
   Your Identity entity types can implement `ITenantEntity<TKey>`, but Tenantry is not tested with Identity. Identity's
   unique indexes on user and role names stay global until you add `TenantId` to them.
@@ -333,11 +335,13 @@ need the key type, such as `UseStore`. Read your tenant type with `t.As<AppTenan
 2. Tenantry is registered with `string` keys, or a key type change has a migration that converts the data.
 3. Your tenant type implements `ITenantDescriptor<string>`, and the store maps identifiers in `FindByIdentifierAsync`.
 4. The resolvers read the header, claim or route value your clients already send.
-5. `UseTenantry()` runs after `UseAuthentication()`.
+5. `UseTenantry()` runs after `UseAuthentication()`, and, with per-tenant authentication, `UseTenantResolution()`
+   before it.
 6. Tenant-owned entities implement `ITenantEntity<string>`, and each context is a plain `DbContext` registered with
    `UseTenantry()`.
 7. Keys and indexes that Finbuckle adjusted are declared, and the new migration has no operations.
 8. Ignored query filters name `TenantryQueryFilters.Tenant`.
 9. Code that relied on `TenantMismatchMode` or `TenantNotSetMode` uses a maintenance context.
-10. Per-tenant options use `ConfigurePerTenant<TOptions>`, and per-tenant sign-in is checked with a tenant claim.
+10. Per-tenant options use `ConfigurePerTenant<TOptions>`, per-tenant authentication names its scheme, and per-tenant
+    sign-in is checked with a tenant claim.
 11. Tests that expected an exception without a tenant expect empty results.
