@@ -359,8 +359,8 @@ builder.Services.AddTenantry<string>(tenant => tenant
 - It registers a scoped `AppDbContext` and an `IDbContextFactory<AppDbContext>`, and applies `UseTenantry()` before
   your configuration, so interceptors you add see new entities already stamped. Use it instead of `AddDbContext`,
   `AddDbContextPool` or `AddPooledDbContextFactory` for that context. Call `UseConnectionStrings` first; without it,
-  `AddDbContextPerTenantDatabase` throws. It returns the builder without its key type, so it goes after the methods
-  that need one.
+  `AddDbContextPerTenantDatabase` throws. It returns the builder without its key type, so put it last (see
+  [Registration](core-concepts.md#registration)).
 - `pooled: true` reuses contexts from a pool, as `AddDbContextPool` does; the context then needs a constructor
   that takes only its options. Without a pool, a context can take other services in its constructor, and has its
   scope as its application service provider, as with `AddDbContext`.

@@ -208,20 +208,23 @@ and runs your work in such a scope. See [Non-HTTP hosts](non-http-hosts.md).
 |-----------|---------|-------------|
 | `TenantNotResolvedException` | `Tenantry.Core` | Code that needs a current tenant runs without one (an EF Core write, `CurrentTenantConnectionString`). |
 | `TenantNotFoundException` | `Tenantry.Core` | A tenant id is not in the store (`RunInScopeAsync`). It derives from `TenantNotResolvedException` and carries the `TenantId`, so a queue consumer can drop a message for a tenant that no longer exists. |
+| `TenantInactiveException` | `Tenantry.Core` | `RunInScopeAsync` names a tenant that `ValidateTenantActivity` refuses. It derives from `TenantNotResolvedException` and carries the `TenantId`. |
 | `TenantIsolationViolationException` | `Tenantry.EfCore` | EF Core would read or write across tenants; `Kind` says which check failed. See [EF Core integration](efcore-integration.md). |
 
 ## Registration
 
 There is one entry point, `AddTenantry<TKey>(configure?)` in `Tenantry.Core`, for every kind of host. It registers
-the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITenantScopeFactory<TKey>` and
-`ITenantLookup<TKey>`. Inside the `configure` lambda you compose, on `ITenantBuilder<TKey>`, a store
-(`UseInMemoryStore`, `UseStore`), connection strings, EF Core options (`ConfigureEfCoreIsolation`,
-`AddDbContextPerTenantDatabase`, from `Tenantry.EfCore`), and — for ASP.NET Core, from `Tenantry.AspNetCore` —
-resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`.
-Every builder method returns the builder, so they chain; the few that take a type parameter of their own
-(`UseResolver<TResolver>()`, `AddDbContextPerTenantDatabase<TContext>()`) return it without its key type, so they
-go last.
+the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITenantScopeFactory<TKey>`,
+`ITenantLookup<TKey>`, `ITenantStoreCache<TKey>`, `ITenantActivity<TKey>` and `ITenantKeyType`. Inside the
+`configure` lambda you add a store, connection strings, EF Core options and, with `Tenantry.AspNetCore`, resolution
+and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`.
 
-Registration needs no Tenantry `using` directive: `AddTenantry` and the builder methods are extension methods in
-`Microsoft.Extensions.DependencyInjection`. Calling `AddTenantry` again adds to the same registration, and the
-core services are only added once. An application registers one store: a second one throws.
+The rules, stated here once:
+
+- Every builder method returns the builder, so calls chain. Three return it without its key type, so put them last:
+  `UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()` and `AddDbContextPerTenantDatabase<TContext>()`.
+  The first two have overloads that take a `Type` and chain: `UseResolver(typeof(CookieTenantResolver))`.
+- Registration needs no Tenantry `using` directive: `AddTenantry` and the builder methods are extension methods in
+  `Microsoft.Extensions.DependencyInjection`.
+- Calling `AddTenantry` again adds to the same registration. An application uses one tenant key type and one store:
+  a second of either throws.

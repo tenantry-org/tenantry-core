@@ -64,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     that has only a service provider or collection, with an AOT-safe visitor.
   - `TenantryAspNetCoreTelemetry`: the activity source, meter and log category names of `app.UseTenantry()`.
 
+- `UseResolver(Type)` and `ValidateTenantAccess(Type)` (Tenantry.AspNetCore): the same as `UseResolver<TResolver>()`
+  and `ValidateTenantAccess<TValidator>()`, but they return the builder with its key type, so calls chain after them.
+
 ### Changed
 
 - `UseTenantry()`, `AddDbContextPerTenantDatabase` and `IsSharedAcrossTenants()` carry `[RequiresUnreferencedCode]`

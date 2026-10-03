@@ -23,13 +23,8 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .ValidateTenantAccessByClaim("tenant_id")); // access control (optional)
 ```
 
-There is one `AddTenantry`, in `Tenantry.Core`, for every kind of host. It registers the core services
-(`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`, `ITenantScopeFactory<TKey>`, `ITenantLookup<TKey>`),
-and its builder, `ITenantBuilder<TKey>`, gains the ASP.NET Core methods above when `Tenantry.AspNetCore` is
-referenced; the first one you call registers the middleware's services. Every builder method returns the
-builder, so calls chain in any order (with two exceptions: `UseResolver<TResolver>()`, and Tenantry.EfCore's
-`AddDbContextPerTenantDatabase<TContext>()`, return the builder without its key type, so call them last). `AddTenantry` can be called again, from another part of the application, to add
-to the same registration.
+`Tenantry.AspNetCore` adds these methods to the `AddTenantry` builder. The first one you call registers the
+middleware's services. See [Registration](core-concepts.md#registration) for the rules every builder method follows.
 
 ### Startup validation
 
