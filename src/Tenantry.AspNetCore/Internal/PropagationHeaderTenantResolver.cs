@@ -9,9 +9,6 @@ namespace Tenantry.AspNetCore.Internal;
 /// </summary>
 internal sealed class PropagationHeaderTenantResolver : ITenantResolver
 {
-    public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default)
-    {
-        var value = context.Request.Headers[TenantPropagation.HeaderName].FirstOrDefault();
-        return new ValueTask<string?>(string.IsNullOrWhiteSpace(value) ? null : value.Trim());
-    }
+    public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default) =>
+        RequestValues.Single(context.Request.Headers[TenantPropagation.HeaderName]);
 }

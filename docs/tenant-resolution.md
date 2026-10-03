@@ -25,7 +25,7 @@ Resolution turns an HTTP request into a tenant, in two steps:
 
 | Method | Source | Notes |
 |--------|--------|-------|
-| `ResolveFromHeader(name)` | request header `name` | Trims whitespace. e.g. `X-Tenant-Id`. |
+| `ResolveFromHeader(name)` | request header `name` | Trims whitespace. A repeated header names no tenant. e.g. `X-Tenant-Id`. |
 | `ResolveFromSubdomain(options)` | the subdomain of the host | Ignores `www` and IP addresses; takes base domains. See below. |
 | `ResolveFromHost()` | the host name | For tenants with domains of their own. See below. |
 | `ResolveFromRouteValue(key = "tenant")` | route value `key` | For routes like `/api/{tenant}/…`. Needs routing before the middleware. |
@@ -39,8 +39,8 @@ Resolution turns an HTTP request into a tenant, in two steps:
 tenant.ResolveFromHeader("X-Tenant-Id");
 ```
 
-The most common choice for APIs and service-to-service calls. The value is trimmed; empty/whitespace
-yields `null`.
+The most common choice for APIs and service-to-service calls. The value is trimmed; an empty value, or a header
+sent more than once, names no tenant. A proxy that sets the header must replace the client's, not add a second one.
 
 ### Subdomain
 

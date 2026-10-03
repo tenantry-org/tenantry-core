@@ -6,6 +6,18 @@ namespace Tenantry.AspNetCore.Tests.Resolvers;
 public sealed class QueryStringTenantResolverTests
 {
     [Fact]
+    public async Task Parameter_GivenTwice_ReturnsNull()
+    {
+        QueryStringTenantResolver resolver = new();
+        DefaultHttpContext context = new();
+        context.Request.QueryString = new("?tenantId=acme&tenantId=globex");
+
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Parameter_Present_ReturnsValue()
     {
         QueryStringTenantResolver resolver = new();
