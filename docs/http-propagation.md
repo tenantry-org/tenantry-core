@@ -46,7 +46,10 @@ builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = new U
 - **A tenant is current:** the request carries its id, formatted with the invariant culture (`TenantIds.Format`).
   With no tenant, the request goes without the header, and the called service decides what that means, for example
   with `RequireTenant()`.
-- **The caller has not set the header:** a header already on the request is left as it is.
+- **A header naming another tenant is refused.** A request that already carries the header with another tenant's
+  id, while a tenant is current, throws `InvalidOperationException`. That catches a header forwarded from the incoming
+  request or set in `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.Use`.
+  With no current tenant, a header you set is sent as it is.
 - **The request is for the client's own service:** when the client has a base address, set in its configuration as
   above, only requests to that scheme, host and port carry the tenant; a request to an absolute address elsewhere does
   not. A client with no base address there carries it on every request: a gRPC client, whose address is the
