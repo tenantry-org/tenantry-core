@@ -61,8 +61,16 @@ public sealed class TracingTests
             (CultureInfo.CurrentCulture, CultureInfo.DefaultThreadCurrentCulture) = (previous, previousDefault);
         }
 
-        // In the order the requests were sent: the test server can stop a request's span after the next one's.
-        var requests = stopped.Where(a => a.OperationName == "Microsoft.AspNetCore.Hosting.HttpRequestIn").OrderBy(a => a.StartTimeUtc).ToList();
+        // The test server answers a request before the server stops its span, so a span can still be open here, and
+        // stop after the next request's: wait for both, and take them in the order the requests were sent.
+        const string requestIn = "Microsoft.AspNetCore.Hosting.HttpRequestIn";
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (stopped.Count(a => a.OperationName == requestIn) < 2 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        var requests = stopped.Where(a => a.OperationName == requestIn).OrderBy(a => a.StartTimeUtc).ToList();
         var resolutions = stopped.Where(a => a.Source.Name == "Tenantry.AspNetCore").OrderBy(a => a.StartTimeUtc).ToList();
         requests.Should().HaveCount(2);
         resolutions.Should().HaveCount(2);
