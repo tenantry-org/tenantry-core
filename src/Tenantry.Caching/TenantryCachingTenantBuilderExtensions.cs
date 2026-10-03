@@ -40,6 +40,7 @@ public static class TenantryCachingTenantBuilderExtensions
     /// <param name="builder">The tenant builder.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <example>
+    /// <c>AddHybridCache()</c> is in the Microsoft.Extensions.Caching.Hybrid package.
     /// <code>
     /// builder.Services.AddHybridCache();
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant

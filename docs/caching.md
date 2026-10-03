@@ -6,6 +6,7 @@ reads and writes the cache does not have to name the tenant.
 
 ```bash
 dotnet add package Tenantry.Caching
+dotnet add package Microsoft.Extensions.Caching.Hybrid   # AddHybridCache(), unless you already register a HybridCache
 ```
 
 ## HybridCache
