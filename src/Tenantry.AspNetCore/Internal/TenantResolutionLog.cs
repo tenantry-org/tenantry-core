@@ -60,4 +60,18 @@ internal static partial class TenantResolutionLog
         "before app.UseOutputCache(). Logged once",
         EventName = "OutputCacheBeforeTenantry")]
     public static partial void OutputCacheBeforeTenantry(ILogger logger, string method, string path);
+
+    [LoggerMessage(1010, LogLevel.Warning,
+        "app.UseTenantResolution() ran after the authentication middleware for request {Method} {Path}, so " +
+        "authentication used the options of no tenant. Call app.UseTenantResolution() before app.UseAuthentication(). " +
+        "Logged once",
+        EventName = "TenantResolutionAfterAuthentication")]
+    public static partial void TenantResolutionAfterAuthentication(ILogger logger, string method, string path);
+
+    [LoggerMessage(1011, LogLevel.Error,
+        "app.UseTenantResolution() resolved request {Method} {Path}, but app.UseTenantry() did not run before its " +
+        "endpoint, so the access validators never checked the tenant. The endpoint was not run (500). Call " +
+        "app.UseTenantry() after app.UseAuthentication(), in every branch",
+        EventName = "TenantryDidNotRun")]
+    public static partial void TenantryDidNotRun(ILogger logger, string method, string path);
 }

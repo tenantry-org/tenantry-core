@@ -372,12 +372,11 @@ public sealed class ResolutionTests
 
         TenantResolutionMiddleware<string> middleware = new(
             _ => Task.CompletedTask,
-            provider.GetRequiredService<ITenantLookup<string>>(),
+            new TenantRequestResolution<string>(provider.GetRequiredService<ITenantLookup<string>>(), new NoServices()),
             provider.GetRequiredService<ITenantContextSetter<string>>(),
             provider.GetRequiredService<IOptions<TenantResolutionOptions<string>>>(),
             provider.GetRequiredService<TenantResolutionMetrics>(),
-            provider.GetRequiredService<ILoggerFactory>(),
-            new NoServices());
+            provider.GetRequiredService<ILoggerFactory>());
         DefaultHttpContext context = new() { RequestServices = scope.ServiceProvider };
         context.Request.Headers["X-Tenant-Id"] = "initech";
         context.SetEndpoint(new Endpoint(null, new EndpointMetadataCollection(new RequireTenantAttribute()), "required"));

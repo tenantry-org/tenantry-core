@@ -35,36 +35,28 @@ namespace Tenantry.AspNetCore.Internal;
 internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     private readonly RequestDelegate _next;
-    private readonly ITenantLookup<TKey> _tenants;
     private readonly ITenantContextSetter<TKey> _tenantContext;
     private readonly TenantResolutionOptions<TKey> _options;
     private readonly TenantResolutionMetrics _metrics;
     private readonly ILogger _logger;
-    private readonly ITenantActivity<TKey>? _activity;
-    private readonly bool _hasValidators;
+    private readonly TenantRequestResolution<TKey> _resolution;
     private int _warnedBeforeRouting;
     private int _warnedBeforeAuthentication;
 
     public TenantResolutionMiddleware(
         RequestDelegate next,
-        ITenantLookup<TKey> tenants,
+        TenantRequestResolution<TKey> resolution,
         ITenantContextSetter<TKey> tenantContext,
         IOptions<TenantResolutionOptions<TKey>> options,
         TenantResolutionMetrics metrics,
-        ILoggerFactory loggerFactory,
-        IServiceProvider services)
+        ILoggerFactory loggerFactory)
     {
         _next = next;
-        _tenants = tenants;
+        _resolution = resolution;
         _tenantContext = tenantContext;
         _options = options.Value;
         _metrics = metrics;
         _logger = loggerFactory.CreateLogger(TenantResolutionLog.Category);
-        _activity = services.GetService<ITenantActivity<TKey>>();
-
-        // Without IServiceProviderIsService, validators are assumed to exist: an unknown tenant then gets the
-        // access-denied response, which hides which tenants exist either way.
-        _hasValidators = services.GetService<IServiceProviderIsService>()?.IsService(typeof(ITenantAccessValidator<TKey>)) ?? true;
     }
 
     /// <summary>
@@ -78,7 +70,9 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         var requestActivity = Activity.Current;
         var endpoint = context.GetEndpoint();
         var required = IsTenantRequired(endpoint);
-        var resolution = await ResolveAsync(context);
+        var resolution = context.Features.Get<EarlyTenantResolution<TKey>>() is { } early
+            ? await CompleteAsync(context, early)
+            : await _resolution.ResolveAsync(context, beforeAuthentication: false);
 
         // Before routing, whether the request is rejected is known only once routing has chosen its endpoint.
         if (endpoint is not null || required || resolution.Result == ResolutionResult.Resolved)
@@ -104,6 +98,10 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             await NextAsync(context, endpoint is null, resolution);
             return;
         }
+
+        // A tenant app.UseTenantResolution() made current, and the access validators then refused, is not current for the
+        // rest of the request.
+        using var noTenant = _tenantContext.HasTenant ? _tenantContext.UseNoTenant() : null;
 
         if (resolution.Result == ResolutionResult.AccessDenied)
         {
@@ -141,95 +139,25 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         await NextAsync(context, endpoint is null, resolution);
     }
 
-    private async ValueTask<Resolution> ResolveAsync(HttpContext context)
+    // Before authentication, app.UseTenantResolution() found what it could: the access validators, and the claim
+    // resolvers when nothing else named a tenant, run now that the user is known.
+    private async ValueTask<TenantResolution<TKey>> CompleteAsync(HttpContext context, EarlyTenantResolution<TKey> early)
     {
-        using var activity = TenantryHttpTelemetry.ActivitySource.StartActivity(TenantryHttpTelemetry.ResolveActivityName);
+        early.Completed = true;
+        var resolution = early.Resolution;
 
-        var resolution = await FindTenantAsync(context);
-
-        if (activity is not null)
+        if (resolution.Result == ResolutionResult.Missing)
         {
-            activity.SetTag(TenantryHttpTelemetry.ResultTag, TenantryHttpTelemetry.ResultName(resolution.Result));
+            return await _resolution.ResolveAsync(context, beforeAuthentication: false);
+        }
 
-            if (resolution is { Result: ResolutionResult.Resolved, Tenant: { } tenant })
-            {
-                activity.SetTag(TenantTelemetry.TenantIdTag, TenantIds.Format(tenant.TenantId));
-            }
+        if (resolution is { Result: ResolutionResult.Resolved, Tenant: { } tenant } &&
+            !await _resolution.ValidateAsync(context, tenant))
+        {
+            return resolution with { Result = ResolutionResult.AccessDenied };
         }
 
         return resolution;
-    }
-
-    // Another service sent a tenant id, which the store may not accept as an identifier (it may map slugs only).
-    private ValueTask<ITenantDescriptor<TKey>?> LookUpAsync(string identifier, bool isTenantId, CancellationToken cancellationToken)
-    {
-        if (!isTenantId)
-        {
-            return _tenants.FindByIdentifierAsync(identifier, cancellationToken);
-        }
-
-        return TenantIds.TryParse<TKey>(identifier, out var tenantId)
-            ? _tenants.GetTenantAsync(tenantId, cancellationToken)
-            : ValueTask.FromResult<ITenantDescriptor<TKey>?>(null);
-    }
-
-    private async ValueTask<Resolution> FindTenantAsync(HttpContext context)
-    {
-        var cancellationToken = context.RequestAborted;
-        string? identifier = null;
-        var isTenantId = false;
-        List<ClaimTenantResolver>? claimResolvers = null;
-
-        foreach (var resolver in context.RequestServices.GetServices<ITenantResolver>())
-        {
-            identifier = await resolver.ResolveAsync(context, cancellationToken);
-
-            // An empty identifier is no identifier: the next resolver may have one.
-            if (!string.IsNullOrWhiteSpace(identifier))
-            {
-                isTenantId = resolver is PropagationHeaderTenantResolver;
-                break;
-            }
-
-            identifier = null;
-
-            // The authentication middleware has not run yet: a claim resolver could not see the request's user.
-            if (resolver is ClaimTenantResolver claimResolver && context.Features.Get<IAuthenticationFeature>() is null)
-            {
-                (claimResolvers ??= []).Add(claimResolver);
-            }
-        }
-
-        if (identifier is null)
-        {
-            return new Resolution(ResolutionResult.Missing, null, null, claimResolvers);
-        }
-
-        var tenant = await LookUpAsync(identifier, isTenantId, cancellationToken);
-
-        if (tenant is null)
-        {
-            return new Resolution(ResolutionResult.NotFound, identifier, null, null);
-        }
-
-        // An inactive (suspended) tenant is refused like one an access validator refuses.
-        if (_activity is not null && !await _activity.IsActiveAsync(tenant, cancellationToken))
-        {
-            return new Resolution(ResolutionResult.AccessDenied, identifier, tenant, null);
-        }
-
-        if (_hasValidators)
-        {
-            foreach (var validator in context.RequestServices.GetServices<ITenantAccessValidator<TKey>>())
-            {
-                if (!await validator.ValidateAsync(context, tenant, cancellationToken))
-                {
-                    return new Resolution(ResolutionResult.AccessDenied, identifier, tenant, null);
-                }
-            }
-        }
-
-        return new Resolution(ResolutionResult.Resolved, identifier, tenant, null);
     }
 
     // Runs the rest of the pipeline, then looks for what the request needed and only had later: an endpoint routing
@@ -238,15 +166,15 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     // authorization with a scheme that is not the default, is not mistaken for it). Each is logged once.
     // Before routing, a request without a tenant still fails closed: an endpoint routing chooses that requires one is
     // replaced by one that rejects the request.
-    private async Task NextAsync(HttpContext context, bool endpointWasNull, Resolution resolution)
+    private async Task NextAsync(HttpContext context, bool endpointWasNull, TenantResolution<TKey> resolution)
     {
-        RejectingEndpointFeature? routed = null;
+        ReplacingEndpointFeature? routed = null;
         IEndpointFeature? previous = null;
 
         if (endpointWasNull && resolution.Result != ResolutionResult.Resolved)
         {
             previous = context.Features.Get<IEndpointFeature>();
-            routed = new RejectingEndpointFeature(previous, endpoint => IsTenantRequired(endpoint)
+            routed = new ReplacingEndpointFeature(previous, endpoint => IsTenantRequired(endpoint)
                 ? RejectingEndpoint(endpoint, resolution)
                 : null);
             context.Features.Set<IEndpointFeature>(routed);
@@ -267,7 +195,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                     context.SetEndpoint(routed.Endpoint);
                 }
 
-                _metrics.Record(resolution.Result, routed.Rejected);
+                _metrics.Record(resolution.Result, routed.Replaced);
             }
         }
 
@@ -298,13 +226,9 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     }
 
     // Keeps the endpoint's metadata, so authorization and the rest of the pipeline treat the request as before.
-    private Endpoint RejectingEndpoint(Endpoint endpoint, Resolution resolution)
+    private Endpoint RejectingEndpoint(Endpoint endpoint, TenantResolution<TKey> resolution)
     {
-        RequestDelegate reject = context => RejectAsync(context, resolution);
-
-        return endpoint is RouteEndpoint route
-            ? new RouteEndpoint(reject, route.RoutePattern, route.Order, route.Metadata, route.DisplayName)
-            : new Endpoint(reject, endpoint.Metadata, endpoint.DisplayName);
+        return ReplacingEndpointFeature.WithDelegate(endpoint, context => RejectAsync(context, resolution));
     }
 
     private static bool HasTenantMetadata(Endpoint endpoint) =>
@@ -332,7 +256,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         return _options.RequireTenantByDefault;
     }
 
-    private async Task RejectAsync(HttpContext context, Resolution resolution)
+    private async Task RejectAsync(HttpContext context, TenantResolution<TKey> resolution)
     {
         var request = context.Request;
 
@@ -342,7 +266,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         {
             ResolutionResult.Missing => (_options.MissingTenantStatusCode, "Tenant required",
                 "This endpoint requires a tenant, and the request does not identify one."),
-            ResolutionResult.NotFound when !_hasValidators => (_options.TenantNotFoundStatusCode, "Tenant not found",
+            ResolutionResult.NotFound when !_resolution.HasValidators => (_options.TenantNotFoundStatusCode, "Tenant not found",
                 "The request's tenant does not exist."),
             _ => (_options.AccessDeniedStatusCode, "Tenant access denied", "The request may not use its tenant."),
         };
@@ -393,43 +317,44 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             });
         }
     }
+}
 
-    /// <summary>
-    /// The endpoint feature while routing runs after this middleware: an endpoint routing sets that requires a
-    /// tenant is replaced by the one the replacement function gives.
-    /// </summary>
-    private sealed class RejectingEndpointFeature(IEndpointFeature? inner, Func<Endpoint, Endpoint?> replace) : IEndpointFeature
+/// <summary>
+/// The endpoint feature while a Tenantry middleware runs before routing, or needs to change the endpoint: an endpoint
+/// set through it is replaced by the one the replacement function gives, if any. It keeps the endpoint in the feature it
+/// replaced, when there was one.
+/// </summary>
+internal sealed class ReplacingEndpointFeature(IEndpointFeature? inner, Func<Endpoint, Endpoint?> replace) : IEndpointFeature
+{
+    private Endpoint? _endpoint;
+
+    public bool Replaced { get; private set; }
+
+    public Endpoint? Endpoint
     {
-        private Endpoint? _endpoint;
-
-        public bool Rejected { get; private set; }
-
-        public Endpoint? Endpoint
+        get => inner is null ? _endpoint : inner.Endpoint;
+        set
         {
-            get => inner is null ? _endpoint : inner.Endpoint;
-            set
+            if (value is not null && replace(value) is { } replacement)
             {
-                if (value is not null && replace(value) is { } replacement)
-                {
-                    value = replacement;
-                    Rejected = true;
-                }
+                value = replacement;
+                Replaced = true;
+            }
 
-                if (inner is null)
-                {
-                    _endpoint = value;
-                }
-                else
-                {
-                    inner.Endpoint = value;
-                }
+            if (inner is null)
+            {
+                _endpoint = value;
+            }
+            else
+            {
+                inner.Endpoint = value;
             }
         }
     }
 
-    private sealed record Resolution(
-        ResolutionResult Result,
-        string? Identifier,
-        ITenantDescriptor<TKey>? Tenant,
-        List<ClaimTenantResolver>? MissedClaimResolvers);
+    /// <summary>The same endpoint, with its metadata, running <paramref name="requestDelegate"/> instead.</summary>
+    public static Endpoint WithDelegate(Endpoint endpoint, RequestDelegate requestDelegate) =>
+        endpoint is RouteEndpoint route
+            ? new RouteEndpoint(requestDelegate, route.RoutePattern, route.Order, route.Metadata, route.DisplayName)
+            : new Endpoint(requestDelegate, endpoint.Metadata, endpoint.DisplayName);
 }
