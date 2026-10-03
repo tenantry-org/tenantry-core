@@ -2,9 +2,12 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
+An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.
+
 Code that needs the tenant key type, given it by [`ITenantKeyType`](tenantry-itenantkeytype.md).
 
 ```csharp
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public interface ITenantKeyTypeVisitor<out TResult>
 ```
 

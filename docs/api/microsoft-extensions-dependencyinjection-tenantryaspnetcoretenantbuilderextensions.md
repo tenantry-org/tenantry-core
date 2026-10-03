@@ -245,7 +245,7 @@ Parameters:
 
 - `builder` [`ITenantBuilder`](tenantry-itenantbuilder.md): The tenant builder.
 
-Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first, or use the overload that takes a `Type`, which chains.
+Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first, or call it as a statement of its own.
 
 ### `UseResolver<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantResolver>)`
 
@@ -265,29 +265,6 @@ Parameters:
 - `factory` `Func<IServiceProvider, ITenantResolver>`: Creates the resolver from the application's services.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
-
-### `UseResolver<TKey>(ITenantBuilder<TKey>, Type)`
-
-Adds a resolver of type `resolverType`, created in each request's scope, as `UseResolver<TResolver>()` does, but returns the builder with its key type, so calls chain after it.
-
-```csharp
-public static ITenantBuilder<TKey> UseResolver<TKey>(this ITenantBuilder<TKey> builder, Type resolverType) where TKey : IEquatable<TKey>, IParsable<TKey>
-```
-
-Type parameters:
-
-- `TKey`: The tenant identifier type.
-
-Parameters:
-
-- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `resolverType` `Type`: A class that implements [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md).
-
-Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
-
-Exceptions:
-
-- `ArgumentException`: `resolverType` is not a class that implements [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md).
 
 ### `UseResolver<TKey>(ITenantBuilder<TKey>, ITenantResolver)`
 
@@ -343,7 +320,7 @@ Parameters:
 
 - `builder` [`ITenantBuilder`](tenantry-itenantbuilder.md): The tenant builder.
 
-Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first, or use the overload that takes a `Type`, which chains.
+Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first, or call it as a statement of its own.
 
 Exceptions:
 
@@ -386,26 +363,3 @@ Parameters:
 - `validator` `Func<HttpContext, ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>>`: Returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md), and any other runs without one. It receives the request's cancellation token.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
-
-### `ValidateTenantAccess<TKey>(ITenantBuilder<TKey>, Type)`
-
-Adds an access validator of type `validatorType`, created in each request's scope, as `ValidateTenantAccess<TValidator>()` does, but returns the builder with its key type, so calls chain after it.
-
-```csharp
-public static ITenantBuilder<TKey> ValidateTenantAccess<TKey>(this ITenantBuilder<TKey> builder, Type validatorType) where TKey : IEquatable<TKey>, IParsable<TKey>
-```
-
-Type parameters:
-
-- `TKey`: The tenant identifier type.
-
-Parameters:
-
-- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `validatorType` `Type`: A class that implements [`ITenantAccessValidator<TKey>`](tenantry-aspnetcore-itenantaccessvalidator.md).
-
-Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
-
-Exceptions:
-
-- `ArgumentException`: `validatorType` is not a class that implements [`ITenantAccessValidator<TKey>`](tenantry-aspnetcore-itenantaccessvalidator.md).

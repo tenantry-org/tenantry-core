@@ -2,9 +2,12 @@
 
 Namespace: `Tenantry.EfCore` · Package: `Tenantry.EfCore` · [API reference](README.md)
 
+An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.
+
 Reads which entity types of an EF Core model Tenantry isolates, for packages and tests that build on it.
 
 ```csharp
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public static class TenantModel
 ```
 

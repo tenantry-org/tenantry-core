@@ -2,11 +2,14 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
+An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.
+
 The default [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md): calls the configured delegates on every call, without caching.
 
 Public so that other providers (for example a caching one) can wrap it. `UseConnectionStrings` registers it as a singleton, and forwards [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) to it.
 
 ```csharp
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public sealed class TenantConnectionStringProvider<TKey> : ITenantConnectionStringProvider<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
 ```
 

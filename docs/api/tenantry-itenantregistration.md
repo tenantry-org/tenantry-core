@@ -2,9 +2,12 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
+An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.
+
 A registration that needs the tenant key type, added through [`ITenantBuilder.Add`](tenantry-itenantbuilder.md). Packages use it for builder methods that take a type parameter of their own, such as a `DbContext` type.
 
 ```csharp
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public interface ITenantRegistration
 ```
 

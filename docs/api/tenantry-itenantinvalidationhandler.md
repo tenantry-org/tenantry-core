@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-Clears data kept per tenant when the tenant changes. Every registered handler runs on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md) and [`ITenantStoreCache<TKey>`](tenantry-itenantstorecache.md) invalidation, with or without `CacheTenants`. Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options register their own.
+Clears data kept per tenant when the tenant changes. Every registered handler runs on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md) invalidation, with or without `CacheTenants`. Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options register their own.
 
 Register a handler as a singleton, once, with `TryAddEnumerable`. When the application also injects the handler to read what it keeps, register it once and forward the handler registration to that instance:
 

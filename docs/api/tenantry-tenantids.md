@@ -2,9 +2,12 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
+An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.
+
 Tenant ids as text, and the ids Tenantry reserves for "no tenant". Tenantry formats and parses tenant ids this way wherever they leave or enter the process: in log scopes and traces, in the headers Tenantry.Http and Tenantry.Pro's jobs and messages carry, and in the identifiers [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md) reads by default.
 
 ```csharp
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public static class TenantIds
 ```
 
