@@ -58,15 +58,17 @@ Then:
 
 Every tenant's cookies are protected with the application's one key ring, so a user's cookie from one tenant also
 decrypts for another ([Cookies](authentication-per-tenant.md#cookies)). Put the tenant in the cookie, and refuse a
-signed-in user whose cookie names another tenant:
+signed-in user whose cookie names another tenant. The factory derives from the one that adds the user's roles, as
+`AddIdentity<AppUser, IdentityRole>` does:
 
 ```csharp
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
-public sealed class TenantClaimsFactory(UserManager<AppUser> users, IOptions<IdentityOptions> options)
-    : UserClaimsPrincipalFactory<AppUser>(users, options)
+public sealed class TenantClaimsFactory(
+    UserManager<AppUser> users, RoleManager<IdentityRole> roles, IOptions<IdentityOptions> options)
+    : UserClaimsPrincipalFactory<AppUser, IdentityRole>(users, roles, options)
 {
     protected override async Task<ClaimsIdentity> GenerateClaimsAsync(AppUser user)
     {

@@ -1,14 +1,16 @@
+using System.Security.Claims;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Tenantry.IntegrationTests.Providers;
 
 namespace Tenantry.IntegrationTests;
 
 /// <summary>
-/// ASP.NET Core Identity in a database its tenants share, as docs/efcore-advanced.md sets it up: the user type is
+/// ASP.NET Core Identity in a database its tenants share, as docs/aspnetcore-identity.md sets it up: the user type is
 /// tenant-owned and its user names are unique within a tenant, so each tenant's <see cref="UserManager{TUser}"/> sees its
 /// own users only.
 /// </summary>
@@ -29,7 +31,10 @@ public sealed class IdentityTests(SqlServerFixture fixture) : IAsyncLifetime
         services.AddLogging();
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme, Globex]));
         services.AddDbContext<IdentityContext>(options => options.UseSqlServer(connectionString).UseTenantry());
-        services.AddIdentityCore<TenantUser>().AddRoles<IdentityRole>().AddEntityFrameworkStores<IdentityContext>();
+        services.AddIdentityCore<TenantUser>()
+            .AddRoles<IdentityRole>()
+            .AddEntityFrameworkStores<IdentityContext>()
+            .AddClaimsPrincipalFactory<TenantClaimsFactory>();
         _services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
 
         await using var scope = _services.CreateAsyncScope();
@@ -94,6 +99,23 @@ public sealed class IdentityTests(SqlServerFixture fixture) : IAsyncLifetime
         await AsAsync(Globex, async users => (await users.FindByEmailAsync("dave@acme.example")).Should().BeNull());
     }
 
+    [Fact]
+    public async Task TheSignInPrincipal_NamesTheUsersTenant_AndKeepsTheirRoles()
+    {
+        await AsAsync(Acme, async (_, scope) =>
+            (await scope.GetRequiredService<RoleManager<IdentityRole>>().CreateAsync(new IdentityRole("admin"))).Succeeded.Should().BeTrue());
+        var id = await CreateAsync(Acme, "erin", role: "admin");
+
+        await AsAsync(Acme, async (users, scope) =>
+        {
+            var principal = await scope.GetRequiredService<IUserClaimsPrincipalFactory<TenantUser>>()
+                .CreateAsync((await users.FindByIdAsync(id))!);
+
+            principal.FindFirst("tenant_id")!.Value.Should().Be("acme");
+            principal.IsInRole("admin").Should().BeTrue();
+        });
+    }
+
     private const string Password = "Correct-horse-1";
 
     private async Task<string> CreateAsync(TenantDescriptor<string> tenant, string userName, string? role = null)
@@ -130,6 +152,19 @@ public sealed class IdentityTests(SqlServerFixture fixture) : IAsyncLifetime
 public sealed class TenantUser : IdentityUser, ITenantEntity<string>
 {
     public string TenantId { get; set; } = null!;
+}
+
+/// <summary>The guide's claims factory: the user's tenant beside their roles.</summary>
+public sealed class TenantClaimsFactory(
+    UserManager<TenantUser> users, RoleManager<IdentityRole> roles, IOptions<IdentityOptions> options)
+    : UserClaimsPrincipalFactory<TenantUser, IdentityRole>(users, roles, options)
+{
+    protected override async Task<ClaimsIdentity> GenerateClaimsAsync(TenantUser user)
+    {
+        var identity = await base.GenerateClaimsAsync(user);
+        identity.AddClaim(new Claim("tenant_id", user.TenantId));
+        return identity;
+    }
 }
 
 public sealed class IdentityContext(DbContextOptions<IdentityContext> options) : IdentityDbContext<TenantUser>(options)
