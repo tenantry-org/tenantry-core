@@ -4,6 +4,8 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.Caching.Tests;
@@ -216,6 +218,44 @@ public sealed class IsolateCachesTests
         await FluentActions.Awaiting(() => cache.RemoveAsync("orders", Ct).AsTask()).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => cache.RemoveByTagAsync("x", Ct).AsTask()).Should().ThrowAsync<InvalidOperationException>();
         provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+    }
+
+    [Fact]
+    public async Task AHybridCacheRegisteredAfterAddTenantry_StopsTheHost_RatherThanShareEntries()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddSingleton<HybridCache>(_inner);
+        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
+        builder.Services.AddSingleton<HybridCache, InMemoryHybridCache>();   // replaces the isolated cache
+        using var host = builder.Build();
+
+        await FluentActions.Awaiting(() => host.StartAsync(Ct))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*InMemoryHybridCache, registered after AddTenantry*");
+    }
+
+    [Fact]
+    public void AKeyedHybridCache_StopsTheHost_SinceItIsNotIsolated()
+    {
+        ServiceCollection services = new();
+        services.AddSingleton<HybridCache>(_inner);
+        services.AddKeyedSingleton<HybridCache>("reports", new InMemoryHybridCache());
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
+        using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
+
+        provider.Invoking(p => p.GetRequiredService<IStartupValidator>().Validate())
+            .Should().Throw<InvalidOperationException>().WithMessage("*keyed HybridCache 'reports'*");
+    }
+
+    [Fact]
+    public async Task TheHostStarts_WithTheCacheRegisteredFirst_OrWithNoHybridCacheAtAll()
+    {
+        await using (var provider = Build())
+            provider.GetRequiredService<IStartupValidator>().Validate();
+
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
+        await using (var provider = services.BuildServiceProvider(Conformance.ProviderOptions))
+            provider.GetRequiredService<IStartupValidator>().Validate();
     }
 
     [Theory]

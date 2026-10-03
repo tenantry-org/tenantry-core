@@ -42,7 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Tenantry.Caching`, a new package: `IsolateCaches()` keeps the application's `HybridCache` entries per tenant (keys
   and tags under the tenant's prefix, a factory run as the tenant, and no call without a tenant), with
   `SharedHybridCache` for entries every tenant shares and `ITenantDistributedCache` for code that uses
-  `IDistributedCache` directly. Invalidating a tenant removes its entries. See [Caching per tenant](docs/caching.md).
+  `IDistributedCache` directly. Invalidating a tenant removes its entries. The host does not start when a `HybridCache`
+  registered after `AddTenantry`, or a keyed one, would share entries across tenants. See
+  [Caching per tenant](docs/caching.md).
 - `IsolateOutputCache()` (Tenantry.AspNetCore) makes cached responses vary by tenant, and invalidating a tenant
   evicts its responses. A response for a request `UseTenantry()` did not handle first is not cached (log event 1009,
   once).

@@ -17,9 +17,11 @@
     <InternalsVisibleTo Include="Tenantry.AspNetCore.Tests"/>
   </ItemGroup>
 
-  <!-- Not in the .NET 11 preview lane (IncludeNet11), where Microsoft.Extensions.Caching.Abstractions comes with the shared framework -->
+  <!-- Not in the .NET 11 preview lane (IncludeNet11), where these come with the shared framework -->
   <ItemGroup Condition="'$(TargetFramework)' != 'net11.0'">
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <!-- ValidateOnStart, for the startup check of the cache's registration -->
+    <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 
 </Project>

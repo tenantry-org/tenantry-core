@@ -5,8 +5,7 @@ namespace Tenantry.Caching.Internal;
 /// <summary>
 /// The <see cref="HybridCache"/> registered when <c>IsolateCaches()</c> finds none to isolate: every call throws,
 /// naming the fix. A later registration that only adds a cache if none exists (<c>AddHybridCache()</c>'s) finds this one
-/// in its place, so the application fails loudly rather than caching unisolated; one that replaces registrations
-/// (<c>AddSingleton</c>) is not caught.
+/// in its place, and <see cref="CacheIsolationCheck"/> stops the host when it sees that one was attempted.
 /// </summary>
 internal sealed class MissingHybridCache : HybridCache
 {

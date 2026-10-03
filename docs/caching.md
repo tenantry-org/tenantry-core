@@ -44,10 +44,11 @@ public sealed class RecentOrders(HybridCache cache, AppDbContext db)
 - **No tenant, no cache.** A call with no current tenant throws `TenantNotResolvedException`, rather than reading or
   writing an entry no tenant owns.
 - **Register the cache first.** `IsolateCaches()` wraps the `HybridCache` registered before it, so call
-  `AddHybridCache()` (or another library's registration of a `HybridCache`) before `AddTenantry`. Without one, the
-  `HybridCache` it registers throws when used, naming the fix, and `AddHybridCache()` called later leaves it in place.
-  A `HybridCache` registered later with `AddSingleton` replaces it, unisolated, so keep cache registrations before
-  `AddTenantry`.
+  `AddHybridCache()` (or another library's registration of a `HybridCache`) before `AddTenantry`. When the host starts,
+  it checks that `HybridCache` resolves to the cache it keys by tenant, and stops the application with an
+  `InvalidOperationException` if not: for a `HybridCache` registered after `AddTenantry`, which would replace it, for
+  `AddHybridCache()` called after `AddTenantry`, and for a keyed `HybridCache`, which it does not isolate. A service
+  provider built without a host skips this check.
 - **Keys get longer.** Each key carries the tenant's id, so keep keys within the cache's maximum key length (1,024
   characters by default) with the id added.
 

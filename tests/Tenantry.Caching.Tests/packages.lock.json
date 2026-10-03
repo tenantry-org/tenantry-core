@@ -411,6 +411,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Caching.Abstractions": "[10.0.0, )",
+          "Microsoft.Extensions.Options": "[10.0.0, )",
           "Tenantry.Core": "[1.0.0, )"
         }
       },
@@ -855,6 +856,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Caching.Abstractions": "[9.0.0, )",
+          "Microsoft.Extensions.Options": "[8.0.0, )",
           "Tenantry.Core": "[1.0.0, )"
         }
       },
@@ -1299,6 +1301,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Caching.Abstractions": "[9.0.0, )",
+          "Microsoft.Extensions.Options": "[9.0.0, )",
           "Tenantry.Core": "[1.0.0, )"
         }
       },

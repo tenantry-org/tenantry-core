@@ -135,6 +135,21 @@ public sealed class TenantCachingTests
     }
 
     [Fact]
+    public async Task AddHybridCacheAfterAddTenantry_StopsTheHost_NamingTheOrder()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddTenantry<string>(tenant => tenant
+            .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }])
+            .IsolateCaches());
+        builder.Services.AddHybridCache();
+        await using var app = builder.Build();
+
+        await FluentActions.Awaiting(() => app.StartAsync(Ct))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("AddHybridCache() was called after AddTenantry*");
+    }
+
+    [Fact]
     public async Task EveryCachingService_Resolves_InAValidatedHost()
     {
         await using var app = await StartAsync();

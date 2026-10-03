@@ -24,10 +24,11 @@ public static class TenantryCachingTenantBuilderExtensions
     /// <remarks>
     /// <para>
     /// It wraps the <see cref="HybridCache"/> registered before it, so call <c>AddHybridCache()</c> before
-    /// <c>AddTenantry</c>. Without one, the <see cref="HybridCache"/> it registers throws when used, naming the fix, and a
-    /// later <c>AddHybridCache()</c>, which adds a cache only if none is registered, leaves it in place. A
-    /// <see cref="HybridCache"/> registered later with <c>AddSingleton</c> replaces it, unisolated: keep cache
-    /// registrations before <c>AddTenantry</c>.
+    /// <c>AddTenantry</c>. When the host starts, it checks that <see cref="HybridCache"/> resolves to the cache it keys
+    /// by tenant, and throws <see cref="InvalidOperationException"/> otherwise: for a <see cref="HybridCache"/>
+    /// registered after it (which would replace it), for <c>AddHybridCache()</c> called after it, and for a keyed
+    /// <see cref="HybridCache"/>, which it does not isolate. With no <see cref="HybridCache"/> registered at all, the one
+    /// it registers throws when used, naming the fix.
     /// </para>
     /// <para>
     /// A <see cref="HybridCache"/> call with no current tenant throws <see cref="TenantNotResolvedException"/>, rather
@@ -59,6 +60,7 @@ public static class TenantryCachingTenantBuilderExtensions
         services.AddSingleton<ICurrentTenant>(sp => new CurrentTenant<TKey>(sp.GetRequiredService<ITenantContextSetter<TKey>>()));
         services.TryAddSingleton<ITenantDistributedCache>(sp =>
             new TenantDistributedCache(sp.GetRequiredService<IDistributedCache>(), sp.GetRequiredService<ICurrentTenant>()));
+        CacheIsolationCheck.Register(services);
 
         var registered = services.LastOrDefault(d => d.ServiceType == typeof(HybridCache) && !d.IsKeyedService);
 
