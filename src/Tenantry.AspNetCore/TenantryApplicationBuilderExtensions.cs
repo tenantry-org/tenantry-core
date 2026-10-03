@@ -45,8 +45,10 @@ public static class TenantryApplicationBuilderExtensions
     /// <remarks>
     /// Between the two, the tenant is current but not yet checked against the user, so put only
     /// <c>app.UseAuthentication()</c> between them. An endpoint whose request did not pass through <see cref="UseTenantry"/>
-    /// after this does not run: it gets <c>500</c> and log event 1011. Resolve from the host, subdomain, route or a
-    /// header here; claim resolvers wait for <see cref="UseTenantry"/>.
+    /// after this does not run: it gets <c>500</c> and log event 1011. Only the resolvers added before the first claim
+    /// resolver run here, in order. If they find nothing, <see cref="UseTenantry"/> runs every resolver, in order, after
+    /// authentication, so a resolver added after a claim resolver never wins over the claim; authentication then used
+    /// the default settings.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// Tenantry is not registered with a way to resolve requests, or no tenant store is registered. The application

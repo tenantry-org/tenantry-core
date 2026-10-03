@@ -157,8 +157,8 @@ endpoint did not run. Call `app.UseTenantry()` after `app.UseAuthentication()` i
 
 The authentication middleware ran before `app.UseTenantResolution()`, so it used no tenant's settings. Call
 `app.UseAuthentication()` yourself, after `app.UseTenantResolution()`: the one `WebApplication` adds on its own runs
-first. A tenant named only by a claim is resolved after authentication, so it always uses the defaults. See
-[Authentication per tenant](authentication-per-tenant.md).
+first. A tenant resolved after authentication, by a claim resolver or one added after it, always uses the defaults:
+add the resolver for authentication before any claim resolver. See [Authentication per tenant](authentication-per-tenant.md).
 
 ## A request with the tenant header has no tenant
 

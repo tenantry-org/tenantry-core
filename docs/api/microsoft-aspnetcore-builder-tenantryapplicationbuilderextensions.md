@@ -28,7 +28,7 @@ Exceptions:
 
 - `InvalidOperationException`: Tenantry is not registered with a way to resolve requests, or no tenant store is registered. The application also fails to start if [`TenantryApplicationBuilderExtensions.UseTenantry`](microsoft-aspnetcore-builder-tenantryapplicationbuilderextensions.md) is not in the pipeline.
 
-Between the two, the tenant is current but not yet checked against the user, so put only `app.UseAuthentication()` between them. An endpoint whose request did not pass through [`TenantryApplicationBuilderExtensions.UseTenantry`](microsoft-aspnetcore-builder-tenantryapplicationbuilderextensions.md) after this does not run: it gets `500` and log event 1011. Resolve from the host, subdomain, route or a header here; claim resolvers wait for [`TenantryApplicationBuilderExtensions.UseTenantry`](microsoft-aspnetcore-builder-tenantryapplicationbuilderextensions.md).
+Between the two, the tenant is current but not yet checked against the user, so put only `app.UseAuthentication()` between them. An endpoint whose request did not pass through [`TenantryApplicationBuilderExtensions.UseTenantry`](microsoft-aspnetcore-builder-tenantryapplicationbuilderextensions.md) after this does not run: it gets `500` and log event 1011. Only the resolvers added before the first claim resolver run here, in order. If they find nothing, [`TenantryApplicationBuilderExtensions.UseTenantry`](microsoft-aspnetcore-builder-tenantryapplicationbuilderextensions.md) runs every resolver, in order, after authentication, so a resolver added after a claim resolver never wins over the claim; authentication then used the default settings.
 
 ```csharp
 app.UseTenantResolution();

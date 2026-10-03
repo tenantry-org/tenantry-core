@@ -68,6 +68,52 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task AResolverAddedAfterAClaimResolver_NeverWinsOverTheClaim()
+    {
+        // Registration order: the token's claim first, a header second. Before authentication the claim cannot be read,
+        // so the header must not be taken in its place.
+        await using var app = await StartAsync(
+            tenant => tenant
+                .ResolveFromClaim("tenant_id")
+                .ResolveFromHeader("X-Tenant-Id")
+                .UseInMemoryStore([Acme, Globex]),
+            AddJwt,
+            pipeline: a =>
+            {
+                a.UseTenantResolution();
+                a.UseAuthentication();
+                a.UseTenantry();
+            });
+        using var client = app.GetTestClient();
+
+        async Task<string> TenantOf(string? claim, string? header)
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, "http://localhost/tenant");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token("default", "dave", tenantClaim: claim));
+
+            if (header is not null)
+            {
+                request.Headers.Add("X-Tenant-Id", header);
+            }
+
+            using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+            return await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await TenantOf(claim: "acme", header: "globex")).Should().Be("acme", "the claim was added first");
+        (await TenantOf(claim: null, header: "globex")).Should().Be("globex", "with no claim, the next resolver applies");
+    }
+
+    [Fact]
+    public async Task AResolverAddedBeforeAClaimResolver_ResolvesBeforeAuthentication()
+    {
+        // The subdomain comes first, so it resolves before authentication and the tenant's settings authenticate.
+        await using var app = await StartJwtAsync(tenant => tenant.ResolveFromClaim("tenant_id"));
+
+        (await Get(app, "acme", "/whoami", Token("acme", "alice", tenantClaim: "globex"))).Should().Be((HttpStatusCode.OK, "acme:alice"));
+    }
+
+    [Fact]
     public async Task AnEndpoint_UseTenantryDidNotRunFor_DoesNotRun()
     {
         RecordingLoggerProvider logs = new();

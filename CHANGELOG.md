@@ -74,10 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   options per tenant, such as an authentication scheme's, which its handler reads with `IOptionsMonitor<T>.Get(scheme)`.
 
 - `app.UseTenantResolution()` (Tenantry.AspNetCore) resolves the tenant before `app.UseAuthentication()`, so
-  authentication handlers read the tenant's options, and `app.UseTenantry()` after it runs the access validators. A
-  tenant the validators refuse is not current for the rest of the request, an endpoint that `app.UseTenantry()` did not
-  run for gets `500` (event 1011), and a pipeline without `app.UseTenantry()` fails to start. Event 1010 warns when it
-  runs after authentication. See [Authentication per tenant](docs/authentication-per-tenant.md).
+  authentication handlers read the tenant's options, and `app.UseTenantry()` after it runs the access validators. Only
+  the resolvers added before the first claim resolver run before authentication, so the registration order still
+  decides which resolver wins. A tenant the validators refuse is not current for the rest of the request, an endpoint
+  that `app.UseTenantry()` did not run for gets `500` (event 1011), and a pipeline without `app.UseTenantry()` fails to
+  start. Event 1010 warns when it runs after authentication. See [Authentication per tenant](docs/authentication-per-tenant.md).
 
 ### Changed
 
