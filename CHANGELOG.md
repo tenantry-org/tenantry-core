@@ -80,6 +80,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that `app.UseTenantry()` did not run for gets `500` (event 1011), and a pipeline without `app.UseTenantry()` fails to
   start. Event 1010 warns when it runs after authentication. See [Authentication per tenant](docs/authentication-per-tenant.md).
 
+- Docs: ASP.NET Core Identity in a database tenants share, with each tenant's users kept apart and user names unique
+  within a tenant, now tested ([ASP.NET Core Identity](docs/aspnetcore-identity.md)); and a scheme per tenant, for
+  tenants on different identity providers, through a policy scheme
+  ([A scheme per tenant](docs/authentication-per-tenant.md#a-scheme-per-tenant)).
+
 ### Changed
 
 - Tenantry.Options runs the tenant's steps after every `Configure` and before every `PostConfigure`, through an options

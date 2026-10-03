@@ -100,6 +100,7 @@ public class AppTenant : ITenantDescriptor<Guid>
     public bool IsSuspended { get; set; }
     public string Authority { get; set; } = "";
     public string ClientId { get; set; } = "";
+    public string? SignInScheme { get; set; }
 }
 
 /// <summary>The catalog database, which lists the tenants.</summary>

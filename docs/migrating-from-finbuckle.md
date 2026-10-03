@@ -22,6 +22,7 @@ not have.
 | `TenantNotSetMode` | No setting: a new entity is stamped, a changed one without the tenant throws |
 | `ConfigurePerTenant<TOptions, TTenantInfo>(…)`, its named and `ConfigureAllPerTenant` variants | `ConfigurePerTenant<TOptions>(…)`, `ConfigurePerTenant<TOptions>(name, …)` and `ConfigureAllPerTenant<TOptions>(…)` in `AddTenantry` (Tenantry.Options) |
 | `WithPerTenantAuthentication()` | `ConfigurePerTenant<TOptions>(scheme, …)` with `UseTenantResolution()` ([Authentication per tenant](authentication-per-tenant.md)) |
+| `MultiTenantIdentityDbContext` (Finbuckle.MultiTenant.Identity.EntityFrameworkCore) | `IdentityDbContext<TUser>` with a tenant-owned user type ([ASP.NET Core Identity](aspnetcore-identity.md)) |
 | `ShortCircuitWhenTenantNotResolved()` | `RequireTenantByDefault()` |
 | `ExcludeFromMultiTenantResolution()` | `AllowMissingTenant()` |
 | `MultiTenantOptions.Events` | `ConfigureResolution(o => o.OnResolved = …)`, and `OnRejected` |
@@ -36,8 +37,8 @@ dotnet add package Tenantry.EfCore
 ```
 
 Add `Tenantry.Options` if you configure options per tenant. If you use
-`Finbuckle.MultiTenant.Identity.EntityFrameworkCore`, read [What Tenantry does not have](#what-tenantry-does-not-have)
-before you start.
+`Finbuckle.MultiTenant.Identity.EntityFrameworkCore`, remove it too, and set Identity up as in
+[ASP.NET Core Identity](aspnetcore-identity.md).
 
 ## 2. Keep string tenant ids
 
@@ -280,7 +281,8 @@ need the key type, such as `UseStore`. Read your tenant type with `t.As<AppTenan
 
 `WithPerTenantAuthentication()` becomes `ConfigurePerTenant` on each scheme's options, such as
 `ConfigurePerTenant<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before
-`app.UseAuthentication()`, so the tenant is known when the scheme authenticates. Finbuckle also refused a cookie signed
+`app.UseAuthentication()`, so the tenant is known when the scheme authenticates. A tenant's own challenge scheme
+becomes a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)). Finbuckle also refused a cookie signed
 in under another tenant. To keep that check, add the tenant id as a claim when the user signs in, and validate it with
 `ValidateTenantAccessByClaim`. A request for another tenant then gets `403` where a tenant is required; Finbuckle
 treated the same user as signed out. Sessions signed in before the change lack the claim, so their users sign in
@@ -314,12 +316,6 @@ again. See [Authentication per tenant](authentication-per-tenant.md).
 
 ## What Tenantry does not have
 
-- **A default scheme per tenant.** Each scheme's settings can differ per tenant, but the schemes and the default and
-  challenge schemes are the same for every tenant. For tenants on different identity providers, use one scheme whose
-  `Authority` differs per tenant, or register a scheme per provider and choose between them yourself.
-- **ASP.NET Core Identity.** Tenantry has no counterpart to `Finbuckle.MultiTenant.Identity.EntityFrameworkCore`.
-  Your Identity entity types can implement `ITenantEntity<TKey>`, but Tenantry is not tested with Identity. Identity's
-  unique indexes on user and role names stay global until you add `TenantId` to them.
 - **Other stores.** Tenantry builds in only the in-memory store, and an application has one store. Finbuckle's
   configuration, distributed cache, HTTP remote and echo stores have no equivalent, and neither have its methods that
   add, update and remove tenants. Write an `ITenantStore<TKey>` as in step 3.

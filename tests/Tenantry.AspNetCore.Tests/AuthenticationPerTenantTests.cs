@@ -49,6 +49,42 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task EachTenant_CanAuthenticateWithASchemeOfItsOwn_ThroughAPolicyScheme()
+    {
+        // A scheme per identity provider, and a policy scheme as the default that forwards to the current tenant's.
+        await using var app = await StartAsync(
+            tenant => tenant.ResolveFromSubdomain(o => o.BaseDomains.Add("example.com")).UseInMemoryStore([Acme, Globex]),
+            services =>
+            {
+                var authentication = services.AddAuthentication("tenant")
+                    .AddPolicyScheme("tenant", "The tenant's provider", o => o.ForwardDefaultSelector = http =>
+                        http.RequestServices.GetRequiredService<ITenantContext<string>>().CurrentTenantId ?? "default");
+
+                foreach (var provider in Keys.Keys)
+                {
+                    authentication.AddJwtBearer(provider, o => Validate(o, provider));
+                }
+
+                services.AddAuthorization();
+            },
+            pipeline: a =>
+            {
+                a.UseTenantResolution();
+                a.UseAuthentication();
+                a.UseTenantry();
+                a.UseAuthorization();
+                a.MapGet("/whoami", (HttpContext http, ITenantContext<string> tenant) => $"{tenant.CurrentTenantId}:{http.User.Identity!.Name}")
+                    .RequireAuthorization();
+            });
+
+        (await Get(app, "acme", "/whoami", Token("acme", "alice"))).Should().Be((HttpStatusCode.OK, "acme:alice"));
+        (await Get(app, "globex", "/whoami", Token("globex", "bob"))).Should().Be((HttpStatusCode.OK, "globex:bob"));
+        (await Get(app, "globex", "/whoami", Token("acme", "alice"))).Status.Should().Be(HttpStatusCode.Unauthorized);
+        (await Get(app, "acme", "/whoami", Token("default", "mallory"))).Status.Should().Be(HttpStatusCode.Unauthorized);
+        (await Get(app, null, "/whoami", Token("default", "carol"))).Should().Be((HttpStatusCode.OK, ":carol"));
+    }
+
+    [Fact]
     public async Task ATenantTheValidatorsRefuse_IsNotCurrentForTheRestOfTheRequest()
     {
         await using var app = await StartJwtAsync(tenant => tenant.ValidateTenantAccess((_, t) => t.TenantId != "globex"));
@@ -243,18 +279,21 @@ public sealed class AuthenticationPerTenantTests
 
     private static void AddJwt(IServiceCollection services)
     {
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
-        {
-            o.MapInboundClaims = false;
-            o.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidIssuer = Issuer("default"),
-                ValidAudience = "api",
-                IssuerSigningKey = Keys["default"],
-                NameClaimType = "sub",
-            };
-        });
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o => Validate(o, "default"));
         services.AddAuthorization();
+    }
+
+    // Accepts the tokens of one issuer and key.
+    private static void Validate(JwtBearerOptions o, string issuer)
+    {
+        o.MapInboundClaims = false;
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidIssuer = Issuer(issuer),
+            ValidAudience = "api",
+            IssuerSigningKey = Keys[issuer],
+            NameClaimType = "sub",
+        };
     }
 
     private static Task<WebApplication> StartJwtAsync(Action<ITenantBuilder<string>>? more = null) =>

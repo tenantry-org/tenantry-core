@@ -92,10 +92,27 @@ JWT bearer and OpenID Connect fetch the provider's metadata (its signing keys) a
 per-tenant options, each tenant has its own copy, fetched on its first request. Invalidating the tenant
 (`ITenantStoreCache<TKey>.Invalidate`) clears it with the tenant's other options.
 
-## Not supported
+## A scheme per tenant
 
-The set of schemes is the same for every tenant: one tenant cannot sign in with Google and another with Entra ID under
-different schemes. Give them one scheme whose settings differ per tenant instead.
+Tenants on different identity providers, one on Entra ID and another on Google, say, need a scheme each. Register one
+per provider, and make a policy scheme the default that forwards to the current tenant's. It runs during
+authentication, after `app.UseTenantResolution()` has made the tenant current:
+
+```csharp
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Tenantry;
+
+builder.Services.AddAuthentication("tenant")
+    .AddPolicyScheme("tenant", "The tenant's provider", o => o.ForwardDefaultSelector = http =>
+        http.RequestServices.GetRequiredService<ITenantContext<Guid>>().GetCurrentTenant<AppTenant>()?.SignInScheme
+        ?? "entra")
+    .AddOpenIdConnect("entra", o => o.CallbackPath = "/signin-entra")
+    .AddOpenIdConnect("google", o => o.CallbackPath = "/signin-google");
+```
+
+Give each scheme a callback path of its own. Each can still take settings per tenant, with
+`ConfigurePerTenant<OpenIdConnectOptions>("entra", …)`. The schemes themselves are registered at startup, so a tenant on
+a new provider needs a scheme added and a restart.
 
 ## See also
 
