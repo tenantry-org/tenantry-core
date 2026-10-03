@@ -56,7 +56,7 @@ public sealed class ResolutionTests
         (await Get(client, "acme")).Should().Be(HttpStatusCode.OK);
         store.Lookups.Should().Be(1);
 
-        app.Services.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+        await app.Services.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
         (await Get(client, "acme")).Should().Be(HttpStatusCode.OK);
         store.Lookups.Should().Be(2);
     }

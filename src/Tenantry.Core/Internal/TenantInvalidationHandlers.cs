@@ -5,7 +5,7 @@ namespace Tenantry.Internal;
 
 /// <summary>
 /// Runs every registered <see cref="ITenantInvalidationHandler{TKey}"/>, resolving them the first time, so a handler may
-/// depend on <see cref="ITenantInvalidator{TKey}"/> or <see cref="ITenantStoreCache{TKey}"/> itself.
+/// depend on <see cref="ITenantInvalidator{TKey}"/> itself.
 /// </summary>
 internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services)
     where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -17,11 +17,6 @@ internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services
 
     public ValueTask InvalidateAllAsync(CancellationToken cancellationToken) =>
         RunEachAsync(handler => handler.InvalidateAllAsync(cancellationToken), cancellationToken);
-
-    // ITenantStoreCache's synchronous methods wait for the handlers.
-    public void Invalidate(TKey tenantId) => Wait(InvalidateAsync(tenantId, CancellationToken.None));
-
-    public void InvalidateAll() => Wait(InvalidateAllAsync(CancellationToken.None));
 
     // No tenant has an id reserved for "no tenant", and a handler could read an empty one as every tenant.
     public static void ThrowIfReserved(TKey tenantId)
@@ -36,12 +31,6 @@ internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services
                 "so no tenant has it to invalidate.",
                 nameof(tenantId));
         }
-    }
-
-    private static void Wait(ValueTask task)
-    {
-        if (!task.IsCompletedSuccessfully)
-            task.AsTask().GetAwaiter().GetResult();
     }
 
     private async ValueTask RunEachAsync(Func<ITenantInvalidationHandler<TKey>, ValueTask> run, CancellationToken cancellationToken)

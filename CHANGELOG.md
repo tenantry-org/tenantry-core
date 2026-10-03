@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where you call them, as EF Core's own methods do.
 - A post-configuration of an options type you configure per tenant sees the tenant's values.
 - If an access validator refuses suspended tenants, `ValidateTenantActivity` also stops their background work.
+- `ITenantStoreCache<TKey>` is gone. Inject `ITenantInvalidator<TKey>` instead and await `InvalidateAsync(tenantId)` or
+  `InvalidateAllAsync()`, which also clear everything else Tenantry keeps for the tenant.
 
 ### Added
 
@@ -58,7 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and run every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`, so one call clears
   everything kept for a tenant. Handlers are asynchronous and take a `CancellationToken`, so removing a tenant's
   entries from a remote cache does not block a thread. Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options
-  register one. `ITenantStoreCache<TKey>.Invalidate` runs the same handlers and waits for them.
+  register one. It replaces `ITenantStoreCache<TKey>`, whose synchronous methods blocked on those handlers, and
+  refuses an id Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty string), which no tenant has.
 
 - `options.UseTenantry(o => …)` sets a context's own isolation options, starting from the application's, so a
   context kept for maintenance code can allow writes without a tenant while every other context keeps `Reject`.
@@ -121,8 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConfigureEfCoreIsolation` configures `IOptions<EfCoreIsolationOptions>`, so `services.Configure` sets the same
   options, and the options can no longer be changed through a registered instance at run time. The
   `TenantNotResolvedException` for a write without a tenant now points at a maintenance context, not the global switch.
-- `ITenantStoreCache<TKey>.Invalidate` refuses an id Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty
-  string), which no tenant has.
 
 ### Fixed
 

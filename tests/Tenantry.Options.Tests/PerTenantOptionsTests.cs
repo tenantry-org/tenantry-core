@@ -103,20 +103,20 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
-    public void ATenantsValue_IsBuiltOnce_UntilTheTenantIsInvalidated()
+    public async Task ATenantsValue_IsBuiltOnce_UntilTheTenantIsInvalidated()
     {
         using var provider = Build();
         var options = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
-        var tenants = provider.GetRequiredService<ITenantStoreCache<string>>();
+        var tenants = provider.GetRequiredService<ITenantInvalidator<string>>();
 
         ReadAs(provider, options, Acme, Globex, Acme, Globex);
         _built.Should().Be(2);
 
-        tenants.Invalidate("acme");
+        await tenants.InvalidateAsync("acme", TestContext.Current.CancellationToken);
         ReadAs(provider, options, Acme, Globex);
         _built.Should().Be(3, "only acme's value is built again");
 
-        tenants.InvalidateAll();
+        await tenants.InvalidateAllAsync(TestContext.Current.CancellationToken);
         ReadAs(provider, options, Acme, Globex);
         _built.Should().Be(5);
     }
@@ -318,7 +318,7 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
-    public void AReadAfterAnInvalidation_BuildsFromTheStoresTenant_NotTheCopyAnEarlierRequestCarries()
+    public async Task AReadAfterAnInvalidation_BuildsFromTheStoresTenant_NotTheCopyAnEarlierRequestCarries()
     {
         // A request resolved before the tenant changed reads the options after the invalidation.
         var store = new ChangingStore(Acme);
@@ -334,7 +334,7 @@ public sealed class PerTenantOptionsTests
             monitor.CurrentValue.Name.Should().Be("Acme");
 
             store.Tenant = new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Renamed" };
-            provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+            await provider.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
 
             monitor.CurrentValue.Name.Should().Be("Acme Renamed");
         }

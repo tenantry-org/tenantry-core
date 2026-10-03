@@ -29,3 +29,4 @@ AddEfCoreIsolation => tenant.ConfigureEfCoreIsolation
 AddTenantDbContextPool => tenant.AddDbContextPerTenantDatabase
 __TenantryFilter__ => TenantryQueryFilters.Tenant
 TenantIds.IsUnset => TenantIds.IsReserved
+ITenantStoreCache => ITenantInvalidator

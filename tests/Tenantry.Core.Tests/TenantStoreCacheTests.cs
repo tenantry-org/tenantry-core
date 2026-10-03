@@ -7,7 +7,7 @@ namespace Tenantry.Core.Tests;
 
 /// <summary>
 /// <c>CacheTenants</c>: the tenants Tenantry reads through <see cref="ITenantLookup{TKey}"/>, by id and by
-/// identifier, are kept for the configured duration, and <see cref="ITenantStoreCache{TKey}"/> removes them.
+/// identifier, are kept for the configured duration, and <see cref="ITenantInvalidator{TKey}"/> removes them.
 /// </summary>
 public sealed class TenantStoreCacheTests
 {
@@ -60,7 +60,7 @@ public sealed class TenantStoreCacheTests
     {
         await using var provider = Build();
         var tenants = provider.GetRequiredService<ITenantLookup<string>>();
-        var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
+        var cache = provider.GetRequiredService<ITenantInvalidator<string>>();
 
         foreach (var lookup in new[] { "acme", "ACME", "globex" })
         {
@@ -69,7 +69,7 @@ public sealed class TenantStoreCacheTests
         }
 
         _store.Reads.Clear();
-        cache.Invalidate("acme");
+        await cache.InvalidateAsync("acme", TestContext.Current.CancellationToken);
 
         foreach (var lookup in new[] { "acme", "ACME", "globex" })
         {
@@ -88,7 +88,7 @@ public sealed class TenantStoreCacheTests
 
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
         await tenants.FindByIdentifierAsync("globex", TestContext.Current.CancellationToken);
-        provider.GetRequiredService<ITenantStoreCache<string>>().InvalidateAll();
+        await provider.GetRequiredService<ITenantInvalidator<string>>().InvalidateAllAsync(TestContext.Current.CancellationToken);
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
         await tenants.FindByIdentifierAsync("globex", TestContext.Current.CancellationToken);
 
@@ -100,7 +100,7 @@ public sealed class TenantStoreCacheTests
     {
         await using var provider = Build();
         var tenants = provider.GetRequiredService<ITenantLookup<string>>();
-        var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
+        var cache = provider.GetRequiredService<ITenantInvalidator<string>>();
 
         foreach (var read in new Func<ValueTask<ITenantDescriptor<string>?>>[]
                  {
@@ -113,7 +113,7 @@ public sealed class TenantStoreCacheTests
             var reading = read().AsTask();
             await _store.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
-            cache.Invalidate("acme");
+            await cache.InvalidateAsync("acme", TestContext.Current.CancellationToken);
             _store.Gate.SetResult();
             (await reading).Should().BeSameAs(Acme, "the store's answer is still returned");
 
@@ -139,11 +139,11 @@ public sealed class TenantStoreCacheTests
         _store.Reads.Should().HaveCount(4);
 
         // Always registered, so code that invalidates runs whether or not tenants are cached.
-        var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
-        cache.Invalidate("acme");
-        cache.InvalidateAll();
-        cache.Invoking(c => c.Invalidate(null!)).Should().Throw<ArgumentNullException>();
-        cache.Invoking(c => c.Invalidate("")).Should().Throw<ArgumentException>().WithMessage("*reserved for \"no tenant\"*");
+        var cache = provider.GetRequiredService<ITenantInvalidator<string>>();
+        await cache.InvalidateAsync("acme", TestContext.Current.CancellationToken);
+        await cache.InvalidateAllAsync(TestContext.Current.CancellationToken);
+        await cache.Awaiting(c => c.InvalidateAsync(null!, TestContext.Current.CancellationToken)).Should().ThrowAsync<ArgumentNullException>();
+        await cache.Awaiting(c => c.InvalidateAsync("", TestContext.Current.CancellationToken)).Should().ThrowAsync<ArgumentException>().WithMessage("*reserved for \"no tenant\"*");
     }
 
     [Fact]
@@ -159,8 +159,7 @@ public sealed class TenantStoreCacheTests
         var tenants = provider.GetRequiredService<ITenantLookup<string>>();
 
         services.Should().ContainSingle(d => d.ServiceType == typeof(TenantStoreCacheOptions));
-        services.Should().ContainSingle(d => d.ServiceType == typeof(ITenantStoreCache<string>));
-        provider.GetRequiredService<ITenantStoreCache<string>>().Should().BeSameAs(provider.GetRequiredService<TenantStoreCache<string>>());
+        services.Should().ContainSingle(d => d.ServiceType == typeof(TenantStoreCache<string>));
         provider.GetRequiredService<TenantStoreCacheOptions>().Duration.Should().Be(TimeSpan.FromSeconds(30));
 
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
@@ -204,8 +203,7 @@ public sealed class TenantStoreCacheTests
     {
         TenantStoreCache<string> cache = new(
             new TenantStoreCacheOptions { Duration = TimeSpan.FromMinutes(1) },
-            _time,
-            new TenantInvalidationHandlers<string>(new ServiceCollection().BuildServiceProvider()));
+            _time);
 
         for (var i = 0; i < TenantStoreCache<string>.MaxEntries; i++)
         {
@@ -242,10 +240,10 @@ public sealed class TenantStoreCacheTests
                 tenant.CacheTenants();
         });
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
-        var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
+        var cache = provider.GetRequiredService<ITenantInvalidator<string>>();
 
-        cache.Invalidate("acme");
-        cache.InvalidateAll();
+        await cache.InvalidateAsync("acme", TestContext.Current.CancellationToken);
+        await cache.InvalidateAllAsync(TestContext.Current.CancellationToken);
 
         first.Calls.Should().Equal("acme", "*");
         second.Calls.Should().Equal("acme", "*");
@@ -260,19 +258,19 @@ public sealed class TenantStoreCacheTests
         services.AddSingleton<ITenantInvalidationHandler<string>>(last);
         services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store).CacheTenants());
         await using var provider = services.BuildServiceProvider();
-        var cache = provider.GetRequiredService<ITenantStoreCache<string>>();
+        var cache = provider.GetRequiredService<ITenantInvalidator<string>>();
         var tenants = provider.GetRequiredService<ITenantLookup<string>>();
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
 
-        cache.Invoking(c => c.Invalidate("acme")).Should().Throw<InvalidOperationException>().WithMessage("first");
+        await cache.Awaiting(c => c.InvalidateAsync("acme", TestContext.Current.CancellationToken)).Should().ThrowAsync<InvalidOperationException>().WithMessage("first");
         last.Calls.Should().Equal("acme");
         await tenants.GetTenantAsync("acme", TestContext.Current.CancellationToken);
         _store.Reads.Should().HaveCount(2, "the tenant was removed before the handlers ran");
 
         services.AddSingleton<ITenantInvalidationHandler<string>>(new Throwing("second"));
         await using var twoThrow = services.BuildServiceProvider();
-        twoThrow.GetRequiredService<ITenantStoreCache<string>>().Invoking(c => c.InvalidateAll())
-            .Should().Throw<AggregateException>().Which.InnerExceptions.Select(e => e.Message).Should().Equal("first", "second");
+        (await twoThrow.GetRequiredService<ITenantInvalidator<string>>().Awaiting(c => c.InvalidateAllAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<AggregateException>()).Which.InnerExceptions.Select(e => e.Message).Should().Equal("first", "second");
     }
 
     [Fact]
@@ -284,22 +282,22 @@ public sealed class TenantStoreCacheTests
         services.AddTenantry<int>(tenant => tenant.UseInMemoryStore([new TenantDescriptor<int> { TenantId = 7, Name = "Seven" }]).CacheTenants());
         await using var provider = services.BuildServiceProvider();
 
-        provider.GetRequiredService<ITenantStoreCache<int>>().Invoking(c => c.Invalidate(0))
-            .Should().Throw<ArgumentException>().WithParameterName("tenantId");
+        await provider.GetRequiredService<ITenantInvalidator<int>>().Awaiting(c => c.InvalidateAsync(0, TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<ArgumentException>().WithParameterName("tenantId");
         handler.Calls.Should().BeEmpty("an empty or default id would read as every tenant to some handlers");
     }
 
     [Fact]
-    public async Task AHandler_CanDependOnTheCacheItself()
+    public async Task AHandler_CanDependOnTheInvalidatorItself()
     {
         ServiceCollection services = new();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<string>, NeedsTheCache>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<string>, NeedsTheInvalidator>());
         services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store).CacheTenants());
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
 
-        provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+        await provider.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
 
-        provider.GetServices<ITenantInvalidationHandler<string>>().OfType<NeedsTheCache>().Single().Calls.Should().Be(1);
+        provider.GetServices<ITenantInvalidationHandler<string>>().OfType<NeedsTheInvalidator>().Single().Calls.Should().Be(1);
     }
 
     [Theory]
@@ -407,13 +405,13 @@ public sealed class TenantStoreCacheTests
         public ValueTask InvalidateAllAsync(CancellationToken cancellationToken) => ValueTask.FromException(new InvalidOperationException(message));
     }
 
-    private sealed class NeedsTheCache(ITenantStoreCache<string> cache, ITenantInvalidator<string> invalidator) : ITenantInvalidationHandler<string>
+    private sealed class NeedsTheInvalidator(ITenantInvalidator<string> invalidator) : ITenantInvalidationHandler<string>
     {
         public int Calls { get; private set; }
 
         public ValueTask InvalidateAsync(string tenantId, CancellationToken cancellationToken)
         {
-            Calls += cache is not null && invalidator is not null ? 1 : 0;
+            Calls += invalidator is not null ? 1 : 0;
             return ValueTask.CompletedTask;
         }
 

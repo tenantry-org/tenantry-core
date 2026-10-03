@@ -152,9 +152,7 @@ public static class TenantryTenantBuilderExtensions
 
         services.TryAddSingleton(sp => new TenantStoreCache<TKey>(
             sp.GetRequiredService<TenantStoreCacheOptions>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System,
-            sp.GetRequiredService<TenantInvalidationHandlers<TKey>>()));
-        services.Replace(ServiceDescriptor.Singleton<ITenantStoreCache<TKey>>(sp => sp.GetRequiredService<TenantStoreCache<TKey>>()));
+            sp.GetService<TimeProvider>() ?? TimeProvider.System));
 
         return builder;
     }

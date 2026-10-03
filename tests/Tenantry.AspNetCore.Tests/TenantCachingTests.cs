@@ -53,12 +53,12 @@ public sealed class TenantCachingTests
         var acmeFirst = await acme.GetStringAsync("/now", Ct);
         var globexFirst = await globex.GetStringAsync("/now", Ct);
 
-        app.Services.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+        await app.Services.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
 
         (await acme.GetStringAsync("/now", Ct)).Should().NotBe(acmeFirst);
         (await globex.GetStringAsync("/now", Ct)).Should().Be(globexFirst);
 
-        app.Services.GetRequiredService<ITenantStoreCache<string>>().InvalidateAll();
+        await app.Services.GetRequiredService<ITenantInvalidator<string>>().InvalidateAllAsync(TestContext.Current.CancellationToken);
         (await globex.GetStringAsync("/now", Ct)).Should().NotBe(globexFirst);
     }
 
@@ -127,7 +127,7 @@ public sealed class TenantCachingTests
         (await distributed.GetAsync("t:globex:plan", Ct)).Should().NotBeNull();
         (await distributed.GetAsync("s:rate", Ct)).Should().NotBeNull();
 
-        app.Services.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+        await app.Services.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
 
         (await acme.GetStringAsync("/plan", Ct)).Should().Be("acme 4");
         (await globex.GetStringAsync("/plan", Ct)).Should().Be("globex 2");

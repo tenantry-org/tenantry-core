@@ -174,8 +174,7 @@ app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, IT
 `AddTenantry` always registers `ITenantInvalidator<TKey>`, so this code runs with caching off too, when there is no
 cached copy to remove. Each instance of the application has its own cache, so `InvalidateAsync` clears this instance's
 copy; other instances serve theirs until it expires. Keep the duration as short as that staleness allows. The cache
-reads the time from a registered `TimeProvider`, so tests can control expiry. `ITenantStoreCache<TKey>.Invalidate`
-does the same synchronously, blocking until every handler below is done.
+reads the time from a registered `TimeProvider`, so tests can control expiry.
 
 ### Everything kept for a tenant
 

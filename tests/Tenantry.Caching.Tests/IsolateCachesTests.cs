@@ -190,15 +190,15 @@ public sealed class IsolateCachesTests
     {
         await using var provider = Build();
         var cache = provider.GetRequiredService<HybridCache>();
-        var tenants = provider.GetRequiredService<ITenantStoreCache<string>>();
+        var tenants = provider.GetRequiredService<ITenantInvalidator<string>>();
         await provider.GetRequiredService<SharedHybridCache>().SetAsync("rates", 1, cancellationToken: Ct);
         foreach (var tenant in new[] { Acme, Globex, new TenantDescriptor<string> { TenantId = "initech", Name = "Initech" } })
             await AsAsync(provider, tenant, () => cache.SetAsync("orders", 1, cancellationToken: Ct).AsTask());
 
-        tenants.Invalidate("acme");
+        await tenants.InvalidateAsync("acme", TestContext.Current.CancellationToken);
         _inner.Entries.Keys.Should().BeEquivalentTo("s:rates", "t:globex:orders", "t:initech:orders");
 
-        tenants.InvalidateAll();
+        await tenants.InvalidateAllAsync(TestContext.Current.CancellationToken);
         _inner.Entries.Keys.Should().Equal("s:rates");
     }
 
@@ -217,7 +217,7 @@ public sealed class IsolateCachesTests
             .Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => cache.RemoveAsync("orders", Ct).AsTask()).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => cache.RemoveByTagAsync("x", Ct).AsTask()).Should().ThrowAsync<InvalidOperationException>();
-        provider.GetRequiredService<ITenantStoreCache<string>>().Invalidate("acme");
+        await provider.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", TestContext.Current.CancellationToken);
     }
 
     [Fact]

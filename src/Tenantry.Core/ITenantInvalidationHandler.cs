@@ -2,7 +2,7 @@ namespace Tenantry;
 
 /// <summary>
 /// Clears data kept per tenant when the tenant changes. Every registered handler runs on
-/// <see cref="ITenantInvalidator{TKey}"/> and <see cref="ITenantStoreCache{TKey}"/> invalidation, with or without
+/// <see cref="ITenantInvalidator{TKey}"/> invalidation, with or without
 /// <c>CacheTenants</c>. Tenantry.Caching, <c>IsolateOutputCache()</c> and Tenantry.Options register their own.
 /// </summary>
 /// <typeparam name="TKey">

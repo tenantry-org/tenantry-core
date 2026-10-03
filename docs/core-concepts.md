@@ -208,7 +208,7 @@ and runs your work in such a scope. See [Non-HTTP hosts](non-http-hosts.md).
 
 There is one entry point, `AddTenantry<TKey>(configure?)` in `Tenantry.Core`, for every kind of host. It registers
 the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITenantScopeFactory<TKey>`,
-`ITenantLookup<TKey>`, `ITenantInvalidator<TKey>`, `ITenantStoreCache<TKey>`, `ITenantActivity<TKey>` and
+`ITenantLookup<TKey>`, `ITenantInvalidator<TKey>`, `ITenantActivity<TKey>` and
 `ITenantKeyType`. Inside the `configure` lambda you add a store, connection strings, EF Core options and, with
 `Tenantry.AspNetCore`, resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`.
 
