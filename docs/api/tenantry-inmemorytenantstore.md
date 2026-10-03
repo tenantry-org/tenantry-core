@@ -31,7 +31,7 @@ Parameters:
 Exceptions:
 
 - `ArgumentNullException`: `tenants` or one of its tenants is null.
-- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsUnset<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
+- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsReserved<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
 
 ## Methods
 

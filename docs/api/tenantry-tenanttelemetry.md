@@ -50,8 +50,30 @@ Exceptions:
 
 - `ArgumentNullException`: `tenantId` is null.
 
+### `CreateLogScope<TKey>(TKey)`
+
+The state of a log scope with one property, [`TenantTelemetry.LogScopeName`](tenantry-tenanttelemetry.md), for `ILogger.BeginScope`, with the id formatted as Tenantry formats it everywhere ([`TenantIds.Format<TKey>`](tenantry-tenantids.md)), so log entries can be queried by it.
+
 ```csharp
-using (logger.BeginScope(TenantTelemetry.CreateLogScope(TenantIds.Format(tenantId))))
+public static IReadOnlyList<KeyValuePair<string, object?>> CreateLogScope<TKey>(TKey tenantId) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `tenantId` `TKey`: The tenant's id.
+
+Returns: `IReadOnlyList<KeyValuePair<string, object>>`: The scope's state.
+
+Exceptions:
+
+- `ArgumentNullException`: `tenantId` is null.
+
+```csharp
+using (logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId)))
 {
     logger.LogInformation("Invoicing");   // carries TenantId
 }

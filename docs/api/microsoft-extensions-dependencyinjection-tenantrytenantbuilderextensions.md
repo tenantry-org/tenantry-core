@@ -33,7 +33,7 @@ Exceptions:
 
 - `ArgumentOutOfRangeException`: [`TenantStoreCacheOptions.Duration`](tenantry-tenantstorecacheoptions.md) is not positive.
 
-Lookups that find nothing, and [`ITenantStore<TKey>.GetAllTenantsAsync`](tenantry-itenantstore.md), are not cached. Call [`ITenantStoreCache<TKey>.Invalidate`](tenantry-itenantstorecache.md) when a tenant changes. It uses a registered `TimeProvider` if there is one.
+Lookups that find nothing, and [`ITenantStore<TKey>.GetAllTenantsAsync`](tenantry-itenantstore.md), are not cached. Call [`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md) when a tenant changes. It uses a registered `TimeProvider` if there is one.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -146,7 +146,7 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 Exceptions:
 
 - `InvalidOperationException`: A tenant store is already registered.
-- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsUnset<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
+- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsReserved<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
 
 ### `UseStore<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantStore<TKey>>)`
 

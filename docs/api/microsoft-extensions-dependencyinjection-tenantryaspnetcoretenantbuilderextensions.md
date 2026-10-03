@@ -31,7 +31,7 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 
 ### `IsolateOutputCache<TKey>(ITenantBuilder<TKey>)`
 
-Keeps ASP.NET Core's output cache per tenant: a response cached while a tenant is current varies by the tenant, so it is served only to that tenant, and invalidating the tenant ([`ITenantStoreCache<TKey>.Invalidate`](tenantry-itenantstorecache.md)) evicts it. A response for a request without a tenant (an endpoint that allows one to be missing) is cached apart from every tenant's.
+Keeps ASP.NET Core's output cache per tenant: a response cached while a tenant is current varies by the tenant, so it is served only to that tenant, and invalidating the tenant ([`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md)) evicts it. A response for a request without a tenant (an endpoint that allows one to be missing) is cached apart from every tenant's.
 
 ```csharp
 public static ITenantBuilder<TKey> IsolateOutputCache<TKey>(this ITenantBuilder<TKey> builder) where TKey : IEquatable<TKey>, IParsable<TKey>

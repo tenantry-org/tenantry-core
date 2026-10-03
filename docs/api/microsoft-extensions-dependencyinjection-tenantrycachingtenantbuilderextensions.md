@@ -12,7 +12,7 @@ public static class TenantryCachingTenantBuilderExtensions
 
 ### `IsolateCaches<TKey>(ITenantBuilder<TKey>)`
 
-Keys the application's `HybridCache` by tenant: an entry written while a tenant is current is read only while that tenant is current, so one tenant's cached data is never served to another. Entries every tenant shares go through [`SharedHybridCache`](tenantry-caching-sharedhybridcache.md); code that uses `IDistributedCache` directly can inject [`ITenantDistributedCache`](tenantry-caching-itenantdistributedcache.md). Invalidating a tenant ([`ITenantStoreCache<TKey>.Invalidate`](tenantry-itenantstorecache.md)) removes its `HybridCache` entries.
+Keys the application's `HybridCache` by tenant: an entry written while a tenant is current is read only while that tenant is current, so one tenant's cached data is never served to another. Entries every tenant shares go through [`SharedHybridCache`](tenantry-caching-sharedhybridcache.md); code that uses `IDistributedCache` directly can inject [`ITenantDistributedCache`](tenantry-caching-itenantdistributedcache.md). Invalidating a tenant ([`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md)) removes its `HybridCache` entries.
 
 ```csharp
 public static ITenantBuilder<TKey> IsolateCaches<TKey>(this ITenantBuilder<TKey> builder) where TKey : IEquatable<TKey>, IParsable<TKey>
