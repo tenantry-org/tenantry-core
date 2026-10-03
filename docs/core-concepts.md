@@ -1,7 +1,6 @@
 # Core concepts
 
 Everything in Tenantry is built on a small set of types in the `Tenantry` namespace (package `Tenantry.Core`).
-Understanding them makes the EF Core and ASP.NET Core layers obvious.
 
 ## The tenant key (`TKey`)
 
@@ -165,28 +164,18 @@ using (tenantContext.Use(acme))       // current = Acme
 }                                     // current = none
 ```
 
-This is useful for admin/maintenance code that needs to briefly act as a specific tenant from within
-another context.
+Use it in maintenance code that acts as another tenant for a moment.
 
 ## The `AsyncLocal` model
 
-`ITenantContext<TKey>` and `ITenantContextSetter<TKey>` are both registered as a **singleton** backed by a
-single `AsyncLocal` holding the innermost open scope. The implication matters:
+`ITenantContext<TKey>` and `ITenantContextSetter<TKey>` are one singleton over an `AsyncLocal`, so the current tenant
+belongs to the async flow, not to an object. It flows into code you call and await, never back to your caller, and
+concurrent requests never see each other's tenant.
 
-- The "current tenant" is **per async-execution-context**, not per object instance. The value flows
-  *down* into every method you call and every `Task` you `await`, but never *up* to your caller.
-- This is why a singleton is correct and safe: there is no per-request instance to manage, and the
-  value cannot leak between concurrent requests/operations because each runs in its own async context.
-- A background `Task.Run(...)` started inside a scope inherits the tenant at the moment it is created.
-  If you queue work to run *later* (after the scope disposes), capture the tenant id and open a fresh
-  scope when the work runs (`ITenantScopeFactory.RunInScopeAsync`); do not rely on the ambient value
-  still being set.
-- Disposing a scope is order-safe. Disposing the innermost scope restores the nearest scope that is
-  still open; disposing any other scope (out of order, or from a different async flow) closes it without
-  changing the active tenant.
-- Disposal restores the tenant only in the flow that disposes. If a child task disposes a handle it
-  inherited, the caller keeps that tenant until it disposes the handle as well, which then restores the
-  caller's previous tenant. Further disposals change nothing.
+- A `Task.Run(...)` started inside a scope inherits the tenant it had then. For work that runs after the scope is
+  disposed, capture the tenant id and run the work by id (see [Non-HTTP hosts](non-http-hosts.md)).
+- Disposing the innermost scope restores the nearest one still open. Disposing any other, out of order or from
+  another async flow, closes it without changing the current tenant, and only in the flow that disposes it.
 
 ### How EF Core queries see the current tenant
 

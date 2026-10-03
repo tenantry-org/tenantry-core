@@ -3,10 +3,11 @@
 `Tenantry.AspNetCore` turns an incoming HTTP request into a resolved tenant. It adds, to the builder of
 `AddTenantry<TKey>(...)`:
 
-- Tenant **resolvers** (header, subdomain, host, route, claim, query string, custom) — see [Tenant resolution](tenant-resolution.md).
-- **Access validation** and endpoint metadata — see [Access control](access-control.md).
-- `ConfigureResolution(...)` — whether endpoints need a tenant, the [status codes](#status-codes) of rejections, and
-  the [events](#events) raised when a request's tenant is made current or a request is rejected.
+- tenant resolvers (header, subdomain, host, route, claim, query string, your own): see
+  [Tenant resolution](tenant-resolution.md);
+- access validation and endpoint metadata: see [Access control](access-control.md);
+- `ConfigureResolution(...)`: whether endpoints need a tenant, the [status codes](#status-codes) of rejections, and
+  the [events](#events) raised when a request's tenant is made current or a request is rejected;
 
 and `app.UseTenantry()`, the resolution middleware, which also checks the registration when the application starts.
 Its logs, traces and metrics are described in [Diagnostics](diagnostics.md).
@@ -28,20 +29,10 @@ middleware's services. See [Registration](core-concepts.md#registration) for the
 
 ### Startup validation
 
-`app.UseTenantry()` checks the registration when the pipeline is built, before the application serves a
-request, and throws `InvalidOperationException` if:
-
-- **Tenantry's request resolution is not registered** (you did not call `AddTenantry` with a `ResolveFrom…` or
-  `UseResolver` method),
-- **no resolver** is registered, or
-- **no store** is registered (you forgot `UseInMemoryStore`/`UseStore`).
-
-The other way round, a web application that registers request resolution but never calls `app.UseTenantry()`
-fails to start: without the middleware, no request would have a tenant, and endpoints marked `RequireTenant()`
-would run without one. A host that serves no requests (a worker) is not checked.
-
-A second store registration, and `AddTenantry` with another tenant key type, throw where they are made. This
-converts a class of silent runtime bugs into an immediate, descriptive startup failure.
+`app.UseTenantry()` throws `InvalidOperationException` when the pipeline is built if no resolver or no store is
+registered. A web application that registers resolvers but never calls `app.UseTenantry()` fails to start, because
+no request would have a tenant. A host that serves no requests (a worker) is not checked. Registering a second store,
+or a second key type, throws at once.
 
 ## The middleware
 
@@ -61,17 +52,17 @@ For each request, the middleware:
 3. Finds the tenant the identifier names, with `ITenantLookup<TKey>.FindByIdentifierAsync`, which calls your
    store's `FindByIdentifierAsync` (by default: parse the identifier as `TKey` and look the id up) and serves it from
    the cache with [`CacheTenants`](tenant-stores.md#caching). If none, a request that requires a tenant is
-   rejected (`404 Not Found`, or the access-denied response when access validators are configured).
-4. Runs the [access validators](access-control.md), in the order they were added. If one refuses, a request that
-   requires a tenant is rejected (`403 Forbidden`).
+   rejected (see [Status codes](#status-codes)).
+4. Checks the tenant is [active](tenant-stores.md#suspended-and-inactive-tenants), then runs the
+   [access validators](access-control.md) in the order they were added. If either refuses, a request that requires a
+   tenant is rejected (`403 Forbidden`).
 5. Makes the tenant current (`ITenantContextSetter.Use`) for the remainder of the request, tags the request's
    trace span `tenant.id` and opens a log scope with `TenantId`, and raises [`OnResolved`](#events). The tenant is
    restored when the request ends.
 
-A request to an endpoint that does **not** require a tenant is never rejected: when its identifier names no
-tenant, or names one an access validator refuses, it continues without a tenant, as if it had no identifier. So a
-`www.` host or a stale header does not break your login and health endpoints, and a caller learns nothing about
-which tenants exist.
+A request to an endpoint that does not require a tenant is never rejected: when its identifier names no tenant, or
+one that is refused, it continues without a tenant, as if it had no identifier. So a `www.` host or a stale header
+does not break your login and health endpoints.
 
 Resolvers and access validators added by type (`UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()`) are
 created in the **request's** service scope, so they can depend on a scoped `DbContext`. The store is resolved from a scope of `ITenantLookup<TKey>`'s own for each lookup.
@@ -141,25 +132,16 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     }));
 ```
 
-`Reason` is the real reason, for your logs: with access validators, an unknown tenant's `StatusCode` is the
-access-denied one, so a caller cannot tell it from a refused tenant. Keep that in a response of your own, and do
-not repeat `Identifier`, which is request input, without encoding it.
+`Reason` is the real reason, for your logs; `StatusCode` hides it as described under [Status codes](#status-codes).
+Keep it hidden in a response of your own, and do not repeat `Identifier`, which is request input, without encoding
+it.
 
 ## Pipeline ordering
 
-`UseTenantry()` must run **before** anything that needs the resolved tenant — your endpoints,
-authorization that depends on the tenant, and EF Core work driven by the request.
-
-Two ordering rules matter:
-
-- **After authentication when resolving from claims.** `ResolveFromClaim` and `ValidateTenantAccessByClaim`
-  read `HttpContext.User`, which is only populated after `app.UseAuthentication()`. Place
-  `UseTenantry()` after it.
-- **After routing for endpoint metadata.** `RequireTenant()`/`AllowMissingTenant()` are endpoint
-  metadata, so the middleware must run after routing has selected an endpoint to honour them.
-  `WebApplication` adds routing automatically and places it early, so for minimal APIs and controllers
-  this generally just works. If you build a custom pipeline, ensure `UseRouting()` precedes
-  `UseTenantry()`.
+Put `UseTenantry()` before anything that needs the tenant: your endpoints, authorization that depends on it, and
+EF Core work driven by the request. Put it after `UseAuthentication()` when you resolve or validate from claims, and
+after routing, so it sees endpoint metadata (`WebApplication` adds routing first; a custom pipeline must call
+`UseRouting()` before `UseTenantry()`).
 
 If the middleware runs before routing, a request without a tenant to an endpoint that requires one is still
 rejected, but `RequireTenantByDefault()` then applies to `AllowMissingTenant()` endpoints too, and route values are
@@ -190,12 +172,9 @@ app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.CurrentTenant!.Na
 
 Check `HasTenant` only where the tenant is optional: on an endpoint that does not require one.
 
-You rarely need to read `CurrentTenantId` for data access — the EF Core query filter and interceptor
-apply it for you. Read it when you need the tenant for non-EF logic (per-tenant file paths, external
-API keys, logging, etc.).
+Read `CurrentTenantId` for work outside EF Core, which applies the tenant for you.
 
 ## MVC / controllers
 
-Everything above applies to controllers too. The endpoint metadata helpers exist as attributes for
-controllers — `[RequireTenant]` and `[AllowMissingTenant]` — and as builder methods
-(`.RequireTenant()`, `.AllowMissingTenant()`) for minimal APIs. See [Access control](access-control.md).
+Everything above applies to controllers too. The endpoint metadata is `[RequireTenant]` and `[AllowMissingTenant]` on
+controllers, and `.RequireTenant()` and `.AllowMissingTenant()` on minimal APIs. See [Access control](access-control.md).

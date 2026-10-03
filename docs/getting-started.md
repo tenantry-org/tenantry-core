@@ -58,13 +58,9 @@ builder.Services.AddTenantry<Guid>(tenant =>
 });
 ```
 
-Every builder method returns the builder, so the same registration can be written as one chain:
-`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`.
-
-> **Startup validation.** `app.UseTenantry()` (step 7) checks the registration when the pipeline is built and
-> throws a clear `InvalidOperationException` if no resolver or no store is registered, rather than letting the
-> application misbehave at runtime. Registering a second store, or calling `AddTenantry` with another key
-> type, throws too.
+Builder methods chain, so this can also be one chain:
+`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`. `app.UseTenantry()` (step 7) throws
+at startup if no resolver or no store is registered. The rules are in [Registration](core-concepts.md#registration).
 
 ## 4. Mark your tenant-owned entities
 
