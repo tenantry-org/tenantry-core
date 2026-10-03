@@ -1,10 +1,8 @@
 # Tenantry documentation
 
-Tenantry is a flexible, modern, and unopinionated multi-tenancy library for .NET. It isolates each
-tenant's data in a **shared database** using a `TenantId` column, wiring the isolation in through an
-EF Core interceptor and global query filters, or gives each tenant **its own database** through
-per-tenant connection strings ([database per tenant](efcore-integration.md#database-per-tenant)) —
-without forcing a base class on your entities or taking over your request pipeline. Schema-per-tenant,
+Tenantry keeps each tenant's data apart in EF Core, either in a shared database, where tenant-owned entities carry a
+`TenantId` that every query and save is scoped to, or in a [database per tenant](efcore-integration.md#database-per-tenant).
+Your entities need no base class, and Tenantry does not take over your request pipeline. Schema per tenant,
 provisioning and migrations across tenant databases are in [Tenantry.Pro](https://tenantry.dev/docs/pro).
 
 If you are new, start with **[Getting started](getting-started.md)** and **[Core concepts](core-concepts.md)**.

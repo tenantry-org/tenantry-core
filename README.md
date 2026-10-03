@@ -7,15 +7,11 @@
 [![License](https://img.shields.io/github/license/tenantry-org/tenantry-core)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0%20LTS%20%7C%208.0%2C%209.0%20legacy-512BD4)](docs/compatibility.md)
 
-A flexible, modern, and unopinionated multi-tenancy library for .NET.
+Tenant isolation for ASP.NET Core and EF Core: one call on your `DbContext`, no base class, and it fails closed.
 
-Tenantry isolates each tenant's data in a **shared database**, where the entities you choose to make
-tenant-scoped carry a `TenantId` column and EF Core reads and writes against them are limited to the
-current tenant, or gives each tenant **its own database** through per-tenant connection strings. It
-does this without forcing
-a base class on your entities, without a custom `DbContext`, and without taking over your request
-pipeline. You pick the tenant key type, how tenants are resolved, and where they are stored — and
-Tenantry wires the isolation in.
+Tenantry keeps each tenant's data apart in EF Core, either in a shared database, where tenant-owned entities carry a
+`TenantId` that every query and save is scoped to, or in a database per tenant. Your entities need no base class,
+your `DbContext` stays plain, and you choose the key type, how tenants are resolved and where they are stored.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -29,51 +25,26 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 
 ## Why Tenantry?
 
-- **Unopinionated.** Your tenant key can be a `Guid`, `int`, `string`, or any type that is
-  `IEquatable<T>` and `IParsable<T>`. Resolve tenants from a header, subdomain, route, claim, query
-  string, or your own resolver. Store them in memory, a database, or anywhere behind an interface.
-- **One call per `DbContext`.** `options.UseTenantry()` isolates **any** `DbContext`, pooled or not: no base
-  class, no interface, and your own model configuration in any order.
-- **Fails closed.** When no tenant is resolved, query filters match nothing rather than leaking every
-  tenant's rows. New rows that name another tenant, and updates and deletes of another tenant's rows, are
-  rejected before saving, and the stored tenant is also part of every `UPDATE`/`DELETE` statement, so a forged
-  key matches nothing.
-  Tenant-scoped writes without a tenant context are rejected by default (`OnMissingTenant`).
-  Isolation is enforced by EF Core, not the database: raw SQL and `IgnoreQueryFilters()` are unisolated
-  ([what is and isn't isolated](docs/efcore-integration.md#what-is-and-isnt-isolated)).
-- **HTTP and beyond.** One `AddTenantry` serves ASP.NET Core (resolution middleware, access validation,
-  endpoint metadata, from `Tenantry.AspNetCore`) and brings the same isolation to console apps, worker
-  services and desktop UIs with no web stack.
-- **Modern .NET.** Built for .NET 10, with .NET 11 added when it ships; .NET 8 and 9 are supported as
-  legacy until 10 November 2027 ([compatibility](docs/compatibility.md)). The core and ASP.NET Core packages are trim- and
-  Native-AOT-compatible (see [AOT & trimming](#aot--trimming)).
+- Any key type that is `IEquatable<T>` and `IParsable<T>`: `Guid`, `int`, `string` and so on. Resolve tenants from a
+  header, subdomain, host, route, claim or a resolver of your own, and keep them in any store behind an interface.
+- `options.UseTenantry()` isolates any `DbContext`, pooled or not, with your own model configuration in any order.
+- It fails closed. With no tenant, queries return nothing and tenant-owned writes are refused. A write to another
+  tenant's row is rejected before saving, and `TenantId` is part of every `UPDATE` and `DELETE`, so a forged key
+  matches no row. Raw SQL and `IgnoreQueryFilters()` are not isolated
+  ([details](docs/efcore-integration.md#what-is-and-isnt-isolated)).
+- One `AddTenantry` serves ASP.NET Core, console apps, workers and desktop apps.
+- Built for .NET 10. .NET 8 and 9 are supported until 10 November 2027 ([compatibility](docs/compatibility.md)).
 
-## Tenantry and Tenantry.Pro
-
-**Tenantry** (this open-source library) covers identifying tenants and isolating their data:
-
-- tenant resolution, tenant stores and access control, in ASP.NET Core and in console, worker and desktop hosts;
-- isolation in a **shared database**, with a `TenantId` column that EF Core scopes reads and writes to;
-- a **database per tenant**, with per-tenant connection strings and `DbContext` pooling across tenant databases;
-- worker scopes for running background work as a tenant.
-
-**[Tenantry.Pro](https://tenantry.dev)** (a subscription) adds what running many tenant databases takes:
-
-- a **schema per tenant** (SQL Server, PostgreSQL) and **mixed mode**, choosing a database, a schema or the shared
-  database per tenant;
-- provisioning of tenant databases and schemas on SQL Server, PostgreSQL and MySQL;
-- migration orchestration across every tenant database, and the provision → migrate → seed lifecycle;
-- caching of connection strings;
-- tenant context in Hangfire, MassTransit, Quartz.NET and Rebus, health checks, audit logging and per-tenant
-  telemetry.
+[Tenantry.Pro](https://tenantry.dev), a subscription, adds schema per tenant, provisioning and migrations across
+tenant databases, and the tenant in background jobs and messages.
 
 ## Packages
 
 | Package               | Version                                                                                                                | Description                                                                    |
 |-----------------------|------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
-| `Tenantry.Core`       | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Core.svg)](https://www.nuget.org/packages/Tenantry.Core)             | Core interfaces, tenant scope, tenant store, and DI registration               |
-| `Tenantry.EfCore`     | [![NuGet](https://img.shields.io/nuget/v/Tenantry.EfCore.svg)](https://www.nuget.org/packages/Tenantry.EfCore)         | EF Core integration — interceptor-based isolation, query filters, isolation policy |
-| `Tenantry.AspNetCore` | [![NuGet](https://img.shields.io/nuget/v/Tenantry.AspNetCore.svg)](https://www.nuget.org/packages/Tenantry.AspNetCore) | ASP.NET Core integration — resolution middleware, resolvers, access validation |
+| `Tenantry.Core`       | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Core.svg)](https://www.nuget.org/packages/Tenantry.Core)             | The current tenant, tenant stores, worker scopes and registration              |
+| `Tenantry.EfCore`     | [![NuGet](https://img.shields.io/nuget/v/Tenantry.EfCore.svg)](https://www.nuget.org/packages/Tenantry.EfCore)         | EF Core isolation: query filters and checked saves                             |
+| `Tenantry.AspNetCore` | [![NuGet](https://img.shields.io/nuget/v/Tenantry.AspNetCore.svg)](https://www.nuget.org/packages/Tenantry.AspNetCore) | Resolves each request's tenant: middleware, resolvers, access validation        |
 | `Tenantry.Http`       | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Http.svg)](https://www.nuget.org/packages/Tenantry.Http)             | Sends the current tenant to the services an `HttpClient` or gRPC client calls |
 | `Tenantry.Caching`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Caching.svg)](https://www.nuget.org/packages/Tenantry.Caching)       | Keeps `HybridCache` entries per tenant                                         |
 | `Tenantry.Options`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Options.svg)](https://www.nuget.org/packages/Tenantry.Options)       | `IOptions<T>` values per tenant                                                |
@@ -141,7 +112,7 @@ Add EF Core isolation where you register your context, with `options.UseTenantry
 the current tenant, and saves are stamped and checked. The context stays a plain `DbContext`. See the
 [EF Core integration guide](docs/efcore-integration.md) for the full picture.
 
-## Quick start (console / worker — no ASP.NET Core)
+## Quick start (console or worker)
 
 There is no request to resolve a tenant from, so you open a tenant scope around each unit of work:
 
@@ -172,27 +143,9 @@ and the [non-HTTP hosts guide](docs/non-http-hosts.md).
 
 ## AOT & trimming
 
-Tenantry is built with the trim and AOT analyzers enabled and ships annotated for both. Support
-differs by package because EF Core's query-filter mechanism requires runtime code generation:
-
-| Package               | Trimming                | Native AOT                                                                 |
-|-----------------------|-------------------------|----------------------------------------------------------------------------|
-| `Tenantry.Core`       | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`)                                     |
-| `Tenantry.AspNetCore` | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`) — see the `Aot` sample             |
-| `Tenantry.Http`       | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`) — see the `Aot` sample             |
-| `Tenantry.Caching`    | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`); Microsoft's `HybridCache` has trim warnings of its own |
-| `Tenantry.Options`    | ✅ Fully compatible     | ✅ Fully compatible (`IsAotCompatible`)                                     |
-| `Tenantry.EfCore`     | ✅ Trim-compatible      | ⚠️ Not AOT-compatible — query filters require dynamic code (see below)     |
-
-- **`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options`** are marked `IsAotCompatible` and `IsTrimmable` and
-  carry no trim/AOT warnings. The [`Tenantry.Samples.Aot`](samples/Tenantry.Samples.Aot) project
-  publishes with `PublishAot=true` against a slim host and source-generated JSON.
-- **`Tenantry.EfCore`** is `IsTrimmable` but **not** AOT-compatible. `UseTenantry()` builds the tenant query
-  filters as LINQ expression trees while EF Core builds the model at run time, as EF Core itself does: EF Core's
-  `DbContext` is annotated `[RequiresDynamicCode]` and `[RequiresUnreferencedCode]`, and does not support
-  Native AOT with a model built at run time.
-
-Full details and guidance are in [AOT & trimming](docs/aot-and-trimming.md).
+`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` support trimming
+and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and its EF Core entry points are annotated
+([details](docs/aot-and-trimming.md)).
 
 ## Documentation
 
