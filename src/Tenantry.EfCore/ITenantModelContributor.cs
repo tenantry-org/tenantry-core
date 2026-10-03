@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 
 namespace Tenantry.EfCore;
@@ -13,6 +14,7 @@ namespace Tenantry.EfCore;
 /// provider: a context built without it (a design-time factory that builds its options by hand, say) gets a model
 /// without their contributions.
 /// </remarks>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public interface ITenantModelContributor
 {
     /// <summary>

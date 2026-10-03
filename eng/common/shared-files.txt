@@ -4,6 +4,7 @@
 dotnet-tools.json
 global.json
 eng/api-docs/docfx.json
+eng/api-docs/filter.yml
 eng/common/Build.props
 eng/common/Build.targets
 eng/common/Packages.props

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -8,6 +9,7 @@ namespace Tenantry.EfCore;
 /// <summary>
 /// Reads which entity types of an EF Core model Tenantry isolates, for packages and tests that build on it.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public static class TenantModel
 {
     /// <summary>The model annotation <c>IsSharedAcrossTenants()</c> sets.</summary>

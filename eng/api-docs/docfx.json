@@ -15,7 +15,8 @@
       "outputFormat": "mref",
       "namespaceLayout": "flattened",
       "memberLayout": "samePage",
-      "enumSortOrder": "declaringOrder"
+      "enumSortOrder": "declaringOrder",
+      "filter": "filter.yml"
     }
   ]
 }

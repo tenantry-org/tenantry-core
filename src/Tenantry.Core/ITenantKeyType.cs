@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace Tenantry;
 
 /// <summary>
@@ -10,6 +12,7 @@ namespace Tenantry;
 /// <see cref="Accept{TResult}"/> calls a generic method with the key type known at compile time, so Native AOT
 /// compiles it, unlike <c>MakeGenericType</c> on <see cref="Type"/>.
 /// </remarks>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public interface ITenantKeyType
 {
     /// <summary>The tenant key type, such as <see cref="Guid"/>.</summary>
@@ -24,6 +27,7 @@ public interface ITenantKeyType
 
 /// <summary>Code that needs the tenant key type, given it by <see cref="ITenantKeyType"/>.</summary>
 /// <typeparam name="TResult">What the code returns.</typeparam>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public interface ITenantKeyTypeVisitor<out TResult>
 {
     /// <summary>Runs with the tenant key type as <typeparamref name="TKey"/>.</summary>

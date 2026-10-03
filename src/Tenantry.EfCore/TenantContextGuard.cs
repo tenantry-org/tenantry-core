@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,7 @@ namespace Tenantry.EfCore;
 /// <see cref="TenantIsolationViolationException"/> when it would use another tenant's data.
 /// </para>
 /// </remarks>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public abstract class TenantContextGuard : IDbConnectionInterceptor, IDbCommandInterceptor, ISaveChangesInterceptor
 {
     // The context that opened each connection, for commands EF Core runs without one.

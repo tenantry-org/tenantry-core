@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
@@ -9,6 +10,7 @@ namespace Tenantry;
 /// jobs and messages carry, and in the identifiers <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/> reads by
 /// default.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public static class TenantIds
 {
     /// <summary>

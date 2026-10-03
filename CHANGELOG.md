@@ -81,7 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads its connection string when it first opens a connection. It can now be injected; only asynchronous EF Core
   calls work on it. Before, injecting it threw.
 
-- Seams for packages that build on Tenantry, Tenantry.Pro among them:
+- Seams for packages that build on Tenantry, Tenantry.Pro among them. They and the other extension points
+  (`TenantIds`, `ITenantRegistration`, the EF Core contributors, `TenantConnectionStringProvider<TKey>`) are marked
+  `[EditorBrowsable(EditorBrowsableState.Advanced)]`, and the API reference lists them apart from the types an
+  application uses:
   - `TenantContextGuard` (Tenantry.EfCore), an interceptor base that checks a context before it opens a connection,
     runs a command or saves, and the violation kind `TenantSchemaMismatch`, for a context on another tenant's schema.
     A guard checks a save before Tenantry stamps its new entities, wherever it is among the context's interceptors,

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Tenantry;
 using Tenantry.Internal;
@@ -86,6 +87,7 @@ public static class TenantryServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The application's service collection.</param>
     /// <returns>The key type, or <see langword="null"/>.</returns>
+    [EditorBrowsable(EditorBrowsableState.Advanced)]
     public static ITenantKeyType? FindTenantKeyType(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);

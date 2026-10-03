@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace Tenantry;
 
 /// <summary>
@@ -12,6 +14,7 @@ namespace Tenantry;
 /// Public so that other providers (for example a caching one) can wrap it. <c>UseConnectionStrings</c>
 /// registers it as a singleton, and forwards <see cref="ITenantConnectionStringProvider{TKey}"/> to it.
 /// </remarks>
+[EditorBrowsable(EditorBrowsableState.Advanced)]
 public sealed class TenantConnectionStringProvider<TKey>(TenantConnectionStringOptions<TKey> options)
     : ITenantConnectionStringProvider<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
