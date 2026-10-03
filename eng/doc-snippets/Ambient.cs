@@ -7,6 +7,7 @@ global using static DocSnippets.Ambient;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Tenantry;
+using Tenantry.AspNetCore;
 
 namespace DocSnippets;
 
@@ -137,6 +138,18 @@ public sealed class AppTenantStore : ITenantStore<string>
 
     public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken ct = default) =>
         ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([]);
+}
+
+public sealed class CookieTenantResolver : ITenantResolver
+{
+    public ValueTask<string?> ResolveAsync(Microsoft.AspNetCore.Http.HttpContext context, CancellationToken ct = default) =>
+        ValueTask.FromResult(context.Request.Cookies["tenant"]);
+}
+
+public sealed class MembershipValidator : ITenantAccessValidator<Guid>
+{
+    public ValueTask<bool> ValidateAsync(Microsoft.AspNetCore.Http.HttpContext context, ITenantDescriptor<Guid> tenant, CancellationToken ct) =>
+        ValueTask.FromResult(true);
 }
 
 /// <summary>A secrets client, as Azure Key Vault's or AWS Secrets Manager's.</summary>

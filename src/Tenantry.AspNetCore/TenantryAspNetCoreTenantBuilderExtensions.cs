@@ -222,7 +222,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TResolver">The resolver type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first, or use the overload that takes a <see cref="Type"/>, which chains.</returns>
+    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first, or call it as a statement of its own.</returns>
     public static ITenantBuilder UseResolver<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TResolver>(
         this ITenantBuilder builder)
@@ -232,33 +232,6 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
 
         builder.Add(TenantResolutionRegistration.Instance);
         builder.Services.AddScoped<ITenantResolver, TResolver>();
-        return builder;
-    }
-
-    /// <summary>
-    /// Adds a resolver of type <paramref name="resolverType"/>, created in each request's scope, as
-    /// <c>UseResolver&lt;TResolver&gt;()</c> does, but returns the builder with its key type, so calls chain after it.
-    /// </summary>
-    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
-    /// <param name="builder">The tenant builder.</param>
-    /// <param name="resolverType">A class that implements <see cref="ITenantResolver"/>.</param>
-    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
-    /// <exception cref="ArgumentException"><paramref name="resolverType"/> is not a class that implements <see cref="ITenantResolver"/>.</exception>
-    public static ITenantBuilder<TKey> UseResolver<TKey>(
-        this ITenantBuilder<TKey> builder,
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type resolverType)
-        where TKey : IEquatable<TKey>, IParsable<TKey>
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(resolverType);
-
-        if (!resolverType.IsClass || resolverType.IsAbstract || !typeof(ITenantResolver).IsAssignableFrom(resolverType))
-        {
-            throw new ArgumentException($"{resolverType.Name} is not a class that implements ITenantResolver.", nameof(resolverType));
-        }
-
-        TenantResolutionMiddlewareConfigurator<TKey>.Register(builder.Services);
-        builder.Services.AddScoped(typeof(ITenantResolver), resolverType);
         return builder;
     }
 
@@ -395,7 +368,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TValidator">The validator type, which implements <see cref="ITenantAccessValidator{TKey}"/> for the application's tenant key type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first, or use the overload that takes a <see cref="Type"/>, which chains.</returns>
+    /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first, or call it as a statement of its own.</returns>
     /// <exception cref="InvalidOperationException"><typeparamref name="TValidator"/> does not implement <see cref="ITenantAccessValidator{TKey}"/> for the builder's key type.</exception>
     public static ITenantBuilder ValidateTenantAccess<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>(
@@ -405,36 +378,6 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Add(new TenantAccessValidatorRegistration<TValidator>());
-        return builder;
-    }
-
-    /// <summary>
-    /// Adds an access validator of type <paramref name="validatorType"/>, created in each request's scope, as
-    /// <c>ValidateTenantAccess&lt;TValidator&gt;()</c> does, but returns the builder with its key type, so calls chain
-    /// after it.
-    /// </summary>
-    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
-    /// <param name="builder">The tenant builder.</param>
-    /// <param name="validatorType">A class that implements <see cref="ITenantAccessValidator{TKey}"/>.</param>
-    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
-    /// <exception cref="ArgumentException"><paramref name="validatorType"/> is not a class that implements <see cref="ITenantAccessValidator{TKey}"/>.</exception>
-    public static ITenantBuilder<TKey> ValidateTenantAccess<TKey>(
-        this ITenantBuilder<TKey> builder,
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type validatorType)
-        where TKey : IEquatable<TKey>, IParsable<TKey>
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(validatorType);
-
-        if (!validatorType.IsClass || validatorType.IsAbstract || !typeof(ITenantAccessValidator<TKey>).IsAssignableFrom(validatorType))
-        {
-            throw new ArgumentException(
-                $"{validatorType.Name} is not a class that implements ITenantAccessValidator<{typeof(TKey).Name}>.",
-                nameof(validatorType));
-        }
-
-        TenantResolutionMiddlewareConfigurator<TKey>.Register(builder.Services);
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped(typeof(ITenantAccessValidator<TKey>), validatorType));
         return builder;
     }
 }

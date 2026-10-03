@@ -118,8 +118,8 @@ public sealed class Membership
 tenant.ValidateTenantAccess<MembershipValidator>();
 ```
 
-`ValidateTenantAccess<TValidator>()` returns the builder without its key type (see
-[Registration](core-concepts.md#registration)); `ValidateTenantAccess(typeof(MembershipValidator))` chains.
+`ValidateTenantAccess<TValidator>()` returns the builder without its key type, so put it last in a chain or call it
+as a statement of its own (see [Registration](core-concepts.md#registration)).
 
 A validator that needs only the request and the tenant can be a delegate, synchronous or asynchronous:
 

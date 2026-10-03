@@ -103,34 +103,6 @@ public sealed class BuilderRegistrationTests
     }
 
     [Fact]
-    public void ResolversAndValidatorsOfAType_CanBeGivenAsATypeAndChain()
-    {
-        ServiceCollection services = new();
-
-        services.AddTenantry<Guid>(tenant => tenant
-            .UseResolver(typeof(TestTenantResolver))
-            .ValidateTenantAccess(typeof(TestValidator))
-            .ValidateTenantAccess(typeof(TestValidator))
-            .UseInMemoryStore([]));
-
-        services.Should().ContainSingle(sd => sd.ServiceType == typeof(ITenantResolver))
-            .Which.Should().BeEquivalentTo(new { Lifetime = ServiceLifetime.Scoped, ImplementationType = typeof(TestTenantResolver) });
-        services.Should().ContainSingle(sd => sd.ServiceType == typeof(ITenantAccessValidator<Guid>))
-            .Which.Lifetime.Should().Be(ServiceLifetime.Scoped);
-    }
-
-    [Fact]
-    public void ATypeThatIsNotAResolverOrValidator_IsRefused()
-    {
-        ServiceCollection services = new();
-
-        services.Invoking(s => s.AddTenantry<string>(tenant => tenant.UseResolver(typeof(TestValidator))))
-            .Should().Throw<ArgumentException>().WithMessage("*ITenantResolver*");
-        services.Invoking(s => s.AddTenantry<string>(tenant => tenant.ValidateTenantAccess(typeof(TestValidator))))
-            .Should().Throw<ArgumentException>().WithMessage("*ITenantAccessValidator<String>*");
-    }
-
-    [Fact]
     public void ValidateTenantAccess_OfAType_IsCreatedInEachRequestsScope_Once()
     {
         ServiceCollection services = new();

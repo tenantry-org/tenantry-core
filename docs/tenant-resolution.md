@@ -164,9 +164,9 @@ tenant.UseResolver<CookieTenantResolver>();                          // created 
 ```
 
 `UseResolver<TResolver>()` creates the resolver in each request's scope, so it can depend on scoped services
-such as a `DbContext`. It returns the builder without its key type (see [Registration](core-concepts.md#registration));
-`UseResolver(typeof(CookieTenantResolver))` does the same and chains. An instance or a factory's resolver is created
-once and used for every request.
+such as a `DbContext`. It returns the builder without its key type, so put it last in a chain or call it as a
+statement of its own (see [Registration](core-concepts.md#registration)). An instance or a factory's resolver is
+created once and used for every request.
 
 Registration order relative to the built-in resolvers is preserved, so you can slot a custom resolver
 anywhere in the fallback chain.

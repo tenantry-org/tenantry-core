@@ -214,9 +214,19 @@ the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITen
 
 The rules, stated here once:
 
-- Every builder method returns the builder, so calls chain. Three return it without its key type, so put them last:
+- Every builder method returns the builder, so calls chain. Three return it without its key type:
   `UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()` and `AddDbContextPerTenantDatabase<TContext>()`.
-  The first two have overloads that take a `Type` and chain: `UseResolver(typeof(CookieTenantResolver))`.
+  Put them last in a chain, or make each call a statement of its own:
+
+  ```csharp
+  builder.Services.AddTenantry<Guid>(tenant =>
+  {
+      tenant.UseResolver<CookieTenantResolver>();
+      tenant.ValidateTenantAccess<MembershipValidator>();
+      tenant.UseStore<EfCoreTenantStore>();
+  });
+  ```
+
 - Registration needs no Tenantry `using` directive: `AddTenantry` and the builder methods are extension methods in
   `Microsoft.Extensions.DependencyInjection`.
 - Calling `AddTenantry` again adds to the same registration. An application uses one tenant key type and one store:
