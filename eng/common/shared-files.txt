@@ -16,6 +16,7 @@ samples/Directory.Build.props
 scripts/api-docs.cs
 scripts/check-dependabot.cs
 scripts/check-dependency-floors.cs
+scripts/check-doc-links.cs
 scripts/check-doc-snippets.sh
 scripts/check-package-consumer.sh
 scripts/check-package-ranges.cs

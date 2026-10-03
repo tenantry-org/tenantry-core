@@ -69,6 +69,10 @@ jobs:
         # The README, docs, samples and src name no API or package that no longer exists (eng/common/removed-names.txt)
         run: dotnet run scripts/check-removed-names.cs
 
+      - name: Check the documentation's links
+        # Every link in the README, docs and samples reaches a file, page and heading, as tenantry.dev serves docs/
+        run: dotnet run scripts/check-doc-links.cs
+
       - name: Restore
         # Locked: fails if a test or sample project's packages.lock.json is out of date
         run: dotnet restore Tenantry.slnx --locked-mode

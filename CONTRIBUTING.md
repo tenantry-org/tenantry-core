@@ -50,6 +50,7 @@ ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them re
 |-------|---------|---------------|
 | Dependabot's list of banded packages matches the project files | `dotnet run scripts/check-dependabot.cs` | Update the list in `.github/dependabot.yml` |
 | No API or package that no longer exists is named in the README, docs, samples or `src/` | `dotnet run scripts/check-removed-names.cs` | Use the name it gives; the removed names are in `eng/common/removed-names.txt` |
+| Every link reaches a file, page and heading | `dotnet run scripts/check-doc-links.cs` | Fix the link it names. Links in `docs/` are checked as tenantry.dev serves them: another page as `page.md#heading`, any other file through `../` |
 | The lock files are up to date | `dotnet restore Tenantry.slnx --locked-mode` | `dotnet restore Tenantry.slnx`, then commit the lock files |
 | Formatting | `dotnet format Tenantry.slnx --verify-no-changes --no-restore` | `dotnet format Tenantry.slnx` |
 | Every published floor is tested | `dotnet run scripts/check-dependency-floors.cs` | A version range's minimum must be a version some test project resolves |
