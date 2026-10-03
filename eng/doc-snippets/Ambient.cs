@@ -28,6 +28,7 @@ public static class Ambient
     public static ITenantContextSetter<Guid> tenantContext = null!;
     public static ITenantScope<Guid> scope = null!;
     public static ITenantScopeFactory<Guid> scopes = null!;
+    public static ITenantActivity<Guid> activity = null!;
     public static AppDbContext db = null!;
     public static ModelBuilder modelBuilder = null!;
     public static Message message = null!;

@@ -54,8 +54,8 @@ new TenantDescriptor<Guid> { TenantId = id, Name = "Acme" };
 
 Implement `ITenantDescriptor<TKey>` on your own type to carry what your application knows about a tenant (its
 plan, region, connection string, feature flags…), and return it from your [tenant store](tenant-stores.md).
-Tenantry only ever reads `TenantId` and `Name`. That includes status: Tenantry has no notion of an active or
-suspended tenant, so keep yours on your tenant type and check it where work starts (see
+Tenantry only ever reads `TenantId` and `Name`. It has no tenant status of its own: keep yours on your tenant type
+and give Tenantry a check for it with `ValidateTenantActivity` (see
 [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
 
 ```csharp no-compile
@@ -77,7 +77,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .UseStore<EfCoreTenantStore>()
     .UseConnectionStrings(o => o.GetConnectionString = t => t.As<AppTenant>().ConnectionString)
-    .ValidateTenantAccess((http, t) => !t.As<AppTenant>().IsSuspended));
+    .ValidateTenantActivity(t => !t.As<AppTenant>().IsSuspended));
 
 app.MapGet("/plan", (ITenantContext<Guid> tenants) => tenants.GetCurrentTenant<AppTenant>()?.Plan);
 ```

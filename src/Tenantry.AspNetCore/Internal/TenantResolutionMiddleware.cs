@@ -20,8 +20,8 @@ namespace Tenantry.AspNetCore.Internal;
 /// <para>
 /// Registered via <c>app.UseTenantry()</c>. Resolvers, created in the request's scope, are tried in registration
 /// order, and the first identifier one returns is looked up with <see cref="ITenantLookup{TKey}"/> (through
-/// the cache, with <c>CacheTenants</c>). The access validators, also from the request's scope, must all allow the
-/// tenant. The tenant is then current for the rest of the request, which is tagged <c>tenant.id</c> and logged with a
+/// the cache, with <c>CacheTenants</c>). <see cref="ITenantActivity{TKey}"/> must find the tenant active, and the
+/// access validators, also from the request's scope, must all allow it. The tenant is then current for the rest of the request, which is tagged <c>tenant.id</c> and logged with a
 /// <c>TenantId</c> scope.
 /// </para>
 /// <para>
@@ -40,6 +40,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     private readonly TenantResolutionOptions<TKey> _options;
     private readonly TenantResolutionMetrics _metrics;
     private readonly ILogger _logger;
+    private readonly ITenantActivity<TKey>? _activity;
     private readonly bool _hasValidators;
     private int _warnedBeforeRouting;
     private int _warnedBeforeAuthentication;
@@ -59,6 +60,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         _options = options.Value;
         _metrics = metrics;
         _logger = loggerFactory.CreateLogger(TenantResolutionLog.Category);
+        _activity = services.GetService<ITenantActivity<TKey>>();
 
         // Without IServiceProviderIsService, validators are assumed to exist: an unknown tenant then gets the
         // access-denied response, which hides which tenants exist either way.
@@ -208,6 +210,12 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         if (tenant is null)
         {
             return new Resolution(ResolutionResult.NotFound, identifier, null, null);
+        }
+
+        // An inactive (suspended) tenant is refused like one an access validator refuses.
+        if (_activity is not null && !await _activity.IsActiveAsync(tenant, cancellationToken))
+        {
+            return new Resolution(ResolutionResult.AccessDenied, identifier, tenant, null);
         }
 
         if (_hasValidators)

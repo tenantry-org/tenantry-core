@@ -87,7 +87,7 @@ created in the **request's** service scope, so they can depend on a scoped `DbCo
 |---------------------------------------------------|----------------|--------|
 | No resolver produced an identifier | `400 Bad Request` | `MissingTenantStatusCode` |
 | The identifier names no tenant (with the default lookup: it does not parse, is the key type's default, or is not in the store) | `404 Not Found` | `TenantNotFoundStatusCode` |
-| An access validator refused the tenant (including a suspended tenant your validator refuses) | `403 Forbidden` | `AccessDeniedStatusCode` |
+| The tenant is not active (`ValidateTenantActivity`), or an access validator refused it | `403 Forbidden` | `AccessDeniedStatusCode` |
 | The identifier names no tenant, **and access validators are configured** | same as access denied | `AccessDeniedStatusCode` |
 
 With access validators, a tenant that does not exist gets exactly the response of one the caller may not use,

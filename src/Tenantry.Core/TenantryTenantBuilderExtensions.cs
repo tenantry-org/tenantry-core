@@ -66,6 +66,48 @@ public static class TenantryTenantBuilderExtensions
     }
 
     /// <summary>
+    /// Stops work for tenants that <paramref name="isActive"/> refuses, such as suspended ones: requests (with
+    /// Tenantry.AspNetCore), <c>RunInScopeAsync</c>, and Tenantry.Pro's background work, jobs and messages.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="isActive">Returns <see langword="true"/> when work may run for the tenant.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// Calling it again adds another check: a tenant must pass all of them. See <see cref="ITenantActivity{TKey}"/>
+    /// for where Tenantry checks.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;string&gt;(tenant =&gt; tenant
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .ValidateTenantActivity(t =&gt; t.As&lt;AppTenant&gt;().IsActive));
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> ValidateTenantActivity<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<ITenantDescriptor<TKey>, bool> isActive)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(isActive);
+
+        return builder.ValidateTenantActivity((tenant, _) => ValueTask.FromResult(isActive(tenant)));
+    }
+
+    /// <inheritdoc cref="ValidateTenantActivity{TKey}(ITenantBuilder{TKey}, Func{ITenantDescriptor{TKey}, bool})"/>
+    public static ITenantBuilder<TKey> ValidateTenantActivity<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>> isActive)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(isActive);
+
+        builder.Services.AddSingleton<ITenantActivityValidator<TKey>>(new DelegateTenantActivityValidator<TKey>(isActive));
+        return builder;
+    }
+
+    /// <summary>
     /// Caches the tenants Tenantry reads from the tenant store, so a request does not ask the store for its tenant
     /// each time. <see cref="ITenantStoreCache{TKey}"/> then removes a tenant that changes (<c>AddTenantry</c> always
     /// registers it, so code that invalidates runs with caching off too).

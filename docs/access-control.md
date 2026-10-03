@@ -155,20 +155,8 @@ a string; it does not read the JSON-array form that `ValidateTenantAccessByClaim
 
 ### Suspended tenants
 
-Your store returns suspended tenants too (see
-[Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)), so refuse them with a
-validator that reads the status from your own tenant type (see
-[Your own tenant type](core-concepts.md#your-own-tenant-type)):
-
-```csharp
-tenant.ValidateTenantAccess((http, t) => !t.As<AppTenant>().IsSuspended);
-```
-
-With [`CacheTenants`](tenant-stores.md#caching), a tenant you suspend is served from the cache until its entry
-expires: call `ITenantStoreCache<TKey>.Invalidate` when you suspend it.
-
-Access validators run only in the HTTP middleware. `ITenantScopeFactory`, `ITenantContextSetter.Use` and
-background jobs never call them, so background work must check the tenant's status itself.
+Refuse suspended tenants with `ValidateTenantActivity`, not an access validator: it also stops their background
+work, jobs and messages. See [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants).
 
 ## Putting it together
 
@@ -180,7 +168,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
     tenant.UseStore<EfCoreTenantStore>();
     tenant.RequireTenantByDefault();             // no anonymous tenant access
     tenant.ValidateTenantAccessByClaim("tenant_id"); // caller must be entitled to the tenant
-    tenant.ValidateTenantAccess((_, t) => !t.As<AppTenant>().IsSuspended); // and it must be active
+    tenant.ValidateTenantActivity(t => !t.As<AppTenant>().IsSuspended); // and it must be active
 });
 ```
 

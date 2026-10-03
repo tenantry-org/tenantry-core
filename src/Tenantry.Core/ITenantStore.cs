@@ -16,8 +16,8 @@ namespace Tenantry;
 /// </para>
 /// <para>
 /// Return every tenant that exists, suspended or inactive ones included, from both methods: tools that
-/// maintain each tenant's database, such as migrations, find tenants here. Decide whether a tenant may be
-/// served elsewhere: with an access validator for HTTP requests, and in your own code for background work.
+/// maintain each tenant's database, such as migrations, find tenants here. Decide whether work may run for a tenant
+/// with an <see cref="ITenantActivityValidator{TKey}"/> (<c>tenant.ValidateTenantActivity(…)</c>).
 /// </para>
 /// </remarks>
 /// <typeparam name="TKey">

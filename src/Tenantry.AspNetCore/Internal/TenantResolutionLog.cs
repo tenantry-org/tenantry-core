@@ -30,7 +30,8 @@ internal static partial class TenantResolutionLog
     public static partial void TenantNotFound(ILogger logger, string identifier, string method, string path, int statusCode);
 
     [LoggerMessage(1005, LogLevel.Warning,
-        "Request {Method} {Path} by user '{User}' may not use tenant {TenantId}: an access validator refused it",
+        "Request {Method} {Path} by user '{User}' may not use tenant {TenantId}: it is not active, or an access " +
+        "validator refused it",
         EventName = "TenantAccessDenied")]
     public static partial void TenantAccessDenied(ILogger logger, string method, string path, string user, string tenantId);
 

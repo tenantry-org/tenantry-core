@@ -426,6 +426,21 @@ public sealed class ResolutionTests
     }
 
     [Fact]
+    public async Task AnInactiveTenant_IsRefusedLikeOneAnAccessValidatorRefuses()
+    {
+        var (app, _) = await StartWithLogsAsync<string>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .UseInMemoryStore([Acme, Globex])
+            .ValidateTenantActivity(t => t.TenantId != "globex"));
+        await using var _ = app;
+        using var client = app.GetTestClient();
+
+        (await Get(client, "acme", "/required")).Should().Be(HttpStatusCode.OK);
+        (await Get(client, "globex", "/required")).Should().Be(HttpStatusCode.Forbidden);
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+    }
+
+    [Fact]
     public async Task EveryRequest_IsCountedByResult()
     {
         await using var app = await StartAsync<string>(tenant => tenant

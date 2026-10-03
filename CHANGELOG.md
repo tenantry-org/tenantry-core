@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `options.UseTenantry(o => …)` sets a context's own isolation options, starting from the application's, so a
   context kept for maintenance code can allow writes without a tenant while every other context keeps `Reject`.
 
+- `ValidateTenantActivity(t => …)` and `ITenantActivityValidator<TKey>`: one check for whether work may run for a
+  tenant, so suspending a tenant stops all its work. `app.UseTenantry()` refuses an inactive tenant as it refuses one
+  an access validator refuses, `RunInScopeAsync` throws the new `TenantInactiveException`, and other code, Tenantry.Pro's
+  background services, schedulers and message integrations among it, asks the new `ITenantActivity<TKey>`.
+  `CreateScope` does not check, so migrations and provisioning still reach suspended tenants.
+
 ### Changed
 
 - `ConfigureEfCoreIsolation` configures `IOptions<EfCoreIsolationOptions>`, so `services.Configure` sets the same
