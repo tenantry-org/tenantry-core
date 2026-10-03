@@ -47,9 +47,14 @@ public sealed class RecentOrders(HybridCache cache, AppDbContext db)
 - **Register the cache first.** `IsolateCaches()` wraps the `HybridCache` registered before it, so call
   `AddHybridCache()` (or another library's registration of a `HybridCache`) before `AddTenantry`. When the host starts,
   it checks that `HybridCache` resolves to the cache it keys by tenant, and stops the application with an
-  `InvalidOperationException` if not: for a `HybridCache` registered after `AddTenantry`, which would replace it, for
-  `AddHybridCache()` called after `AddTenantry`, and for a keyed `HybridCache`, which it does not isolate. A service
-  provider built without a host skips this check.
+  `InvalidOperationException` if not: for a `HybridCache`, keyed or not, registered after `AddTenantry`, which would
+  replace it, and for `AddHybridCache()` called after `AddTenantry`. A service provider built without a host skips this
+  check.
+- **Keyed caches too.** A keyed `HybridCache` registered before `AddTenantry` is kept per tenant the same way:
+  `[FromKeyedServices("reports")] HybridCache` holds the current tenant's entries, and
+  `[FromKeyedServices("reports")] SharedHybridCache` holds entries every tenant shares in that cache. Invalidating a tenant
+  clears its entries from each one. A `HybridCache` registered for any key (`KeyedService.AnyKey`) stops the host, since
+  its keys are not known in advance to clear.
 - **Keys get longer.** Each key carries the tenant's id, so keep keys within the cache's maximum key length (1,024
   characters by default) with the id added.
 

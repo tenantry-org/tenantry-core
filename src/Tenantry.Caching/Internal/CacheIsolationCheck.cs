@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 namespace Tenantry.Caching.Internal;
 
 /// <summary>
-/// Checks, as the host starts, that the <see cref="HybridCache"/> the application resolves is the one
+/// Checks, as the host starts, that the <see cref="HybridCache"/> the application resolves, and each keyed one, is one
 /// <c>IsolateCaches()</c> keys by tenant. A registration order that would share entries across tenants stops the
 /// application instead.
 /// </summary>
@@ -26,20 +26,25 @@ internal sealed class CacheIsolationCheck
 
     internal static void ThrowIfShared(IServiceCollection services, IServiceProvider provider)
     {
-        var keyed = services
-            .Where(d => d.ServiceType == typeof(HybridCache) && d.IsKeyedService)
-            .Select(d => $"'{d.ServiceKey}'")
-            .ToList();
-
-        if (keyed.Count > 0)
-        {
-            throw new InvalidOperationException(
-                $"IsolateCaches() keys only the HybridCache registered without a key, so the keyed HybridCache " +
-                $"{string.Join(", ", keyed)} would share its entries across tenants. Inject HybridCache for each " +
-                "tenant's entries and SharedHybridCache for entries every tenant shares, and remove the keyed registration.");
-        }
-
         using var scope = provider.CreateScope();
+
+        foreach (var key in services.Where(d => d.ServiceType == typeof(HybridCache) && d.IsKeyedService).Select(d => d.ServiceKey).Distinct())
+        {
+            if (Equals(key, KeyedService.AnyKey))
+            {
+                throw new InvalidOperationException(
+                    "A HybridCache is registered for any key (KeyedService.AnyKey). IsolateCaches() cannot know its keys to " +
+                    "clear a tenant's entries from it, so its entries would outlive the tenant's invalidation. Register " +
+                    "each keyed HybridCache under its own key, before AddTenantry.");
+            }
+
+            if (scope.ServiceProvider.GetKeyedService<HybridCache>(key) is not TenantHybridCache)
+            {
+                throw new InvalidOperationException(
+                    $"The HybridCache with the key '{key}' was registered after AddTenantry, so IsolateCaches() did not key " +
+                    "it by tenant and its entries would be shared across tenants. Register it before AddTenantry.");
+            }
+        }
 
         switch (scope.ServiceProvider.GetService<HybridCache>())
         {

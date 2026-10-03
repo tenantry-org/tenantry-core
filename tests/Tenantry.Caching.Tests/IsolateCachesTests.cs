@@ -234,16 +234,51 @@ public sealed class IsolateCachesTests
     }
 
     [Fact]
-    public void AKeyedHybridCache_StopsTheHost_SinceItIsNotIsolated()
+    public async Task AKeyedHybridCache_IsKeyedByTenantToo_WithItsOwnSharedEntries_AndInvalidatingATenantClearsIt()
     {
+        InMemoryHybridCache reports = new();
         ServiceCollection services = new();
         services.AddSingleton<HybridCache>(_inner);
-        services.AddKeyedSingleton<HybridCache>("reports", new InMemoryHybridCache());
-        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
-        using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
+        services.AddKeyedSingleton<HybridCache>("reports", reports);
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme, Globex]).IsolateCaches());
+        await using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
+        var cache = provider.GetRequiredKeyedService<HybridCache>("reports");
 
-        provider.Invoking(p => p.GetRequiredService<IStartupValidator>().Validate())
-            .Should().Throw<InvalidOperationException>().WithMessage("*keyed HybridCache 'reports'*");
+        provider.GetRequiredService<IStartupValidator>().Validate();
+        await AsAsync(provider, Acme, () => cache.SetAsync("monthly", 1, cancellationToken: Ct).AsTask());
+        await provider.GetRequiredKeyedService<SharedHybridCache>("reports").SetAsync("template", 2, cancellationToken: Ct);
+        (await AsAsync(provider, Globex, () => cache.GetOrCreateAsync("monthly", _ => ValueTask.FromResult(0), cancellationToken: Ct)))
+            .Should().Be(0, "Acme's entry is not Globex's");
+
+        reports.Entries.Keys.Should().BeEquivalentTo("t:acme:monthly", "t:globex:monthly", "s:template");
+        _inner.Entries.Should().BeEmpty("the keyed cache keeps its own entries");
+
+        await provider.GetRequiredService<ITenantInvalidator<string>>().InvalidateAsync("acme", Ct);
+        reports.Entries.Keys.Should().BeEquivalentTo("t:globex:monthly", "s:template");
+    }
+
+    [Fact]
+    public void AKeyedHybridCacheRegisteredAfterAddTenantry_OrForAnyKey_StopsTheHost()
+    {
+        ServiceCollection after = new();
+        after.AddSingleton<HybridCache>(_inner);
+        after.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
+        after.AddKeyedSingleton<HybridCache>("reports", new InMemoryHybridCache());
+        using (var provider = after.BuildServiceProvider(Conformance.ProviderOptions))
+        {
+            provider.Invoking(p => p.GetRequiredService<IStartupValidator>().Validate())
+                .Should().Throw<InvalidOperationException>().WithMessage("*key 'reports' was registered after AddTenantry*");
+        }
+
+        ServiceCollection anyKey = new();
+        anyKey.AddSingleton<HybridCache>(_inner);
+        anyKey.AddKeyedSingleton<HybridCache>(KeyedService.AnyKey, (_, _) => new InMemoryHybridCache());
+        anyKey.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
+        using (var provider = anyKey.BuildServiceProvider(Conformance.ProviderOptions))
+        {
+            provider.Invoking(p => p.GetRequiredService<IStartupValidator>().Validate())
+                .Should().Throw<InvalidOperationException>().WithMessage("*any key*");
+        }
     }
 
     [Fact]

@@ -25,10 +25,14 @@ public static class TenantryCachingTenantBuilderExtensions
     /// <para>
     /// It wraps the <see cref="HybridCache"/> registered before it, so call <c>AddHybridCache()</c> before
     /// <c>AddTenantry</c>. When the host starts, it checks that <see cref="HybridCache"/> resolves to the cache it keys
-    /// by tenant, and throws <see cref="InvalidOperationException"/> otherwise: for a <see cref="HybridCache"/>
-    /// registered after it (which would replace it), for <c>AddHybridCache()</c> called after it, and for a keyed
-    /// <see cref="HybridCache"/>, which it does not isolate. With no <see cref="HybridCache"/> registered at all, the one
-    /// it registers throws when used, naming the fix.
+    /// by tenant, and throws <see cref="InvalidOperationException"/> otherwise: for a <see cref="HybridCache"/>, keyed or
+    /// not, registered after it (which would replace it), for one registered for any key, and for <c>AddHybridCache()</c>
+    /// called after it. With no <see cref="HybridCache"/> registered at all, the one it registers throws when used, naming
+    /// the fix.
+    /// </para>
+    /// <para>
+    /// A keyed <see cref="HybridCache"/> registered before it is kept per tenant the same way, and the same key gives a
+    /// <see cref="SharedHybridCache"/> for that cache's shared entries.
     /// </para>
     /// <para>
     /// A <see cref="HybridCache"/> call with no current tenant throws <see cref="TenantNotResolvedException"/>, rather
@@ -62,6 +66,9 @@ public static class TenantryCachingTenantBuilderExtensions
         services.TryAddSingleton<ITenantDistributedCache>(sp =>
             new TenantDistributedCache(sp.GetRequiredService<IDistributedCache>(), sp.GetRequiredService<ICurrentTenant>()));
         CacheIsolationCheck.Register(services);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<TKey>, TenantCacheInvalidation<TKey>>());
+
+        IsolateKeyed(services);
 
         var registered = services.LastOrDefault(d => d.ServiceType == typeof(HybridCache) && !d.IsKeyedService);
 
@@ -78,9 +85,38 @@ public static class TenantryCachingTenantBuilderExtensions
             typeof(HybridCache),
             sp => new TenantHybridCache(sp.GetRequiredService<SharedHybridCache>().Inner, sp.GetRequiredService<ICurrentTenant>()),
             registered.Lifetime));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<TKey>, TenantCacheInvalidation<TKey>>());
 
         return builder;
+    }
+
+    // Each keyed HybridCache is isolated the same way: [FromKeyedServices(key)] HybridCache keeps entries per tenant,
+    // and [FromKeyedServices(key)] SharedHybridCache keeps that cache's shared entries. Invalidation clears each one, so
+    // it needs their keys; a registration for any key (KeyedService.AnyKey) has none, and the startup check refuses it.
+    private static void IsolateKeyed(IServiceCollection services)
+    {
+        var keyed = services
+            .Where(d => d.ServiceType == typeof(HybridCache) && d.IsKeyedService && !Equals(d.ServiceKey, KeyedService.AnyKey))
+            .GroupBy(d => d.ServiceKey)
+            .Select(group => group.Last())
+            .ToList();
+
+        IsolatedCacheKeys keys = new([.. keyed.Select(d => d.ServiceKey!)]);
+        services.AddSingleton(keys);
+
+        foreach (var registered in keyed)
+        {
+            foreach (var earlier in services.Where(d => d.ServiceType == typeof(HybridCache) && d.IsKeyedService && Equals(d.ServiceKey, registered.ServiceKey)).ToList())
+                services.Remove(earlier);
+
+            services.Add(new ServiceDescriptor(
+                typeof(SharedHybridCache), registered.ServiceKey, (sp, key) => CreateKeyed(sp, registered, key), registered.Lifetime));
+            services.Add(new ServiceDescriptor(
+                typeof(HybridCache),
+                registered.ServiceKey,
+                (sp, key) => new TenantHybridCache(
+                    sp.GetRequiredKeyedService<SharedHybridCache>(key).Inner, sp.GetRequiredService<ICurrentTenant>()),
+                registered.Lifetime));
+        }
     }
 
     private static SharedHybridCache Create(IServiceProvider services, ServiceDescriptor registered)
@@ -91,6 +127,18 @@ public static class TenantryCachingTenantBuilderExtensions
         var created = registered.ImplementationFactory is { } factory
             ? factory(services)
             : ActivatorUtilities.CreateInstance(services, registered.ImplementationType!);
+
+        return new SharedHybridCache((HybridCache)created, ownsInner: true);
+    }
+
+    private static SharedHybridCache CreateKeyed(IServiceProvider services, ServiceDescriptor registered, object? key)
+    {
+        if (registered.KeyedImplementationInstance is HybridCache instance)
+            return new SharedHybridCache(instance, ownsInner: false);
+
+        var created = registered.KeyedImplementationFactory is { } factory
+            ? factory(services, key)
+            : ActivatorUtilities.CreateInstance(services, registered.KeyedImplementationType!);
 
         return new SharedHybridCache((HybridCache)created, ownsInner: true);
     }
