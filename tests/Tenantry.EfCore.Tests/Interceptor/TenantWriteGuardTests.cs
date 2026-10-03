@@ -189,7 +189,7 @@ public sealed class TenantWriteGuardTests
     [Fact]
     public async Task AddedEntity_NonStringKey_DoesNotThrow()
     {
-        // With a value-type key (Guid), the `tenantId is string` fast-path in IsUnstamped is
+        // With a value-type key (Guid), the `tenantId is string` fast-path in TenantIds.IsUnset is
         // never matched — this exercises the non-string branch of the unstamped check that
         // the string-keyed tests can't reach.
         var tenantId = Guid.NewGuid();

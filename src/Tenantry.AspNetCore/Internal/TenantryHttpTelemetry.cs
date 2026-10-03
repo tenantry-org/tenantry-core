@@ -1,14 +1,12 @@
-using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Globalization;
 
 namespace Tenantry.AspNetCore.Internal;
 
 /// <summary>
 /// The names <c>app.UseTenantry()</c> records under: an activity source and a meter named <c>Tenantry.AspNetCore</c>,
-/// the request's <c>tenant.id</c> tag and its <c>TenantId</c> log scope. Tenantry.Pro's jobs and messages use the
-/// same tag and scope names.
+/// and its resolution tags. The request's tenant goes under <see cref="TenantTelemetry"/>'s names, which Tenantry.Pro's
+/// jobs and messages use too.
 /// </summary>
 internal static class TenantryHttpTelemetry
 {
@@ -16,21 +14,11 @@ internal static class TenantryHttpTelemetry
 
     public const string ResolveActivityName = "Tenantry.ResolveTenant";
 
-    public const string TenantIdTag = "tenant.id";
-
     public const string ResultTag = "tenantry.resolution.result";
 
     public const string RejectedTag = "tenantry.resolution.rejected";
 
-    public const string LogScopeName = "TenantId";
-
     public static readonly ActivitySource ActivitySource = new(Name);
-
-    // The tenant id as jobs and messages carry it: formatted with the invariant culture.
-    public static string Format<TKey>(TKey tenantId) =>
-        (tenantId is IFormattable formattable
-            ? formattable.ToString(null, CultureInfo.InvariantCulture)
-            : tenantId?.ToString()) ?? string.Empty;
 
     public static string ResultName(ResolutionResult result) =>
         result switch
@@ -81,26 +69,4 @@ internal sealed class TenantResolutionMetrics
                 new KeyValuePair<string, object?>(TenantryHttpTelemetry.RejectedTag, rejected));
         }
     }
-}
-
-/// <summary>
-/// The log scope a request's tenant opens: one property, <c>TenantId</c>.
-/// </summary>
-internal sealed class TenantLogScope(string tenantId) : IReadOnlyList<KeyValuePair<string, object?>>
-{
-    public int Count => 1;
-
-    public KeyValuePair<string, object?> this[int index] =>
-        index == 0
-            ? new KeyValuePair<string, object?>(TenantryHttpTelemetry.LogScopeName, tenantId)
-            : throw new ArgumentOutOfRangeException(nameof(index));
-
-    public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
-    {
-        yield return this[0];
-    }
-
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-    public override string ToString() => $"{TenantryHttpTelemetry.LogScopeName}:{tenantId}";
 }

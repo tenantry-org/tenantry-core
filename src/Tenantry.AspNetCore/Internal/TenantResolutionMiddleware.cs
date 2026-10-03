@@ -78,11 +78,11 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         if (resolution.Tenant is { } tenant && resolution.Result == ResolutionResult.Resolved)
         {
-            var tenantId = TenantryHttpTelemetry.Format(tenant.TenantId);
-            requestActivity?.SetTag(TenantryHttpTelemetry.TenantIdTag, tenantId);
+            var tenantId = TenantIds.Format(tenant.TenantId);
+            requestActivity?.SetTag(TenantTelemetry.TenantIdTag, tenantId);
 
             using var current = _tenantContext.Use(tenant);
-            using var logScope = _logger.BeginScope(new TenantLogScope(tenantId));
+            using var logScope = _logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId));
 
             TenantResolutionLog.TenantResolved(_logger, tenantId, context.Request.Method, context.Request.Path);
 
@@ -102,7 +102,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 context.Request.Method,
                 context.Request.Path,
                 context.User.Identity?.Name ?? "(anonymous)",
-                TenantryHttpTelemetry.Format(resolution.Tenant!.TenantId));
+                TenantIds.Format(resolution.Tenant!.TenantId));
         }
 
         if (required)
@@ -143,7 +143,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
             if (resolution is { Result: ResolutionResult.Resolved, Tenant: { } tenant })
             {
-                activity.SetTag(TenantryHttpTelemetry.TenantIdTag, TenantryHttpTelemetry.Format(tenant.TenantId));
+                activity.SetTag(TenantTelemetry.TenantIdTag, TenantIds.Format(tenant.TenantId));
             }
         }
 

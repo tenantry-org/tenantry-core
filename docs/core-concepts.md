@@ -15,6 +15,11 @@ where TKey : IEquatable<TKey>, IParsable<TKey>
 - `IParsable<TKey>` lets Tenantry turn text, such as the identifier a request carries in a header, route or
   claim, into a `TKey`, with the invariant culture.
 
+`TenantIds` does this the way Tenantry does, for code of your own that carries tenant ids as text: `Format` writes
+an id with the invariant culture, and `TryParse` reads one back, refusing text that names no tenant. `IsUnset` is
+true for the ids Tenantry reserves for "no tenant": `null`, the key type's default (`Guid.Empty`, `0`) and an
+empty string.
+
 `Guid`, `int`, `long`, `string`, and most numeric types satisfy this. Choose one type and use it
 everywhere — the same `TKey` flows through your entities, store, `DbContext`, and registration. An application
 has one key type: calling `AddTenantry` with a second one throws, and an entity that implements

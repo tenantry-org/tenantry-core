@@ -73,9 +73,12 @@ the pieces fit together; this reference is for the details of each type and memb
 | [`TenantDescriptor<TKey>`](tenantry-tenantdescriptor.md) | class | Default implementation of [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md). |
 | [`TenantDescriptorExtensions`](tenantry-tenantdescriptorextensions.md) | class | Reads a tenant as the application's own tenant type. |
 | [`TenantEntity<TKey>`](tenantry-tenantentity.md) | class | Optional base class for tenant-owned entities, implementing [`ITenantEntity<TKey>`](tenantry-itenantentity.md). |
+| [`TenantIds`](tenantry-tenantids.md) | class | Tenant ids as text, and the ids Tenantry reserves for "no tenant". Tenantry formats and parses tenant ids this way wherever they leave or enter the process: in log scopes and traces, in the headers Tenantry.Http and Tenantry.Pro's jobs and messages carry, and in the identifiers [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md) reads by default. |
 | [`TenantNotFoundException`](tenantry-tenantnotfoundexception.md) | class | Thrown when a tenant is looked up by its id and the tenant store has no tenant with that id, for example by [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md). |
 | [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md) | class | Thrown when an operation needs a current tenant and none is current, or when the tenant it names does not exist ([`TenantNotFoundException`](tenantry-tenantnotfoundexception.md)). |
+| [`TenantPropagation`](tenantry-tenantpropagation.md) | class | How Tenantry carries a tenant from one process to another: Tenantry.Http's outgoing requests, Tenantry.AspNetCore's `ResolveFromPropagationHeader()` on the receiving side, and Tenantry.Pro's Hangfire, MassTransit, Quartz.NET and Rebus integrations. |
 | [`TenantStoreCacheOptions`](tenantry-tenantstorecacheoptions.md) | class | How Tenantry caches the tenants it reads from the tenant store. Set with `tenant.CacheTenants(o => …)`. |
+| [`TenantTelemetry`](tenantry-tenanttelemetry.md) | class | The names Tenantry records a tenant under in traces and logs: Tenantry.AspNetCore's `app.UseTenantry()` for a request, and Tenantry.Pro for jobs, messages and background work. |
 
 ## Tenantry.EfCore
 

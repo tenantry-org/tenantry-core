@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `TenantIds`: `Format` writes a tenant id with the invariant culture, `TryParse` reads one back and refuses the ids
+  Tenantry reserves for "no tenant", and `IsUnset` tells those ids apart. They are what Tenantry itself uses, for code
+  of your own that carries tenant ids as text.
+- `TenantTelemetry`: the `tenant.id` tag and `TenantId` log-scope names Tenantry records a tenant under, and
+  `CreateLogScope`, the scope's state, to record it the same way in your own code.
+- `TenantPropagation.HeaderName` (`tenantry-tenant-id`), the header that carries a tenant between processes. It was
+  Tenantry.Pro's; Tenantry.Http and Tenantry.Pro's integrations now read it from Tenantry.Core.
+
 ## [0.5.0] - 2026-10-03
 
 ### Upgrading from 0.4

@@ -20,6 +20,7 @@ public static class Ambient
     public static IServiceProvider serviceProvider = null!;
     public static CancellationToken ct, cancellationToken;
     public static string connectionString = "";
+    public static ILogger logger = null!;
 
     public static TenantList tenants = new();
     public static ITenantDescriptor<Guid> tenant = null!, acme = null!, globex = null!;

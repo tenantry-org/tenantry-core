@@ -33,6 +33,17 @@ console's and OpenTelemetry's with `IncludeScopes`. Tenantry.Pro's jobs and mess
 builder.Logging.AddJsonConsole(o => o.IncludeScopes = true);
 ```
 
+The names are public, in `TenantTelemetry`, so your own code can record the tenant the same way: `TenantIdTag`
+(`tenant.id`), `LogScopeName` (`TenantId`), and `CreateLogScope`, the scope's state. `TenantIds.Format` writes the
+id as Tenantry does.
+
+```csharp
+using (logger.BeginScope(TenantTelemetry.CreateLogScope(TenantIds.Format(tenantId))))
+{
+    logger.LogInformation("Invoicing");
+}
+```
+
 ## Traces
 
 The middleware tags the request's span (ASP.NET Core's, which OpenTelemetry's ASP.NET Core instrumentation

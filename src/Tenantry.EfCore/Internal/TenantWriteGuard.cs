@@ -197,7 +197,7 @@ internal sealed class TenantWriteGuard<TKey>
         // visible through the tenant filter and belongs to no one.
         var unowned = writes.FirstOrDefault(entry =>
             entry is { State: EntityState.Added, Entity: ITenantEntity<TKey> entity } &&
-            TenantOwnership.IsUnstamped(entity.TenantId));
+            TenantIds.IsUnset(entity.TenantId));
 
         if (unowned is not null)
         {
@@ -297,7 +297,7 @@ internal sealed class TenantWriteGuard<TKey>
     // silently moved: the caller meant another tenant's data.
     private void CheckNew(EntityEntry entry, ITenantEntity<TKey> entity)
     {
-        if (TenantOwnership.IsUnstamped(entity.TenantId))
+        if (TenantIds.IsUnset(entity.TenantId))
         {
             // Through EF Core rather than the entity, so a private or init-only setter works.
             entry.Property(TenantOwnership.TenantIdProperty).CurrentValue = _tenantId;

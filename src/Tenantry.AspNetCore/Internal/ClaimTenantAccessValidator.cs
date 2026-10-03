@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 
@@ -23,7 +22,7 @@ internal static class ClaimTenantAccessValidator
     {
         var trimmed = claimValue.Trim();
 
-        if (TryParseTenantId(trimmed, out TKey? parsedTenantId) &&
+        if (TenantIds.TryParse<TKey>(trimmed, out var parsedTenantId) &&
             EqualityComparer<TKey>.Default.Equals(parsedTenantId, tenantId))
         {
             return true;
@@ -44,7 +43,7 @@ internal static class ClaimTenantAccessValidator
             {
                 if (!TryGetCandidateValue(element, out var candidateValue) ||
                     candidateValue is null ||
-                    !TryParseTenantId(candidateValue, out parsedTenantId))
+                    !TenantIds.TryParse<TKey>(candidateValue, out parsedTenantId))
                 {
                     continue;
                 }
@@ -60,19 +59,6 @@ internal static class ClaimTenantAccessValidator
             return false;
         }
 
-        return false;
-    }
-
-    private static bool TryParseTenantId<TKey>(string value, out TKey? tenantId)
-        where TKey : IEquatable<TKey>, IParsable<TKey>
-    {
-        if (TKey.TryParse(value, CultureInfo.InvariantCulture, out TKey? parsedTenantId))
-        {
-            tenantId = parsedTenantId;
-            return true;
-        }
-
-        tenantId = default;
         return false;
     }
 

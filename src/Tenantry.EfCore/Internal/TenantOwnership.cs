@@ -31,12 +31,4 @@ internal static class TenantOwnership
     public static bool IsOwnedBy<TKey>(TKey? tenantId, TKey currentTenantId)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         tenantId is not null && EqualityComparer<TKey>.Default.Equals(tenantId, currentTenantId);
-
-    /// <summary>
-    /// Returns true when <paramref name="tenantId"/> is unset: <see langword="null"/>, the type's default,
-    /// or <see cref="string.Empty"/> (string properties are commonly initialised to empty rather than null).
-    /// </summary>
-    public static bool IsUnstamped<TKey>(TKey? tenantId)
-        where TKey : IEquatable<TKey>, IParsable<TKey> =>
-        tenantId is null or string { Length: 0 } || EqualityComparer<TKey>.Default.Equals(tenantId, default!);
 }
