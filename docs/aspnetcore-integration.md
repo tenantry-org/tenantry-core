@@ -113,8 +113,8 @@ response of your own in [`OnRejected`](#events).
   [access validator](access-control.md#validating-tenant-access).
 - `OnRejected` runs when an endpoint that requires a tenant rejects a request, before Tenantry writes its response.
   It is told the `Reason` (`Missing`, `NotFound`, `AccessDenied` or `Inactive`), the `StatusCode` Tenantry would send,
-  the `Identifier` the request sent and, for `AccessDenied` and `Inactive`, the refused `Tenant`. Change `StatusCode`, or write your
-  own response and call `HandleResponse()`, so Tenantry writes none:
+  the `Identifier` the request sent and, for `AccessDenied` and `Inactive`, the refused `Tenant`. Change `StatusCode`,
+  or write your own response and call `HandleResponse()`, so Tenantry writes none:
 
 ```csharp
 using Tenantry.AspNetCore;

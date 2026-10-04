@@ -2,7 +2,8 @@ namespace Tenantry.EfCore;
 
 /// <summary>
 /// What a context does when its model has tenant-owned entity types and also entity types that are neither
-/// tenant-owned nor marked as shared across tenants. Set with <see cref="EfCoreIsolationOptions.OnUnclassifiedEntityType"/>.
+/// tenant-owned nor marked as shared across tenants. Set with
+/// <see cref="EfCoreIsolationOptions.OnUnclassifiedEntityType"/>.
 /// </summary>
 /// <remarks>
 /// Tenantry isolates only tenant-owned entity types, so the rows of an unclassified one are read and written for every
