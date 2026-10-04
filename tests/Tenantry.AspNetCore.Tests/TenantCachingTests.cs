@@ -121,8 +121,11 @@ public sealed class TenantCachingTests
         (await acme.GetStringAsync("/plan", Ct)).Should().Be("acme 1", "acme's entry is cached");
         (await app.GetTestClient().GetStringAsync("/rate", Ct)).Should().Be("rate 3", "shared entries work without a tenant");
 
-        // The second level holds the entries under each tenant's prefix, and the shared one under its own.
-        var distributed = app.Services.GetRequiredService<IDistributedCache>();
+        // The second level holds the entries under each tenant's prefix, and the shared one under its own. HybridCache
+        // can write them after it has returned the value, so wait for each write.
+        var distributed = (DictionaryDistributedCache)app.Services.GetRequiredService<IDistributedCache>();
+        await Task.WhenAll(distributed.Written("t:acme:plan"), distributed.Written("t:globex:plan"), distributed.Written("s:rate"))
+            .WaitAsync(TimeSpan.FromSeconds(30), Ct);
         (await distributed.GetAsync("t:acme:plan", Ct)).Should().NotBeNull();
         (await distributed.GetAsync("t:globex:plan", Ct)).Should().NotBeNull();
         (await distributed.GetAsync("s:rate", Ct)).Should().NotBeNull();
@@ -255,12 +258,23 @@ public sealed class TenantCachingTests
     private sealed class DictionaryDistributedCache : IDistributedCache
     {
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _entries = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, TaskCompletionSource> _written = new();
 
         public byte[]? Get(string key) => _entries.GetValueOrDefault(key);
 
         public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => Task.FromResult(Get(key));
 
-        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => _entries[key] = value;
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+        {
+            _entries[key] = value;
+            Writes(key).TrySetResult();
+        }
+
+        /// <summary>Completes once <paramref name="key"/> has been written, at any time before or after the call.</summary>
+        public Task Written(string key) => Writes(key).Task;
+
+        private TaskCompletionSource Writes(string key) =>
+            _written.GetOrAdd(key, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
 
         public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
         {
