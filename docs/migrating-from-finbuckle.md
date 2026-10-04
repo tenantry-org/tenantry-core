@@ -1,6 +1,6 @@
 # Migrating from Finbuckle.MultiTenant
 
-This guide moves an ASP.NET Core application with EF Core from Finbuckle.MultiTenant 10.1.2 to Tenantry. Work
+This guide moves an ASP.NET Core application with EF Core from Finbuckle.MultiTenant 10.1.4 to Tenantry. Work
 through the numbered steps in order. The sections after them list the behaviour that changes and what Tenantry does
 not have.
 
@@ -299,7 +299,7 @@ so their users sign in again. See [Authentication per tenant](authentication-per
 | Writing with no tenant | Throws `MultiTenantException`. | Throws `TenantNotResolvedException`. One context can allow it ([`OnMissingTenant`](efcore-integration.md#onmissingtenant-writes-with-no-tenant)). |
 | A write that names another tenant | `TenantMismatchMode` can throw, or with `Overwrite` and `Ignore`, replace or keep the other tenant's id. | Throws `TenantIsolationViolationException`. Maintenance code that writes across tenants uses a context of its own with `OnMissingTenant = Allow` and no tenant current. |
 | An `ExecuteUpdate` that sets `TenantId` | Not checked. | Throws. |
-| When the context reads the tenant | In its constructor, and keeps it. | On each query and save, so pooled contexts work. Use a context for one tenant: after a switch, `Find` and `Local` can return entities loaded for the previous one. |
+| When the context reads the tenant | In its constructor, and keeps it. | On each query and save, so pooled contexts work; a database-per-tenant context, connected to one tenant's database, throws instead after a switch. Use a context for one tenant: after a switch, `Find` and `Local` can return entities loaded for the previous one. |
 | An identifier no store knows | The next strategy is tried. | The first identifier a resolver returns is used. If the store does not know it, the request has no tenant. |
 | Identifier case | The in-memory and configuration stores match identifiers in any case. | The default lookup compares `string` ids exactly, and the subdomain and host resolvers return lower case. Ignore case in your `FindByIdentifierAsync` if clients send mixed case. |
 
