@@ -9,9 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.6
 
-- Mark every entity type that is not tenant-owned, in a context that has tenant-owned ones, with
-  `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`, or the context's first query or save throws. ASP.NET Core
-  Identity's types need it too ([ASP.NET Core Identity](docs/aspnetcore-identity.md#the-user-type-and-context)).
 - A many-to-many relationship with a tenant-owned entity at either end is refused until its join entity is configured
   with `UsingEntity<TJoin>()` and implements `ITenantEntity<TKey>`. Add `TenantId` to an existing join table
   ([Many-to-many relationships](docs/efcore-advanced.md#many-to-many-relationships)).
@@ -35,9 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `access_denied`.
 - A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
   `InvalidateAllLocallyAsync`.
-- A static `EF.CompileQuery` or `EF.CompileAsyncQuery` delegate shared by contexts of one type with different
-  `OnUnclassifiedEntityType` values throws EF Core's "executed with a different model" error, because each value gets
-  a model of its own, so keep a delegate per value.
 - Code that calls `TenantModel.FindUnisolatedEntityTypes` gets the roots of hierarchies only, and no owned types or
   many-to-many join entity types that hold only their two foreign keys, which follow the types they belong to.
   `TenantModel.IsSharedAcrossTenants` is true for a type whose base type is marked.
@@ -56,10 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BroadcastInvalidations` registers publishes each invalidation to the other instances, after this instance is
   cleared; each instance applies what it receives with the local methods, which do not run it, so nothing is published
   twice. See [Several instances](docs/tenant-stores.md#several-instances).
-- `EfCoreIsolationOptions.OnUnclassifiedEntityType` (Tenantry.EfCore). In a model with tenant-owned entity types,
-  the context's first query or save throws `TenantIsolationViolationException` of kind `ModelConfiguration`, naming
-  every other entity type that is not marked `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`. `Warn` logs event
-  2006 instead, and `Allow` accepts the model. A model with no tenant-owned type is not checked. See
+- `EfCoreIsolationOptions.OnUnmarkedEntityType` (Tenantry.EfCore), for an application that wants every entity type
+  that is not tenant-owned marked `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`. An entity type that is not
+  tenant-owned is shared by every tenant, as before, and the default, `Allow`, checks nothing. With `Warn`, a model
+  that has tenant-owned types and unmarked ones logs event 2006; with `Reject`, its first query or save throws
+  `TenantIsolationViolationException` of kind `ModelConfiguration`, naming them. See
   [Entity types that are not tenant-owned](docs/efcore-integration.md#entity-types-that-are-not-tenant-owned).
 - `TenantRejectionReason.Inactive` and `TenantResolutionOptions<TKey>.InactiveTenantStatusCode` (Tenantry.AspNetCore).
   A request for a tenant `ValidateTenantActivity` refuses is rejected with the reason `Inactive`, event 1012

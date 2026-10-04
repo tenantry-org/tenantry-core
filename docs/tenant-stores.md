@@ -66,9 +66,6 @@ public sealed class EfCoreTenantStore(AppDbContext db) : ITenantStore<string>
 }
 ```
 
-When the tenants are in a context that also has tenant-owned entities, mark the tenant entity `[SharedAcrossTenants]`
-([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
-
 Register it one of two ways:
 
 ```csharp
