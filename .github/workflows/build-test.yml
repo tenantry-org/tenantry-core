@@ -61,6 +61,12 @@ jobs:
             exit 1
           fi
 
+      - name: Lint the workflows
+        # actionlint checks the workflows' syntax and expressions, and runs shellcheck on each run block
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          version: 1.7.12   # a new actionlint release never changes a build
+
       - name: Check the Dependabot configuration
         # Its list of banded packages (version ranges, per-framework versions) must match the project files
         run: dotnet run scripts/check-dependabot.cs
@@ -164,11 +170,12 @@ jobs:
       - name: Consumer check
         # A stand-in application restores these packages from an empty cache with package source mapping,
         # builds for every target framework and runs, as an application would (see the script)
-        run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http' 'Tenantry.Caching' 'Tenantry.Options'
+        run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.*'
 
       - name: Check the documentation's code blocks
-        # Every ```csharp block in the README and docs builds against these packages (see the script)
-        run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http' 'Tenantry.Caching' 'Tenantry.Options'
+        # Every ```csharp block in the README and docs builds against these packages (see the script). The first
+        # pattern names the package whose version the snippets reference.
+        run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.*'
 
       - name: Upload packages
         # The release job publishes exactly these packages: the ones built, tested and checked above

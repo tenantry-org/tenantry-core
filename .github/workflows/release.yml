@@ -107,7 +107,7 @@ jobs:
             ./artifacts/*.snupkg
 
       - name: Write the packages' checksums
-        run: cd artifacts && sha256sum *.nupkg *.snupkg > SHA256SUMS
+        run: cd artifacts && sha256sum -- *.nupkg *.snupkg > SHA256SUMS
 
       - name: Write the release notes
         # The tag's section of CHANGELOG.md, before anything is published
