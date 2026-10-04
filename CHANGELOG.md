@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   service it needs.
 - `IsolateCaches()` throws for a `HybridCache` that is not a singleton. Register it with `AddHybridCache()`, which
   makes it one.
+- `UseInMemoryStore` and `InMemoryTenantStore<string>` throw `ArgumentException` for two tenant ids that differ only
+  in case, such as `acme` and `ACME`. Give each tenant an id that differs from every other in more than case.
 - Give each HTTP client with `UseTenantry()` an absolute `BaseAddress` in its registration, or pass its service's
   address to `UseTenantry(address)`, as a gRPC client must. `UseTenantry()` on an HTTP client gained an optional
   parameter, so a library compiled against 0.6 that calls it must be compiled again.
@@ -170,6 +172,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it as a commit, a rollback, or the creation or release of a savepoint, none of which leaves the failed save's rows in
   the transaction. Before, only a failed rollback to the save's savepoint did, matched by EF Core's name for it, which
   EF Core does not document: under another name, the commit would have kept the rows.
+- `UseInMemoryStore` refuses two `string` tenant ids that differ only in case. A database whose collation ignores case
+  (the default on SQL Server and MySQL) takes them for one id, so each tenant's query filter matched the other's rows
+  and its updates and deletes could change them. See
+  [String tenant ids and the database's collation](docs/efcore-integration.md#string-tenant-ids-and-the-databases-collation)
+  for what a store of your own must guarantee.
 
 ## [0.6.0] - 2026-10-03
 

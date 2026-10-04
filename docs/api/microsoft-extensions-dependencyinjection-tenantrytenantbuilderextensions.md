@@ -173,7 +173,7 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 Exceptions:
 
 - `InvalidOperationException`: A tenant store is already registered.
-- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsReserved<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
+- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsReserved<TKey>`](tenantry-tenantids.md)), two tenants have the same id, or, with `string` ids, two ids differ only in case.
 
 The store is a singleton, built when this is called.
 

@@ -31,7 +31,9 @@ Parameters:
 Exceptions:
 
 - `ArgumentNullException`: `tenants` or one of its tenants is null.
-- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsReserved<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
+- `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsReserved<TKey>`](tenantry-tenantids.md)), two tenants have the same id, or, with `string` ids, two ids differ only in case.
+
+The store finds a tenant by its exact id. It refuses `string` ids that differ only in case because a database whose collation ignores case, the default on SQL Server and MySQL, takes them for one id, so one tenant's query filter would match the other's rows.
 
 ## Methods
 

@@ -85,6 +85,21 @@ models cannot be isolated at all: see [the list](efcore-advanced.md#models-that-
 With no tenant current, the filter matches nothing, so reads return no rows. It checks whether a tenant is current
 rather than comparing the id with a default value, and no tenant can have the default id.
 
+### String tenant ids and the database's collation
+
+The query filter and the `WHERE` clause of updates and deletes compare `TenantId` in the database, under the column's
+collation. SQL Server's and MySQL's default collations ignore case (MySQL's also ignores accents, and SQL Server ignores
+trailing spaces whatever the collation), so with `string` ids the database takes `acme` and `ACME` for the same
+tenant: each one's queries return the other's rows, and its updates and deletes can change them. Tenantry compares ids
+exactly, so it cannot see this.
+
+Give each tenant a `string` id that the database cannot confuse with another's under its collation. A store that reads
+tenants from a table keyed by the id, under the same collation, guarantees it, since the key refuses a second id the
+collation takes for the first. `UseInMemoryStore` refuses two `string` ids that differ only in case; ids that differ
+only in accents or trailing spaces are yours to avoid. A store of your own over configuration or another service
+guarantees nothing. A binary or case-sensitive collation on `TenantId` (`UseCollation`), or `Guid` or `int` keys, avoid
+the question.
+
 ### How the query filter stays correct
 
 EF Core compiles a query filter once and caches it for every instance of the model, so a filter that captured a
