@@ -115,7 +115,8 @@ public sealed class ResolutionTests
 
         (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("acme");
 
-        shared.Disposed.Should().BeTrue("the scope disposes what a scoped factory returns: pass a shared resolver as an instance");
+        // The test server disposes the request's scope after the client has the response, so wait for it.
+        await shared.Disposed.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -732,12 +733,16 @@ public sealed class ResolutionTests
 
     private sealed class DisposableResolver : ITenantResolver, IDisposable
     {
-        public bool Disposed { get; private set; }
+        private readonly TaskCompletionSource _disposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Completes when the scope disposes the resolver: the scope disposes what a scoped factory returns, so pass a
+        // shared resolver as an instance.
+        public Task Disposed => _disposed.Task;
 
         public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<string?>("acme");
 
-        public void Dispose() => Disposed = true;
+        public void Dispose() => _disposed.TrySetResult();
     }
 
     private sealed class ScopedResolver(RequestServices services) : ITenantResolver
