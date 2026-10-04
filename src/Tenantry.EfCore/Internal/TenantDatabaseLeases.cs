@@ -141,7 +141,9 @@ internal sealed class TenantDatabaseGuard<TKey>(
                 TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
                 $"This '{contextType}''s connection was changed after it was connected to tenant '{lease.TenantId}''s " +
-                "database. Do not call SetConnectionString or SetDbConnection on a context from AddDbContextPerTenantDatabase.",
+                "database. Do not call SetConnectionString or SetDbConnection on a context from AddDbContextPerTenantDatabase. " +
+                "If no code of yours does, the EF Core provider replaced the connection itself, which " +
+                "AddDbContextPerTenantDatabase does not support; the providers it is tested with are listed in Compatibility.",
                 leaseTenantId,
                 currentTenantId);
         }

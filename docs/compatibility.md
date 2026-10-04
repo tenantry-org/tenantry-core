@@ -32,6 +32,13 @@ accepts any later release of it:
 These minimums are the versions the tests run against. EF Core 9 on .NET 8 is not supported: use the EF
 Core that matches your target framework, as you would in any EF Core application.
 
+Three things Tenantry reads from EF Core are not documented by EF Core: the expressions of `ExecuteUpdate` setters,
+the query behind `GetDatabaseValues()` and `Reload()`, and the name EF Core gives a failed transaction operation.
+Tests pin each for every EF Core major above, and the weekly run takes the newest release of each major. If a release
+changed one, Tenantry would reject every `ExecuteUpdate`, or refuse the commit after any failed transaction operation
+that follows a save relying on a tenant check, but `GetDatabaseValues()` and `Reload()` would read another tenant's row
+by its key, as they do without Tenantry.
+
 ## Databases
 
 Tenantry uses only standard EF Core features, so it works with any relational EF Core provider that reports the rows

@@ -285,7 +285,9 @@ The tenant filter and write checks still apply, so a connection string that poin
 and rejects writes. A guard also checks, before a context opens a connection and before every command, that the
 connection was set for this context (and, pooled, this lease) and belongs to the current tenant. A context used after
 a switch to another tenant, or whose connection or connection string your code replaced, throws
-`TenantIsolationViolationException`, even if its connection is already open.
+`TenantIsolationViolationException`, even if its connection is already open. A provider that replaces its connection
+object itself after the connection string is set fails the same way; the [tested providers](compatibility.md#databases)
+keep it.
 
 The guard cannot see SQL you run on `Database.GetDbConnection()`. A streaming or split query that started before the
 tenant changed keeps reading from its database, whose rows belong to the tenant current when it started. Use SQLite
