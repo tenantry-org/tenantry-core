@@ -66,6 +66,8 @@ public sealed class TypedTenantTests
         }
     }
 
+    // Generic so that the tenant type is nested in a generic type; T itself is not used.
+    // ReSharper disable once UnusedTypeParameter
     private static class Outer<T>
     {
         public sealed class NestedTenant : TenantDescriptor<Guid>;

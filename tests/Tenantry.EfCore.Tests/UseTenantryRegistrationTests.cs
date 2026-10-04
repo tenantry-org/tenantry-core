@@ -1,6 +1,5 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -99,7 +98,7 @@ public sealed class UseTenantryRegistrationTests : IDisposable
     {
         var options = new DbContextOptionsBuilder<TestDbContext>()
             .UseSqlite(_connection)
-            .UseApplicationServiceProvider(DbContextFactory.Services<string>(new TestTenantContext()))
+            .UseApplicationServiceProvider(DbContextFactory.Services(new TestTenantContext()))
             .UseTenantry()
             .Options;
 
@@ -121,7 +120,7 @@ public sealed class UseTenantryRegistrationTests : IDisposable
     public void UseTenantry_CalledTwice_ChangesNothingTheSecondTime()
     {
         ContributorCount contributor = new();
-        var services = DbContextFactory.Services<string>(
+        var services = DbContextFactory.Services(
             new TestTenantContext(),
             configure: collection => collection.AddSingleton<ITenantDbContextOptionsContributor>(contributor));
 

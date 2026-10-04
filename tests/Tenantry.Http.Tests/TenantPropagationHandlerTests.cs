@@ -62,6 +62,8 @@ public sealed class TenantPropagationHandlerTests
 
         using (MakeCurrent(provider, "acme"))
         {
+            // The assertion awaits the call, so the request is not used after it is disposed.
+            // ReSharper disable once AccessToDisposedClosure
             await FluentActions.Awaiting(() => Client(provider).SendAsync(request, TestContext.Current.CancellationToken))
                 .Should().ThrowAsync<InvalidOperationException>().WithMessage("*'globex'*current tenant is 'acme'*");
         }
@@ -221,7 +223,7 @@ public sealed class TenantPropagationHandlerTests
         services.AddHttpClient("billing").UseTenantry();
         await using var provider = services.BuildServiceProvider();
 
-        FluentActions.Invoking(() => provider.GetRequiredService<IHttpClientFactory>().CreateClient("billing"))
+        provider.GetRequiredService<IHttpClientFactory>().Invoking(f => f.CreateClient("billing"))
             .Should().Throw<InvalidOperationException>().WithMessage("*tenant.AddHttpPropagation()*");
     }
 

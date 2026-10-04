@@ -4,7 +4,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
 
@@ -112,7 +111,7 @@ public sealed class UnmarkedEntityTypeTests : IDisposable
     public async Task ContextsOfOneApplication_EachFollowTheirOwnOptions()
     {
         // One application, one context type: the application's contexts use the default, one context rejects.
-        var services = DbContextFactory.Services<string>(_tenant);
+        var services = DbContextFactory.Services(_tenant);
         await using UnmarkedContext allowed = new(new DbContextOptionsBuilder<UnmarkedContext>()
             .UseSqlite(_connection)
             .UseApplicationServiceProvider(services)
@@ -149,7 +148,7 @@ public sealed class UnmarkedEntityTypeTests : IDisposable
             new DbContextOptionsBuilder<UnmarkedContext>()
                 .UseSqlite(_connection)
                 .UseTenantry()
-                .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant, isolation))
+                .UseApplicationServiceProvider(DbContextFactory.Services(_tenant, isolation))
                 .Options;
         var ct = TestContext.Current.CancellationToken;
         var countInvoices = EF.CompileAsyncQuery((UnmarkedContext context) => context.Set<Invoice>().Count());
@@ -164,12 +163,12 @@ public sealed class UnmarkedEntityTypeTests : IDisposable
         // The same query and compiled query come from EF Core's cache, compiled for the allowed context: their
         // commands are refused.
         await using UnmarkedContext refused = new(Options(new EfCoreIsolationOptions { OnUnmarkedEntityType = checking }));
-        await refused.Awaiting(context => context.Set<Invoice>().CountAsync())
+        await refused.Awaiting(context => context.Set<Invoice>().CountAsync(ct))
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
-        await refused.Awaiting(context => countInvoices(context))
+        await refused.Awaiting(countInvoices)
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
         refused.Set<Invoice>().Add(new Invoice());
-        await refused.Awaiting(context => context.SaveChangesAsync())
+        await refused.Awaiting(context => context.SaveChangesAsync(ct))
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
     }
 
@@ -181,10 +180,10 @@ public sealed class UnmarkedEntityTypeTests : IDisposable
 
         for (var i = 0; i < 25; i++)
         {
+            var behavior = i % 2 == 0 ? UnmarkedEntityTypeBehavior.Allow : UnmarkedEntityTypeBehavior.Reject;
             ServiceCollection services = new();
             services.AddSingleton<ITenantContext<string>>(_tenant);
-            services.AddTenantry<string>(tenant => tenant.ConfigureEfCoreIsolation(o =>
-                o.OnUnmarkedEntityType = i % 2 == 0 ? UnmarkedEntityTypeBehavior.Allow : UnmarkedEntityTypeBehavior.Reject));
+            services.AddTenantry<string>(tenant => tenant.ConfigureEfCoreIsolation(o => o.OnUnmarkedEntityType = behavior));
             services.AddDbContext<UnmarkedContext>(options => options.UseSqlite(_connection).UseTenantry());
             var application = services.BuildServiceProvider();
             using var scope = application.CreateScope();
@@ -207,17 +206,17 @@ public sealed class UnmarkedEntityTypeTests : IDisposable
         (await allowed.Set<Invoice>().CountAsync(ct)).Should().Be(1);
         (await countInvoices(allowed)).Should().Be(1);
 
-        await rejected.Awaiting(context => context.Set<Invoice>().CountAsync())
+        await rejected.Awaiting(context => context.Set<Invoice>().CountAsync(ct))
             .Should().ThrowAsync<TenantIsolationViolationException>();
 
         // The rejected context has a model of its own, so EF Core refuses the allowed context's compiled query, and
         // compiling it again for the rejected context's model runs the check.
-        await rejected.Awaiting(context => countInvoices(context))
+        await rejected.Awaiting(countInvoices)
             .Should().ThrowAsync<InvalidOperationException>();
         await rejected.Awaiting(context => EF.CompileAsyncQuery((UnmarkedContext c) => c.Set<Invoice>().Count())(context))
             .Should().ThrowAsync<TenantIsolationViolationException>();
         rejected.Set<Invoice>().Add(new Invoice());
-        await rejected.Awaiting(context => context.SaveChangesAsync())
+        await rejected.Awaiting(context => context.SaveChangesAsync(ct))
             .Should().ThrowAsync<TenantIsolationViolationException>();
     }
 
@@ -300,6 +299,8 @@ public sealed class UnmarkedEntityTypeTests : IDisposable
     {
         public int Id { get; set; }
 
+        // The other end of the relationship, which EF Core fills.
+        // ReSharper disable once CollectionNeverUpdated.Global
         public List<Tag> Tags { get; } = [];
     }
 

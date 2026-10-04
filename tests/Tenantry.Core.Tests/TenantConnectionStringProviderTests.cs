@@ -18,7 +18,7 @@ public sealed class TenantConnectionStringProviderTests
     [Fact]
     public async Task GetAsync_PrefersTheAsyncDelegate()
     {
-        using var services = Build(options =>
+        await using var services = Build(options =>
         {
             options.GetConnectionString = _ => "sync";
             options.GetConnectionStringAsync = async (t, _) =>
@@ -35,7 +35,7 @@ public sealed class TenantConnectionStringProviderTests
     [Fact]
     public async Task GetAsync_FallsBackToTheSyncDelegate()
     {
-        using var services = Build(options => options.GetConnectionString = t => $"sync {t.TenantId}");
+        await using var services = Build(options => options.GetConnectionString = t => $"sync {t.TenantId}");
 
         (await Provider(services).GetAsync(Acme, TestContext.Current.CancellationToken)).Should().Be("sync acme");
     }
@@ -43,9 +43,9 @@ public sealed class TenantConnectionStringProviderTests
     [Fact]
     public async Task GetAsync_PassesTheCancellationToken()
     {
-        CancellationToken received = default;
+        CancellationToken received = CancellationToken.None;
         using CancellationTokenSource cts = new();
-        using var services = Build(options => options.GetConnectionStringAsync = (_, ct) =>
+        await using var services = Build(options => options.GetConnectionStringAsync = (_, ct) =>
         {
             received = ct;
             return ValueTask.FromResult("x");
@@ -59,7 +59,7 @@ public sealed class TenantConnectionStringProviderTests
     [Fact]
     public async Task CurrentTenantConnectionString_UsesTheCurrentTenant()
     {
-        using var services = Build(options => options.GetConnectionString = t => $"Database=app_{t.TenantId}");
+        await using var services = Build(options => options.GetConnectionString = t => $"Database=app_{t.TenantId}");
         var current = services.GetRequiredService<CurrentTenantConnectionString<string>>();
 
         using (services.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(Acme))
@@ -72,7 +72,7 @@ public sealed class TenantConnectionStringProviderTests
     [Fact]
     public async Task CurrentTenantConnectionString_InsideAWorkerScope_UsesThatScopesTenant()
     {
-        using var services = Build(
+        await using var services = Build(
             options => options.GetConnectionString = t => $"Database=app_{t.TenantId}",
             tenant => tenant.UseInMemoryStore([Acme]));
 
@@ -86,7 +86,7 @@ public sealed class TenantConnectionStringProviderTests
     [Fact]
     public async Task CurrentTenantConnectionString_WithoutACurrentTenant_Throws()
     {
-        using var services = Build(options => options.GetConnectionString = _ => "x");
+        await using var services = Build(options => options.GetConnectionString = _ => "x");
         var current = services.GetRequiredService<CurrentTenantConnectionString<string>>();
 
         current.Invoking(c => c.Get())
@@ -110,7 +110,7 @@ public sealed class TenantConnectionStringProviderTests
     [InlineData("  ")]
     public async Task EmptyConnectionString_ThrowsNamingTheTenant(string? value)
     {
-        using var services = Build(options =>
+        await using var services = Build(options =>
         {
             options.GetConnectionString = _ => value!;
             options.GetConnectionStringAsync = (_, _) => ValueTask.FromResult(value!);
@@ -286,7 +286,7 @@ public sealed class TenantConnectionStringProviderTests
     [Fact]
     public async Task Get_NullTenant_Throws()
     {
-        using var services = Build(options => options.GetConnectionString = _ => "x");
+        await using var services = Build(options => options.GetConnectionString = _ => "x");
 
         services.Invoking(s => Provider(s).Get(null!)).Should().Throw<ArgumentNullException>();
         await services.Awaiting(s => Provider(s).GetAsync(null!).AsTask()).Should().ThrowAsync<ArgumentNullException>();

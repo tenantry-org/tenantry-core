@@ -199,7 +199,7 @@ internal sealed class TenantWriteGuard<TKey>
             return;
         }
 
-        var entityTypes = string.Join(", ", writes.Select(entry => Name(entry)).Distinct());
+        var entityTypes = string.Join(", ", writes.Select(Name).Distinct());
 
         switch (behavior)
         {

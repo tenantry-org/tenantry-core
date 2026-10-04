@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
 using AwesomeAssertions;
-using Tenantry;
 using Tenantry.AspNetCore.Internal;
 
 namespace Tenantry.AspNetCore.Tests;

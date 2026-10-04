@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Microsoft.Extensions.Logging;
 
 namespace Tenantry.AspNetCore.Tests;
 
@@ -33,7 +32,7 @@ public sealed class RecordingLoggerProvider : ILoggerProvider, ISupportExternalS
 
     private sealed class Logger(RecordingLoggerProvider provider, string category) : ILogger
     {
-        public IDisposable? BeginScope<TState>(TState state)
+        public IDisposable BeginScope<TState>(TState state)
             where TState : notnull => provider._scopes.Push(state);
 
         public bool IsEnabled(LogLevel logLevel) => true;

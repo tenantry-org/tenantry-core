@@ -3,7 +3,6 @@ using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
 
@@ -36,7 +35,8 @@ public sealed class IsolationLogTests : IAsyncDisposable
         await db.Invoking(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
 
         var entry = _logs.Entries.Should().ContainSingle(e => e.EventId.Id == 2001).Subject;
-        entry.Should().BeEquivalentTo(new { Category = "Tenantry.EfCore", Level = LogLevel.Error });
+        entry.Category.Should().Be("Tenantry.EfCore");
+        entry.Level.Should().Be(LogLevel.Error);
         entry.EventId.Name.Should().Be("TenantIsolationViolation");
         entry.Message.Should().Contain("'acme'").And.Contain("'globex'");
     }
@@ -77,7 +77,7 @@ public sealed class IsolationLogTests : IAsyncDisposable
     public async Task UnmarkedEntityTypes_UnderWarn_AreLoggedAsEvent2006_OncePerModel()
     {
         _tenant.As("acme");
-        var services = DbContextFactory.Services<string>(
+        var services = DbContextFactory.Services(
             _tenant,
             new EfCoreIsolationOptions { OnUnmarkedEntityType = UnmarkedEntityTypeBehavior.Warn },
             collection => collection.AddLogging(logging => logging.AddProvider(_logs)));
@@ -111,7 +111,7 @@ public sealed class IsolationLogTests : IAsyncDisposable
 
     private async Task<TestDbContext> CreateAsync(EfCoreIsolationOptions? isolation = null)
     {
-        var services = DbContextFactory.Services<string>(
+        var services = DbContextFactory.Services(
             _tenant,
             isolation,
             collection => collection.AddLogging(logging => logging.AddProvider(_logs)));
@@ -131,6 +131,8 @@ public sealed class IsolationLogTests : IAsyncDisposable
 
     private sealed class UnmarkedContext(DbContextOptions<UnmarkedContext> options) : DbContext(options)
     {
+        // EF Core reads the DbSet property to find the entity type.
+        // ReSharper disable once UnusedMember.Local
         public DbSet<Order> Orders => Set<Order>();
 
         public DbSet<Invoice> Invoices => Set<Invoice>();

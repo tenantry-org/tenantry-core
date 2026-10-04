@@ -44,6 +44,8 @@ internal sealed class TenantRequestResolution<TKey>
     /// </param>
     public async ValueTask<TenantResolution<TKey>> ResolveAsync(HttpContext context, bool beforeAuthentication)
     {
+        // The span is named for what it covers, not for this method.
+        // ReSharper disable once ExplicitCallerInfoArgument
         using var activity = TenantryHttpTelemetry.ActivitySource.StartActivity(TenantryHttpTelemetry.ResolveActivityName);
 
         var resolution = await FindTenantAsync(context, beforeAuthentication).ConfigureAwait(false);

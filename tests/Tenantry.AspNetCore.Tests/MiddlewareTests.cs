@@ -1,9 +1,7 @@
 using System.Security.Claims;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.AspNetCore.Tests;
 
@@ -940,7 +938,7 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
 
         foreach (var (header, status, title) in new[]
                  {
-                     ((string?)null, 400, "Tenant required"),
+                     (null, 400, "Tenant required"),
                      (identifier, 404, "Tenant not found"),
                      ("31337", 404, "Tenant not found"),
                  })
@@ -978,9 +976,9 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
                 .ValidateTenantAccess((_, _) => false),
             services => services.AddProblemDetails());
 
-        async Task<(System.Net.HttpStatusCode Status, string Body)> Get(string tenantId)
+        static async Task<(System.Net.HttpStatusCode Status, string Body)> Get(WebApplication host, string tenantId)
         {
-            using var client = app.GetTestClient();
+            using var client = host.GetTestClient();
             client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
             var response = await client.GetAsync("/tenant");
             var body = await response.Content.ReadAsStringAsync();
@@ -989,8 +987,8 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
             return (response.StatusCode, TraceId().Replace(body, ""));
         }
 
-        var denied = await Get("acme");
-        var unknown = await Get("unknown-corp");
+        var denied = await Get(app, "acme");
+        var unknown = await Get(app, "unknown-corp");
 
         denied.Status.Should().Be(System.Net.HttpStatusCode.Forbidden);
         unknown.Should().Be(denied, "a caller must not learn which tenants exist");
@@ -1029,7 +1027,7 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
                 options.TenantNotFoundStatusCode = 410;
             }));
 
-        foreach (var (header, status) in new[] { ((string?)null, 401), ("x", 410), ("2", 410) })
+        foreach (var (header, status) in new[] { (null, 401), ("x", 410), ("2", 410) })
         {
             using var client = app.GetTestClient();
             if (header is not null)

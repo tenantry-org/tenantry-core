@@ -1,9 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Tenantry;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
 

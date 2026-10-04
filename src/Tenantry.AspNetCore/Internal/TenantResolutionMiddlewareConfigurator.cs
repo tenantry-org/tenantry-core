@@ -114,7 +114,7 @@ internal sealed class TenantryPipelineCheck(TenantryPipeline pipeline) : IStartu
         {
             next(app);
 
-            if (!pipeline.HasMiddleware && pipeline.HasEarlyResolution)
+            if (pipeline is { HasMiddleware: false, HasEarlyResolution: true })
             {
                 throw new InvalidOperationException(
                     "app.UseTenantResolution() is in the request pipeline but app.UseTenantry() is not, so no request's " +

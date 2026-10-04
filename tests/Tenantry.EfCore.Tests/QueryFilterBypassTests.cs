@@ -31,7 +31,7 @@ public sealed class QueryFilterBypassTests
     [Fact]
     public async Task Query_CountByTenant_ReturnsCorrectCount()
     {
-        (var db, var ctx, var conn) = await SeedTwoTenantsAsync();
+        var (db, ctx, conn) = await SeedTwoTenantsAsync();
         await using (db)
         await using (conn)
         {
@@ -49,7 +49,7 @@ public sealed class QueryFilterBypassTests
     [Fact]
     public async Task Query_WhereOnTop_DoesNotLeakCrossTenantRows()
     {
-        (var db, var ctx, var conn) = await SeedTwoTenantsAsync();
+        var (db, ctx, conn) = await SeedTwoTenantsAsync();
         await using (db)
         await using (conn)
         {
@@ -66,7 +66,7 @@ public sealed class QueryFilterBypassTests
     [Fact]
     public async Task Query_GroupBy_DoesNotLeakCrossTenantRows()
     {
-        (var db, var ctx, var conn) = await SeedTwoTenantsAsync();
+        var (db, ctx, conn) = await SeedTwoTenantsAsync();
         await using (db)
         await using (conn)
         {
@@ -83,7 +83,7 @@ public sealed class QueryFilterBypassTests
     [Fact]
     public async Task Query_Select_DoesNotLeakCrossTenantRows()
     {
-        (var db, var ctx, var conn) = await SeedTwoTenantsAsync();
+        var (db, ctx, conn) = await SeedTwoTenantsAsync();
         await using (db)
         await using (conn)
         {

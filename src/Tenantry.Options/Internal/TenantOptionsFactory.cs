@@ -24,6 +24,8 @@ internal sealed class TenantOptionsFactory<[DynamicallyAccessedMembers(Dynamical
 
     public TOptions Create(string name)
     {
+        // A caller compiled without nullable annotations can pass null, as the options pattern's own readers accept.
+        // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
         name ??= Microsoft.Extensions.Options.Options.DefaultName;
         var options = Activator.CreateInstance<TOptions>();
 

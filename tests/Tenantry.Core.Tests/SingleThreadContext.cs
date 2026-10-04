@@ -49,18 +49,24 @@ internal sealed class SingleThreadContext : SynchronizationContext, IDisposable
     public Task<T> RunAsync<T>(Func<Task<T>> work)
     {
         TaskCompletionSource<T> result = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        Post(async _ =>
+        Post(static state =>
         {
-            try
-            {
-                result.SetResult(await work());
-            }
-            catch (Exception e)
-            {
-                result.SetException(e);
-            }
-        }, null);
+            var (start, completion) = ((Func<Task<T>>, TaskCompletionSource<T>))state!;
+            _ = CompleteAsync(start, completion);
+        }, (work, result));
         return result.Task;
+    }
+
+    private static async Task CompleteAsync<T>(Func<Task<T>> work, TaskCompletionSource<T> result)
+    {
+        try
+        {
+            result.SetResult(await work());
+        }
+        catch (Exception e)
+        {
+            result.SetException(e);
+        }
     }
 
     public void Dispose() => _queue.CompleteAdding();

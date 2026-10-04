@@ -212,7 +212,7 @@ public sealed class IsolateCachesTests
         await using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
         var cache = provider.GetRequiredService<HybridCache>();
 
-        await FluentActions.Awaiting(() => AsAsync(provider, Acme, () => cache.SetAsync("orders", 1, cancellationToken: Ct).AsTask()))
+        await provider.Awaiting(p => AsAsync(p, Acme, () => cache.SetAsync("orders", 1, cancellationToken: Ct).AsTask()))
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("*AddHybridCache(), then builder.Services.AddTenantry*");
         await FluentActions.Awaiting(() => cache.GetOrCreateAsync("orders", _ => ValueTask.FromResult(1), cancellationToken: Ct).AsTask())
             .Should().ThrowAsync<InvalidOperationException>();
@@ -230,7 +230,7 @@ public sealed class IsolateCachesTests
         builder.Services.AddSingleton<HybridCache, InMemoryHybridCache>();   // replaces the isolated cache
         using var host = builder.Build();
 
-        await FluentActions.Awaiting(() => host.StartAsync(Ct))
+        await host.Awaiting(h => h.StartAsync(Ct))
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("*InMemoryHybridCache, registered after AddTenantry*");
     }
 

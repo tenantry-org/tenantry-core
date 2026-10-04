@@ -110,8 +110,8 @@ public sealed class ManyToManyTests : IDisposable
             post.TenantId = "globex";
             db.Set<Dictionary<string, object>>("PostTag").Add(new Dictionary<string, object> { ["PostsId"] = 1, ["TagsId"] = 3 });
 
-            Func<Task> save = sync ? () => Task.FromResult(db.SaveChanges()) : () => db.SaveChangesAsync();
-            (await save.Should().ThrowAsync<TenantIsolationViolationException>()).Which.OffendingTenantId.Should().Be("globex");
+            (await db.Awaiting(d => sync ? Task.FromResult(d.SaveChanges()) : d.SaveChangesAsync())
+                .Should().ThrowAsync<TenantIsolationViolationException>()).Which.OffendingTenantId.Should().Be("globex");
         }
 
         await using var check = await CreateAsync<ImplicitContext>();
@@ -700,6 +700,8 @@ public sealed class ManyToManyTests : IDisposable
 
     public sealed class Badge : ITenantEntity<string>
     {
+        // EF Core reads it when it saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         public int Id { get; set; }
 
         [MaxLength(64)]
@@ -708,11 +710,15 @@ public sealed class ManyToManyTests : IDisposable
 
     public sealed class Keyword : ITenantEntity<string>
     {
+        // EF Core reads it when it saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         public int Id { get; set; }
 
         [MaxLength(64)]
         public string TenantId { get; set; } = string.Empty;
 
+        // The other end of the relationship, which EF Core fills.
+        // ReSharper disable once CollectionNeverUpdated.Global
         public List<Video> Videos { get; } = [];
     }
 
@@ -796,11 +802,15 @@ public sealed class ManyToManyTests : IDisposable
 
     public sealed class Topic : ITenantEntity<string>
     {
+        // EF Core reads it when it saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         public int Id { get; set; }
 
         [MaxLength(64)]
         public string TenantId { get; set; } = string.Empty;
 
+        // The other end of the relationship, which EF Core fills.
+        // ReSharper disable once CollectionNeverUpdated.Global
         public List<Document> Documents { get; } = [];
     }
 

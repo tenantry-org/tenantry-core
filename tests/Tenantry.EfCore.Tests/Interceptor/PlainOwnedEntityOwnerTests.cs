@@ -69,8 +69,8 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
             db.ChangeTracker.AutoDetectChangesEnabled = false;
             customer.TenantId = "globex";
 
-            Func<Task> save = sync ? () => Task.FromResult(db.SaveChanges()) : () => db.SaveChangesAsync();
-            (await save.Should().ThrowAsync<TenantIsolationViolationException>()).Which.OffendingTenantId.Should().Be("globex");
+            (await db.Awaiting(d => sync ? Task.FromResult(d.SaveChanges()) : d.SaveChangesAsync())
+                .Should().ThrowAsync<TenantIsolationViolationException>()).Which.OffendingTenantId.Should().Be("globex");
         }
 
         (await AcmePhonesAsync()).Should().Equal("1: acme phone");
@@ -406,6 +406,8 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
     {
         public int Id { get; set; }
 
+        // EF Core reads it when it saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         [MaxLength(64)]
         public string Text { get; set; } = string.Empty;
     }

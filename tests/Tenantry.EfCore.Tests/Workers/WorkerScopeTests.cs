@@ -1,8 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
 using Tenantry.EfCore.Tests.Pooling;
 
 namespace Tenantry.EfCore.Tests.Workers;

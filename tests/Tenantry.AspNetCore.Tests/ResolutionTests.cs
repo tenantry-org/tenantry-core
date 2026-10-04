@@ -4,10 +4,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Tenantry.AspNetCore.Internal;
 
@@ -33,14 +30,14 @@ public sealed class ResolutionTests
             .UseStore<SlugStore>());
         using var client = app.GetTestClient();
 
-        (await client.GetStringAsync("http://acme.example.com/tenant", TestContext.Current.CancellationToken)).Should().Be(SlugStore.Acme.ToString());
-        (await client.GetStringAsync("http://APP.acme.com/tenant", TestContext.Current.CancellationToken)).Should().Be(SlugStore.Acme.ToString());
+        (await client.GetStringAsync("http://acme.example.com/tenant", TestContext.Current.CancellationToken)).Should().Be(SlugStore.AcmeId.ToString());
+        (await client.GetStringAsync("http://APP.acme.com/tenant", TestContext.Current.CancellationToken)).Should().Be(SlugStore.AcmeId.ToString());
         (await client.GetStringAsync("http://www.example.com/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
         (await client.GetStringAsync("http://example.com/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
-        (await client.GetStringAsync($"http://{SlugStore.Acme}.example.com/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)", "this store maps slugs, not ids");
+        (await client.GetStringAsync($"http://{SlugStore.AcmeId}.example.com/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)", "this store maps slugs, not ids");
 
         // The application's own hosts never reach the store.
-        SlugStore.Lookups.Should().Equal("acme", "app.acme.com", SlugStore.Acme.ToString());
+        SlugStore.Lookups.Should().Equal("acme", "app.acme.com", SlugStore.AcmeId.ToString());
     }
 
     [Fact]
@@ -662,15 +659,15 @@ public sealed class ResolutionTests
 
         static string Current(ITenantContext<TKey> context) => context.HasTenant ? context.CurrentTenantId!.ToString()! : "(none)";
 
-        app.MapGet("/tenant", (ITenantContext<TKey> context) => Current(context));
-        app.MapGet("/required", (ITenantContext<TKey> context) => Current(context)).RequireTenant();
+        app.MapGet("/tenant", Current);
+        app.MapGet("/required", Current).RequireTenant();
         app.MapGet("/log", (ILogger<ResolutionTests> logger) => logger.LogInformation("inside the request"));
         app.MapGet("/scoped", (HttpContext http, ITenantContext<TKey> context) =>
         {
-            var services = http.RequestServices.GetService<RequestServices>();
-            return $"{Current(context)} {services?.Id} " +
-                   $"{(ReferenceEquals(http.Items["resolver"], services) ? "same" : "other")} " +
-                   $"{(ReferenceEquals(http.Items["validator"], services) ? "same" : "other")}";
+            var requestServices = http.RequestServices.GetService<RequestServices>();
+            return $"{Current(context)} {requestServices?.Id} " +
+                   $"{(ReferenceEquals(http.Items["resolver"], requestServices) ? "same" : "other")} " +
+                   $"{(ReferenceEquals(http.Items["validator"], requestServices) ? "same" : "other")}";
         });
 
         try
@@ -688,14 +685,14 @@ public sealed class ResolutionTests
 
     private sealed class SlugStore : ITenantStore<Guid>
     {
-        public static readonly Guid Acme = Guid.NewGuid();
+        public static readonly Guid AcmeId = Guid.NewGuid();
 
         public static readonly List<string> Lookups = [];
 
-        private static readonly TenantDescriptor<Guid> AcmeTenant = new() { TenantId = Acme, Name = "Acme" };
+        private static readonly TenantDescriptor<Guid> AcmeTenant = new() { TenantId = AcmeId, Name = "Acme" };
 
         public ValueTask<ITenantDescriptor<Guid>?> GetTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<ITenantDescriptor<Guid>?>(tenantId == Acme ? AcmeTenant : null);
+            ValueTask.FromResult<ITenantDescriptor<Guid>?>(tenantId == AcmeId ? AcmeTenant : null);
 
         public ValueTask<IReadOnlyList<ITenantDescriptor<Guid>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<Guid>>>([AcmeTenant]);

@@ -1,6 +1,5 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
 
 namespace Tenantry.Core.Tests;
 
@@ -270,7 +269,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     public async Task RunInScopeAsync_PassesTheTokenToTheStoreAndTheWork()
     {
         using CancellationTokenSource cts = new();
-        CancellationToken received = default;
+        CancellationToken received = CancellationToken.None;
 
         await Scopes.RunInScopeAsync("acme", (_, ct) =>
         {

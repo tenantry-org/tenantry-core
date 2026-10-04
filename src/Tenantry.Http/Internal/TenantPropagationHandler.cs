@@ -29,8 +29,10 @@ internal sealed class TenantPropagationHandler(ITenantHeaderSource source, Propa
 
         // A header put there before (forwarded from the incoming request, or a client's DefaultRequestHeaders) would call
         // the service as whatever tenant it names, with this service's credentials.
-        if (request.Headers.TryGetValues(TenantPropagation.HeaderName, out var existing))
+        if (request.Headers.TryGetValues(TenantPropagation.HeaderName, out var headers))
         {
+            var existing = headers.ToArray();
+
             if (existing.All(value => value == tenantId))
                 return;
 

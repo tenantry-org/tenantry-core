@@ -1,13 +1,7 @@
-using System.Net;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Hybrid;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Tenantry.Caching;
 using Tenantry.Tests.Shared;
 
@@ -148,7 +142,7 @@ public sealed class TenantCachingTests
         builder.Services.AddHybridCache();
         await using var app = builder.Build();
 
-        await FluentActions.Awaiting(() => app.StartAsync(Ct))
+        await app.Awaiting(a => a.StartAsync(Ct))
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("AddHybridCache() was called after AddTenantry*");
     }
 
@@ -170,7 +164,7 @@ public sealed class TenantCachingTests
         return client;
     }
 
-    private static IServiceCollection Services(WebApplication app) => app.Services.GetRequiredService<ServicesHolder>().Services;
+    private static IServiceCollection Services(WebApplication app) => app.Services.GetRequiredService<ServicesHolder>().Collection;
 
     private static async Task<WebApplication> StartAsync(
         bool outputCacheFirst = false, RecordingLoggerProvider? logs = null, string? tenantryOnlyOutside = null)
@@ -232,7 +226,7 @@ public sealed class TenantCachingTests
         return app;
     }
 
-    private sealed record ServicesHolder(IServiceCollection Services);
+    private sealed record ServicesHolder(IServiceCollection Collection);
 
     private sealed class RecordingLoggerProvider : ILoggerProvider
     {

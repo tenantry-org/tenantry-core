@@ -151,15 +151,20 @@ public sealed class NonRelationalProviderTests
             });
     }
 
+    // The DbSet properties name the entity types for EF Core, which reads them by reflection.
+    // ReSharper disable UnusedMember.Local
     private sealed class SameNameContext(DbContextOptions<SameNameContext> options) : DbContext(options)
     {
         public DbSet<Note> Notes => Set<Note>();
 
         public DbSet<Archive.Note> ArchivedNotes => Set<Archive.Note>();
     }
+    // ReSharper restore UnusedMember.Local
 
     public static class Archive
     {
+        // The same name as the other Note on purpose: the test is about two entity types of one name.
+        // ReSharper disable once MemberHidesStaticFromOuterClass
         public sealed class Note
         {
             public int Id { get; set; }

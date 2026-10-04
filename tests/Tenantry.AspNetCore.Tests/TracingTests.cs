@@ -2,9 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.AspNetCore.Tests;
 
@@ -21,12 +19,10 @@ public sealed class TracingTests
     public async Task TheRequestsSpan_IsTaggedWithTheTenant_AndResolutionHasASpanOfItsOwn()
     {
         ConcurrentQueue<Activity> stopped = new();
-        using ActivityListener listener = new()
-        {
-            ShouldListenTo = source => source.Name is "Microsoft.AspNetCore" or "Tenantry.AspNetCore",
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = stopped.Enqueue,
-        };
+        using ActivityListener listener = new();
+        listener.ShouldListenTo = source => source.Name is "Microsoft.AspNetCore" or "Tenantry.AspNetCore";
+        listener.Sample = (ref _) => ActivitySamplingResult.AllDataAndRecorded;
+        listener.ActivityStopped = stopped.Enqueue;
         ActivitySource.AddActivityListener(listener);
 
         var builder = WebApplication.CreateBuilder();

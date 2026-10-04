@@ -1,6 +1,5 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Infrastructure;
 
@@ -85,18 +84,6 @@ public static class DbContextFactory
         TestDbContext context = new(Options<TestDbContext>(tenantContext, connection, isolationOptions));
         await context.Database.EnsureCreatedAsync();
         return context;
-    }
-
-    /// <summary>
-    /// Creates a <see cref="TestDbContext"/> on its own private in-memory database.
-    /// Useful for single-tenant tests that don't need to share a database.
-    /// </summary>
-    public static async Task<(TestDbContext context, SqliteConnection connection)> CreateIsolatedContextAsync(
-        TestTenantContext tenantContext)
-    {
-        var connection = CreateSharedConnection();
-        var context = await CreateContextAsync(tenantContext, connection);
-        return (context, connection);
     }
 
     // ── Guid-keyed path ──────────────────────────────────────────────────────

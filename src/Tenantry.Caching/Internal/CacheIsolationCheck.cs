@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Tenantry.Caching.Internal;
 
@@ -24,7 +23,7 @@ internal sealed class CacheIsolationCheck
             })
             .ValidateOnStart();
 
-    internal static void ThrowIfShared(IServiceCollection services, IServiceProvider provider)
+    private static void ThrowIfShared(IServiceCollection services, IServiceProvider provider)
     {
         using var scope = provider.CreateScope();
 

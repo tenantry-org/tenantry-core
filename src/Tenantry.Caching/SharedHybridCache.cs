@@ -79,6 +79,8 @@ public sealed class SharedHybridCache : HybridCache, IDisposable
     /// <param name="cancellationToken">Cancels the removal.</param>
     /// <returns>A task that completes when the entries are removed.</returns>
     public override ValueTask RemoveAsync(IEnumerable<string> keys, CancellationToken cancellationToken = default) =>
+        // HybridCache's contract treats a null collection as empty, whatever the parameter's annotation says.
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         keys is null ? ValueTask.CompletedTask : _inner.RemoveAsync(keys.Select(TenantCacheKeys.Shared).ToList(), cancellationToken);
 
     /// <summary>Removes the shared entries tagged <paramref name="tag"/>; <c>*</c> removes every shared entry.</summary>
@@ -93,6 +95,8 @@ public sealed class SharedHybridCache : HybridCache, IDisposable
     /// <param name="cancellationToken">Cancels the removal.</param>
     /// <returns>A task that completes when the entries are removed.</returns>
     public override ValueTask RemoveByTagAsync(IEnumerable<string> tags, CancellationToken cancellationToken = default) =>
+        // HybridCache's contract treats a null collection as empty, whatever the parameter's annotation says.
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         tags is null ? ValueTask.CompletedTask : _inner.RemoveByTagAsync(tags.Select(SharedTag).ToList(), cancellationToken);
 
     /// <summary>Disposes the cache it wraps, when that cache was created for it and is disposable.</summary>

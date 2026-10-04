@@ -279,9 +279,16 @@ internal sealed class TenantFreeOptions<[DynamicallyAccessedMembers(DynamicallyA
 
             lock (_gate)
             {
+                if (_value is { } built)
+                    return built;
+
                 // Not kept when the build throws, so the next read tries again.
                 using (tenant.MakeNoTenantCurrent())
-                    return _value ??= factory.Create(Microsoft.Extensions.Options.Options.DefaultName);
+                {
+                    var created = factory.Create(Microsoft.Extensions.Options.Options.DefaultName);
+                    _value = created;
+                    return created;
+                }
             }
         }
     }

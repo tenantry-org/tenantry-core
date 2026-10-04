@@ -9,7 +9,7 @@ namespace Tenantry.EfCore.Internal;
 /// </summary>
 internal static partial class TenantIsolationLog
 {
-    public const string Category = "Tenantry.EfCore";
+    private const string Category = "Tenantry.EfCore";
 
     public static ILogger? Find(IServiceProvider? services) =>
         services?.GetService<ILoggerFactory>()?.CreateLogger(Category);

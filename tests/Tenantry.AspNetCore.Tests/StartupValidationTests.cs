@@ -1,7 +1,5 @@
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.AspNetCore.Tests;
 
@@ -18,9 +16,8 @@ public sealed class StartupValidationTests
             .RequireTenantByDefault()
             .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" }]));
 
-        var act = () => app.UseTenantry();
-
-        act.Should().Throw<InvalidOperationException>().WithMessage("*no tenant resolvers*ResolveFromHeader*");
+        app.Invoking(a => a.UseTenantry())
+            .Should().Throw<InvalidOperationException>().WithMessage("*no tenant resolvers*ResolveFromHeader*");
     }
 
     [Fact]
@@ -28,9 +25,8 @@ public sealed class StartupValidationTests
     {
         await using var app = Build(tenant => tenant.ResolveFromHeader("X-Tenant-Id"));
 
-        var act = () => app.UseTenantry();
-
-        act.Should().Throw<InvalidOperationException>().WithMessage("*no tenant store*UseStore*UseInMemoryStore*");
+        app.Invoking(a => a.UseTenantry())
+            .Should().Throw<InvalidOperationException>().WithMessage("*no tenant store*UseStore*UseInMemoryStore*");
     }
 
     [Fact]
@@ -42,9 +38,8 @@ public sealed class StartupValidationTests
 
         foreach (var app in new[] { withCoreOnly, withNothing })
         {
-            var act = () => app.UseTenantry();
-
-            act.Should().Throw<InvalidOperationException>().WithMessage("*found no tenant resolution*AddTenantry*ResolveFromHeader*");
+            app.Invoking(a => a.UseTenantry())
+                .Should().Throw<InvalidOperationException>().WithMessage("*found no tenant resolution*AddTenantry*ResolveFromHeader*");
         }
     }
 

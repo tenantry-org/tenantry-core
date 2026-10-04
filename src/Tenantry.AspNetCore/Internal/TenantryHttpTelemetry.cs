@@ -10,7 +10,7 @@ namespace Tenantry.AspNetCore.Internal;
 /// </summary>
 internal static class TenantryHttpTelemetry
 {
-    public const string Name = TenantryAspNetCoreTelemetry.ActivitySourceName;
+    private const string Name = TenantryAspNetCoreTelemetry.ActivitySourceName;
 
     public const string ResolveActivityName = "Tenantry.ResolveTenant";
 

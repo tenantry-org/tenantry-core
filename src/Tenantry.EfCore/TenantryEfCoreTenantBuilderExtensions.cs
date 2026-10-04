@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Tenantry;
 using Tenantry.EfCore;
 using Tenantry.EfCore.Internal;

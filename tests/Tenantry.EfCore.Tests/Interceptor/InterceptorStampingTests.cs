@@ -53,9 +53,9 @@ public sealed class InterceptorStampingTests
 
         Order[] orders =
         [
-            new Order { Description = "First" },
-            new Order { Description = "Second" },
-            new Order { Description = "Third" },
+            new() { Description = "First" },
+            new() { Description = "Second" },
+            new() { Description = "Third" },
         ];
 
         db.Orders.AddRange(orders);

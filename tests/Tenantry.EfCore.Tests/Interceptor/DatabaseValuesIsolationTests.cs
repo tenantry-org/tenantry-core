@@ -179,6 +179,8 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
 
     public sealed class Address
     {
+        // EF Core reads it when it saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         [MaxLength(64)]
         public string City { get; set; } = string.Empty;
     }
@@ -187,6 +189,8 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
     {
         public int Id { get; set; }
 
+        // EF Core reads it when it saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         [MaxLength(64)]
         public string Number { get; set; } = string.Empty;
     }

@@ -1,7 +1,5 @@
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
 using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;

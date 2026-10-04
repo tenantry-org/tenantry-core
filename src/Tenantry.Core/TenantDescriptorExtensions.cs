@@ -29,7 +29,7 @@ public static class TenantDescriptorExtensions
         return tenant as TTenant ?? throw NotOfType(tenant, typeof(TTenant));
     }
 
-    internal static InvalidOperationException NotOfType(ITenantDescriptor tenant, Type expected) =>
+    private static InvalidOperationException NotOfType(ITenantDescriptor tenant, Type expected) =>
         new($"Tenant '{tenant.Name}' is of type {DisplayName(tenant.GetType())}, not {DisplayName(expected)}. Tenants " +
             $"are what the tenant store returns: make it return {DisplayName(expected)}, or read the tenant as the type " +
             "it returns.");

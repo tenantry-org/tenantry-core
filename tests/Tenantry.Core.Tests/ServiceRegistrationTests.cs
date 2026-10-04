@@ -122,7 +122,7 @@ public sealed class ServiceRegistrationTests
         ServiceCollection services = new();
         RecordingRegistration registration = new();
 
-        services.AddTenantry<Guid>(tenant => ((ITenantBuilder)tenant).Add(registration));
+        services.AddTenantry<Guid>(tenant => tenant.Add(registration));
 
         registration.KeyType.Should().Be<Guid>();
         registration.Services.Should().BeSameAs(services);

@@ -541,12 +541,13 @@ public sealed class AtomicSaveTests : IDisposable
         await SeedAcmeAsync();
         _tenant.As("acme");
         using CancellationTokenSource cancellation = new();
+        var token = cancellation.Token;
 
         var committed = await CommitsAsync(undoable, new Setup { Commands = new CancelOn("UPDATE \"Customers\"", cancellation) }, async open =>
         {
             var db = await open();
             await ChangeAsync(db, Change.AddOwnedRow);
-            await db.Awaiting(d => d.SaveChangesAsync(cancellation.Token)).Should().ThrowAsync<OperationCanceledException>();
+            await db.Awaiting(d => d.SaveChangesAsync(token)).Should().ThrowAsync<OperationCanceledException>();
         });
 
         committed.Should().BeFalse();
@@ -903,8 +904,12 @@ public sealed class AtomicSaveTests : IDisposable
             try
             {
                 using TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled);
-                Thread other = new(() => StartAt(barrier, second));
-                other.Start();
+                Thread other = new(static state =>
+                {
+                    var (meeting, context) = ((Barrier, AtomicContext))state!;
+                    StartAt(meeting, context);
+                });
+                other.Start((barrier, second));
                 StartAt(barrier, first);
                 other.Join();
 
@@ -1213,14 +1218,15 @@ public sealed class AtomicSaveTests : IDisposable
         await SeedAcmeAsync();
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
+        var token = cancelled.Token;
 
         await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { NoSavepoints = true }))
         {
             var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
             Forge(db, Forgery.StubOwnerAddsOwnedRow);
-            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+            await db.Awaiting(d => d.SaveChangesAsync(TestContext.Current.CancellationToken)).Should().ThrowAsync<DbUpdateConcurrencyException>();
 
-            await transaction.Awaiting(t => t.CommitAsync(cancelled.Token)).Should().ThrowAsync<TenantIsolationViolationException>();
+            await transaction.Awaiting(t => t.CommitAsync(token)).Should().ThrowAsync<TenantIsolationViolationException>();
             db.Database.CurrentTransaction.Should().BeNull();
         }
 
@@ -1280,14 +1286,15 @@ public sealed class AtomicSaveTests : IDisposable
         // transaction.
         await SeedAcmeAsync();
         using CancellationTokenSource cancellation = new();
+        var token = cancellation.Token;
 
         await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { Commands = new CancelOn("UPDATE \"Customers\"", cancellation) }))
         {
             await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
             Forge(db, Forgery.StubOwnerAddsOwnedRow);
-            await db.Awaiting(d => d.SaveChangesAsync(cancellation.Token)).Should().ThrowAsync<OperationCanceledException>();
+            await db.Awaiting(d => d.SaveChangesAsync(token)).Should().ThrowAsync<OperationCanceledException>();
 
-            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+            await transaction.Awaiting(t => t.CommitAsync(TestContext.Current.CancellationToken)).Should().ThrowAsync<TenantIsolationViolationException>();
         }
 
         (await AcmeStateAsync()).Should().Be(AcmeState);
@@ -1408,7 +1415,8 @@ public sealed class AtomicSaveTests : IDisposable
             Change.AddOwnedRow => "acme|1:acme phone,2:added|acme detail",
             Change.ChangeDerivedTable => "acme|1:acme phone|changed",
             Change.DeleteOwnerWithOwnedRows => "|<none>|acme detail",
-            _ => "acme|1:acme phone|<none>",
+            Change.DeleteTablePerTypeEntity => "acme|1:acme phone|<none>",
+            _ => throw new ArgumentOutOfRangeException(nameof(change), change, null),
         });
     }
 
@@ -1493,12 +1501,13 @@ public sealed class AtomicSaveTests : IDisposable
     {
         await SeedAcmeAsync();
         using CancellationTokenSource cancellation = new();
+        var token = cancellation.Token;
 
         await using var db = await CreateAsync(_tenant.As("acme"), new Setup { Commands = new CancelOnFirstCommand(cancellation) });
         db.Database.AutoTransactionBehavior = AutoTransactionBehavior.Never;
         await ChangeAsync(db, Change.AddOwnedRow);
 
-        await db.Awaiting(d => d.SaveChangesAsync(cancellation.Token)).Should().ThrowAsync<OperationCanceledException>();
+        await db.Awaiting(d => d.SaveChangesAsync(token)).Should().ThrowAsync<OperationCanceledException>();
 
         db.Database.AutoTransactionBehavior.Should().Be(AutoTransactionBehavior.Never);
         (await AcmeStateAsync()).Should().Be(AcmeState);
@@ -1749,9 +1758,11 @@ public sealed class AtomicSaveTests : IDisposable
                 db.Attach(dog);
                 dog.Detail = "from globex";
                 break;
-            default:
+            case Forgery.TablePerTypeDelete:
                 db.Remove(new Dog { Id = 1, TenantId = "globex", Detail = "acme detail" });
                 break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(forgery), forgery, null);
         }
     }
 
@@ -1768,9 +1779,11 @@ public sealed class AtomicSaveTests : IDisposable
             case Change.DeleteOwnerWithOwnedRows:
                 db.Remove(await db.Set<Customer>().SingleAsync());
                 break;
-            default:
+            case Change.DeleteTablePerTypeEntity:
                 db.Remove(await db.Set<Dog>().SingleAsync());
                 break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(change), change, null);
         }
     }
 
@@ -1835,7 +1848,7 @@ public sealed class AtomicSaveTests : IDisposable
             builder.AddInterceptors(last);
         }
 
-        foreach (var interceptor in new IInterceptor?[] { setup.Later, setup.Last, setup.Transactions, setup.Commands })
+        foreach (var interceptor in new[] { setup.Later, setup.Last, setup.Transactions, setup.Commands })
         {
             if (interceptor is not null)
             {
@@ -2767,6 +2780,8 @@ public sealed class AtomicSaveTests : IDisposable
     {
         public int Id { get; set; }
 
+        // EF Core reads it when it saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         [MaxLength(64)]
         public string Name { get; set; } = string.Empty;
     }

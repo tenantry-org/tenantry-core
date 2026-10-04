@@ -1,7 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
-using Tenantry;
 
 namespace Tenantry.EfCore.Tests;
 

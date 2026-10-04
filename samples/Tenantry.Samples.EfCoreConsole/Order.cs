@@ -1,5 +1,3 @@
-using Tenantry;
-
 namespace Tenantry.Samples.EfCoreConsole;
 
 /// <summary>

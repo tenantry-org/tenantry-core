@@ -1,4 +1,6 @@
+#if EFCORE10_OR_GREATER
 using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;

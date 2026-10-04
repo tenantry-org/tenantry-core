@@ -272,7 +272,8 @@ internal static class TenantEntityTypes
     public static IEnumerable<Type> KeyTypes([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type) =>
         type.GetInterfaces()
             .Append(type)
-            .Where(candidate => candidate.IsInterface && candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(ITenantEntity<>))
+            .Where(candidate => candidate is { IsInterface: true, IsGenericType: true } &&
+                                candidate.GetGenericTypeDefinition() == typeof(ITenantEntity<>))
             .Select(candidate => candidate.GetGenericArguments()[0]);
 
     /// <summary>
@@ -356,7 +357,7 @@ internal static class TenantEntityTypes
                 entityType.ClrType.Name,
                 $"Owned entity '{entityType.ClrType.Name}' is owned through a key of '{owner.ClrType.Name}' that " +
                 "neither includes nor is part of its primary key, nor includes its TenantId, so Tenantry cannot check " +
-                $"that the owner its rows name is the current tenant's. Own it through the primary key of " +
+                "that the owner its rows name is the current tenant's. Own it through the primary key of " +
                 $"'{owner.ClrType.Name}', or through a key that includes its TenantId.");
         }
 

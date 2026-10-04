@@ -17,13 +17,10 @@ internal sealed class TenantScopeFactory<TKey>(
     : ITenantScopeFactory<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    private ITenantLookup<TKey>? _tenants;
-    private ITenantActivity<TKey>? _activity;
-
     // A race resolves the singleton twice, which returns the same instance.
-    private ITenantLookup<TKey> Tenants => _tenants ??= services.GetRequiredService<ITenantLookup<TKey>>();
+    private ITenantLookup<TKey> Tenants => field ??= services.GetRequiredService<ITenantLookup<TKey>>();
 
-    private ITenantActivity<TKey> Activity => _activity ??= services.GetRequiredService<ITenantActivity<TKey>>();
+    private ITenantActivity<TKey> Activity => field ??= services.GetRequiredService<ITenantActivity<TKey>>();
 
     /// <inheritdoc />
     /// <remarks>

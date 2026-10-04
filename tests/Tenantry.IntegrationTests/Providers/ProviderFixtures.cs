@@ -3,8 +3,6 @@ using DotNet.Testcontainers.Containers;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Tenantry;
-using Tenantry.EfCore;
 using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
 

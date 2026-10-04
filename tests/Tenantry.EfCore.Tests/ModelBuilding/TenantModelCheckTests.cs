@@ -1,10 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
@@ -118,7 +116,7 @@ public sealed class TenantModelCheckTests : IDisposable
     {
         var builder = new DbContextOptionsBuilder<ItemsOnlyContext>()
             .UseSqlite(_connection)
-            .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant));
+            .UseApplicationServiceProvider(DbContextFactory.Services(_tenant));
 
         if (replacedFirst)
         {
@@ -177,7 +175,7 @@ public sealed class TenantModelCheckTests : IDisposable
         var options = new DbContextOptionsBuilder<ItemsOnlyContext>()
             .UseSqlite(_connection)
             .UseInternalServiceProvider(internalServices)
-            .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant))
+            .UseApplicationServiceProvider(DbContextFactory.Services(_tenant))
             .UseTenantry()
             .Options;
 
@@ -394,7 +392,7 @@ public sealed class TenantModelCheckTests : IDisposable
         where TContext : DbContext =>
         new DbContextOptionsBuilder<TContext>()
             .UseSqlite(_connection)
-            .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant, configure: configure))
+            .UseApplicationServiceProvider(DbContextFactory.Services(_tenant, configure: configure))
             .UseTenantry()
             .Options;
 
@@ -411,7 +409,7 @@ public sealed class TenantModelCheckTests : IDisposable
     {
         var options = new DbContextOptionsBuilder<TContext>()
             .UseSqlite(_connection)
-            .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant))
+            .UseApplicationServiceProvider(DbContextFactory.Services(_tenant))
             .AddInterceptors(TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance)
             .Options;
         var db = (TContext)Activator.CreateInstance(typeof(TContext), options)!;
@@ -598,6 +596,8 @@ public sealed class TenantModelCheckTests : IDisposable
 
     public sealed class Note
     {
+        // EF Core sets it when it reads or saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         public int Id { get; set; }
 
         [MaxLength(64)]
@@ -613,6 +613,8 @@ public sealed class TenantModelCheckTests : IDisposable
 
     public sealed class Price : ITenantEntity<string>
     {
+        // EF Core sets it when it reads or saves the entity.
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         public int Id { get; set; }
 
         [MaxLength(64)]
@@ -622,6 +624,9 @@ public sealed class TenantModelCheckTests : IDisposable
     }
 
     // ── Contexts (one type per model, because EF Core caches the model per context type) ──
+
+    // A context's DbSet properties name its entity types for EF Core, which reads them by reflection.
+    // ReSharper disable UnusedMember.Local
 
     public sealed class ItemsOnlyContext(DbContextOptions<ItemsOnlyContext> options) : DbContext(options)
     {
@@ -865,6 +870,8 @@ public sealed class TenantModelCheckTests : IDisposable
             modelBuilder.Entity<Item>().Property(item => item.TenantId).IsConcurrencyToken(false);
         }
     }
+
+    // ReSharper restore UnusedMember.Local
 
     private sealed class LateItemContributor : ITenantModelContributor
     {

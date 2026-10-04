@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Tenantry;
 
 namespace Tenantry.Samples.EfCoreWeb.Data;
 

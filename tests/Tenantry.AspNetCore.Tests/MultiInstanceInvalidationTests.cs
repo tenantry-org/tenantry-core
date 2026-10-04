@@ -1,10 +1,7 @@
 using System.Collections.Concurrent;
 using AwesomeAssertions;
 using Microsoft.Extensions.Caching.Hybrid;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Tenantry.Caching;
 
 namespace Tenantry.AspNetCore.Tests;
 
@@ -110,7 +107,7 @@ public sealed class MultiInstanceInvalidationTests
     }
 
     private static List<string> Invalidations(IHost instance) =>
-        [.. instance.Services.GetRequiredService<RecordingHandler>().Invalidations];
+        [.. instance.Services.GetRequiredService<RecordingHandler>().Applied];
 
     public sealed class PlanOptions
     {
@@ -209,17 +206,17 @@ public sealed class MultiInstanceInvalidationTests
     /// <summary>Records the invalidations an instance applies.</summary>
     private sealed class RecordingHandler : ITenantInvalidationHandler<string>
     {
-        public ConcurrentQueue<string> Invalidations { get; } = new();
+        public ConcurrentQueue<string> Applied { get; } = new();
 
         public ValueTask InvalidateAsync(string tenantId, CancellationToken cancellationToken)
         {
-            Invalidations.Enqueue(tenantId);
+            Applied.Enqueue(tenantId);
             return ValueTask.CompletedTask;
         }
 
         public ValueTask InvalidateAllAsync(CancellationToken cancellationToken)
         {
-            Invalidations.Enqueue("*");
+            Applied.Enqueue("*");
             return ValueTask.CompletedTask;
         }
     }

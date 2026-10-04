@@ -28,9 +28,9 @@ internal sealed class UnresolvedRequest
 internal sealed class TenantOutputCachePolicy<TKey>(ITenantContext<TKey> tenantContext, ILogger logger) : IOutputCachePolicy
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    internal const string TenantKey = "tenantry-tenant";
+    private const string TenantKey = "tenantry-tenant";
 
-    internal const string NoTenantKey = "tenantry-no-tenant";
+    private const string NoTenantKey = "tenantry-no-tenant";
 
     internal const string AllTenantsTag = "t:";
 

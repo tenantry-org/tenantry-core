@@ -1,5 +1,3 @@
-using Tenantry;
-
 namespace Tenantry.EfCore.Tests.Infrastructure;
 
 /// <summary>
@@ -90,13 +88,6 @@ public sealed class GuidTestTenantContext : ITenantContext<Guid>
     public GuidTestTenantContext As(Guid tenantId)
     {
         CurrentTenantLocal.Value = new TenantDescriptor<Guid> { TenantId = tenantId, Name = tenantId.ToString() };
-        return this;
-    }
-
-    /// <summary>Clears the current tenant and returns this instance.</summary>
-    public GuidTestTenantContext AsNone()
-    {
-        CurrentTenantLocal.Value = null;
         return this;
     }
 }

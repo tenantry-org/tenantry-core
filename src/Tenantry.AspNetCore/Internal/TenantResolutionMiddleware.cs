@@ -83,7 +83,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             _metrics.Record(resolution.Result, rejected: required && resolution.Result != ResolutionResult.Resolved);
         }
 
-        if (resolution.Tenant is { } tenant && resolution.Result == ResolutionResult.Resolved)
+        if (resolution is { Tenant: { } tenant, Result: ResolutionResult.Resolved })
         {
             var tenantId = TenantIds.Format(tenant.TenantId);
             requestActivity?.SetTag(TenantTelemetry.TenantIdTag, tenantId);
@@ -195,8 +195,8 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         if (endpointWasNull && resolution.Result != ResolutionResult.Resolved)
         {
             previous = context.Features.Get<IEndpointFeature>();
-            routed = new ReplacingEndpointFeature(previous, endpoint => IsTenantRequired(endpoint)
-                ? RejectingEndpoint(endpoint, resolution)
+            routed = new ReplacingEndpointFeature(previous, chosen => IsTenantRequired(chosen)
+                ? RejectingEndpoint(chosen, resolution)
                 : null);
             context.Features.Set<IEndpointFeature>(routed);
         }
@@ -369,13 +369,11 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 /// </summary>
 internal sealed class ReplacingEndpointFeature(IEndpointFeature? inner, Func<Endpoint, Endpoint?> replace) : IEndpointFeature
 {
-    private Endpoint? _endpoint;
-
     public bool Replaced { get; private set; }
 
     public Endpoint? Endpoint
     {
-        get => inner is null ? _endpoint : inner.Endpoint;
+        get => inner is null ? field : inner.Endpoint;
         set
         {
             if (value is not null && replace(value) is { } replacement)
@@ -386,7 +384,7 @@ internal sealed class ReplacingEndpointFeature(IEndpointFeature? inner, Func<End
 
             if (inner is null)
             {
-                _endpoint = value;
+                field = value;
             }
             else
             {

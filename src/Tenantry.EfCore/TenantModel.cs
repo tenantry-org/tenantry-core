@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Reflection;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Tenantry.EfCore.Internal;
 

@@ -57,10 +57,11 @@ internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant curren
         return inner.RemoveAsync(currentTenant.Require(Name).Prefix + key, cancellationToken);
     }
 
-    // HybridCache's contract treats a null collection as empty.
+    // HybridCache's contract treats a null collection as empty, whatever the parameter's annotation says.
     public override ValueTask RemoveAsync(IEnumerable<string> keys, CancellationToken cancellationToken = default)
     {
         var prefix = currentTenant.Require(Name).Prefix;
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         return keys is null ? ValueTask.CompletedTask : inner.RemoveAsync(keys.Select(key => prefix + key).ToList(), cancellationToken);
     }
 
@@ -70,9 +71,11 @@ internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant curren
         return inner.RemoveByTagAsync(TenantTag(currentTenant.Require(Name).Prefix, tag), cancellationToken);
     }
 
+    // HybridCache's contract treats a null collection as empty, whatever the parameter's annotation says.
     public override ValueTask RemoveByTagAsync(IEnumerable<string> tags, CancellationToken cancellationToken = default)
     {
         var prefix = currentTenant.Require(Name).Prefix;
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         return tags is null ? ValueTask.CompletedTask : inner.RemoveByTagAsync(tags.Select(tag => TenantTag(prefix, tag)).ToList(), cancellationToken);
     }
 

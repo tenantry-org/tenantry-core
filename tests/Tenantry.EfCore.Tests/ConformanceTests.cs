@@ -1,11 +1,9 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Tenantry;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.EfCore.Tests;

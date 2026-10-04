@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
-using Tenantry;
 
 namespace Tenantry.Samples.SecureApi;
 

@@ -6,11 +6,7 @@ using AwesomeAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -112,7 +108,7 @@ public sealed class AuthenticationPerTenantTests
     [Fact]
     public async Task WithNothingToResolveBeforeAuthentication_UseTenantryTriesTheClaimResolvers()
     {
-        await using var app = await StartJwtAsync(tenant => tenant.ResolveFromClaim("tenant_id"));
+        await using var app = await StartJwtAsync(tenant => tenant.ResolveFromClaim());
 
         // No subdomain: the default settings authenticate, then the claim names the tenant.
         (await Get(app, null, "/required", Token("default", "carol", tenantClaim: "acme"))).Should().Be((HttpStatusCode.OK, "acme"));
@@ -125,7 +121,7 @@ public sealed class AuthenticationPerTenantTests
         // so the header must not be taken in its place.
         await using var app = await StartAsync(
             tenant => tenant
-                .ResolveFromClaim("tenant_id")
+                .ResolveFromClaim()
                 .ResolveFromHeader("X-Tenant-Id")
                 .UseInMemoryStore([Acme, Globex]),
             AddJwt,
@@ -137,7 +133,7 @@ public sealed class AuthenticationPerTenantTests
             });
         using var client = app.GetTestClient();
 
-        async Task<string> TenantOf(string? claim, string? header)
+        async Task<string> TenantOf(HttpClient http, string? claim, string? header)
         {
             using HttpRequestMessage request = new(HttpMethod.Get, "http://localhost/tenant");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token("default", "dave", tenantClaim: claim));
@@ -147,12 +143,12 @@ public sealed class AuthenticationPerTenantTests
                 request.Headers.Add("X-Tenant-Id", header);
             }
 
-            using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+            using var response = await http.SendAsync(request, TestContext.Current.CancellationToken);
             return await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         }
 
-        (await TenantOf(claim: "acme", header: "globex")).Should().Be("acme", "the claim was added first");
-        (await TenantOf(claim: null, header: "globex")).Should().Be("globex", "with no claim, the next resolver applies");
+        (await TenantOf(client, claim: "acme", header: "globex")).Should().Be("acme", "the claim was added first");
+        (await TenantOf(client, claim: null, header: "globex")).Should().Be("globex", "with no claim, the next resolver applies");
     }
 
     [Fact]
@@ -174,7 +170,7 @@ public sealed class AuthenticationPerTenantTests
             });
         using var client = app.GetTestClient();
 
-        async Task<string> TenantOf(string caller, string? propagated, string? header)
+        async Task<string> TenantOf(HttpClient http, string caller, string? propagated, string? header)
         {
             using HttpRequestMessage request = new(HttpMethod.Get, "http://localhost/tenant");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token("default", caller));
@@ -185,19 +181,19 @@ public sealed class AuthenticationPerTenantTests
             if (header is not null)
                 request.Headers.Add("X-Tenant-Id", header);
 
-            using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+            using var response = await http.SendAsync(request, TestContext.Current.CancellationToken);
             return await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         }
 
-        (await TenantOf("orders-service", propagated: "globex", header: "acme")).Should().Be("globex", "a trusted caller's header comes first");
-        (await TenantOf("mallory", propagated: "globex", header: "acme")).Should().Be("acme", "an untrusted caller's header is ignored");
+        (await TenantOf(client, "orders-service", propagated: "globex", header: "acme")).Should().Be("globex", "a trusted caller's header comes first");
+        (await TenantOf(client, "mallory", propagated: "globex", header: "acme")).Should().Be("acme", "an untrusted caller's header is ignored");
     }
 
     [Fact]
     public async Task AResolverAddedBeforeAClaimResolver_ResolvesBeforeAuthentication()
     {
         // The subdomain comes first, so it resolves before authentication and the tenant's settings authenticate.
-        await using var app = await StartJwtAsync(tenant => tenant.ResolveFromClaim("tenant_id"));
+        await using var app = await StartJwtAsync(tenant => tenant.ResolveFromClaim());
 
         (await Get(app, "acme", "/whoami", Token("acme", "alice", tenantClaim: "globex"))).Should().Be((HttpStatusCode.OK, "acme:alice"));
     }
@@ -395,9 +391,9 @@ public sealed class AuthenticationPerTenantTests
 
         static string Current(ITenantContext<string> context) => context.CurrentTenantId ?? "(none)";
 
-        app.MapGet("/tenant", (ITenantContext<string> context) => Current(context));
-        app.MapGet("/required", (ITenantContext<string> context) => Current(context)).RequireTenant();
-        app.MapGet("/skipped", (ITenantContext<string> context) => Current(context));
+        app.MapGet("/tenant", Current);
+        app.MapGet("/required", Current).RequireTenant();
+        app.MapGet("/skipped", Current);
 
         try
         {

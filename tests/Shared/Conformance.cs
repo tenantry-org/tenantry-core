@@ -1,7 +1,9 @@
+// Linked into every test project: the ASP.NET Core one's implicit usings cover these two, the others need them.
+// ReSharper disable RedundantUsingDirective
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Tenantry;
+// ReSharper restore RedundantUsingDirective
 
 namespace Tenantry.Tests.Shared;
 
@@ -24,8 +26,7 @@ internal static class Conformance
     public static void ResolveEveryTenantryService(IServiceCollection services, IServiceProvider scope)
     {
         var serviceTypes = services
-            .Where(descriptor => !descriptor.IsKeyedService &&
-                                 !descriptor.ServiceType.IsGenericTypeDefinition &&
+            .Where(descriptor => descriptor is { IsKeyedService: false, ServiceType.IsGenericTypeDefinition: false } &&
                                  descriptor.ServiceType.Namespace?.StartsWith("Tenantry", StringComparison.Ordinal) == true)
             .Select(descriptor => descriptor.ServiceType)
             .Distinct()

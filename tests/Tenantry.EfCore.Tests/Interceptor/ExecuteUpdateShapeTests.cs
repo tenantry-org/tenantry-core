@@ -1,10 +1,13 @@
 using System.Linq.Expressions;
+#if EFCORE10_OR_GREATER
 using System.Runtime.CompilerServices;
+#endif
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+#if !EFCORE10_OR_GREATER
 using Microsoft.EntityFrameworkCore.Query;
-using Tenantry;
+#endif
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Interceptor;

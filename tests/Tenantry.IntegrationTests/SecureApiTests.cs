@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Tenantry;
 using Tenantry.Samples.SecureApi;
 
 namespace Tenantry.IntegrationTests;

@@ -161,7 +161,7 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
 
         if (declared.FirstOrDefault(filter => filter.Key is null) is { Expression: { } unnamed })
         {
-            builder.HasQueryFilter((LambdaExpression?)null);
+            builder.HasQueryFilter(null);   // removes the unnamed filter
             builder.HasQueryFilter(TenantryQueryFilters.Application, unnamed);
         }
 

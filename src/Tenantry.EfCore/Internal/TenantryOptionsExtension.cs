@@ -18,15 +18,13 @@ namespace Tenantry.EfCore.Internal;
 /// </remarks>
 internal sealed class TenantryOptionsExtension(EfCoreIsolationOptions? isolation = null) : IDbContextOptionsExtension
 {
-    private DbContextOptionsExtensionInfo? _info;
-
     /// <summary>
     /// The isolation options the context follows: those <c>UseTenantry(configure)</c> set, or the application's as they
     /// were when <c>UseTenantry()</c> ran; null when the options had no application service provider then.
     /// </summary>
     public EfCoreIsolationOptions? Isolation { get; } = isolation;
 
-    public DbContextOptionsExtensionInfo Info => _info ??= new ExtensionInfo(this);
+    public DbContextOptionsExtensionInfo Info => field ??= new ExtensionInfo(this);
 
     // Replace rather than TryAdd: this may run before or after the database provider registers its own customizer.
     // The save's notices and the transaction and command hooks are interceptors of the internal service provider, first

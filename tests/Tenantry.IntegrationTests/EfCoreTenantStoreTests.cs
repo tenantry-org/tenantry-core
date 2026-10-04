@@ -1,10 +1,7 @@
 using System.Net;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
 using Tenantry.IntegrationTests.Providers;
 
 namespace Tenantry.IntegrationTests;

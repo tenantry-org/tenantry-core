@@ -1,6 +1,5 @@
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
-using Tenantry;
 
 namespace Tenantry.Samples.EfCoreWeb.Entities;
 

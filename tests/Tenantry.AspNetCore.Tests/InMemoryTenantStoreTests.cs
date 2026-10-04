@@ -1,6 +1,4 @@
 using AwesomeAssertions;
-using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
 
 namespace Tenantry.AspNetCore.Tests;
 

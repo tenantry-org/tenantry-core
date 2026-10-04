@@ -1,13 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
-using Tenantry;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Pooling;
@@ -74,7 +72,7 @@ public sealed class NonPooledDatabasePerTenantTests() : DatabasePerTenantTests(p
 public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
 {
     protected static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme" };
-    protected static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex" };
+    private static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex" };
 
     private readonly Dictionary<string, SqliteConnection> _databases = new()
     {

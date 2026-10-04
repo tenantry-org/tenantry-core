@@ -26,7 +26,7 @@ public sealed class PerTenantOptionsTests
         using var provider = Build();
         using var scope = provider.CreateScope();
 
-        foreach (var (tenant, colour) in new[] { (Acme, "red"), (Globex, "blue"), ((TenantDescriptor<string>?)null, "grey") })
+        foreach (var (tenant, colour) in new[] { (Acme, "red"), (Globex, "blue"), (null, "grey") })
         {
             using var _ = tenant is null ? null : MakeCurrent(provider, tenant);
 
@@ -107,7 +107,7 @@ public sealed class PerTenantOptionsTests
     [Fact]
     public async Task ATenantsValue_IsBuiltOnce_UntilTheTenantIsInvalidated()
     {
-        using var provider = Build();
+        await using var provider = Build();
         var options = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
         var tenants = provider.GetRequiredService<ITenantInvalidator<string>>();
 
@@ -141,7 +141,7 @@ public sealed class PerTenantOptionsTests
         services.AddTenantry<string>(tenant => tenant
             .UseInMemoryStore([Acme])
             .ConfigurePerTenant(perTenant => perTenant
-                .Configure<BrandingOptions>((o, t) => o.Colour = "red")
+                .Configure<BrandingOptions>((o, _) => o.Colour = "red")
                 .Configure<BrandingOptions>((o, t) => o.Colour += $"-{t.Name}")));
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
 
@@ -249,7 +249,7 @@ public sealed class PerTenantOptionsTests
     public void AStepForEveryName_AppliesToTheDefaultAndEveryNamedValue()
     {
         using var provider = Build(services => services.AddTenantry<string>(tenant =>
-            tenant.ConfigurePerTenant(perTenant => perTenant.ConfigureAll<BrandingOptions>((o, t, sp) => o.Name = $"all-{t.Name}"))));
+            tenant.ConfigurePerTenant(perTenant => perTenant.ConfigureAll<BrandingOptions>((o, t, _) => o.Name = $"all-{t.Name}"))));
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
         using (MakeCurrent(provider, Acme))
@@ -266,7 +266,7 @@ public sealed class PerTenantOptionsTests
         using var provider = Build(services =>
         {
             services.PostConfigureAll<BrandingOptions>(o => o.Name = $"built-from-{o.Colour}");
-            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>("print", (o, t) => o.Colour = "ink")));
+            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>("print", (o, _) => o.Colour = "ink")));
         });
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
@@ -297,7 +297,7 @@ public sealed class PerTenantOptionsTests
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant
             .UseInMemoryStore([Acme])
-            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) =>
+            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, _) =>
             {
                 if (++calls == 1)
                     throw new TimeoutException("The database did not answer.");
@@ -328,7 +328,7 @@ public sealed class PerTenantOptionsTests
         services.AddTenantry<string>(tenant => tenant
             .UseStore(_ => store)
             .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) => o.Name = t.Name)));
-        using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
+        await using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
         using (MakeCurrent(provider, Acme))
@@ -349,29 +349,30 @@ public sealed class PerTenantOptionsTests
     public async Task ACopyThatDiffersFromTheStores_GetsTheStoresValue_BeforeAndAfterAnInvalidation()
     {
         var store = new ChangingStore(Acme);
-        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => store));
-        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        await using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => store));
+        var reader = Reader(provider);
         TenantDescriptor<string> forged = new() { TenantId = "acme", Name = "Forged" };
 
-        ReadNames(provider, monitor, forged, Acme).Should().Equal("Acme", "Acme");
+        reader.Names(forged, Acme).Should().Equal("Acme", "Acme");
 
         await provider.GetRequiredService<ITenantInvalidator<string>>()
             .InvalidateAsync("acme", TestContext.Current.CancellationToken);
 
-        ReadNames(provider, monitor, forged, Acme).Should().Equal("Acme", "Acme");
+        reader.Names(forged, Acme).Should().Equal("Acme", "Acme");
     }
 
     [Fact]
     public void IdsTheStoreDoesNotHold_AreBuiltFromTheCallersCopy_AndNotKept()
     {
         using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseInMemoryStore([Acme]));
-        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
-        var unknown = Enumerable.Range(0, 1000)
-            .Select(i => new TenantDescriptor<string> { TenantId = $"x{i}", Name = $"X{i}" })
-            .ToArray();
+        var reader = Reader(provider);
+        ITenantDescriptor<string>[] unknown =
+        [
+            .. Enumerable.Range(0, 1000).Select(i => new TenantDescriptor<string> { TenantId = $"x{i}", Name = $"X{i}" }),
+        ];
 
-        ReadNames(provider, monitor, unknown).Should().Equal(unknown.Select(t => t.Name));
-        ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "x0", Name = "X0 again" })
+        reader.Names(unknown).Should().Equal(unknown.Select(t => t.Name));
+        reader.Names(new TenantDescriptor<string> { TenantId = "x0", Name = "X0 again" })
             .Should().Equal("X0 again");
 
         _built.Should().Be(1001);
@@ -382,9 +383,9 @@ public sealed class PerTenantOptionsTests
     public void WithoutAStore_TheCallersCopyIsBuiltOnceAndKept()
     {
         using var provider = BuildNamedAfterTheTenant(_ => { });
-        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        var reader = Reader(provider);
 
-        ReadNames(provider, monitor, Acme, new TenantDescriptor<string> { TenantId = "acme", Name = "Other copy" })
+        reader.Names(Acme, new TenantDescriptor<string> { TenantId = "acme", Name = "Other copy" })
             .Should().Equal("Acme", "Acme");
 
         _built.Should().Be(1);
@@ -395,14 +396,14 @@ public sealed class PerTenantOptionsTests
     public async Task ReadersSharingABuildForAnIdTheStoreDoesNotHold_EachGetTheirOwnCopysValue()
     {
         _slowName = "A";
-        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseInMemoryStore([Acme]));
-        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        await using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseInMemoryStore([Acme]));
+        var reader = Reader(provider);
 
         var first = Task.Run(
-            () => ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "x", Name = "A" }),
+            () => reader.Names(new TenantDescriptor<string> { TenantId = "x", Name = "A" }),
             TestContext.Current.CancellationToken);
         await Task.Delay(50, TestContext.Current.CancellationToken);
-        var second = ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "x", Name = "B" });
+        var second = reader.Names(new TenantDescriptor<string> { TenantId = "x", Name = "B" });
 
         (await first).Should().Equal("A");
         second.Should().Equal("B");
@@ -416,13 +417,13 @@ public sealed class PerTenantOptionsTests
         using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => new FuncStore((id, _) =>
             ValueTask.FromResult<ITenantDescriptor<string>?>(
                 string.Equals(id, "acme", StringComparison.OrdinalIgnoreCase) ? Acme : null))));
-        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        var reader = Reader(provider);
 
-        ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "ACME", Name = "Forged" })
+        reader.Names(new TenantDescriptor<string> { TenantId = "ACME", Name = "Forged" })
             .Should().Equal("Acme");
         KeptValues(provider).Should().Be(0);
 
-        ReadNames(provider, monitor, Acme).Should().Equal("Acme");
+        reader.Names(Acme).Should().Equal("Acme");
         KeptValues(provider).Should().Be(1);
     }
 
@@ -430,19 +431,21 @@ public sealed class PerTenantOptionsTests
     public async Task AStoreThatAwaitsOnTheCallersScheduler_IsReadWithoutHanging_AsNoTenant()
     {
         bool? hadTenant = null;
-        ITenantContext<string>? ambient = null;
-        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => new FuncStore(async (id, ct) =>
+        await using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(sp =>
         {
-            await Task.Delay(20, ct);
-            hadTenant = ambient!.HasTenant;
-            return id == "acme" ? Acme : null;
-        })));
-        ambient = provider.GetRequiredService<ITenantContext<string>>();
-        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+            var ambient = sp.GetRequiredService<ITenantContext<string>>();
+            return new FuncStore(async (id, ct) =>
+            {
+                await Task.Delay(20, ct);
+                hadTenant = ambient.HasTenant;
+                return id == "acme" ? Acme : null;
+            });
+        }));
+        var reader = Reader(provider);
         TenantDescriptor<string> copy = new() { TenantId = "acme", Name = "Copy" };
 
         var read = Task.Factory.StartNew(
-            () => ReadNames(provider, monitor, copy),
+            () => reader.Names(copy),
             TestContext.Current.CancellationToken,
             TaskCreationOptions.None,
             new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler);
@@ -454,12 +457,12 @@ public sealed class PerTenantOptionsTests
     [Fact]
     public async Task AStoreThatAwaitsOnTheCallersSynchronizationContext_IsReadWithoutHanging()
     {
-        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => new FuncStore(async (id, ct) =>
+        await using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => new FuncStore(async (id, ct) =>
         {
             await Task.Delay(20, ct);
             return id == "acme" ? Acme : null;
         })));
-        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        var reader = Reader(provider);
         TaskCompletionSource<List<string>> result = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // A context that never runs what is posted to it: a continuation captured on it would never run.
@@ -469,7 +472,7 @@ public sealed class PerTenantOptionsTests
             try
             {
                 result.SetResult(
-                    ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "acme", Name = "Copy" }));
+                    reader.Names(new TenantDescriptor<string> { TenantId = "acme", Name = "Copy" }));
             }
             catch (Exception e)
             {
@@ -538,18 +541,24 @@ public sealed class PerTenantOptionsTests
     private static int KeptValues(IServiceProvider provider) =>
         provider.GetRequiredService<TenantOptionsCache<BrandingOptions>>().Count;
 
-    private static List<string> ReadNames(
-        IServiceProvider provider, IOptionsMonitor<BrandingOptions> options, params ITenantDescriptor<string>[] tenants)
+    private static NameReader Reader(IServiceProvider provider) =>
+        new(provider.GetRequiredService<ITenantContextSetter<string>>(), provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>());
+
+    // Reads the options' name as each copy of a tenant in turn.
+    private sealed class NameReader(ITenantContextSetter<string> tenantContext, IOptionsMonitor<BrandingOptions> options)
     {
-        List<string> names = [];
-
-        foreach (var tenant in tenants)
+        public List<string> Names(params ITenantDescriptor<string>[] copies)
         {
-            using (MakeCurrent(provider, tenant))
-                names.Add(options.CurrentValue.Name);
-        }
+            List<string> names = [];
 
-        return names;
+            foreach (var copy in copies)
+            {
+                using (tenantContext.MakeCurrent(copy))
+                    names.Add(options.CurrentValue.Name);
+            }
+
+            return names;
+        }
     }
 
     private static void ReadAs(IServiceProvider provider, IOptionsMonitor<BrandingOptions> options, params ITenantDescriptor<string>[] tenants)
@@ -583,8 +592,10 @@ public sealed class PerTenantOptionsTests
         public string Colour { get; } = settings.Value.Colour;
     }
 
+    // Scope validation refuses this singleton before anything reads it.
     private sealed class SnapshotBranding(IOptionsSnapshot<BrandingOptions> snapshot)
     {
+        // ReSharper disable once UnusedMember.Local
         public string Colour => snapshot.Value.Colour;
     }
 
@@ -615,7 +626,7 @@ public sealed class PerTenantOptionsTests
         public ITenantDescriptor<string> Tenant { get; set; } = tenant;
 
         public ValueTask<ITenantDescriptor<string>?> GetTenantAsync(string tenantId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<ITenantDescriptor<string>?>(tenantId == Tenant.TenantId ? Tenant : null);
+            ValueTask.FromResult(tenantId == Tenant.TenantId ? Tenant : null);
 
         public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([Tenant]);

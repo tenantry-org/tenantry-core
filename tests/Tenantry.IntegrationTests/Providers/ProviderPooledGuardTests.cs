@@ -4,9 +4,7 @@ using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using Tenantry;
 using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;

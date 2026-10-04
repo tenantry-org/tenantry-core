@@ -4,9 +4,7 @@ using AwesomeAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using Tenantry;
 using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;
@@ -297,7 +295,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     [Fact]
     public async Task TheTenantsOwnJoinRows_AreAddedAndRemoved()
     {
-        var (post, tag, other) = await AddPostAsync(_acme);
+        var (post, _, other) = await AddPostAsync(_acme);
 
         await AsTenantAsync(_acme, async db =>
         {

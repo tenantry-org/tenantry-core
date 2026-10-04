@@ -271,6 +271,8 @@ public sealed class KeyedOwnerTests : IDisposable
     // Owned through Id; (TenantId, Id) is an alternate key, as a composite foreign key from another entity needs.
     private sealed class AlternateKeyContext(DbContextOptions<AlternateKeyContext> options) : DbContext(options)
     {
+        // EF Core reads the DbSet property to find the entity type.
+        // ReSharper disable once UnusedMember.Local
         public DbSet<Order> Orders => Set<Order>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
@@ -290,6 +292,8 @@ public sealed class KeyedOwnerTests : IDisposable
     // Keyed and owned through (TenantId, Id).
     private sealed class PrimaryKeyContext(DbContextOptions<PrimaryKeyContext> options) : DbContext(options)
     {
+        // EF Core reads the DbSet property to find the entity type.
+        // ReSharper disable once UnusedMember.Local
         public DbSet<Order> Orders => Set<Order>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
@@ -361,6 +365,8 @@ public sealed class KeyedOwnerTests : IDisposable
     // Keyed by Id, owned through the alternate key (TenantId, Id).
     private sealed class OwnedThroughAlternateKeyContext(DbContextOptions<OwnedThroughAlternateKeyContext> options) : DbContext(options)
     {
+        // EF Core reads the DbSet property to find the entity type.
+        // ReSharper disable once UnusedMember.Local
         public DbSet<Order> Orders => Set<Order>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>

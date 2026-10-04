@@ -1,10 +1,7 @@
 using System.Diagnostics.Metrics;
 using System.Net;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.AspNetCore.Tests;
 

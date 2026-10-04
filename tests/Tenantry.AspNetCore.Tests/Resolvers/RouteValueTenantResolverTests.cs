@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using Tenantry.AspNetCore;
 
 namespace Tenantry.AspNetCore.Tests.Resolvers;
 

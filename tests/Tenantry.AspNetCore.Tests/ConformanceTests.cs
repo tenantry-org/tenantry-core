@@ -1,10 +1,5 @@
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Tenantry;
-using Tenantry.AspNetCore;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.AspNetCore.Tests;
@@ -74,7 +69,7 @@ public sealed class ConformanceTests
     private sealed class ScopedValidator(ScopedTenantStore.Session session) : ITenantAccessValidator<string>
     {
         public ValueTask<bool> ValidateAsync(HttpContext context, ITenantDescriptor<string> tenant, CancellationToken cancellationToken) =>
-            ValueTask.FromResult(session is not null);
+            ValueTask.FromResult(session.Open);
     }
 
     private sealed class NoTenantResolver : ITenantResolver

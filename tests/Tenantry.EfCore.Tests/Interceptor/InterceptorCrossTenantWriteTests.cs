@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using Tenantry;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
 

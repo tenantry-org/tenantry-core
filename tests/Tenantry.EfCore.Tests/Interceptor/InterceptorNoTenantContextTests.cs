@@ -1,7 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Tenantry;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
@@ -151,10 +150,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         return reader.Read() ? (reader.GetString(0), reader.GetString(1)) : null;
     }
 
-    private sealed class NullContextEventData : DbContextEventData
-    {
-        // DbContextEventData stores constructor args as-is; null! for eventDefinition
-        // it is safe because the interceptor never invokes the message generator.
-        public NullContextEventData() : base(null!, (_, _) => string.Empty, null) { }
-    }
+    // DbContextEventData stores constructor args as-is; null! for eventDefinition
+    // it is safe because the interceptor never invokes the message generator.
+    private sealed class NullContextEventData() : DbContextEventData(null!, (_, _) => string.Empty, null);
 }
