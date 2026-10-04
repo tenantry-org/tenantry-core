@@ -10,12 +10,14 @@ namespace Tenantry.Options;
 
 /// <summary>
 /// Sets options per tenant, in <c>tenant.ConfigurePerTenant(...)</c>: each <c>Configure</c> or <c>ConfigureAll</c> names
-/// an options type and what differs for each tenant. <c>IOptionsSnapshot&lt;TOptions&gt;</c> and
-/// <c>IOptionsMonitor&lt;TOptions&gt;</c> then give the current tenant's value, built from the ordinary configuration
-/// (every <c>Configure</c>), then these steps with the tenant. Without a tenant they give the ordinary value.
-/// <c>IOptions&lt;TOptions&gt;</c> always gives the ordinary value.
+/// an options type and what differs for each tenant.
 /// </summary>
 /// <remarks>
+/// <para>
+/// <c>IOptionsSnapshot&lt;TOptions&gt;</c> and <c>IOptionsMonitor&lt;TOptions&gt;</c> then give the current tenant's
+/// value, built from the ordinary configuration, then these steps with the tenant. Without a tenant they give the
+/// ordinary value. <c>IOptions&lt;TOptions&gt;</c> always gives the ordinary value.
+/// </para>
 /// <para>
 /// <c>IOptions&lt;TOptions&gt;</c> is not per tenant because its value is read once and kept: a singleton that reads
 /// <c>options.Value</c> in its constructor would keep the first tenant's settings and use them for every tenant. Read

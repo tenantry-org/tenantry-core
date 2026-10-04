@@ -11,11 +11,12 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class TenantryOptionsTenantBuilderExtensions
 {
     /// <summary>
-    /// Configures options per tenant: in <paramref name="configure"/>, each <c>Configure&lt;TOptions&gt;</c> or
-    /// <c>ConfigureAll&lt;TOptions&gt;</c> sets what differs for each tenant, and <c>IOptionsSnapshot&lt;TOptions&gt;</c>
-    /// and <c>IOptionsMonitor&lt;TOptions&gt;</c> then give the current tenant's value. <c>IOptions&lt;TOptions&gt;</c>
-    /// always gives the ordinary value. See <see cref="TenantOptionsBuilder{TKey}"/>.
+    /// Configures options per tenant: <c>IOptionsSnapshot&lt;TOptions&gt;</c> and <c>IOptionsMonitor&lt;TOptions&gt;</c>
+    /// give the current tenant's value of each options type <paramref name="configure"/> names.
     /// </summary>
+    /// <remarks>
+    /// <c>IOptions&lt;TOptions&gt;</c> always gives the ordinary value. See <see cref="TenantOptionsBuilder{TKey}"/>.
+    /// </remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="configure">Names the options types and sets their values per tenant.</param>
