@@ -258,9 +258,8 @@ public sealed class AuthenticationPerTenantTests
         app.UseAuthentication();
         app.UseAuthorization();
 
-        var useTenantry = () => app.UseTenantry();
-
-        useTenantry.Should().Throw<InvalidOperationException>().WithMessage("*UseAuthorization()*after app.UseTenantry()*");
+        app.Invoking(a => a.UseTenantry())
+            .Should().Throw<InvalidOperationException>().WithMessage("*UseAuthorization()*after app.UseTenantry()*");
     }
 
     [Fact]
