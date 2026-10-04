@@ -90,15 +90,17 @@ rather than comparing the id with a default value, and no tenant can have the de
 The query filter and the `WHERE` clause of updates and deletes compare `TenantId` in the database, under the column's
 collation. SQL Server's and MySQL's default collations ignore case (MySQL's also ignores accents, and SQL Server ignores
 trailing spaces whatever the collation), so with `string` ids the database takes `acme` and `ACME` for the same
-tenant: each one's queries return the other's rows, and its updates and deletes can change them. Tenantry compares ids
-exactly, so it cannot see this.
+tenant: each one's queries return the other's rows, and its updates and deletes can change them. PostgreSQL compares
+exactly by default, and does the same as the others on a `citext` column or under a nondeterministic collation.
+Tenantry compares ids exactly, so it cannot see this.
 
 Give each tenant a `string` id that the database cannot confuse with another's under its collation. A store that reads
 tenants from a table keyed by the id, under the same collation, guarantees it, since the key refuses a second id the
-collation takes for the first. `UseInMemoryStore` refuses two `string` ids that differ only in case; ids that differ
-only in accents or trailing spaces are yours to avoid. A store of your own over configuration or another service
-guarantees nothing. A binary or case-sensitive collation on `TenantId` (`UseCollation`), or `Guid` or `int` keys, avoid
-the question.
+collation takes for the first. `UseInMemoryStore` refuses two `string` ids that differ only in case; ids that the
+collation takes for one another in any other way (accents, trailing spaces, `ß` and `ss` under some collations) are
+yours to avoid. A store of your own over configuration or another service guarantees nothing. `Guid` or `int` keys
+avoid the question. So does a binary collation on `TenantId` (`UseCollation`), except that SQL Server still ignores
+trailing spaces.
 
 ### How the query filter stays correct
 
