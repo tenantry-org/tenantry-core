@@ -67,7 +67,10 @@ public sealed class TenantRejectedContext<TKey>
     /// </summary>
     public string? Identifier { get; }
 
-    /// <summary>The tenant an access validator refused, or <see langword="null"/> for any other reason.</summary>
+    /// <summary>
+    /// The tenant that was refused, because it is inactive or an access validator refused it, or
+    /// <see langword="null"/> for any other reason.
+    /// </summary>
     public ITenantDescriptor<TKey>? Tenant { get; }
 
     /// <summary>Whether <see cref="HandleResponse"/> was called.</summary>
@@ -90,6 +93,6 @@ public enum TenantRejectionReason
     /// <summary>The identifier names no tenant.</summary>
     NotFound,
 
-    /// <summary>An access validator refused the tenant.</summary>
+    /// <summary>The tenant is inactive (<c>ValidateTenantActivity</c>), or an access validator refused it.</summary>
     AccessDenied,
 }

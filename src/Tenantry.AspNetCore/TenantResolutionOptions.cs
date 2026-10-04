@@ -42,7 +42,8 @@ public sealed class TenantResolutionOptions<TKey>
     public int TenantNotFoundStatusCode { get; set; } = StatusCodes.Status404NotFound;
 
     /// <summary>
-    /// The status code when an access validator refuses the request's tenant. Default <c>403 Forbidden</c>.
+    /// The status code when the request's tenant is inactive or an access validator refuses it. Default
+    /// <c>403 Forbidden</c>.
     /// </summary>
     public int AccessDeniedStatusCode { get; set; } = StatusCodes.Status403Forbidden;
 

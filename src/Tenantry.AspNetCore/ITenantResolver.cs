@@ -16,8 +16,8 @@ public interface ITenantResolver
     /// <param name="context">The current HTTP context.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
-    /// The identifier, or <see langword="null"/> (or an empty string) if this resolver cannot determine the tenant
-    /// from the current request. Return it as the request carries it: the tenant store finds the tenant it names.
+    /// The identifier, or <see langword="null"/> (or an empty string or whitespace) if this resolver cannot determine
+    /// the tenant from the current request. Return it as the request carries it: the tenant store finds the tenant it names.
     /// </returns>
     ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default);
 }

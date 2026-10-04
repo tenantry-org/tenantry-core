@@ -25,7 +25,7 @@ public TenantIsolationViolationException(TenantIsolationViolationKind kind, stri
 Parameters:
 
 - `kind` [`TenantIsolationViolationKind`](tenantry-efcore-tenantisolationviolationkind.md): Which isolation check failed.
-- `typeName` `string`: The CLR type name of the entity, or of the `DbContext` for [`TenantIsolationViolationKind.TenantDatabaseMismatch`](tenantry-efcore-tenantisolationviolationkind.md).
+- `typeName` `string`: The CLR type name of the entity the check concerns, or of the `DbContext` for a check of the whole context.
 - `message` `string`: Why the operation was rejected.
 - `offendingTenantId` `string`: The tenant the rejected entity or database belongs to, when known.
 - `expectedTenantId` `string`: The current tenant, when known.
@@ -64,7 +64,7 @@ Value: `string`
 
 ### `TypeName`
 
-The CLR type name of the entity that caused the violation, or of the `DbContext` for [`TenantIsolationViolationKind.TenantDatabaseMismatch`](tenantry-efcore-tenantisolationviolationkind.md).
+The CLR type name of the entity the check concerns, or of the `DbContext` for a check of the whole context: [`TenantIsolationViolationKind.TenantDatabaseMismatch`](tenantry-efcore-tenantisolationviolationkind.md), [`TenantIsolationViolationKind.TenantSchemaMismatch`](tenantry-efcore-tenantisolationviolationkind.md), [`TenantIsolationViolationKind.SaveWithoutTransaction`](tenantry-efcore-tenantisolationviolationkind.md), and [`TenantIsolationViolationKind.TransactionRolledBack`](tenantry-efcore-tenantisolationviolationkind.md) when no single entity's check failed.
 
 ```csharp
 public string TypeName { get; }

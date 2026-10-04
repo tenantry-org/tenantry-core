@@ -1,8 +1,8 @@
 namespace Tenantry;
 
 /// <summary>
-/// Thrown when an operation needs a current tenant and none is current, or when the tenant it names does not
-/// exist (<see cref="TenantNotFoundException"/>).
+/// Thrown when an operation needs a current tenant and none is current. Derived types cover a named tenant that does
+/// not exist (<see cref="TenantNotFoundException"/>) or is inactive (<see cref="TenantInactiveException"/>).
 /// </summary>
 public class TenantNotResolvedException : InvalidOperationException
 {

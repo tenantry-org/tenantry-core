@@ -89,7 +89,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .ConfigurePerTenant(perTenant => perTenant.Configure<LimitsOptions>((options, t, services) =>
     {
         var catalog = services.GetRequiredService<CatalogDbContext>();
-        options.MaxUsers = catalog.Tenants.Where(x => x.Name == t.Name).Select(x => x.Plan).Single() == "enterprise" ? 500 : 20;
+        options.MaxUsers = catalog.Tenants.Where(x => x.TenantId == t.TenantId).Select(x => x.Plan).Single() == "enterprise" ? 500 : 20;
     })));
 ```
 

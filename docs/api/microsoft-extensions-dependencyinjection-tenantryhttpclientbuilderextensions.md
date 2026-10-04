@@ -26,9 +26,9 @@ Returns: `IHttpClientBuilder`: The same `builder` for chaining.
 
 Exceptions:
 
-- `InvalidOperationException`: `builder` is `ConfigureHttpClientDefaults`'s, which configures every client, third-party SDKs' included. The client is created without `tenant.AddHttpPropagation()` (thrown when it is created).
+- `InvalidOperationException`: `builder` is `ConfigureHttpClientDefaults`'s, which configures every client, third-party SDKs' included. The client is created without `tenant.AddHttpPropagation()` (thrown when it is created). A request sent while a tenant is current already carries the header with another tenant's id, or the tenant's id is not printable ASCII without a space at either end (thrown when the request is sent).
 
-A request carries the header when a tenant is current and the caller has not set the header itself. A request without a tenant goes without it, and the receiving service decides what that means, for example with `RequireTenant()`.
+While a tenant is current, a request carries the tenant's id in the header. A request that already carries the header with another tenant's id (forwarded from an incoming request, or from the client's `DefaultRequestHeaders`) throws `InvalidOperationException`. With no tenant current, the request goes as the caller built it, and the receiving service decides what a missing header means, for example with `RequireTenant()`.
 
 The header goes only to the service the client is for: when the client has a base address, set in its configuration (`AddHttpClient(c => c.BaseAddress = …)`), only requests to that scheme, host and port carry it; a request to an absolute address elsewhere does not. A client with no base address there (a gRPC client, or a typed client that sets it in its constructor) carries it on every request. A redirect that the client follows keeps the request's headers, this one included.
 

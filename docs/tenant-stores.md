@@ -155,8 +155,8 @@ tenant is not cached, so a tenant you add is found at once, and `GetAllTenantsAs
 injects `ITenantStore<TKey>` itself reads the store.
 
 When a tenant changes (it is suspended, renamed or deleted, or its slug changes), invalidate it with
-`ITenantInvalidator<TKey>`, or it is served as it was until its entry expires: an access validator reads the status
-from the cached descriptor.
+`ITenantInvalidator<TKey>`, or it is served as it was until its entry expires: `ValidateTenantActivity` checks
+the cached descriptor.
 
 ```csharp
 app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, ITenantInvalidator<string> tenants, CancellationToken ct) =>

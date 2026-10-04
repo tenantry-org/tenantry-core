@@ -68,7 +68,7 @@ Value: `int`
 
 ### `Tenant`
 
-The tenant an access validator refused, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for any other reason.
+The tenant that was refused, because it is inactive or an access validator refused it, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for any other reason.
 
 ```csharp
 public ITenantDescriptor<TKey>? Tenant { get; }

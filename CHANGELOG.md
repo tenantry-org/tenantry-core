@@ -63,8 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Tenantry.Pro's; Tenantry.Http and Tenantry.Pro's integrations now read it from Tenantry.Core.
 - `Tenantry.Http`, a new package: `UseTenantry()` on an `HttpClient` or gRPC client sends the current tenant's id
   with its requests, in the `tenantry-tenant-id` header, after `tenant.AddHttpPropagation()` in `AddTenantry`. Only
-  requests to the client's base address carry it, a header the caller set is kept, and `ConfigureHttpClientDefaults`
-  is refused. See [Calling other services](docs/http-propagation.md).
+  requests to the client's base address carry it. While a tenant is current, a request that already carries the header
+  with another tenant's id throws `InvalidOperationException`. `ConfigureHttpClientDefaults` is refused. See
+  [Calling other services](docs/http-propagation.md).
 - `ResolveFromPropagationHeader(isTrustedCaller)` (Tenantry.AspNetCore) resolves the tenant another service sent, by
   id with the store's `GetTenantAsync`, so a store whose identifiers are slugs still finds it. It reads the header only
   when `isTrustedCaller` accepts the request, after authentication, and ignores it from any other caller.
@@ -131,8 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `app.UseTenantResolution()` (Tenantry.AspNetCore) resolves the tenant before `app.UseAuthentication()`, so
   authentication handlers read the tenant's options, and `app.UseTenantry()` after it runs the access validators. Only
-  the resolvers added before the first claim resolver run before authentication, so the registration order still
-  decides which resolver wins. A tenant the validators refuse is not current for the rest of the request, an endpoint
+  the resolvers added before the first one that needs the user (a claim resolver or `ResolveFromPropagationHeader`) run
+  before authentication, so the registration order still decides which resolver wins. A tenant the validators refuse is not current for the rest of the request, an endpoint
   that `app.UseTenantry()` did not run for gets `500` (event 1011), and a pipeline without `app.UseTenantry()` fails to
   start. Event 1010 warns when it runs after authentication. See [Authentication per tenant](docs/authentication-per-tenant.md).
 

@@ -10,7 +10,7 @@ public sealed class TenantIsolationViolationException : InvalidOperationExceptio
     /// Initialises a new instance.
     /// </summary>
     /// <param name="kind">Which isolation check failed.</param>
-    /// <param name="typeName">The CLR type name of the entity, or of the <c>DbContext</c> for <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/>.</param>
+    /// <param name="typeName">The CLR type name of the entity the check concerns, or of the <c>DbContext</c> for a check of the whole context.</param>
     /// <param name="message">Why the operation was rejected.</param>
     /// <param name="offendingTenantId">The tenant the rejected entity or database belongs to, when known.</param>
     /// <param name="expectedTenantId">The current tenant, when known.</param>
@@ -32,8 +32,11 @@ public sealed class TenantIsolationViolationException : InvalidOperationExceptio
     public TenantIsolationViolationKind Kind { get; }
 
     /// <summary>
-    /// The CLR type name of the entity that caused the violation, or of the <c>DbContext</c> for
-    /// <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/>.
+    /// The CLR type name of the entity the check concerns, or of the <c>DbContext</c> for a check of the whole
+    /// context: <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/>,
+    /// <see cref="TenantIsolationViolationKind.TenantSchemaMismatch"/>,
+    /// <see cref="TenantIsolationViolationKind.SaveWithoutTransaction"/>, and
+    /// <see cref="TenantIsolationViolationKind.TransactionRolledBack"/> when no single entity's check failed.
     /// </summary>
     public string TypeName { get; }
 

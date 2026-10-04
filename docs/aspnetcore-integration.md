@@ -43,8 +43,8 @@ app.UseTenantry();
 
 For each request, the middleware:
 
-1. Tries each registered resolver **in registration order** and takes the **first** identifier one returns (a
-   resolver that returns `null` or an empty string has none).
+1. Tries each registered resolver **in registration order** and takes the **first** identifier one returns (`null`,
+   an empty string or whitespace counts as none, and the next resolver runs).
 2. If no resolver produced an identifier:
    - if a tenant is **required** for this request (see [Access control](access-control.md)), rejects it
      (`400 Bad Request`) and stops;

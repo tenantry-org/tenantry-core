@@ -20,7 +20,7 @@ public sealed class TenantResolutionOptions<TKey> where TKey : IEquatable<TKey>,
 
 ### `AccessDeniedStatusCode`
 
-The status code when an access validator refuses the request's tenant. Default `403 Forbidden`.
+The status code when the request's tenant is inactive or an access validator refuses it. Default `403 Forbidden`.
 
 ```csharp
 public int AccessDeniedStatusCode { get; set; }

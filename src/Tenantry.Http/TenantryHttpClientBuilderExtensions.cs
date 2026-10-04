@@ -19,9 +19,11 @@ public static class TenantryHttpClientBuilderExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A request carries the header when a tenant is current and the caller has not set the header itself. A request
-    /// without a tenant goes without it, and the receiving service decides what that means, for example with
-    /// <c>RequireTenant()</c>.
+    /// While a tenant is current, a request carries the tenant's id in the header. A request that already carries the
+    /// header with another tenant's id (forwarded from an incoming request, or from the client's
+    /// <c>DefaultRequestHeaders</c>) throws <see cref="InvalidOperationException"/>. With no tenant current, the
+    /// request goes as the caller built it, and the receiving service decides what a missing header means, for example
+    /// with <c>RequireTenant()</c>.
     /// </para>
     /// <para>
     /// The header goes only to the service the client is for: when the client has a base address, set in its
@@ -40,6 +42,8 @@ public static class TenantryHttpClientBuilderExtensions
     /// <exception cref="InvalidOperationException">
     /// <paramref name="builder"/> is <c>ConfigureHttpClientDefaults</c>'s, which configures every client, third-party
     /// SDKs' included. The client is created without <c>tenant.AddHttpPropagation()</c> (thrown when it is created).
+    /// A request sent while a tenant is current already carries the header with another tenant's id, or the tenant's
+    /// id is not printable ASCII without a space at either end (thrown when the request is sent).
     /// </exception>
     /// <example>
     /// <code>
