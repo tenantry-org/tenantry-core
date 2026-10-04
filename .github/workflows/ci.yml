@@ -148,8 +148,9 @@ jobs:
             highest="$(jq -r --arg prefix "$prefix" '[.versions[] | select(startswith($prefix)) | ltrimstr($prefix)
               | select(test("^[0-9]+$")) | tonumber] | max // -1' <<<"$published")"
             if (( height <= highest )); then
-              echo "::error::$prefix$highest is published already, so $version would go backwards: a release tag is" \
-                "likely on master's history (RELEASING.md)"
+              echo "::error::$prefix$highest is published already, so $version would go backwards. Either a later" \
+                "push's run published first, and nothing needs doing, or a release tag is on master's history" \
+                "(RELEASING.md)"
               exit 1
             fi
           fi

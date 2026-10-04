@@ -133,7 +133,8 @@ prerelease can be unlisted, but never deleted or replaced.
 The job refuses any version but `X.Y.0-alpha.0.N` for the `MinVerMinimumMajorMinor` in `Directory.Build.props`, so a
 version in a release branch's range fails rather than publishing. It also refuses an N at or below the highest N
 NuGet.org has for that `X.Y`, unless the version is published already: a smaller N means a release tag is on `master`'s
-history. It checks the version on NuGet.org with `scripts/check-unpublished.sh`. When every package has it already, the
+history, or that a later push's run reached the job first, in which case the newer prerelease is out and nothing needs
+doing. It checks the version on NuGet.org with `scripts/check-unpublished.sh`. When every package has it already, the
 job checks that the published `Tenantry.Core` was built from the same commit: if so, the run is a rerun and skips the
 push with a notice; if not, it fails. A version only some packages have fails the job, since a published package cannot
 be replaced: unlist those packages, and the next push to `master` publishes the next version. Runs publish one at a
