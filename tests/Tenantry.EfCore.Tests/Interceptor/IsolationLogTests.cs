@@ -74,15 +74,15 @@ public sealed class IsolationLogTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task UnclassifiedEntityTypes_UnderWarn_AreLoggedAsEvent2006_OncePerModel()
+    public async Task UnmarkedEntityTypes_UnderWarn_AreLoggedAsEvent2006_OncePerModel()
     {
         _tenant.As("acme");
         var services = DbContextFactory.Services<string>(
             _tenant,
-            new EfCoreIsolationOptions { OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Warn },
+            new EfCoreIsolationOptions { OnUnmarkedEntityType = UnmarkedEntityTypeBehavior.Warn },
             collection => collection.AddLogging(logging => logging.AddProvider(_logs)));
 
-        var options = new DbContextOptionsBuilder<UnclassifiedContext>()
+        var options = new DbContextOptionsBuilder<UnmarkedContext>()
             .UseSqlite(_connection)
             .UseApplicationServiceProvider(services)
             .UseTenantry()
@@ -91,7 +91,7 @@ public sealed class IsolationLogTests : IAsyncDisposable
 
         for (var i = 0; i < 2; i++)
         {
-            await using UnclassifiedContext db = new(options);
+            await using UnmarkedContext db = new(options);
             await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
             (await db.Invoices.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
             models.Add(db.Model);
@@ -103,8 +103,8 @@ public sealed class IsolationLogTests : IAsyncDisposable
         entries.Should().HaveCount(models.Count);
         var entry = entries[0];
         entry.Should().BeEquivalentTo(new { Category = "Tenantry.EfCore", Level = LogLevel.Warning });
-        entry.EventId.Name.Should().Be("UnclassifiedEntityTypes");
-        entry.Message.Should().Contain("Invoice").And.Contain("UnclassifiedContext");
+        entry.EventId.Name.Should().Be("UnmarkedEntityTypes");
+        entry.Message.Should().Contain("Invoice").And.Contain("UnmarkedContext");
     }
 
     public async ValueTask DisposeAsync() => await _connection.DisposeAsync();
@@ -129,7 +129,7 @@ public sealed class IsolationLogTests : IAsyncDisposable
         public int Id { get; set; }
     }
 
-    private sealed class UnclassifiedContext(DbContextOptions<UnclassifiedContext> options) : DbContext(options)
+    private sealed class UnmarkedContext(DbContextOptions<UnmarkedContext> options) : DbContext(options)
     {
         public DbSet<Order> Orders => Set<Order>();
 

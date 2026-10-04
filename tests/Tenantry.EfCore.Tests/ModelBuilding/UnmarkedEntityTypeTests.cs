@@ -1,31 +1,50 @@
 using System.ComponentModel.DataAnnotations;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 
 namespace Tenantry.EfCore.Tests.ModelBuilding;
 
 /// <summary>
-/// A model with tenant-owned entity types must classify every other entity type as shared across tenants, unless
-/// <see cref="EfCoreIsolationOptions.OnUnclassifiedEntityType"/> says otherwise. A model without tenant-owned entity
-/// types is never checked.
+/// An entity type that is not tenant-owned is shared by every tenant. An application that sets
+/// <see cref="EfCoreIsolationOptions.OnUnmarkedEntityType"/> to <c>Warn</c> or <c>Reject</c> wants each such type
+/// marked as shared, in a model that has tenant-owned entity types. A model without them is never checked.
 /// </summary>
-public sealed class UnclassifiedEntityTypeTests : IDisposable
+public sealed class UnmarkedEntityTypeTests : IDisposable
 {
+    private static readonly EfCoreIsolationOptions Reject = new() { OnUnmarkedEntityType = UnmarkedEntityTypeBehavior.Reject };
+
     private readonly SqliteConnection _connection = DbContextFactory.CreateSharedConnection();
     private readonly TestTenantContext _tenant = TestTenantContext.For("acme");
 
     public void Dispose() => _connection.Dispose();
 
     [Fact]
-    public async Task UnclassifiedEntityTypes_FailTheFirstQueryAndSave_NamingEachRoot()
+    public async Task ByDefault_AnUnmarkedEntityType_IsSharedByEveryTenant()
     {
-        await using var db = await CreateAsync<UnclassifiedContext>();
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await CreateAsync<UnmarkedContext>();
+        db.Set<Invoice>().Add(new Invoice());
+        await db.SaveChangesAsync(ct);
+        _tenant.As("globex");
+
+        (await db.Set<Invoice>().CountAsync(ct)).Should().Be(1);
+        new EfCoreIsolationOptions().OnUnmarkedEntityType.Should().Be(UnmarkedEntityTypeBehavior.Allow);
+        default(UnmarkedEntityTypeBehavior).Should().Be(UnmarkedEntityTypeBehavior.Allow);
+    }
+
+    [Fact]
+    public async Task UnderReject_UnmarkedEntityTypes_FailTheFirstQueryAndSave_NamingEachRoot()
+    {
+        await using var db = await CreateAsync<UnmarkedContext>(Reject);
 
         var query = await db.Awaiting(context => context.Orders.ToListAsync())
             .Should().ThrowAsync<TenantIsolationViolationException>();
         query.Which.Kind.Should().Be(TenantIsolationViolationKind.ModelConfiguration);
-        query.Which.TypeName.Should().Be(nameof(UnclassifiedContext));
+        query.Which.TypeName.Should().Be(nameof(UnmarkedContext));
         query.Which.Message.Should()
             .Contain("Invoice, InvoiceSummary, Setting (Dictionary<string, object>)")
             .And.Contain("ITenantEntity<String>")
@@ -43,9 +62,9 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     }
 
     [Fact]
-    public async Task EveryShapeOfClassifiedEntityType_IsAccepted()
+    public async Task UnderReject_EveryShapeOfMarkedEntityType_IsAccepted()
     {
-        await using var db = await CreateAsync<ClassifiedContext>();
+        await using var db = await CreateAsync<MarkedContext>(Reject);
 
         (await db.Orders.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
         TenantModel.FindUnisolatedEntityTypes(db.Model).Should().BeEmpty();
@@ -54,9 +73,9 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     }
 
     [Fact]
-    public async Task AJoinEntityWithDataOfItsOwn_IsClassifiedLikeAnyOther_AndAPureOneFollowsTheTypesItJoins()
+    public async Task AJoinEntityWithDataOfItsOwn_IsCheckedLikeAnyOther_AndAPureOneFollowsTheTypesItJoins()
     {
-        await using var db = await CreateAsync<JoinsContext>();
+        await using var db = await CreateAsync<JoinsContext>(Reject);
 
         TenantModel.FindUnisolatedEntityTypes(db.Model).Select(type => type.ClrType).Should().Equal(typeof(GroupRole));
         await db.Awaiting(context => context.Set<GroupRole>().CountAsync())
@@ -66,8 +85,8 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     [Fact]
     public async Task AValueOutsideTheEnum_IsTreatedAsReject()
     {
-        await using var db = await CreateAsync<UnclassifiedContext>(
-            new EfCoreIsolationOptions { OnUnclassifiedEntityType = (UnclassifiedEntityTypeBehavior)7 });
+        await using var db = await CreateAsync<UnmarkedContext>(
+            new EfCoreIsolationOptions { OnUnmarkedEntityType = (UnmarkedEntityTypeBehavior)7 });
 
         await db.Awaiting(context => context.Set<Invoice>().CountAsync())
             .Should().ThrowAsync<TenantIsolationViolationException>();
@@ -77,11 +96,11 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     }
 
     [Theory]
-    [InlineData(UnclassifiedEntityTypeBehavior.Warn)]
-    [InlineData(UnclassifiedEntityTypeBehavior.Allow)]
-    public async Task UnderWarnOrAllow_TheModelIsUsed(UnclassifiedEntityTypeBehavior behavior)
+    [InlineData(UnmarkedEntityTypeBehavior.Warn)]
+    [InlineData(UnmarkedEntityTypeBehavior.Allow)]
+    public async Task UnderWarnOrAllow_TheModelIsUsed(UnmarkedEntityTypeBehavior behavior)
     {
-        await using var db = await CreateAsync<UnclassifiedContext>(new EfCoreIsolationOptions { OnUnclassifiedEntityType = behavior });
+        await using var db = await CreateAsync<UnmarkedContext>(new EfCoreIsolationOptions { OnUnmarkedEntityType = behavior });
 
         db.Orders.Add(new Order { Description = "Acme order" });
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -90,19 +109,19 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     }
 
     [Fact]
-    public async Task ContextsSharingAModel_EachFollowTheirOwnOptions()
+    public async Task ContextsOfOneApplication_EachFollowTheirOwnOptions()
     {
-        // One application, one context type: a maintenance context allows the model, the application's does not.
+        // One application, one context type: the application's contexts use the default, one context rejects.
         var services = DbContextFactory.Services<string>(_tenant);
-        await using UnclassifiedContext allowed = new(new DbContextOptionsBuilder<UnclassifiedContext>()
-            .UseSqlite(_connection)
-            .UseApplicationServiceProvider(services)
-            .UseTenantry(o => o.OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Allow)
-            .Options);
-        await using UnclassifiedContext rejected = new(new DbContextOptionsBuilder<UnclassifiedContext>()
+        await using UnmarkedContext allowed = new(new DbContextOptionsBuilder<UnmarkedContext>()
             .UseSqlite(_connection)
             .UseApplicationServiceProvider(services)
             .UseTenantry()
+            .Options);
+        await using UnmarkedContext rejected = new(new DbContextOptionsBuilder<UnmarkedContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(services)
+            .UseTenantry(o => o.OnUnmarkedEntityType = UnmarkedEntityTypeBehavior.Reject)
             .Options);
 
         await RunEachAsync(allowed, rejected);
@@ -112,52 +131,76 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     public async Task ContextsOfApplicationsWithDifferentOptions_EachFollowTheirOwn()
     {
         // Two hosts in one process, as in tests, whose contexts use the options of their own application.
-        await using UnclassifiedContext allowed = new(DbContextFactory.Options<UnclassifiedContext>(
-            _tenant, _connection, new EfCoreIsolationOptions { OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Allow }));
-        await using UnclassifiedContext rejected = new(DbContextFactory.Options<UnclassifiedContext>(_tenant, _connection));
+        await using UnmarkedContext allowed = new(DbContextFactory.Options<UnmarkedContext>(_tenant, _connection));
+        await using UnmarkedContext rejected = new(DbContextFactory.Options<UnmarkedContext>(_tenant, _connection, Reject));
 
         await RunEachAsync(allowed, rejected);
     }
 
-    [Fact]
-    public async Task OptionsThatGetTheirServicesAfterUseTenantry_RefuseALaxerApplicationOption_SoNoCacheIsShared()
+    [Theory]
+    [InlineData(UnmarkedEntityTypeBehavior.Reject)]
+    [InlineData(UnmarkedEntityTypeBehavior.Warn)]
+    public async Task OptionsThatGetTheirServicesAfterUseTenantry_WorkUnderAllow_AndRefuseAnApplicationThatChecks(
+        UnmarkedEntityTypeBehavior checking)
     {
-        // UseTenantry() runs before the options have the application's services, so it reads no options of either
-        // application, and the two contexts share EF Core's caches.
-        DbContextOptions<UnclassifiedContext> Options(EfCoreIsolationOptions? isolation) =>
-            new DbContextOptionsBuilder<UnclassifiedContext>()
+        // UseTenantry() runs before the options have the application's services, so it reads neither application's
+        // options, and the two contexts share EF Core's caches.
+        DbContextOptions<UnmarkedContext> Options(EfCoreIsolationOptions? isolation) =>
+            new DbContextOptionsBuilder<UnmarkedContext>()
                 .UseSqlite(_connection)
                 .UseTenantry()
                 .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant, isolation))
                 .Options;
         var ct = TestContext.Current.CancellationToken;
+        var countInvoices = EF.CompileAsyncQuery((UnmarkedContext context) => context.Set<Invoice>().Count());
 
-        await using UnclassifiedContext allowed = new(Options(new EfCoreIsolationOptions { OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Allow }));
+        await using UnmarkedContext allowed = new(Options(null));
         await allowed.Database.EnsureCreatedAsync(ct);
-        await allowed.Awaiting(context => context.Set<Invoice>().CountAsync())
-            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
-        await allowed.Awaiting(context => EF.CompileAsyncQuery((UnclassifiedContext c) => c.Set<Invoice>().Count())(context))
-            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
         allowed.Set<Invoice>().Add(new Invoice());
-        await allowed.Awaiting(context => context.SaveChangesAsync())
-            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
+        await allowed.SaveChangesAsync(ct);
+        (await allowed.Set<Invoice>().CountAsync(ct)).Should().Be(1);
+        (await countInvoices(allowed)).Should().Be(1);
 
-        await using UnclassifiedContext rejected = new(Options(null));
-        await rejected.Awaiting(context => context.Set<Invoice>().CountAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>();
-        await rejected.Awaiting(context => EF.CompileAsyncQuery((UnclassifiedContext c) => c.Set<Invoice>().Count())(context))
-            .Should().ThrowAsync<TenantIsolationViolationException>();
-        rejected.Set<Invoice>().Add(new Invoice());
-        await rejected.Awaiting(context => context.SaveChangesAsync())
-            .Should().ThrowAsync<TenantIsolationViolationException>();
+        // The same query and compiled query come from EF Core's cache, compiled for the allowed context: their
+        // commands are refused.
+        await using UnmarkedContext refused = new(Options(new EfCoreIsolationOptions { OnUnmarkedEntityType = checking }));
+        await refused.Awaiting(context => context.Set<Invoice>().CountAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
+        await refused.Awaiting(context => countInvoices(context))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
+        refused.Set<Invoice>().Add(new Invoice());
+        await refused.Awaiting(context => context.SaveChangesAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
+    }
+
+    [Fact]
+    public void ManyApplicationsInOneProcess_ShareOneEfCoreProviderPerOptionValue()
+    {
+        // EF Core throws once more than twenty internal service providers exist, so 25 hosts must not each make one.
+        List<IMemoryCache> providers = [];
+
+        for (var i = 0; i < 25; i++)
+        {
+            ServiceCollection services = new();
+            services.AddSingleton<ITenantContext<string>>(_tenant);
+            services.AddTenantry<string>(tenant => tenant.ConfigureEfCoreIsolation(o =>
+                o.OnUnmarkedEntityType = i % 2 == 0 ? UnmarkedEntityTypeBehavior.Allow : UnmarkedEntityTypeBehavior.Reject));
+            services.AddDbContext<UnmarkedContext>(options => options.UseSqlite(_connection).UseTenantry());
+            var application = services.BuildServiceProvider();
+            using var scope = application.CreateScope();
+            // A singleton of EF Core's internal service provider stands for the provider.
+            providers.Add(scope.ServiceProvider.GetRequiredService<UnmarkedContext>().GetService<IMemoryCache>());
+        }
+
+        providers.Distinct().Should().HaveCount(2);
     }
 
     // The allowed context runs a query, a compiled query and a save first, so a cache shared with it would let the
     // rejected context's run them unchecked.
-    private static async Task RunEachAsync(UnclassifiedContext allowed, UnclassifiedContext rejected)
+    private static async Task RunEachAsync(UnmarkedContext allowed, UnmarkedContext rejected)
     {
         var ct = TestContext.Current.CancellationToken;
-        var countInvoices = EF.CompileAsyncQuery((UnclassifiedContext context) => context.Set<Invoice>().Count());
+        var countInvoices = EF.CompileAsyncQuery((UnmarkedContext context) => context.Set<Invoice>().Count());
         await allowed.Database.EnsureCreatedAsync(ct);
         allowed.Set<Invoice>().Add(new Invoice());
         await allowed.SaveChangesAsync(ct);
@@ -171,7 +214,7 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
         // compiling it again for the rejected context's model runs the check.
         await rejected.Awaiting(context => countInvoices(context))
             .Should().ThrowAsync<InvalidOperationException>();
-        await rejected.Awaiting(context => EF.CompileAsyncQuery((UnclassifiedContext c) => c.Set<Invoice>().Count())(context))
+        await rejected.Awaiting(context => EF.CompileAsyncQuery((UnmarkedContext c) => c.Set<Invoice>().Count())(context))
             .Should().ThrowAsync<TenantIsolationViolationException>();
         rejected.Set<Invoice>().Add(new Invoice());
         await rejected.Awaiting(context => context.SaveChangesAsync())
@@ -181,7 +224,7 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     [Fact]
     public async Task AModelWithoutTenantOwnedEntityTypes_IsNotChecked()
     {
-        await using var db = await CreateAsync<NoTenantOwnedTypesContext>();
+        await using var db = await CreateAsync<NoTenantOwnedTypesContext>(Reject);
 
         (await db.Animals.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
         TenantModel.FindUnisolatedEntityTypes(db.Model).Select(type => type.ClrType).Should().Equal(typeof(Animal));
@@ -334,7 +377,7 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
         }
     }
 
-    private sealed class UnclassifiedContext(DbContextOptions<UnclassifiedContext> options) : DbContext(options)
+    private sealed class UnmarkedContext(DbContextOptions<UnmarkedContext> options) : DbContext(options)
     {
         public DbSet<Order> Orders => Set<Order>();
 
@@ -351,7 +394,7 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
         }
     }
 
-    private sealed class ClassifiedContext(DbContextOptions<ClassifiedContext> options) : DbContext(options)
+    private sealed class MarkedContext(DbContextOptions<MarkedContext> options) : DbContext(options)
     {
         public DbSet<Order> Orders => Set<Order>();
 

@@ -9,8 +9,10 @@ namespace Tenantry.EfCore.Internal;
 
 /// <summary>
 /// Checks, once per model, that tenant isolation is in place on every entity type that implements
-/// <see cref="ITenantEntity{TKey}"/>, that no other entity type shares their tables, and that every other entity type
-/// is marked as shared across tenants, and throws <see cref="TenantIsolationViolationException"/> when it is not.
+/// <see cref="ITenantEntity{TKey}"/> and that no other entity type shares their tables, and throws
+/// <see cref="TenantIsolationViolationException"/> when it is not. Each context then applies its
+/// <see cref="EfCoreIsolationOptions.OnUnmarkedEntityType"/> to the entity types that are neither tenant-owned nor
+/// marked as shared.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -36,12 +38,14 @@ internal static class TenantModelCheck
     /// </summary>
     public static TenantIsolation? Verify(DbContext context)
     {
+        ThrowIfUncaptured(context);
+
         var model = context.Model;
 
         if (!Passed.TryGetValue(model, out var passed))
         {
             var isolation = TenantIsolation.ForModel(model);
-            string? unclassified = null;
+            string? unmarked = null;
 
             if (isolation is not null)
             {
@@ -57,67 +61,82 @@ internal static class TenantModelCheck
                 }
 
                 var types = TenantModel.FindUnisolatedEntityTypes(model);
-                unclassified = types.Count == 0
+                unmarked = types.Count == 0
                     ? null
                     : string.Join(", ", types.Select(type => type.DisplayName()).Order(StringComparer.Ordinal));
             }
 
-            passed = new Checked(isolation, unclassified);
+            passed = new Checked(isolation, unmarked);
             Passed.AddOrUpdate(model, passed);
         }
 
         // Contexts that share a model can follow different options, so each applies its own.
-        if (passed.Unclassified is { } names)
+        if (passed.Unmarked is { } names)
         {
-            ApplyUnclassifiedBehavior(context, passed, names);
+            ApplyUnmarkedBehavior(context, passed, names);
         }
 
         return passed.Isolation;
     }
 
-    private static void ApplyUnclassifiedBehavior(DbContext context, Checked passed, string names)
+    /// <summary>
+    /// Throws when <c>UseTenantry()</c> ran before the options had the application's services, and the application
+    /// sets <see cref="EfCoreIsolationOptions.OnUnmarkedEntityType"/> to anything but <c>Allow</c>.
+    /// </summary>
+    /// <remarks>
+    /// Such a context could not make the option part of EF Core's cache key (<see cref="TenantryOptionsExtension"/>),
+    /// so it shares EF Core's compiled queries with contexts that allow every model, and a query one of them compiled
+    /// would run here without the check. It is refused instead, on its first query, save or command
+    /// (<see cref="UncapturedIsolationGuard"/>), whether or not its model has entity types to check.
+    /// </remarks>
+    public static void ThrowIfUncaptured(DbContext context)
     {
-        var services = ApplicationServices.Find(context);
-        var behavior = ApplicationServices.Isolation(context, services).OnUnclassifiedEntityType;
+        if (context.GetService<IDbContextOptions>().FindExtension<TenantryOptionsExtension>() is not { Isolation: null })
+        {
+            return;
+        }
 
-        // UseTenantry() ran before the options had the application's services, so it could not make this option part
-        // of EF Core's cache key (TenantryOptionsExtension): such contexts share EF Core's compiled queries whatever
-        // their application's option. Only Reject is safe there, as a query cached under it never skipped the check.
-        if (behavior != UnclassifiedEntityTypeBehavior.Reject &&
-            context.GetService<IDbContextOptions>().FindExtension<TenantryOptionsExtension>() is { Isolation: null })
+        var behavior = ApplicationServices.Isolation(context, ApplicationServices.Find(context)).OnUnmarkedEntityType;
+
+        if (behavior != UnmarkedEntityTypeBehavior.Allow)
         {
             throw new InvalidOperationException(
-                $"'{context.GetType().Name}' follows EfCoreIsolationOptions.OnUnclassifiedEntityType = {behavior}, but " +
-                "UseTenantry() was called before its options had the application's services, so contexts with " +
-                "other values could share its compiled queries. Call UseApplicationServiceProvider before UseTenantry(), " +
-                "or set the option for the context with UseTenantry(o => o.OnUnclassifiedEntityType = …).");
+                $"'{context.GetType().Name}' follows EfCoreIsolationOptions.OnUnmarkedEntityType = {behavior}, but " +
+                "UseTenantry() was called before its options had the application's services, so it would share " +
+                "compiled queries with contexts that do not check the model. Call UseApplicationServiceProvider " +
+                "before UseTenantry(), or set the option for the context with UseTenantry(o => o.OnUnmarkedEntityType = …).");
         }
+    }
 
-        switch (behavior)
+    private static void ApplyUnmarkedBehavior(DbContext context, Checked passed, string names)
+    {
+        var services = ApplicationServices.Find(context);
+        var behavior = ApplicationServices.Isolation(context, services).OnUnmarkedEntityType;
+
+        if (behavior == UnmarkedEntityTypeBehavior.Allow)
         {
-            case UnclassifiedEntityTypeBehavior.Warn:
-                if (Interlocked.Exchange(ref passed.Warned, 1) == 0 && TenantIsolationLog.Find(services) is { } logger)
-                {
-                    TenantIsolationLog.UnclassifiedEntityTypes(logger, context.GetType().Name, names);
-                }
-
-                break;
-
-            case UnclassifiedEntityTypeBehavior.Allow:
-                break;
-
-            // Reject, and any value outside the enum, as OnMissingTenant treats one.
-            default:
-                throw new TenantIsolationViolationException(
-                    TenantIsolationViolationKind.ModelConfiguration,
-                    context.GetType().Name,
-                    $"'{context.GetType().Name}' has tenant-owned entity types, and these entity types are neither " +
-                    $"tenant-owned nor marked as shared across tenants, so every tenant reads and writes their rows: " +
-                    $"{names}. Implement ITenantEntity<{passed.Isolation!.KeyType.Name}> on each whose rows belong to a " +
-                    "tenant, and mark each that every tenant shares with [SharedAcrossTenants] or, in OnModelCreating, " +
-                    "IsSharedAcrossTenants(). EfCoreIsolationOptions.OnUnclassifiedEntityType decides what happens to " +
-                    "such a model.");
+            return;
         }
+
+        if (behavior == UnmarkedEntityTypeBehavior.Warn)
+        {
+            if (Interlocked.Exchange(ref passed.Warned, 1) == 0 && TenantIsolationLog.Find(services) is { } logger)
+            {
+                TenantIsolationLog.UnmarkedEntityTypes(logger, context.GetType().Name, names);
+            }
+
+            return;
+        }
+
+        // Reject, and any value outside the enum, as OnMissingTenant treats one.
+        throw new TenantIsolationViolationException(
+            TenantIsolationViolationKind.ModelConfiguration,
+            context.GetType().Name,
+            $"'{context.GetType().Name}' requires every entity type that is not tenant-owned to be marked as shared " +
+            $"across tenants (EfCoreIsolationOptions.OnUnmarkedEntityType = {behavior}), and these are not: {names}. " +
+            "Mark each that every tenant shares with [SharedAcrossTenants] or, in OnModelCreating, " +
+            $"IsSharedAcrossTenants(), and implement ITenantEntity<{passed.Isolation!.KeyType.Name}> on each whose rows " +
+            "belong to a tenant.");
     }
 
     private static void Verify(IEntityType entityType, Type keyType)
@@ -227,12 +246,12 @@ internal static class TenantModelCheck
         return expression;
     }
 
-    private sealed class Checked(TenantIsolation? isolation, string? unclassified)
+    private sealed class Checked(TenantIsolation? isolation, string? unmarked)
     {
         public TenantIsolation? Isolation { get; } = isolation;
 
         /// <summary>The entity types that are neither tenant-owned nor shared, or <see langword="null"/> when there are none.</summary>
-        public string? Unclassified { get; } = unclassified;
+        public string? Unmarked { get; } = unmarked;
 
         public int Warned;
     }

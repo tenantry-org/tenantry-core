@@ -97,11 +97,24 @@ public sealed class UseTenantryRegistrationTests : IDisposable
     [Fact]
     public void UseTenantry_AddsTheInterceptorsAndTheExtension()
     {
-        var options = new DbContextOptionsBuilder<TestDbContext>().UseSqlite(_connection).UseTenantry().Options;
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(DbContextFactory.Services<string>(new TestTenantContext()))
+            .UseTenantry()
+            .Options;
 
         options.FindExtension<TenantryOptionsExtension>().Should().NotBeNull();
         options.FindExtension<CoreOptionsExtension>()!.Interceptors
             .Should().BeEquivalentTo(new IInterceptor[] { TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance, TenantTransactionInterceptor.Instance });
+    }
+
+    [Fact]
+    public void UseTenantry_BeforeTheApplicationsServices_AddsAGuardThatReadsTheirOptionsOnEachCommand()
+    {
+        var options = new DbContextOptionsBuilder<TestDbContext>().UseSqlite(_connection).UseTenantry().Options;
+
+        options.FindExtension<TenantryOptionsExtension>()!.Isolation.Should().BeNull();
+        options.FindExtension<CoreOptionsExtension>()!.Interceptors.Should().Contain(UncapturedIsolationGuard.Instance);
     }
 
     [Fact]

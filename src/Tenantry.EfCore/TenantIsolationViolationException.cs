@@ -76,8 +76,9 @@ public enum TenantIsolationViolationKind
 
     /// <summary>
     /// The model cannot isolate a tenant-owned entity type (for example a missing tenant filter, a base type or owner
-    /// that is not tenant-owned, or a tenant-owned type mapped to JSON), or has entity types that are neither
-    /// tenant-owned nor shared. The message names the types and the cause.
+    /// that is not tenant-owned, or a tenant-owned type mapped to JSON), or, under
+    /// <see cref="EfCoreIsolationOptions.OnUnmarkedEntityType"/> = <c>Reject</c>, has entity types that are neither
+    /// tenant-owned nor marked as shared. The message names the types and the cause.
     /// </summary>
     ModelConfiguration,
 

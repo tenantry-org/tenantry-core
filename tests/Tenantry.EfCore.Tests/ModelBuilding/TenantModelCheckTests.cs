@@ -549,7 +549,6 @@ public sealed class TenantModelCheckTests : IDisposable
 
     public sealed class CardPayment : Payment;
 
-    [SharedAcrossTenants]
     public sealed class LegacyPayment
     {
         public int Id { get; set; }
@@ -563,7 +562,6 @@ public sealed class TenantModelCheckTests : IDisposable
         public string TenantId { get; set; } = string.Empty;
     }
 
-    [SharedAcrossTenants]
     public sealed class ArchivedReport
     {
         public int Id { get; set; }

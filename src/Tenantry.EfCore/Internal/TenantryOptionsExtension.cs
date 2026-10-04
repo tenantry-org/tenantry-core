@@ -11,7 +11,7 @@ namespace Tenantry.EfCore.Internal;
 /// <remarks>
 /// Its only state is the isolation options the context follows, which change no EF Core service. Each context reads
 /// them from its own options on every save, so contexts can share an internal service provider whatever their
-/// <c>OnMissingTenant</c> and <c>OnSaveWithoutTransaction</c>. <c>OnUnclassifiedEntityType</c> is different: Tenantry
+/// <c>OnMissingTenant</c> and <c>OnSaveWithoutTransaction</c>. <c>OnUnmarkedEntityType</c> is different: Tenantry
 /// applies it when EF Core compiles a query, and a query served from the provider's query cache is not compiled again.
 /// So it is part of the provider's key, and a context never runs a query another context compiled under another value.
 /// </remarks>
@@ -67,7 +67,7 @@ internal sealed class TenantryOptionsExtension(EfCoreIsolationOptions? isolation
 
         private EfCoreIsolationOptions? Isolation => ((TenantryOptionsExtension)Extension).Isolation;
 
-        public override int GetServiceProviderHashCode() => (int?)Isolation?.OnUnclassifiedEntityType ?? -1;
+        public override int GetServiceProviderHashCode() => (int?)Isolation?.OnUnmarkedEntityType ?? -1;
 
         public override bool ShouldUseSameServiceProvider(DbContextOptionsExtensionInfo other) =>
             other is ExtensionInfo info && Same(Isolation, info.Isolation);
@@ -78,11 +78,11 @@ internal sealed class TenantryOptionsExtension(EfCoreIsolationOptions? isolation
 
             if (Isolation is { } isolation)
             {
-                debugInfo["Tenantry:OnUnclassifiedEntityType"] = isolation.OnUnclassifiedEntityType.ToString();
+                debugInfo["Tenantry:OnUnmarkedEntityType"] = isolation.OnUnmarkedEntityType.ToString();
             }
         }
 
         private static bool Same(EfCoreIsolationOptions? left, EfCoreIsolationOptions? right) =>
-            left?.OnUnclassifiedEntityType == right?.OnUnclassifiedEntityType;
+            left?.OnUnmarkedEntityType == right?.OnUnmarkedEntityType;
     }
 }

@@ -30,13 +30,13 @@ public sealed class EfCoreIsolationOptions
 
     /// <summary>
     /// What a context does when its model has tenant-owned entity types and also entity types that are neither
-    /// tenant-owned nor marked as shared across tenants. Defaults to <see cref="UnclassifiedEntityTypeBehavior.Reject"/>.
+    /// tenant-owned nor marked as shared across tenants. Defaults to <see cref="UnmarkedEntityTypeBehavior.Allow"/>.
     /// </summary>
     /// <remarks>
     /// Mark an entity type whose rows every tenant shares with <see cref="SharedAcrossTenantsAttribute"/> or
     /// <c>IsSharedAcrossTenants()</c>. <see cref="TenantModel.FindUnisolatedEntityTypes"/> lists the types this checks.
     /// </remarks>
-    public UnclassifiedEntityTypeBehavior OnUnclassifiedEntityType { get; set; } = UnclassifiedEntityTypeBehavior.Reject;
+    public UnmarkedEntityTypeBehavior OnUnmarkedEntityType { get; set; } = UnmarkedEntityTypeBehavior.Allow;
 
     internal EfCoreIsolationOptions Clone() => (EfCoreIsolationOptions)MemberwiseClone();
 }

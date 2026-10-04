@@ -51,7 +51,7 @@ public static class DbContextFactory
                 {
                     options.OnMissingTenant = isolationOptions.OnMissingTenant;
                     options.OnSaveWithoutTransaction = isolationOptions.OnSaveWithoutTransaction;
-                    options.OnUnclassifiedEntityType = isolationOptions.OnUnclassifiedEntityType;
+                    options.OnUnmarkedEntityType = isolationOptions.OnUnmarkedEntityType;
                 });
             }
         });

@@ -43,8 +43,8 @@ public static class TenantryDbContextOptionsBuilderExtensions
     /// configures the options here, and every <see cref="ITenantModelContributor"/> the model; without an application
     /// service provider, none runs. The application's <see cref="EfCoreIsolationOptions"/> are read here too, so set
     /// the application service provider before calling it: otherwise a context whose application sets
-    /// <see cref="EfCoreIsolationOptions.OnUnclassifiedEntityType"/> to anything but <c>Reject</c> throws
-    /// <see cref="InvalidOperationException"/> on its first query or save. Calling this again changes nothing.
+    /// <see cref="EfCoreIsolationOptions.OnUnmarkedEntityType"/> to <c>Warn</c> or <c>Reject</c> throws
+    /// <see cref="InvalidOperationException"/> on its first query, save or command. Calling this again changes nothing.
     /// </para>
     /// <para>
     /// It installs Tenantry's own EF Core model customizer, so the options must not also replace
@@ -72,8 +72,18 @@ public static class TenantryDbContextOptionsBuilderExtensions
 
         // The application's options, read now, so that contexts of applications with other options never share EF
         // Core's caches (TenantryOptionsExtension).
-        var isolation = ApplicationServices.Find(optionsBuilder.Options)?.GetService<IOptions<EfCoreIsolationOptions>>()?.Value.Clone();
-        return Add(optionsBuilder, new TenantryOptionsExtension(isolation));
+        var services = ApplicationServices.Find(optionsBuilder.Options);
+        var isolation = services is null
+            ? null
+            : services.GetService<IOptions<EfCoreIsolationOptions>>()?.Value.Clone() ?? new EfCoreIsolationOptions();
+        Add(optionsBuilder, new TenantryOptionsExtension(isolation));
+
+        if (isolation is null)
+        {
+            optionsBuilder.AddInterceptors(UncapturedIsolationGuard.Instance);
+        }
+
+        return optionsBuilder;
     }
 
     /// <summary>

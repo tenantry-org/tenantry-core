@@ -83,16 +83,16 @@ public static class TenantModel
 
     /// <summary>
     /// Returns the entity types of <paramref name="model"/> that are neither tenant-owned nor marked as shared by
-    /// every tenant. In a database that tenants share, Tenantry does not keep their rows apart.
+    /// every tenant. Every tenant reads and writes their rows, as for a marked type.
     /// </summary>
     /// <param name="model">The model, such as <c>context.Model</c>.</param>
     /// <remarks>
     /// It returns the types to mark, which are the roots of inheritance hierarchies. A derived type, an owned type and
     /// the join entity type of a many-to-many relationship that holds only the two foreign keys are left out: each
     /// follows the type it belongs to, its hierarchy's root, its owner or the entity types it joins. A join entity type
-    /// with other properties or foreign keys is returned like any other. <c>UseTenantry()</c> checks a model that has a
-    /// tenant-owned entity type against this list, as <see cref="EfCoreIsolationOptions.OnUnclassifiedEntityType"/>
-    /// says.
+    /// with other properties or foreign keys is returned like any other. <see cref="EfCoreIsolationOptions.OnUnmarkedEntityType"/>
+    /// decides what <c>UseTenantry()</c> does with a model that has a tenant-owned entity type and types on this
+    /// list.
     /// </remarks>
     public static IReadOnlyList<IReadOnlyEntityType> FindUnisolatedEntityTypes(IReadOnlyModel model)
     {
