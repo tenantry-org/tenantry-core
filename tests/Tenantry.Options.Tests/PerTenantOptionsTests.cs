@@ -260,6 +260,38 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public void AStepForEveryName_WithoutServices_AppliesToTheDefaultAndEveryNamedValue()
+    {
+        using var provider = Build(services => services.AddTenantry<string>(tenant =>
+            tenant.ConfigurePerTenant(perTenant => perTenant.ConfigureAll<BrandingOptions>((o, t) => o.Name = $"all-{t.Name}"))));
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        using (MakeCurrent(provider, Globex))
+        {
+            monitor.Get("anything").Name.Should().Be("all-Globex");
+            monitor.CurrentValue.Name.Should().Be("all-Globex");
+        }
+    }
+
+    [Fact]
+    public void ANamedStepWithServices_ReadsThemFromAScopeOfItsOwn_ForThatNameOnly()
+    {
+        using var provider = Build(services =>
+        {
+            services.AddScoped<Ink>();
+            services.AddTenantry<string>(tenant => tenant.ConfigurePerTenant(perTenant =>
+                perTenant.Configure<BrandingOptions>("print", (o, t, sp) => o.Colour = $"{sp.GetRequiredService<Ink>().Name}-{t.Name}")));
+        });
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        using (MakeCurrent(provider, Acme))
+        {
+            monitor.Get("print").Colour.Should().Be("ink-Acme");
+            monitor.CurrentValue.Colour.Should().Be("red", "the default value is not the step's");
+        }
+    }
+
+    [Fact]
     public void TheTenantsSteps_RunBeforeEveryPostConfigure_WhateverTheOrderTheyWereAddedIn()
     {
         // As an authentication handler's post-configuration does: it builds what it needs from the settings it sees.
@@ -630,6 +662,11 @@ public sealed class PerTenantOptionsTests
 
         public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([Tenant]);
+    }
+
+    private sealed class Ink
+    {
+        public string Name => "ink";
     }
 
     private sealed class FuncStore(Func<string, CancellationToken, ValueTask<ITenantDescriptor<string>?>> get)

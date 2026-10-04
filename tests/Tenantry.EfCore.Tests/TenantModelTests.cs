@@ -30,6 +30,15 @@ public sealed class TenantModelTests : IDisposable
     }
 
     [Fact]
+    public async Task AnEntityTypeMarkedByItsClrType_IsSharedAcrossTenants()
+    {
+        await using MarkedByTypeContext db = new(DbContextFactory.Options<MarkedByTypeContext>(TestTenantContext.For("acme"), _connection));
+
+        TenantModel.IsSharedAcrossTenants(db.Model.FindEntityType(typeof(NonTenant))!).Should().BeTrue();
+        TenantModel.FindUnisolatedEntityTypes(db.Model).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task ATenantOwnedEntityMarkedShared_FailsTheModelCheck()
     {
         await using ContradictoryContext db = new(DbContextFactory.Options<ContradictoryContext>(TestTenantContext.For("acme"), _connection));
@@ -118,6 +127,16 @@ public sealed class TenantModelTests : IDisposable
             modelBuilder.Entity<Order>();
             modelBuilder.Entity<Country>();
             modelBuilder.Entity<NonTenant>().IsSharedAcrossTenants();
+        }
+    }
+
+    // The non-generic builder, as code that configures entity types it finds by reflection uses.
+    public sealed class MarkedByTypeContext(DbContextOptions<MarkedByTypeContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Order>();
+            modelBuilder.Entity(typeof(NonTenant)).IsSharedAcrossTenants();
         }
     }
 

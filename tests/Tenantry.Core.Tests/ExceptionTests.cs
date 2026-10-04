@@ -79,4 +79,16 @@ public sealed class ExceptionTests
         ex.TenantId.Should().Be("acme");
         ex.Message.Should().Be("Custom message");
     }
+
+    [Fact]
+    public void TenantInactiveException_WithAMessage_KeepsBoth()
+    {
+        TenantInactiveException ex = new("suspended", "Custom message");
+
+        ex.TenantId.Should().Be("suspended");
+        ex.Message.Should().Be("Custom message");
+        ex.Should().BeAssignableTo<TenantNotResolvedException>();
+        FluentActions.Invoking(() => new TenantInactiveException(null!, "Custom message"))
+            .Should().Throw<ArgumentNullException>().WithParameterName("tenantId");
+    }
 }
