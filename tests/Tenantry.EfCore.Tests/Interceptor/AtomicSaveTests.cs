@@ -772,6 +772,24 @@ public sealed class AtomicSaveTests : IDisposable
     }
 
     [Fact]
+    public async Task ATransactionHandedOnAfterAFailedSave_IsStillRefused()
+    {
+        await SeedAcmeAsync();
+
+        await using var first = await CreateAsync(_tenant.As("globex"), new Setup { NoSavepoints = true });
+        await using var second = await CreateAsync(_tenant, new Setup { NoSavepoints = true });
+        var transaction = (await first.Database.BeginTransactionAsync(TestContext.Current.CancellationToken)).GetDbTransaction();
+        Forge(first, Forgery.StubOwnerAddsOwnedRow);
+        await first.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+        await first.Database.UseTransactionAsync(null, TestContext.Current.CancellationToken);
+        await second.Database.UseTransactionAsync(transaction, TestContext.Current.CancellationToken);
+
+        await second.Awaiting(d => d.Database.CommitTransactionAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        (await AcmeStateAsync()).Should().Be(AcmeState);
+    }
+
+    [Fact]
     public async Task ASaveStoppedBeforeItSentAnything_LetsItsEntitiesGo_OnceALaterSaveLeavesNothingToSave()
     {
         await SeedAcmeAsync();

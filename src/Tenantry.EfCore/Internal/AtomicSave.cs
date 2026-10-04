@@ -322,13 +322,13 @@ internal sealed class AtomicSave
     }
 
     /// <summary>
-    /// As <paramref name="transaction"/> is handed to a context: drops its ledger if the context that began it no
-    /// longer has it, as Npgsql hands out its transaction objects again. The ledger of a transaction no context began,
-    /// which may still be live, is kept.
+    /// As <paramref name="transaction"/> is handed to a context: drops its ledger if the context that began it is gone,
+    /// disposed or on a new lease, as Npgsql hands out its transaction objects again. The ledger of a transaction no
+    /// context began, or whose context is still there, which may still be live, is kept.
     /// </summary>
     public static void Used(DbTransaction transaction)
     {
-        if (Ledgers.TryGetValue(transaction, out var ledger) && ledger.Ended(transaction))
+        if (Ledgers.TryGetValue(transaction, out var ledger) && ledger.Ended())
         {
             Ledgers.Remove(transaction);
         }
@@ -524,8 +524,9 @@ internal sealed class AtomicSave
             _ownerId = context.ContextId;
         }
 
-        // Whether the context that began the transaction, in the same lease, no longer has it.
-        public bool Ended(DbTransaction transaction)
+        // Whether the context that began the transaction is gone, disposed or on a new lease, so it ended the
+        // transaction. A context that only let it go may have handed it on, still live.
+        public bool Ended()
         {
             if (_owner is null)
             {
@@ -539,7 +540,8 @@ internal sealed class AtomicSave
 
             try
             {
-                return !ReferenceEquals(context.Database.CurrentTransaction?.GetDbTransaction(), transaction);
+                _ = context.Database;
+                return false;
             }
             catch (ObjectDisposedException)
             {
