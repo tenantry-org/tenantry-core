@@ -166,6 +166,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `UseConnectionStrings(sp => …)` no longer leaves the replacement scoped.
 - `IsolateCaches()` throws for a `HybridCache` registered as scoped or transient. It accepted one before, and
   invalidating a tenant then failed, because invalidation clears the cache outside any scope.
+- After a save that relied on a tenant check, any failed transaction operation stops the commit unless EF Core reports
+  it as a commit, a rollback, or the creation or release of a savepoint, none of which leaves the failed save's rows in
+  the transaction. Before, only a failed rollback to the save's savepoint did, matched by EF Core's name for it, which
+  EF Core does not document: under another name, the commit would have kept the rows.
 
 ## [0.6.0] - 2026-10-03
 

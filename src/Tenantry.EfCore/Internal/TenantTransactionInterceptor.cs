@@ -19,7 +19,12 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
 {
     public static readonly TenantTransactionInterceptor Instance = new();
 
-    private const string RollbackToSavepoint = nameof(RollbackToSavepoint);
+    // The names EF Core gives a failed transaction operation (TransactionErrorEventData.Action) that leave nothing of a
+    // failed save in the transaction. TransactionErrorActionShapeTests pins them.
+    internal const string Commit = nameof(Commit);
+    internal const string Rollback = nameof(Rollback);
+    internal const string CreateSavepoint = nameof(CreateSavepoint);
+    internal const string ReleaseSavepoint = nameof(ReleaseSavepoint);
 
     private TenantTransactionInterceptor()
     {
@@ -163,14 +168,20 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
     }
 
     // EF Core logs a failed rollback of a failed save to its savepoint and goes on, so that save's statements stay in
-    // the transaction.
+    // the transaction. Any failed operation other than those known to leave nothing of a save counts as that one, so a
+    // name a later EF Core version uses fails closed.
     private static void SavepointNotRolledBack(DbTransaction transaction, TransactionErrorEventData eventData)
     {
-        if (eventData.Action == RollbackToSavepoint)
+        if (!LeavesNoSave(eventData.Action))
         {
             AtomicSave.SavepointNotRolledBack(eventData.Context, transaction);
         }
     }
+
+    // A commit or rollback ends the transaction; EF Core sends a save's statements only after it created the savepoint,
+    // and releases it only after they all succeeded.
+    internal static bool LeavesNoSave(string action) =>
+        action is Commit or Rollback or CreateSavepoint or ReleaseSavepoint;
 
     // A save's commands, counted per transaction, and their failures, which make it unsafe whatever another
     // interceptor does with the save's failure (AtomicSave).
