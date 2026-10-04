@@ -16,8 +16,6 @@ public interface ITenantConnectionStringProvider<TKey> where TKey : IEquatable<T
 
 - `TKey`: The tenant identifier type. See [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) for constraints.
 
-Derived types: [`TenantConnectionStringProvider<TKey>`](tenantry-tenantconnectionstringprovider.md).
-
 ## Properties
 
 ### `CanGetSynchronously`

@@ -39,6 +39,8 @@ Parameters:
 
 Returns: `IReadOnlyList<IReadOnlyEntityType>`
 
+It returns the types to mark, which are the roots of inheritance hierarchies. A derived type, an owned type and the join entity type of a many-to-many relationship are left out: each follows the type it belongs to, its hierarchy's root, its owner or the entity types it joins. `UseTenantry()` checks a model that has a tenant-owned entity type against this list, as [`EfCoreIsolationOptions.OnUnclassifiedEntityType`](tenantry-efcore-efcoreisolationoptions.md) says.
+
 ### `HasTenantOwnedEntityTypes(IReadOnlyModel)`
 
 Returns whether `model` has an entity type that implements [`ITenantEntity<TKey>`](tenantry-itenantentity.md), which is what `UseTenantry()` isolates. A model without one has nothing for Tenantry's filters and checks to do.
@@ -55,7 +57,7 @@ Returns: `bool`
 
 ### `IsSharedAcrossTenants(IReadOnlyEntityType)`
 
-Returns whether `entityType`, or the type that owns it, is marked as shared by every tenant, with [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) or `IsSharedAcrossTenants()`.
+Returns whether `entityType` is marked as shared by every tenant, with [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) or `IsSharedAcrossTenants()`, or belongs to a type that is: a base type of its hierarchy, or the type that owns it.
 
 ```csharp
 public static bool IsSharedAcrossTenants(IReadOnlyEntityType entityType)

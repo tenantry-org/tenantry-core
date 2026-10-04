@@ -2,13 +2,36 @@
 
 Namespace: `Microsoft.Extensions.DependencyInjection` · Package: `Tenantry.Core` · [API reference](README.md)
 
-Tenantry's core features on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): the tenant store, its cache and per-tenant connection strings.
+Tenantry's core features on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): the tenant store, its cache, invalidation across instances, and per-tenant connection strings.
 
 ```csharp
 public static class TenantryTenantBuilderExtensions
 ```
 
 ## Methods
+
+### `BroadcastInvalidations<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantInvalidationHandler<TKey>>)`
+
+Adds a handler that publishes each invalidation to the application's other instances, through a message bus or a pub/sub channel of your own.
+
+```csharp
+public static ITenantBuilder<TKey> BroadcastInvalidations<TKey>(this ITenantBuilder<TKey> builder, Func<IServiceProvider, ITenantInvalidationHandler<TKey>> factory) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `factory` `Func<IServiceProvider, ITenantInvalidationHandler<TKey>>`: Creates the handler, once, from the application's services.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+The handler is a singleton. [`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md) and [`ITenantInvalidator<TKey>.InvalidateAllAsync`](tenantry-itenantinvalidator.md) run it after every other handler, and [`ITenantInvalidator<TKey>.InvalidateLocallyAsync`](tenantry-itenantinvalidator.md) and [`ITenantInvalidator<TKey>.InvalidateAllLocallyAsync`](tenantry-itenantinvalidator.md) do not run it. Each instance applies an invalidation it receives with the local methods, so it does not publish it again.
+
+The handler is called after this instance is invalidated. When it throws, the invalidator throws its exception once every handler has run: this instance is invalidated, and the others keep their copies until those expire or a retry reaches them.
 
 ### `CacheTenants<TKey>(ITenantBuilder<TKey>, Action<TenantStoreCacheOptions>?)`
 
@@ -84,9 +107,9 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 
 Exceptions:
 
-- `InvalidOperationException`: Neither delegate is set after `configure` runs.
+- `InvalidOperationException`: Neither delegate is set after `configure` runs, or another provider is already registered.
 
-Registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons. Calling it again configures the same options instance, so a later call can replace a delegate.
+Registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons. Calling it again configures the same options instance, so a later call can replace a delegate. It cannot be combined with `UseConnectionStrings(sp => …)` or an [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) the application registered before `AddTenantry`.
 
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant
@@ -116,7 +139,11 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-Registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons. It replaces a provider set before, by this method or by `UseConnectionStrings(options => …)`. A provider that can only read connection strings asynchronously returns [false](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) from [`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md).
+Exceptions:
+
+- `InvalidOperationException`: `UseConnectionStrings(options => …)` was called before it.
+
+Registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons. It replaces a provider set before by this method or registered by the application before `AddTenantry`, and cannot be combined with `UseConnectionStrings(options => …)`. A provider that can only read connection strings asynchronously returns [false](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) from [`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md).
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant

@@ -292,11 +292,11 @@ Type parameters:
 Parameters:
 
 - `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
-- `factory` `Func<IServiceProvider, ITenantResolver>`: Creates the resolver from the application's services.
+- `factory` `Func<IServiceProvider, ITenantResolver>`: Creates the resolver from the request's services.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-The resolver is a singleton, created once and used for every request.
+The factory runs in each request's scope, so the resolver can depend on scoped services such as a `DbContext`. Pass an instance instead for a resolver created once and used for every request.
 
 ### `UseResolver<TKey>(ITenantBuilder<TKey>, ITenantResolver)`
 
