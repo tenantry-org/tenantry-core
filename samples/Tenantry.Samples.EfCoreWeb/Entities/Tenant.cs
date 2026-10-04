@@ -1,7 +1,6 @@
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
 using Tenantry;
-using Tenantry.EfCore;
 
 namespace Tenantry.Samples.EfCoreWeb.Entities;
 
@@ -10,7 +9,6 @@ namespace Tenantry.Samples.EfCoreWeb.Entities;
 /// It is shared across tenants (it does not implement ITenantEntity) because it is global metadata.
 /// In production, you'd likely add: Subscription, BillingInfo, Settings, etc.
 /// </summary>
-[SharedAcrossTenants]
 public class Tenant : TenantDescriptor<string>
 {
     public bool IsActive { get; set; } = true;

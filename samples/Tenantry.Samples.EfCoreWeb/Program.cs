@@ -5,7 +5,7 @@
 // - Tenants stored as EF entities, looked up via EfCoreTenantStore
 // - Inactive tenants kept in the store and refused by ValidateTenantActivity (403)
 // - A tenant required by default (400 without one), and the global endpoints allowing a missing tenant
-// - Tenant-owned and shared entities in one context (Orders are tenant-owned, Products are [SharedAcrossTenants])
+// - Tenant-owned and shared entities in one context (Orders are tenant-owned, Products are shared by every tenant)
 // - Relationships across tenant boundaries (OrderItem → Product)
 // - Seeding global reference data and tenants
 // - Admin queries with IgnoreQueryFilters()

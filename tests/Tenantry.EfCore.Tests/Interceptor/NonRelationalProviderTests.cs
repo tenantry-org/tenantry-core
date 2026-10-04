@@ -160,7 +160,6 @@ public sealed class NonRelationalProviderTests
 
     public static class Archive
     {
-        [SharedAcrossTenants]
         public sealed class Note
         {
             public int Id { get; set; }

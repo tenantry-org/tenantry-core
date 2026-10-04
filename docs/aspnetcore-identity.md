@@ -28,24 +28,9 @@ public class AppIdentityDbContext(DbContextOptions<AppIdentityDbContext> options
         var users = builder.Entity<AppUser>();
         users.Metadata.RemoveIndex([users.Metadata.FindProperty(nameof(AppUser.NormalizedUserName))!]);
         users.HasIndex(u => new { u.NormalizedUserName, u.TenantId }).HasDatabaseName("UserNameIndex").IsUnique();
-
-        // Identity's other types: roles every tenant shares, and rows Identity reads through their user.
-        builder.Entity<IdentityRole>().IsSharedAcrossTenants();
-        builder.Entity<IdentityRoleClaim<string>>().IsSharedAcrossTenants();
-        builder.Entity<IdentityUserRole<string>>().IsSharedAcrossTenants();
-        builder.Entity<IdentityUserClaim<string>>().IsSharedAcrossTenants();
-        builder.Entity<IdentityUserLogin<string>>().IsSharedAcrossTenants();
-        builder.Entity<IdentityUserToken<string>>().IsSharedAcrossTenants();
     }
 }
 ```
-
-Identity's other entity types are not tenant-owned, so the model marks them as shared across tenants, which
-`UseTenantry()` requires of every entity type that is not tenant-owned
-([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)). Identity
-reads a user's claims, tokens and role memberships for a user it found through the tenant filter, and loads the user
-of an external login through that filter, so another tenant's rows lead to no user. Code of your own that queries
-those tables directly reads every tenant's rows.
 
 Register the context with `UseTenantry()`, and Identity's stores as usual:
 

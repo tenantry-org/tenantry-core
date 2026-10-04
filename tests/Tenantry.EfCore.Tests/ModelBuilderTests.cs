@@ -7,7 +7,6 @@ namespace Tenantry.EfCore.Tests;
 
 // Shared by every tenant, so it does not implement ITenantEntity<string>. UseTenantry() must skip it; all rows remain
 // visible regardless of tenant.
-[SharedAcrossTenants]
 internal sealed class NonTenantedProduct
 {
     public int Id { get; set; }

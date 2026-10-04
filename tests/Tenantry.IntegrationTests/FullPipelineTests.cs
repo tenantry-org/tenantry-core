@@ -347,7 +347,6 @@ internal sealed class IntegrationOrder : ITenantEntity<string>
 }
 
 /// <summary>Reference data every tenant shares: no ITenantEntity, no query filter.</summary>
-[SharedAcrossTenants]
 internal sealed class IntegrationLabel
 {
     public int Id { get; set; }

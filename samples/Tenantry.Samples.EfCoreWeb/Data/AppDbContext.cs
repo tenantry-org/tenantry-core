@@ -10,7 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
-    // Entities every tenant shares, marked [SharedAcrossTenants]
+    // Entities every tenant shares
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Category> Categories => Set<Category>();
 

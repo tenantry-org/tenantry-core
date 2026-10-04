@@ -1,14 +1,11 @@
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
-using Tenantry.EfCore;
-
 namespace Tenantry.Samples.EfCoreWeb.Entities;
 
 /// <summary>
 /// Reference data every tenant shares.
 /// Product categories are global and managed by administrators.
 /// </summary>
-[SharedAcrossTenants]
 public class Category
 {
     public int Id { get; set; }

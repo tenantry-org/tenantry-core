@@ -19,15 +19,14 @@ public sealed class TenantModelTests : IDisposable
     {
         await using var db = await DbContextFactory.CreateContextAsync(TestTenantContext.For("acme"), _connection);
         await using MarkedContext marked = new(DbContextFactory.Options<MarkedContext>(TestTenantContext.For("acme"), _connection));
-        await using UnmarkedContext unmarked = new(DbContextFactory.Options<UnmarkedContext>(TestTenantContext.For("acme"), _connection));
 
         TenantModel.HasTenantOwnedEntityTypes(db.Model).Should().BeTrue();
         TenantModel.IsTenantOwned(db.Model.FindEntityType(typeof(Order))!).Should().BeTrue();
-        TenantModel.FindUnisolatedEntityTypes(unmarked.Model).Select(e => e.ClrType).Should().Equal(typeof(Unmarked));
+        TenantModel.FindUnisolatedEntityTypes(db.Model).Select(e => e.ClrType).Should().Equal(typeof(NonTenant));
 
         TenantModel.FindUnisolatedEntityTypes(marked.Model).Should().BeEmpty();
         TenantModel.IsSharedAcrossTenants(marked.Model.FindEntityType(typeof(Country))!).Should().BeTrue();
-        TenantModel.IsSharedAcrossTenants(marked.Model.FindEntityType(typeof(Unmarked))!).Should().BeTrue();
+        TenantModel.IsSharedAcrossTenants(marked.Model.FindEntityType(typeof(NonTenant))!).Should().BeTrue();
         TenantModel.HasTenantOwnedEntityTypes(marked.Model).Should().BeTrue();
     }
 
@@ -119,21 +118,7 @@ public sealed class TenantModelTests : IDisposable
         {
             modelBuilder.Entity<Order>();
             modelBuilder.Entity<Country>();
-            modelBuilder.Entity<Unmarked>().IsSharedAcrossTenants();
-        }
-    }
-
-    public sealed class Unmarked
-    {
-        public int Id { get; set; }
-    }
-
-    public sealed class UnmarkedContext(DbContextOptions<UnmarkedContext> options) : DbContext(options)
-    {
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Order>();
-            modelBuilder.Entity<Unmarked>();
+            modelBuilder.Entity<NonTenant>().IsSharedAcrossTenants();
         }
     }
 

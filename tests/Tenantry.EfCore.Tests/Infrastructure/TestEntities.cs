@@ -48,7 +48,6 @@ public class GuidTestDbContext(DbContextOptions<GuidTestDbContext> options) : Db
 /// <summary>
 /// A mapped entity that every tenant shares, used to check that the write guard skips types that are not tenant-owned.
 /// </summary>
-[SharedAcrossTenants]
 public class NonTenant
 {
     public int Id { get; set; }
