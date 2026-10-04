@@ -2,7 +2,7 @@
 
 Resolution turns an HTTP request into a tenant, in two steps:
 
-1. A **resolver** reads an identifier from the request: a header, the subdomain, the host name, a route value, a
+1. A resolver reads an identifier from the request: a header, the subdomain, the host name, a route value, a
    claim. A resolver implements `ITenantResolver`:
 
    ```csharp no-compile
@@ -13,13 +13,13 @@ Resolution turns an HTTP request into a tenant, in two steps:
    ```
 
    It returns the identifier as a string, or `null` (or an empty string) if the request does not carry one.
-2. The **tenant store** finds the tenant the identifier names, with `ITenantStore<TKey>.FindByIdentifierAsync`.
+2. The tenant store finds the tenant the identifier names, with `ITenantStore<TKey>.FindByIdentifierAsync`.
    By default an identifier is the tenant's id: it is parsed as `TKey` (with the invariant culture) and looked up
    with `GetTenantAsync`. A store can map other names to its tenants, such as a slug or a custom domain for
    `Guid`-keyed tenants: see [Identifiers other than the id](#identifiers-other-than-the-id).
 
-> Resolution is an **ASP.NET Core** concept. In console/worker apps there is no `HttpContext`; you make a
-> tenant current with `ITenantScopeFactory` — see [Non-HTTP hosts](non-http-hosts.md).
+Resolution is part of `Tenantry.AspNetCore`. In console and worker apps there is no request: you make a tenant
+current with `ITenantScopeFactory` ([Non-HTTP hosts](non-http-hosts.md)).
 
 ## Built-in resolvers
 
@@ -30,7 +30,7 @@ Resolution turns an HTTP request into a tenant, in two steps:
 | `ResolveFromHost()` | the host name | For tenants with domains of their own. See below. |
 | `ResolveFromRouteValue(key = "tenant")` | route value `key` | For routes like `/api/{tenant}/…`. Needs routing before the middleware. |
 | `ResolveFromClaim(type = "tenant_id")` | claim on `HttpContext.User` | Needs authentication before the middleware. |
-| `ResolveFromQueryString(name = "tenantId")` | query string parameter | **Development/testing only** — see warning. |
+| `ResolveFromQueryString(name = "tenantId")` | query string parameter | Development and testing only: see [Query string](#query-string). |
 | `ResolveFromPropagationHeader(isTrustedCaller)` | the `tenantry-tenant-id` header another service sent | Only from a caller `isTrustedCaller` accepts, after authentication; read as a tenant id. See [Calling other services](http-propagation.md). |
 
 ### Header
@@ -58,8 +58,8 @@ With base domains set, only a host of exactly one label followed by a base domai
 `acme.other.org` resolve nothing. Add `localhost` for development, so `acme.localhost` resolves to `acme`
 (browsers send `*.localhost` to the local machine).
 
-Without it (`tenant.ResolveFromSubdomain()`), the resolver takes the first label of any host that has **at least
-three**, and resolves nothing for shorter hosts: `acme.app.example.com` and `app.example.com` resolve to `acme`
+Without it (`tenant.ResolveFromSubdomain()`), the resolver takes the first label of any host that has at least
+three, and resolves nothing for shorter hosts: `acme.app.example.com` and `app.example.com` resolve to `acme`
 and `app`, while `example.com`, `localhost` and `acme.localhost` resolve nothing.
 
 Either way, a subdomain in `IgnoredSubdomains` (`www` by default) and a host that is an IP address (a load
@@ -102,9 +102,8 @@ tenant.ResolveFromClaim();               // default claim type "tenant_id"
 tenant.ResolveFromClaim("org_id");
 ```
 
-Reads the claim from `HttpContext.User`, so `UseTenantry()` must come **after** `UseAuthentication()`.
-This binds the tenant to the authenticated identity, which is the most tamper-resistant source — the
-caller cannot choose a tenant they were not issued.
+Reads the claim from `HttpContext.User`, so `UseTenantry()` must come after `UseAuthentication()`. The caller
+cannot name a tenant its token does not carry.
 
 ### Query string
 
@@ -113,13 +112,13 @@ tenant.ResolveFromQueryString();         // ?tenantId=acme
 tenant.ResolveFromQueryString("tenant"); // ?tenant=acme
 ```
 
-> **Do not use in production.** Query strings are logged, cached by CDNs, and stored in browser
-> history. This resolver exists for local development and testing convenience only.
+> Do not use this resolver in production: query strings are logged, cached by CDNs and stored in browser history.
+> It is for local development and tests.
 
 ## Resolver ordering and fallback
 
-You can register several resolvers. The middleware tries them **in registration order** and uses the
-**first identifier** one returns (`null`, an empty string or whitespace counts as none):
+You can register several resolvers. The middleware tries them in registration order and uses the
+first identifier one returns (`null`, an empty string or whitespace counts as none):
 
 ```csharp
 tenant.ResolveFromClaim("tenant_id");             // 1. the tenant in the caller's token
@@ -139,8 +138,8 @@ At least one resolver must be registered, or `app.UseTenantry()` throws at start
 
 ## Custom resolvers
 
-Implement `ITenantResolver` for any source not covered above — a cookie, a gRPC metadata entry, a
-combination of signals, an external lookup, etc.
+Implement `ITenantResolver` for another source, such as a cookie, a gRPC metadata entry or a combination of
+signals.
 
 ```csharp
 using Tenantry.AspNetCore;
@@ -164,16 +163,14 @@ tenant.UseResolver<CookieTenantResolver>();                          // created 
 ```
 
 `UseResolver<TResolver>()` creates the resolver in each request's scope, so it can depend on scoped services
-such as a `DbContext`. It returns the builder without its key type, so put it last in a chain or call it as a
-statement of its own (see [Registration](core-concepts.md#registration)). An instance or a factory's resolver is
-created once and used for every request.
+such as a `DbContext`. Like `ValidateTenantAccess<T>()`, it returns the builder without its key type
+([Registration](core-concepts.md#registration)). An instance or a factory's resolver is created once and used for
+every request.
 
-Registration order relative to the built-in resolvers is preserved, so you can slot a custom resolver
-anywhere in the fallback chain.
+A custom resolver runs in the order it was added among the built-in ones.
 
-Return only an identifier — do **not** look the tenant up; that is the store's job, and returning a value the
-store does not know yields a clean rejection on an endpoint that requires a tenant (`404`, or `403` when access
-validators are configured).
+Return only the identifier, not the tenant: the store looks it up. An identifier the store does not know is rejected
+on an endpoint that requires a tenant (`404`, or `403` when access validators are configured).
 
 ## Identifiers other than the id
 
