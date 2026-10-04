@@ -51,7 +51,9 @@ another tenant's row, pooled contexts, and a database per tenant) against a real
 
 Each framework runs the suite with its own EF Core version. MariaDB is not tested. Keep MySQL's default of reporting
 matched rows: with an option that reports changed rows (such as `UseAffectedRows=true`), an update that changes no
-values reports zero rows and EF Core raises a false concurrency failure.
+values reports zero rows and EF Core raises a false concurrency failure. A save whose tenant check is another of its
+statements is kept all or nothing by rolling it back to a savepoint, or rolling back its transaction, so on MySQL its
+tables must use a transactional engine such as InnoDB, the default: a MyISAM table keeps the rows a failed save wrote.
 
 With `string` tenant ids, the database compares them under the `TenantId` column's collation. SQL Server's and MySQL's
 defaults ignore case, so the database takes `acme` and `ACME` for one tenant and each one's queries return the other's
