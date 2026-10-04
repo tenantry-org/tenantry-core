@@ -20,13 +20,18 @@ internal interface ICurrentTenantId
     IDisposable MakeNoTenantCurrent();
 
     /// <summary>
-    /// When the current tenant has been invalidated since the application started, makes the store's copy of it current
-    /// until disposed, so a value built now does not come from a copy read before the invalidation. Null otherwise.
+    /// Makes the store's copy of the current tenant current until disposed, so a value is built from the tenant as the
+    /// store has it, not from the copy the caller holds, which may be older or not the store's at all. Null when there
+    /// is no tenant, no store, or the caller already holds the store's copy.
     /// </summary>
-    IDisposable? MakeLatestCurrent();
+    /// <param name="keep">
+    /// False when the store does not hold the current tenant's id: the value is built from the caller's copy and must
+    /// not be kept, or every made-up id would add an entry and the next caller with that id would get this one's value.
+    /// </param>
+    IDisposable? MakeStoreCopyCurrent(out bool keep);
 }
 
-internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantContext, TenantOptionsCaches caches, IServiceProvider services)
+internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantContext, IServiceProvider services)
     : ICurrentTenantId
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
@@ -37,28 +42,40 @@ internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantCon
 
     public IDisposable MakeNoTenantCurrent() => tenantContext.MakeNoTenantCurrent();
 
-    public IDisposable? MakeLatestCurrent()
+    public IDisposable? MakeStoreCopyCurrent(out bool keep)
     {
-        if (tenantContext.CurrentTenant is not { } tenant ||
-            !caches.WasInvalidated(TenantIds.Format(tenant.TenantId)) ||
-            Lookup() is not { } lookup)
-        {
-            return null;
-        }
+        keep = true;
 
-        // A request resolved before the invalidation still carries the old copy. Options have no asynchronous
-        // configuration, so the read blocks, only when a value is built and the tenant is not in CacheTenants' cache.
-        // The store is read as no tenant, as it is when a request is resolved.
-        ITenantDescriptor<TKey>? latest;
+        if (tenantContext.CurrentTenant is not { } tenant || Lookup() is not { } lookup)
+            return null;
+
+        // Options have no asynchronous configuration, so the read blocks, once per value built: with CacheTenants it is
+        // usually answered from memory. It runs as no tenant, as it does when a request is resolved, and without the
+        // caller's synchronization context, so a store that awaits without ConfigureAwait(false) cannot deadlock it.
+        ITenantDescriptor<TKey>? stored;
+        var context = SynchronizationContext.Current;
 
         using (tenantContext.MakeNoTenantCurrent())
         {
-            var read = lookup.GetTenantAsync(tenant.TenantId);
-            latest = read.IsCompletedSuccessfully ? read.Result : read.AsTask().GetAwaiter().GetResult();
+            SynchronizationContext.SetSynchronizationContext(null);
+            try
+            {
+                var read = lookup.GetTenantAsync(tenant.TenantId);
+                stored = read.IsCompletedSuccessfully ? read.Result : read.AsTask().GetAwaiter().GetResult();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(context);
+            }
         }
 
-        // A tenant the store does not have (made current with MakeCurrent, or since removed) keeps the caller's copy.
-        return latest is null || ReferenceEquals(latest, tenant) ? null : tenantContext.MakeCurrent(latest);
+        if (stored is null)
+        {
+            keep = false;
+            return null;
+        }
+
+        return ReferenceEquals(stored, tenant) ? null : tenantContext.MakeCurrent(stored);
     }
 
     private ITenantLookup<TKey>? Lookup()
@@ -90,26 +107,17 @@ internal interface ITenantOptionsCache
 internal sealed class TenantOptionsCaches
 {
     private readonly ConcurrentBag<ITenantOptionsCache> _caches = [];
-    private readonly ConcurrentDictionary<string, byte> _invalidated = new();
-    private volatile bool _allInvalidated;
 
     public void Add(ITenantOptionsCache cache) => _caches.Add(cache);
 
-    /// <summary>Whether the tenant's values have been invalidated since the application started, alone or with every tenant's.</summary>
-    public bool WasInvalidated(string tenantId) => _allInvalidated || _invalidated.ContainsKey(tenantId);
-
     public void Remove(string tenantId)
     {
-        _invalidated.TryAdd(tenantId, 0);
-
         foreach (var cache in _caches)
             cache.Remove(tenantId);
     }
 
     public void Clear()
     {
-        _allInvalidated = true;
-
         foreach (var cache in _caches)
             cache.Clear();
     }
@@ -124,7 +132,7 @@ internal sealed class TenantOptionsCaches
 internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions> : IOptionsMonitorCache<TOptions>, ITenantOptionsCache, IDisposable
     where TOptions : class
 {
-    private readonly ConcurrentDictionary<(string? Tenant, string Name), Lazy<TOptions>> _values = new();
+    private readonly ConcurrentDictionary<(string? Tenant, string Name), Lazy<Built>> _values = new();
     private readonly ICurrentTenantId _tenant;
     private readonly List<IDisposable> _changeSubscriptions = [];
 
@@ -147,31 +155,39 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
 
         // The entry is added before its value is built, so invalidating the tenant during the build removes it.
         var key = Key(name);
-        var value = _values.GetOrAdd(key, _ => new Lazy<TOptions>(() => Create(createOptions)));
+        var entry = _values.GetOrAdd(key, _ => new Lazy<Built>(() => Create(createOptions)));
 
         try
         {
-            return value.Value;
+            var built = entry.Value;
+
+            if (!built.Keep)
+                _values.TryRemove(KeyValuePair.Create(key, entry));
+
+            return built.Value;
         }
         catch
         {
             // A Lazy keeps its exception: the failed value is dropped, so the next read builds it again.
-            _values.TryRemove(KeyValuePair.Create(key, value));
+            _values.TryRemove(KeyValuePair.Create(key, entry));
             throw;
         }
     }
 
-    private TOptions Create(Func<TOptions> createOptions)
+    /// <summary>The number of values kept, for tests.</summary>
+    internal int Count => _values.Count;
+
+    private Built Create(Func<TOptions> createOptions)
     {
-        using (_tenant.MakeLatestCurrent())
-            return createOptions();
+        using (_tenant.MakeStoreCopyCurrent(out var keep))
+            return new Built(createOptions(), keep);
     }
 
     public bool TryAdd(string? name, TOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        return _values.TryAdd(Key(name), new Lazy<TOptions>(options));
+        return _values.TryAdd(Key(name), new Lazy<Built>(new Built(options, Keep: true)));
     }
 
     // A name's value is removed for every tenant: the configuration it is bound to changed, or it was set again.
@@ -202,6 +218,8 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
 
     private (string? Tenant, string Name) Key(string? name) =>
         (_tenant.Current, name ?? Microsoft.Extensions.Options.Options.DefaultName);
+
+    private sealed record Built(TOptions Value, bool Keep);
 }
 
 /// <summary>

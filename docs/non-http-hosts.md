@@ -41,9 +41,11 @@ take them in their constructor. Choose by what you have:
 
 `CreateScope` and `MakeCurrent` trust the descriptor they are given. They do not look it up in the store or check
 whether it is active, so a descriptor the store does not hold becomes current like any other: shared-database queries
-are filtered by its id and new rows are stamped with it. Pass them only a tenant you already hold, and run work that
-starts from an id with `RunInScopeAsync`. It takes the work as a callback because the tenant is held in an
-`AsyncLocal`: a scope opened inside an asynchronous lookup would not be current for the code that awaited it
+are filtered by its id and new rows are stamped with it.
+[Per-tenant options](per-tenant-options.md#when-settings-change) are the exception: they are built from the store's
+copy when the store holds the id. Pass them only a tenant you already hold, and run work that starts from an id with
+`RunInScopeAsync`. It takes the work as a callback because the tenant is held in an `AsyncLocal`: a scope opened inside
+an asynchronous lookup would not be current for the code that awaited it
 ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
 
 `IServiceProvider.CreateScope()` and `CreateAsyncScope()` are .NET's plain DI scopes and set no tenant.

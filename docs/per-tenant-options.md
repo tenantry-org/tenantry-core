@@ -99,8 +99,13 @@ Each tenant's value is built on first use and cached. To rebuild it after a tena
 tenant: `ITenantInvalidator<TKey>.InvalidateAsync(tenantId)` clears its options with everything else Tenantry keeps for
 it (see [Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)), and `InvalidateAllAsync()` clears every
 tenant's.
-After an invalidation, a value is built from the tenant as the store has it then, even in a request that was resolved
-before the invalidation and still carries the old copy. A change to the configuration the options are bound to (a
+A value is built from the tenant as the store has it, not from the copy that is current where the options are read.
+After an invalidation, a request resolved before it, which still carries the old copy, gets the new settings, and a copy
+made current with `MakeCurrent` or `CreateScope` whose fields differ from the store's cannot change a tenant's value.
+Building a value reads the store once, blocking, since options have no asynchronous configuration; with
+[`CacheTenants`](tenant-stores.md#caching) the read is usually answered from memory. For an id the store does not hold,
+the value is built from the current copy on every read and not kept. Without a store, it is built from the current copy
+and kept. A change to the configuration the options are bound to (a
 reloaded `appsettings.json`) clears every tenant's value of that options type. Each instance of the application has its
 own values, so [publish the invalidation](tenant-stores.md#several-instances) to the others, or keep the settings in
 configuration that reloads.

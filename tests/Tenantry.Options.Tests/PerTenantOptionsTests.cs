@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tenantry.Options.Internal;
 using Tenantry.Tests.Shared;
 
 namespace Tenantry.Options.Tests;
@@ -344,6 +345,52 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public async Task ACopyThatDiffersFromTheStores_GetsTheStoresValue_BeforeAndAfterAnInvalidation()
+    {
+        var store = new ChangingStore(Acme);
+        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => store));
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        TenantDescriptor<string> forged = new() { TenantId = "acme", Name = "Forged" };
+
+        ReadNames(provider, monitor, forged, Acme).Should().Equal("Acme", "Acme");
+
+        await provider.GetRequiredService<ITenantInvalidator<string>>()
+            .InvalidateAsync("acme", TestContext.Current.CancellationToken);
+
+        ReadNames(provider, monitor, forged, Acme).Should().Equal("Acme", "Acme");
+    }
+
+    [Fact]
+    public void IdsTheStoreDoesNotHold_AreBuiltFromTheCallersCopy_AndNotKept()
+    {
+        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseInMemoryStore([Acme]));
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        var unknown = Enumerable.Range(0, 1000)
+            .Select(i => new TenantDescriptor<string> { TenantId = $"x{i}", Name = $"X{i}" })
+            .ToArray();
+
+        ReadNames(provider, monitor, unknown).Should().Equal(unknown.Select(t => t.Name));
+        ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "x0", Name = "X0 again" })
+            .Should().Equal("X0 again");
+
+        _built.Should().Be(1001);
+        KeptValues(provider).Should().Be(0);
+    }
+
+    [Fact]
+    public void WithoutAStore_TheCallersCopyIsBuiltOnceAndKept()
+    {
+        using var provider = BuildNamedAfterTheTenant(_ => { });
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        ReadNames(provider, monitor, Acme, new TenantDescriptor<string> { TenantId = "acme", Name = "Other copy" })
+            .Should().Equal("Acme", "Acme");
+
+        _built.Should().Be(1);
+        KeptValues(provider).Should().Be(1);
+    }
+
+    [Fact]
     public void EveryRegistration_Resolves_InAValidatedProvider()
     {
         using var provider = Build();
@@ -372,6 +419,39 @@ public sealed class PerTenantOptionsTests
 
     private static IDisposable MakeCurrent(IServiceProvider provider, ITenantDescriptor<string> tenant) =>
         provider.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(tenant);
+
+    // A provider whose step names the options after the tenant it is given, and counts its runs.
+    private ServiceProvider BuildNamedAfterTheTenant(Action<ITenantBuilder<string>> store)
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant =>
+        {
+            store(tenant);
+            tenant.ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) =>
+            {
+                _built++;
+                o.Name = t.Name;
+            }));
+        });
+        return services.BuildServiceProvider(Conformance.ProviderOptions);
+    }
+
+    private static int KeptValues(IServiceProvider provider) =>
+        provider.GetRequiredService<TenantOptionsCache<BrandingOptions>>().Count;
+
+    private static List<string> ReadNames(
+        IServiceProvider provider, IOptionsMonitor<BrandingOptions> options, params ITenantDescriptor<string>[] tenants)
+    {
+        List<string> names = [];
+
+        foreach (var tenant in tenants)
+        {
+            using (MakeCurrent(provider, tenant))
+                names.Add(options.CurrentValue.Name);
+        }
+
+        return names;
+    }
 
     private static void ReadAs(IServiceProvider provider, IOptionsMonitor<BrandingOptions> options, params ITenantDescriptor<string>[] tenants)
     {

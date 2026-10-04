@@ -28,10 +28,12 @@ namespace Tenantry.Options;
 /// </para>
 /// <para>
 /// Each tenant's value is built on first use and cached; <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> clears
-/// it, so changing a tenant's settings is followed by invalidating the tenant. A change to the configuration the options
-/// are bound to clears every tenant's value. Validation (<c>Validate</c>, <c>IValidateOptions</c>) runs on each tenant's
-/// value when it is built, and <c>ValidateOnStart</c> validates the ordinary one. The tenant's steps run after every
-/// <c>Configure</c> and before every <c>PostConfigure</c>, in the order they are added.
+/// it, so changing a tenant's settings is followed by invalidating the tenant. With a store, the value is built from
+/// the store's copy of the tenant, read once per value built, not from the copy that is current; a value for an id the
+/// store does not hold is built from the current copy on every read and not kept. A change to the configuration the
+/// options are bound to clears every tenant's value. Validation (<c>Validate</c>, <c>IValidateOptions</c>) runs on each
+/// tenant's value when it is built, and <c>ValidateOnStart</c> validates the ordinary one. The tenant's steps run after
+/// every <c>Configure</c> and before every <c>PostConfigure</c>, in the order they are added.
 /// </para>
 /// </remarks>
 /// <typeparam name="TKey">The tenant identifier type.</typeparam>
@@ -176,7 +178,7 @@ public sealed class TenantOptionsBuilder<TKey>
 
         services.TryAddSingleton<TenantOptionsCaches>();
         services.TryAddSingleton<ICurrentTenantId>(sp => new CurrentTenantId<TKey>(
-            sp.GetRequiredService<ITenantContextSetter<TKey>>(), sp.GetRequiredService<TenantOptionsCaches>(), sp));
+            sp.GetRequiredService<ITenantContextSetter<TKey>>(), sp));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<TKey>, TenantOptionsInvalidation<TKey>>());
 
         // The options type's own cache and readers, once; IOptionsMonitor<TOptions> reads the cache too.

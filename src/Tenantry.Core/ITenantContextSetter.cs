@@ -28,7 +28,8 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
     /// descriptor passed becomes current as it is, even when the store does not hold its id, the tenant is inactive,
     /// or its other fields differ from the store's. Shared-database queries are then filtered by its id and saves
     /// stamp new rows with it, so a descriptor the store does not hold leaves rows owned by an id the store does not
-    /// know.
+    /// know. Per-tenant options from Tenantry.Options are the exception: they are built from the store's copy when the
+    /// store holds the id.
     /// </para>
     /// <para>
     /// Pass a tenant you already hold: one that request resolution found, one read from
