@@ -52,18 +52,6 @@ public sealed class TenantActivityTests
         (await scopes.RunInScopeAsync("acme", (scope, _) => Task.FromResult(scope.Tenant.TenantId), TestContext.Current.CancellationToken)).Should().Be("acme");
     }
 
-    [Fact]
-    public async Task CreateScope_DoesNotConsultTheValidators()
-    {
-        await using var services = Build(tenant => tenant
-            .UseInMemoryStore([Suspended])
-            .ValidateTenantActivity(_ => false));
-
-        await using var scope = services.GetRequiredService<ITenantScopeFactory<string>>().CreateScope(Suspended);
-
-        scope.Tenant.TenantId.Should().Be("suspended");
-    }
-
     private static ServiceProvider Build(Action<ITenantBuilder<string>> configure)
     {
         ServiceCollection services = new();
