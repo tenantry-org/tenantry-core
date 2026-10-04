@@ -128,12 +128,13 @@ Not covered:
   `AmbientTransactionWarning` turned off: it then saves with no transaction at all;
 - storage without transactions, such as MySQL's MyISAM tables;
 - an interceptor that suppresses EF Core's savepoint commands;
-- a save an interceptor runs inside another save that fails with no failed command, no failed tenant check that
-  Tenantry's interceptor sees, and no failure notice reaching Tenantry, because an interceptor added before Tenantry's
-  throws from `SaveChangesFailed` or `SaveChangesCanceled`, or a `SaveChangesFailed` handler added before Tenantry's
-  throws. The save around it can then be taken for it if it ran from that save's `SavingChanges`, after Tenantry's
-  interceptor, or from the `SavedChanges` of a save that sent nothing but reported entities saved
-  (`SuppressWithResult`);
+- a save an interceptor runs inside another save that fails after sending statements with no failed command, no
+  failed tenant check that Tenantry's interceptor sees, and no failure notice reaching Tenantry at all, because an
+  interceptor added before Tenantry's throws from `SaveChangesFailed` or `SaveChangesCanceled`, or a
+  `SaveChangesFailed` handler added before Tenantry's throws. The save around it can then be taken for it if it ran
+  from that save's `SavingChanges`, after Tenantry's interceptor, or from the `SavedChanges` of a save that sent
+  nothing but reported entities saved (`SuppressWithResult`). Any notice of the failure that does reach Tenantry stops
+  the commit, whichever save it is taken for;
 - a transaction handed to EF Core with `UseTransaction` and then committed directly through ADO.NET.
 
 ## Models that cannot be isolated

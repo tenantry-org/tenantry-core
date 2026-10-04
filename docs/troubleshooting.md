@@ -86,6 +86,12 @@ savepoints, where EF Core undoes the failed save itself and the commit goes ahea
 transaction with `Database.BeginTransaction` rather than a `TransactionScope`. See
 [Saves that succeed or fail as a whole](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole).
 
+With Npgsql, a transaction can also be refused for an earlier one. If a context began a transaction through EF Core,
+a save in it failed, and the transaction was disposed without an EF Core commit or rollback while the context stayed
+in use, a transaction later begun through ADO.NET on the same connection can get the same `NpgsqlTransaction` object,
+and is refused when handed to a context with `UseTransaction`. Begin that transaction through EF Core
+(`Database.BeginTransaction`) instead, or end the failed one through EF Core with `RollbackTransaction`.
+
 ## `TenantIsolationViolationException` of kind `SaveWithoutTransaction`
 
 `Database.AutoTransactionBehavior` is `Never`, `OnSaveWithoutTransaction` is `Reject`, and the save has rows that

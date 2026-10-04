@@ -34,7 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   succeeded, and the commit kept the rows the failed save had written. A failed command and a failed tenant check are
   noted as they happen, so an interceptor that translates the failure, as EntityFramework.Exceptions does, no longer
   keeps it from Tenantry. A failed save that wrote no such rows itself now also stops the commit when another save in
-  the transaction did, and so does a save EF Core reported as saved and then as failed.
+  the transaction did, and so does a save EF Core reported as saved and then as failed. A failure notice counts every
+  save still under way that sent a statement as failed, so a failed save is not missed when the notice is taken for
+  another, such as an audit save a validation interceptor stopped.
 - A transaction handed from one context to another after a failed save in it is still refused at the commit. Before,
   the context that let it go was taken to have ended it.
 - A save that an interceptor runs from another save's `SavingChanges` no longer sets back the transaction (with
