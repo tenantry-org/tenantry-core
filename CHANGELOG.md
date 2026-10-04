@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mark every entity type that is not tenant-owned, in a context that has tenant-owned ones, with
   `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`, or the context's first query or save throws. ASP.NET Core
   Identity's types need it too ([ASP.NET Core Identity](docs/aspnetcore-identity.md#the-user-type-and-context)).
+- A many-to-many relationship with a tenant-owned entity at either end is refused until its join entity is configured
+  with `UsingEntity<TJoin>()` and implements `ITenantEntity<TKey>`. Add `TenantId` to an existing join table
+  ([Many-to-many relationships](docs/efcore-advanced.md#many-to-many-relationships)).
+- An `ITenantConnectionStringProvider<TKey>` of your own registered as scoped or transient makes the first context
+  from `AddDbContextPerTenantDatabase` throw. Register it as a singleton, and have it create a scope for any scoped
+  service it needs.
+- `IsolateCaches()` throws for a `HybridCache` that is not a singleton. Register it with `AddHybridCache()`, which
+  makes it one.
 - Give each HTTP client with `UseTenantry()` an absolute `BaseAddress` in its registration, or pass its service's
   address to `UseTenantry(address)`, as a gRPC client must. `UseTenantry()` on an HTTP client gained an optional
   parameter, so a library compiled against 0.6 that calls it must be compiled again.
