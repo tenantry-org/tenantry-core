@@ -96,19 +96,18 @@ If you have signing configured, signed commits are appreciated. See GitHub's gui
 
 ## Releases (maintainers)
 
-Releases are cut by pushing a `v*` tag on a commit that is on `master`, or for a patch to an older minor on its
-`release/X.Y` branch; a ruleset lets only the maintainer create, move or delete `v*` tags. The release workflow checks
-that the tag is on `release/X.Y`, or on `master` while no tag names a higher minor, checks that CI, SonarCloud
-included, passed on a push that put the tagged commit there, reruns the CI gate on it (without SonarCloud),
-including both package checks, then **pauses for approval** in the `release` environment (only `v*`
-tags can deploy to it) and publishes those same packages, with their symbol packages, to NuGet.org via
-OIDC trusted publishing. The GitHub release's notes are the version's section of `CHANGELOG.md`
-(`scripts/release-notes.sh`), and a tag without one fails before anything is built. The release attests each
-package's build provenance and attaches the packages' checksums (`SHA256SUMS`) and a CycloneDX SBOM per package.
-A tag whose commit has no passing CI run on that branch fails before anything is built, a tag with a prerelease
-suffix makes a GitHub prerelease, and only the highest released version is marked as the latest GitHub release.
-[RELEASING.md](RELEASING.md) has the steps.
+Every release is a `vX.Y.Z` tag on the head of its own branch, `release/X.Y`, which is cut from `master` before the
+minor's first tag; fixes land on `master` and are cherry-picked into the branch for later patches. A ruleset lets only
+the maintainer create, move or delete `v*` tags. The release workflow checks that the tag is a release tag on its
+`release/X.Y` branch, checks that CI, SonarCloud included, passed on the push to that branch that put the tagged commit
+there, reruns the CI gate on it (without SonarCloud), including both package checks, then **pauses for approval** in
+the `release` environment (only `v*` tags can deploy to it) and publishes those same packages, with their symbol
+packages, to NuGet.org via OIDC trusted publishing. The GitHub release's notes are the version's section of
+`CHANGELOG.md` (`scripts/release-notes.sh`), and a tag without one fails before anything is built. The release attests
+each package's build provenance and attaches the packages' checksums (`SHA256SUMS`) and a CycloneDX SBOM per package.
+A tag with a prerelease suffix makes a GitHub prerelease, and only the highest released version is marked as the
+latest GitHub release. [RELEASING.md](RELEASING.md) has the steps.
 
-To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on `master`, or on
-`release/X.Y` for a patch to an older minor: it runs the same checks and builds the same packages, then lists what a
-release would publish, without publishing anything. Give it the tag to also see that release's notes.
+To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on `release/X.Y`, or on
+`master`: it runs the same checks and builds the same packages, then lists what a release would publish, without
+publishing anything. Give it the tag to also see that release's notes.
