@@ -396,7 +396,9 @@ migrations history table is not part of the model. For ASP.NET Core Identity's t
 and uses it, and `Allow` uses it silently. `Warn` logs once for each model EF Core builds, which is usually once per
 context type; it logs again if EF Core drops the model from its cache and builds it again. Set the option for one
 context with `UseTenantry(o => …)`. Contexts with different values of it never share a query EF Core has compiled, so
-each is checked under its own.
+each is checked under its own. That needs the application's services when `UseTenantry()` runs: options built with
+`UseTenantry()` before `UseApplicationServiceProvider` throw on the first query or save unless the application's value
+is `Reject`. `AddDbContext` and its relatives set the services first.
 
 ## Migrations
 

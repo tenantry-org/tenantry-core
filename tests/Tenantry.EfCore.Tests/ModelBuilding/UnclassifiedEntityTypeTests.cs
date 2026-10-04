@@ -119,6 +119,39 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
         await RunEachAsync(allowed, rejected);
     }
 
+    [Fact]
+    public async Task OptionsThatGetTheirServicesAfterUseTenantry_RefuseALaxerApplicationOption_SoNoCacheIsShared()
+    {
+        // UseTenantry() runs before the options have the application's services, so it reads no options of either
+        // application, and the two contexts share EF Core's caches.
+        DbContextOptions<UnclassifiedContext> Options(EfCoreIsolationOptions? isolation) =>
+            new DbContextOptionsBuilder<UnclassifiedContext>()
+                .UseSqlite(_connection)
+                .UseTenantry()
+                .UseApplicationServiceProvider(DbContextFactory.Services<string>(_tenant, isolation))
+                .Options;
+        var ct = TestContext.Current.CancellationToken;
+
+        await using UnclassifiedContext allowed = new(Options(new EfCoreIsolationOptions { OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Allow }));
+        await allowed.Database.EnsureCreatedAsync(ct);
+        await allowed.Awaiting(context => context.Set<Invoice>().CountAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
+        await allowed.Awaiting(context => EF.CompileAsyncQuery((UnclassifiedContext c) => c.Set<Invoice>().Count())(context))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
+        allowed.Set<Invoice>().Add(new Invoice());
+        await allowed.Awaiting(context => context.SaveChangesAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*UseApplicationServiceProvider before UseTenantry()*");
+
+        await using UnclassifiedContext rejected = new(Options(null));
+        await rejected.Awaiting(context => context.Set<Invoice>().CountAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>();
+        await rejected.Awaiting(context => EF.CompileAsyncQuery((UnclassifiedContext c) => c.Set<Invoice>().Count())(context))
+            .Should().ThrowAsync<TenantIsolationViolationException>();
+        rejected.Set<Invoice>().Add(new Invoice());
+        await rejected.Awaiting(context => context.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>();
+    }
+
     // The allowed context runs a query, a compiled query and a save first, so a cache shared with it would let the
     // rejected context's run them unchecked.
     private static async Task RunEachAsync(UnclassifiedContext allowed, UnclassifiedContext rejected)

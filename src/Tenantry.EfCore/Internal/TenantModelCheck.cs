@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Tenantry.EfCore.Internal;
@@ -77,8 +78,22 @@ internal static class TenantModelCheck
     private static void ApplyUnclassifiedBehavior(DbContext context, Checked passed, string names)
     {
         var services = ApplicationServices.Find(context);
+        var behavior = ApplicationServices.Isolation(context, services).OnUnclassifiedEntityType;
 
-        switch (ApplicationServices.Isolation(context, services).OnUnclassifiedEntityType)
+        // UseTenantry() ran before the options had the application's services, so it could not make this option part
+        // of EF Core's cache key (TenantryOptionsExtension): such contexts share EF Core's compiled queries whatever
+        // their application's option. Only Reject is safe there, as a query cached under it never skipped the check.
+        if (behavior != UnclassifiedEntityTypeBehavior.Reject &&
+            context.GetService<IDbContextOptions>().FindExtension<TenantryOptionsExtension>() is { Isolation: null })
+        {
+            throw new InvalidOperationException(
+                $"'{context.GetType().Name}' follows EfCoreIsolationOptions.OnUnclassifiedEntityType = {behavior}, but " +
+                "UseTenantry() was called before its options had the application's services, so contexts with " +
+                "other values could share its compiled queries. Call UseApplicationServiceProvider before UseTenantry(), " +
+                "or set the option for the context with UseTenantry(o => o.OnUnclassifiedEntityType = …).");
+        }
+
+        switch (behavior)
         {
             case UnclassifiedEntityTypeBehavior.Warn:
                 if (Interlocked.Exchange(ref passed.Warned, 1) == 0 && TenantIsolationLog.Find(services) is { } logger)

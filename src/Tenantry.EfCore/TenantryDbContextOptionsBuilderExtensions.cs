@@ -42,7 +42,9 @@ public static class TenantryDbContextOptionsBuilderExtensions
     /// Every <see cref="ITenantDbContextOptionsContributor"/> registered in the application service provider
     /// configures the options here, and every <see cref="ITenantModelContributor"/> the model; without an application
     /// service provider, none runs. The application's <see cref="EfCoreIsolationOptions"/> are read here too, so set
-    /// the application service provider before calling it. Calling this again changes nothing.
+    /// the application service provider before calling it: otherwise a context whose application sets
+    /// <see cref="EfCoreIsolationOptions.OnUnclassifiedEntityType"/> to anything but <c>Reject</c> throws
+    /// <see cref="InvalidOperationException"/> on its first query or save. Calling this again changes nothing.
     /// </para>
     /// <para>
     /// It installs Tenantry's own EF Core model customizer, so the options must not also replace
