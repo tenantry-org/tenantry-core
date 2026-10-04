@@ -7,9 +7,9 @@ using Tenantry.EfCore.Internal;
 namespace Tenantry.EfCore.Tests.Interceptor;
 
 /// <summary>
-/// Verifies SaveChanges without a resolved tenant: tenant-scoped writes are rejected by default, maintenance
+/// Verifies SaveChanges without a resolved tenant: tenant-owned writes are rejected by default, maintenance
 /// writes are possible only through an explicit <see cref="EfCoreIsolationOptions.OnMissingTenant"/> opt-in,
-/// and saves that write no tenant-scoped entity are unaffected.
+/// and saves that write no tenant-owned entity are unaffected.
 /// </summary>
 public sealed class InterceptorNoTenantContextTests : IDisposable
 {

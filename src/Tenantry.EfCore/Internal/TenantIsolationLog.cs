@@ -21,13 +21,13 @@ internal static partial class TenantIsolationLog
     public static partial void IsolationViolation(ILogger logger, string entityType, string? offendingTenantId, string? expectedTenantId);
 
     [LoggerMessage(2002, LogLevel.Warning,
-        "SaveChanges is writing tenant-scoped entities ({EntityTypes}) without a resolved tenant. Updates and deletes " +
+        "SaveChanges is writing tenant-owned entities ({EntityTypes}) without a resolved tenant. Updates and deletes " +
         "are not tenant-checked (EfCoreIsolationOptions.OnMissingTenant = Warn)",
         EventName = "WriteWithoutTenant")]
     public static partial void WriteWithoutTenant(ILogger logger, string entityTypes);
 
     [LoggerMessage(2003, LogLevel.Warning,
-        "A {State} of tenant-scoped entity '{EntityType}' in tenant '{TenantId}' matched no row. The row does not " +
+        "A {State} of tenant-owned entity '{EntityType}' in tenant '{TenantId}' matched no row. The row does not " +
         "exist, belongs to another tenant, or was changed concurrently",
         EventName = "WriteMatchedNoRow")]
     public static partial void WriteMatchedNoRow(ILogger logger, string state, string entityType, string? tenantId);

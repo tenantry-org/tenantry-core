@@ -59,7 +59,7 @@ at startup if no resolver or no store is registered. The rules are in [Registrat
 
 ## 4. Mark your tenant-owned entities
 
-An entity becomes tenant-scoped by implementing `ITenantEntity<TKey>`. The convenience base class
+An entity becomes tenant-owned by implementing `ITenantEntity<TKey>`. The convenience base class
 `TenantEntity<TKey>` implements it for you:
 
 ```csharp

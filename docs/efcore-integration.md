@@ -140,7 +140,7 @@ entities that implement `ITenantEntity<TKey>`:
 The database checks too. `TenantId` is a concurrency token, so every `UPDATE` and `DELETE` includes
 `AND TenantId = <tenant the entity was loaded or attached with>`. A detached entity that pairs another tenant's key
 with the current tenant's `TenantId` passes the in-memory check but matches no row, so EF Core throws
-`DbUpdateConcurrencyException` and nothing changes. The interceptor logs a warning when a tenant-scoped write matches
+`DbUpdateConcurrencyException` and nothing changes. The interceptor logs a warning when a tenant-owned write matches
 no row. No schema change is needed; your next migration's snapshot records the concurrency token. Entities mapped to
 more than one table get extra checks: see [Advanced](efcore-advanced.md#entities-mapped-to-more-than-one-table).
 
@@ -192,7 +192,7 @@ it in a transaction EF Core begins (`UseTransaction`, the default), or throw bef
 The policy applies only to saves that write `ITenantEntity<TKey>` entities. Saves of host-level data only (the tenant
 registry, a global catalogue, seeded reference data) never need a tenant.
 
-| Value | Behaviour when tenant-scoped entities are saved with no tenant |
+| Value | Behaviour when tenant-owned entities are saved with no tenant |
 |-------|----------------------------------------|
 | `Reject` (default) | Throws `TenantNotResolvedException` before anything is persisted. |
 | `Warn` | The save proceeds and a structured warning is logged. |

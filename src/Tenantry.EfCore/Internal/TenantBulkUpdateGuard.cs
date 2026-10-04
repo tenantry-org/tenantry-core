@@ -116,13 +116,13 @@ internal static class TenantBulkUpdateGuard
             {
                 if (name is null)
                 {
-                    Reject(entityType, $"ExecuteUpdate cannot check a setter on tenant-scoped entity '{entityType.Name}': " +
+                    Reject(entityType, $"ExecuteUpdate cannot check a setter on tenant-owned entity '{entityType.Name}': " +
                                        "its EF.Property name could not be read, so it may set TenantId.");
                 }
 
                 if (name == TenantIdProperty)
                 {
-                    Reject(entityType, $"ExecuteUpdate cannot set TenantId on tenant-scoped entity '{entityType.Name}': " +
+                    Reject(entityType, $"ExecuteUpdate cannot set TenantId on tenant-owned entity '{entityType.Name}': " +
                                        "that would move rows into another tenant.");
                 }
 
@@ -138,7 +138,7 @@ internal static class TenantBulkUpdateGuard
             }
         }
 
-        // The tenant-scoped entity type a setter's instance expression refers to, looking through casts (which
+        // The tenant-owned entity type a setter's instance expression refers to, looking through casts (which
         // matter for inheritance: ((TenantScopedDerived)baseEntity).TenantId) and falling back to the member's
         // declaring type. Prefers the innermost concrete type, so an interface cast still names the entity.
         private static Type? TenantEntityType(Expression instance, MemberInfo? member, TenantIsolation isolation)

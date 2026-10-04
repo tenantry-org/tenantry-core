@@ -93,7 +93,7 @@ transaction, a failed check could leave the other rows written, so nothing was s
 
 ## `TenantIsolationViolationException`: "has no tenant query filter" or "is not a concurrency token"
 
-A tenant-scoped entity type lost its tenant filter or concurrency token after `UseTenantry()` added them, for example
+A tenant-owned entity type lost its tenant filter or concurrency token after `UseTenantry()` added them, for example
 to a model-building convention, or the model is a compiled model (`UseModel`), which Tenantry does not support. The
 check stops the query or save before it runs.
 
