@@ -17,8 +17,8 @@ public static class TenantryApplicationBuilderExtensions
     /// <param name="app">The application's request pipeline.</param>
     /// <returns>The same <paramref name="app"/> for chaining.</returns>
     /// <remarks>
-    /// Call it after <c>app.UseAuthentication()</c>, because claim resolvers and claim validators read the user. Call it
-    /// after routing, because it reads <c>RequireTenant()</c> and <c>AllowMissingTenant()</c>
+    /// Call it after <c>app.UseAuthentication()</c>, because claim resolvers and access validators read the user.
+    /// Call it after routing, because it reads <c>RequireTenant()</c> and <c>AllowMissingTenant()</c>
     /// (<see cref="WebApplication"/> adds routing first). Call it before anything that needs the tenant. After
     /// <see cref="UseTenantResolution"/>, it runs the access validators on the tenant found before authentication, and
     /// the claim resolvers if nothing else named a tenant.
