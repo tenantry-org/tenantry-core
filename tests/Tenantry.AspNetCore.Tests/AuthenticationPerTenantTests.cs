@@ -83,13 +83,85 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
-    public async Task ATenantTheValidatorsRefuse_IsNotCurrentForTheRestOfTheRequest()
+    public async Task ATenantTheValidatorsRefuse_RefusesTheSignedInRequest_WhereverItGoes()
     {
-        await using var app = await StartJwtAsync(tenant => tenant.ValidateTenantAccess((_, t) => t.TenantId != "globex"));
+        List<TenantRejectionReason> rejections = [];
+        await using var app = await StartJwtAsync(tenant => tenant
+            .ValidateTenantAccess((_, t) => t.TenantId != "globex")
+            .ConfigureResolution(o => o.OnRejected = rejected =>
+            {
+                rejections.Add(rejected.Reason);
+                return Task.CompletedTask;
+            }));
 
+        // Bob signed in as Globex, which he may not use: no endpoint runs with that user, one that needs no tenant too.
         (await Get(app, "globex", "/required", Token("globex", "bob"))).Status.Should().Be(HttpStatusCode.Forbidden);
-        (await Get(app, "globex", "/tenant", Token("globex", "bob"))).Should().Be((HttpStatusCode.OK, "(none)"));
+        (await Get(app, "globex", "/tenant", Token("globex", "bob"))).Status.Should().Be(HttpStatusCode.Forbidden);
+        rejections.Should().Equal(TenantRejectionReason.AccessDenied, TenantRejectionReason.AccessDenied);
+
         (await Get(app, "acme", "/tenant", Token("acme", "alice"))).Should().Be((HttpStatusCode.OK, "acme"));
+    }
+
+    [Fact]
+    public async Task AnAnonymousCallerTheValidatorsRefuse_CarriesNoClaims_SoAnEndpointThatNeedsNoTenantRunsWithNone()
+    {
+        await using var app = await StartJwtAsync(tenant => tenant.ValidateTenantAccessByClaim("tenant_id"));
+
+        (await Get(app, "globex", "/tenant")).Should().Be((HttpStatusCode.OK, "(none)"));
+        (await Get(app, "globex", "/required")).Status.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ARequestThatNamesNoTenant_OrAnUnknownOne_HadNoTenantDuringAuthentication_AndRunsAsBefore()
+    {
+        await using var app = await StartJwtAsync(tenant => tenant.ValidateTenantAccessByClaim("tenant_id"));
+
+        (await Get(app, null, "/tenant", Token("default", "carol", tenantClaim: "acme"))).Should().Be((HttpStatusCode.OK, "(none)"));
+        (await Get(app, "initech", "/tenant", Token("default", "carol", tenantClaim: "acme"))).Should().Be((HttpStatusCode.OK, "(none)"));
+        (await Get(app, "initech", "/required", Token("default", "carol", tenantClaim: "acme"))).Status.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task AClaimThatNamesAnotherTenant_ThanTheOneAuthenticationRanUnder_RefusesTheRequest()
+    {
+        // The subdomain comes first, so authentication runs as Acme; the token says Globex, which the validator reads.
+        await using var app = await StartJwtAsync(tenant => tenant.ResolveFromClaim().ValidateTenantAccessByClaim("tenant_id"));
+
+        (await Get(app, "acme", "/tenant", Token("acme", "alice", tenantClaim: "acme"))).Should().Be((HttpStatusCode.OK, "acme"));
+        (await Get(app, "acme", "/tenant", Token("acme", "alice", tenantClaim: "globex"))).Status.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task AnExceptionHandlerRunAgain_KeepsTheAllowedTenant_AndAStatusPage_DoesNotRunForARefusedOne()
+    {
+        await using var app = await StartAsync(
+            tenant =>
+            {
+                JwtTenants(tenant);
+                tenant.ValidateTenantAccessByClaim("tenant_id");
+            },
+            AddJwt,
+            a =>
+            {
+                a.UseExceptionHandler("/error");
+                a.UseStatusCodePagesWithReExecute("/status/{0}");
+                a.UseTenantResolution();
+                a.UseAuthentication();
+                a.UseTenantry();
+                a.UseAuthorization();
+                a.MapGet("/error", (ITenantContext<string> tenant) => $"error as {tenant.CurrentTenantId}").AllowMissingTenant();
+                a.MapGet("/status/{code}", (string code, HttpContext http) => $"status page {code} for {http.User.Identity?.Name}")
+                    .AllowMissingTenant();
+                a.MapGet("/throws", string () => throw new InvalidOperationException("boom"));
+            });
+
+        (await Get(app, "acme", "/throws", Token("acme", "alice", tenantClaim: "acme")))
+            .Should().Be((HttpStatusCode.InternalServerError, "error as acme"));
+
+        // Refused again when the status page runs, so the page never runs with the user.
+        var refused = await Get(app, "globex", "/tenant", Token("globex", "bob", tenantClaim: "acme"));
+        refused.Status.Should().Be(HttpStatusCode.Forbidden);
+        refused.Body.Should().NotContain("bob");
     }
 
     [Fact]
@@ -332,6 +404,93 @@ public sealed class AuthenticationPerTenantTests
         logs.For(1014).Should().BeEmpty();
     }
 
+    // Authentication code that reads the current tenant (an event, a claims transformation) adds a claim from the
+    // tenant the request names. With app.UseTenantResolution() that tenant is current during authentication, before
+    // the validator refuses it, so the user would carry Globex's claim: the request is refused. Without it,
+    // authentication ran with no tenant, the user carries nothing of Globex's, and the policy refuses it.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task AClaimDerivedFromTheTenantDuringAuthentication_NeverReachesAuthorization_WhenTheTenantIsRefused(
+        bool earlyResolution, bool fromTransformation)
+    {
+        static void AddPlanClaim(ClaimsPrincipal user, IServiceProvider services)
+        {
+            // "The tenant's plan", read from the current tenant: Globex is premium.
+            if (services.GetRequiredService<ITenantContext<string>>().CurrentTenantId == "globex" &&
+                user.Identity is ClaimsIdentity identity && !user.HasClaim("plan", "premium"))
+            {
+                identity.AddClaim(new Claim("plan", "premium"));
+            }
+        }
+
+        await using var app = await StartAsync(
+            PremiumTenants,
+            services =>
+            {
+                services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
+                {
+                    Validate(o, "default");
+
+                    if (!fromTransformation)
+                    {
+                        o.Events = new JwtBearerEvents
+                        {
+                            OnTokenValidated = c =>
+                            {
+                                AddPlanClaim(c.Principal!, c.HttpContext.RequestServices);
+                                return Task.CompletedTask;
+                            },
+                        };
+                    }
+                });
+
+                if (fromTransformation)
+                {
+                    services.AddTransient<IClaimsTransformation>(sp => new PlanTransformation(p =>
+                    {
+                        AddPlanClaim(p, sp);
+                        return p;
+                    }));
+                }
+
+                services.AddAuthorizationBuilder().AddPolicy("Premium", policy => policy.RequireClaim("plan", "premium"));
+            },
+            a =>
+            {
+                if (earlyResolution)
+                {
+                    a.UseTenantResolution();
+                }
+
+                a.UseAuthentication();
+                a.UseTenantry();
+                a.UseAuthorization();
+                a.MapGet("/plan", () => "premium").RequireAuthorization("Premium");
+            });
+
+        // Alice's token lists only Acme.
+        (await GetPremium(app, "globex", claim: "acme", path: "/plan")).Should().Be(HttpStatusCode.Forbidden);
+
+        // Without the early step, an endpoint that needs no tenant still runs, with none.
+        if (!earlyResolution)
+        {
+            using var client = app.GetTestClient();
+            using HttpRequestMessage request = new(HttpMethod.Get, "http://localhost/tenant");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token("default", "alice", tenantClaim: "acme"));
+            request.Headers.Add("X-Tenant-Id", "globex");
+            using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+            (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("(none)");
+        }
+    }
+
+    private sealed class PlanTransformation(Func<ClaimsPrincipal, ClaimsPrincipal> transform) : IClaimsTransformation
+    {
+        public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal) => Task.FromResult(transform(principal));
+    }
+
     [Fact]
     public async Task UseTenantResolution_AfterAuthentication_IsLoggedOnce()
     {
@@ -412,12 +571,10 @@ public sealed class AuthenticationPerTenantTests
 
         (await Send(client, "acme", "/required", cookie: $"auth-acme={value}")).StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // The same ticket under Globex's cookie name decrypts there (one key ring)...
-        using var replayed = await Send(client, "globex", "/signed-in-to", cookie: $"auth-globex={value}");
-        (await replayed.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("acme");
-
-        // ...but names Acme, so the validator refuses Globex.
+        // The same ticket under Globex's cookie name decrypts there (one key ring), but names Acme, so the validator
+        // refuses Globex, and the request with it: an endpoint that needs no tenant does not run with that user either.
         (await Send(client, "globex", "/required", cookie: $"auth-globex={value}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await Send(client, "globex", "/signed-in-to", cookie: $"auth-globex={value}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     private static void JwtTenants(ITenantBuilder<string> tenant) =>
@@ -473,10 +630,10 @@ public sealed class AuthenticationPerTenantTests
             },
             logs);
 
-    private static async Task<HttpStatusCode> GetPremium(WebApplication app, string tenant, string claim)
+    private static async Task<HttpStatusCode> GetPremium(WebApplication app, string tenant, string claim, string path = "/premium")
     {
         using var client = app.GetTestClient();
-        using HttpRequestMessage request = new(HttpMethod.Get, "http://localhost/premium");
+        using HttpRequestMessage request = new(HttpMethod.Get, $"http://localhost{path}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token("default", "alice", tenantClaim: claim));
         request.Headers.Add("X-Tenant-Id", tenant);
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);

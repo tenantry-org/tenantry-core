@@ -110,6 +110,11 @@ app.UseTenantry();
 app.UseAuthorization();
 ```
 
+During authentication the tenant is current but not yet checked against the user. Cookie events such as
+`OnValidatePrincipal`, and claims transformations, must not grant claims, roles or permissions from the current
+tenant, and must not write as it. If the validator then refuses the tenant for a signed-in user, the whole request is
+refused (`403`), including endpoints that do not require a tenant.
+
 ## See also
 
 - [Authentication per tenant](authentication-per-tenant.md)

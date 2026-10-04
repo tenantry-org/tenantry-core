@@ -82,10 +82,19 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         // Captured first: the resolution's own activity is the current one while it runs.
         var requestActivity = Activity.Current;
         var endpoint = context.GetEndpoint();
-        var required = IsTenantRequired(endpoint);
-        var resolution = context.Features.Get<EarlyTenantResolution<TKey>>() is { } early
+        var early = context.Features.Get<EarlyTenantResolution<TKey>>();
+        var resolution = early is not null
             ? await CompleteAsync(context, early).ConfigureAwait(false)
             : await _resolution.ResolveAsync(context, beforeAuthentication: false).ConfigureAwait(false);
+
+        // A user signed in while app.UseTenantResolution() made a tenant current that the validators now refuse was
+        // authenticated as that tenant: events and claims transformations may have given it the tenant's claims.
+        // Nothing may run with it, so the request is refused, whether or not the endpoint requires a tenant. A caller
+        // with no claims has nothing to carry over, and is treated as before.
+        var required = IsTenantRequired(endpoint) ||
+                       (early is { Resolution.Result: ResolutionResult.Resolved } &&
+                        resolution.Result == ResolutionResult.AccessDenied &&
+                        context.User.Claims.Any());
 
         // Before routing, whether the request is rejected is known only once routing has chosen its endpoint.
         if (endpoint is not null || required || resolution.Result == ResolutionResult.Resolved)

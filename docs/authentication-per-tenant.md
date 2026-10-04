@@ -75,7 +75,13 @@ require a tenant are rejected as usual.
 Between the two, the tenant is current but not yet checked against the user. So:
 
 - Put only `app.UseAuthentication()` between them, and `app.UseAuthorization()` after `app.UseTenantry()`.
-- A tenant the validators refuse is not current for the rest of the request.
+- Authentication events (`OnTokenValidated`, `OnValidatePrincipal`) and claims transformations
+  (`IClaimsTransformation`) run with the tenant current before it is checked. They must not grant claims, roles or
+  permissions from the current tenant, and must not write as it: the caller may not be allowed to use it.
+- If the validators refuse a tenant that was current during authentication, and the request has a signed-in user (one
+  with any claims), the request is refused with the access-denied response, whether or not its endpoint requires a
+  tenant: the user was authenticated as a tenant it may not use. A caller with no claims, such as an anonymous one,
+  is treated as without early resolution: the tenant is not current, and an endpoint that does not require one runs.
 - An endpoint the request reaches without passing `app.UseTenantry()` (in a branch, say) does not run: it gets `500`
   and log event 1011.
 - An application with `app.UseTenantResolution()` and no `app.UseTenantry()` fails to start.
@@ -99,9 +105,11 @@ the tenant in the ticket and check it:
 - add a `tenant_id` claim when you sign the user in, and
 - add `tenant.ValidateTenantAccessByClaim("tenant_id")`, or a validator of your own that compares them.
 
-The validator refuses an anonymous caller, so a sign-in endpoint runs with no tenant current: mark it
-`AllowMissingTenant()` and take the tenant from the request (its host, say) when you issue the cookie. Its
-authentication handler was created with the tenant current, so it writes the tenant's cookie.
+A cookie replayed on another tenant is refused there, on every endpoint, since its user names a tenant the validator
+refuses. The validator refuses an anonymous caller too, but such a caller carries no claims, so a sign-in endpoint
+runs with no tenant current: mark it `AllowMissingTenant()` and take the tenant from the request (its host, say) when
+you issue the cookie. Its authentication handler was created with the tenant current, so it writes the tenant's
+cookie.
 
 ## Identity provider metadata
 

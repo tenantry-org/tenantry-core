@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `app.UseTenantry()`. The authorization middleware added there some other way refuses each request with `500` and
   event 1013 (`AuthorizationBeforeTenantry`). Both checks read keys ASP.NET Core does not document; event 1014
   (`AuthorizationMarkersMissing`) warns at startup if the running version does not set them.
+- With `app.UseTenantResolution()`, a signed-in request whose tenant the access validators refuse is now refused with
+  the access-denied response (`403` by default) on every endpoint, including those that do not require a tenant,
+  where it used to run with no tenant. A caller with no claims, such as an anonymous one, is treated as before.
 - `ITenantContextSetter<TKey>.Use(tenant)` is now `MakeCurrent(tenant)`, and `UseNoTenant()` is
   `MakeNoTenantCurrent()`. Replace `.Use(` with `.MakeCurrent(` where it is called on the tenant context, and
   `UseNoTenant` with `MakeNoTenantCurrent`. A class of your own that implements the interface renames both methods.
@@ -123,6 +126,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Security: with `app.UseTenantResolution()`, a request that named a tenant the caller may not use went on, without
+  the tenant, with a user authenticated while that tenant was current. An authentication event or claims
+  transformation that added claims from the current tenant (its plan, say) gave them to the user, and authorization
+  granted on them on any endpoint that does not require a tenant. This shipped in 0.6.0. Such a request is now
+  refused, through the usual rejection (`OnRejected`, problem details, metrics, event 1005), and no further
+  middleware runs. Applications without `app.UseTenantResolution()` were not affected: their authentication runs with
+  no tenant current. See [Authentication per tenant](docs/authentication-per-tenant.md#how-the-two-steps-work).
 - Tenantry's own reads no longer return to the caller's synchronization context, so a desktop app that waits on a
   store read, an activity check or a connection string on its UI thread no longer deadlocks. The work passed to
   `RunInScopeAsync` still starts on the caller's context, and the scope's services are still disposed there, so await
