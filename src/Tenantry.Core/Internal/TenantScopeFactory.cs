@@ -78,8 +78,9 @@ internal sealed class TenantScopeFactory<TKey>(
         ArgumentNullException.ThrowIfNull(work);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // The work is the caller's, so these return to the caller's synchronization context (a desktop app's UI
-        // thread) for it to start on, as it would if the caller ran it.
+        // The work and the scope's services are the caller's, so these awaits return to the caller's synchronization
+        // context (a desktop app's UI thread): the work starts there, and the services are disposed where they were
+        // created, as they would be if the caller ran the work itself.
         var tenant = await Tenants.GetTenantAsync(tenantId, cancellationToken).ConfigureAwait(true)
                      ?? throw new TenantNotFoundException(tenantId);
 
@@ -88,9 +89,9 @@ internal sealed class TenantScopeFactory<TKey>(
         // The scope is opened inside this method, so it is active for the work and never for the caller.
         var scope = CreateScope(tenant);
 
-        await using (scope.ConfigureAwait(false))
+        await using (scope.ConfigureAwait(true))
         {
-            return await work(scope, cancellationToken).ConfigureAwait(false);
+            return await work(scope, cancellationToken).ConfigureAwait(true);
         }
     }
 }

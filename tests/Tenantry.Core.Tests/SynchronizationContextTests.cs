@@ -36,6 +36,7 @@ public sealed class SynchronizationContextTests : IAsyncLifetime, IDisposable
                 await Task.Delay(10, ct).ConfigureAwait(false);
                 return $"Data Source={t.TenantId}";
             }));
+        services.AddScoped(_ => new DisposalProbe(() => _ui.IsCurrent));
         _services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
 
         return ValueTask.CompletedTask;
@@ -55,6 +56,23 @@ public sealed class SynchronizationContextTests : IAsyncLifetime, IDisposable
             .WaitAsync(Patience, TestContext.Current.CancellationToken);
 
         onContext.Should().BeTrue("the work is the caller's, after the lookup and the activity checks");
+    }
+
+    [Fact]
+    public async Task RunInScopeAsync_DisposesTheScopesServicesOnTheCallersContext()
+    {
+        var scopes = _services.GetRequiredService<ITenantScopeFactory<string>>();
+        DisposalProbe? probe = null;
+
+        await _ui.RunAsync(() => scopes.RunInScopeAsync("acme", async (scope, ct) =>
+            {
+                probe = scope.ServiceProvider.GetRequiredService<DisposalProbe>();
+                await Task.Delay(10, ct).ConfigureAwait(false);   // the work ends off the context
+                return 0;
+            }))
+            .WaitAsync(Patience, TestContext.Current.CancellationToken);
+
+        probe!.DisposedOnContext.Should().BeTrue("the caller's scoped services are disposed where they were created");
     }
 
     [Fact]
@@ -93,6 +111,18 @@ public sealed class SynchronizationContextTests : IAsyncLifetime, IDisposable
             .WaitAsync(Patience, TestContext.Current.CancellationToken);
 
         connectionString.Should().Be("Data Source=acme");
+    }
+
+    /// <summary>A scoped service that records whether it was disposed on the caller's context.</summary>
+    private sealed class DisposalProbe(Func<bool> onContext) : IAsyncDisposable
+    {
+        public bool? DisposedOnContext { get; private set; }
+
+        public ValueTask DisposeAsync()
+        {
+            DisposedOnContext = onContext();
+            return ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>A store that answers later, on the thread pool, as a database-backed one does.</summary>
