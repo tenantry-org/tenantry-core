@@ -24,7 +24,7 @@ Value: [`MissingTenantBehavior`](tenantry-efcore-missingtenantbehavior.md)
 
 ### `OnSaveWithoutTransaction`
 
-What a save does when `AutoTransactionBehavior` is `Never` and some of its rows depend on another statement's tenant check (owned rows in their own table, or an entity split across tables). Defaults to [`SaveWithoutTransactionBehavior.UseTransaction`](tenantry-efcore-savewithouttransactionbehavior.md).
+What a save does when `AutoTransactionBehavior` is `Never` and some of its rows depend on another statement's tenant check (owned rows in their own table, an entity split across tables, or many-to-many join rows). Defaults to [`SaveWithoutTransactionBehavior.UseTransaction`](tenantry-efcore-savewithouttransactionbehavior.md).
 
 ```csharp
 public SaveWithoutTransactionBehavior OnSaveWithoutTransaction { get; set; }
@@ -32,14 +32,14 @@ public SaveWithoutTransactionBehavior OnSaveWithoutTransaction { get; set; }
 
 Value: [`SaveWithoutTransactionBehavior`](tenantry-efcore-savewithouttransactionbehavior.md)
 
-### `OnUnclassifiedEntityType`
+### `OnUnmarkedEntityType`
 
-What a context does when its model has tenant-owned entity types and also entity types that are neither tenant-owned nor marked as shared across tenants. Defaults to [`UnclassifiedEntityTypeBehavior.Reject`](tenantry-efcore-unclassifiedentitytypebehavior.md).
+What a context does when its model has tenant-owned entity types and also entity types that are neither tenant-owned nor marked as shared across tenants. Defaults to [`UnmarkedEntityTypeBehavior.Allow`](tenantry-efcore-unmarkedentitytypebehavior.md).
 
 ```csharp
-public UnclassifiedEntityTypeBehavior OnUnclassifiedEntityType { get; set; }
+public UnmarkedEntityTypeBehavior OnUnmarkedEntityType { get; set; }
 ```
 
-Value: [`UnclassifiedEntityTypeBehavior`](tenantry-efcore-unclassifiedentitytypebehavior.md)
+Value: [`UnmarkedEntityTypeBehavior`](tenantry-efcore-unmarkedentitytypebehavior.md)
 
 Mark an entity type whose rows every tenant shares with [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) or `IsSharedAcrossTenants()`. [`TenantModel.FindUnisolatedEntityTypes`](tenantry-efcore-tenantmodel.md) lists the types this checks.
