@@ -22,6 +22,7 @@ scripts/check-doc-snippets.sh
 scripts/check-package-consumer.sh
 scripts/check-package-ranges.cs
 scripts/check-removed-names.cs
+scripts/check-unpublished.sh
 scripts/doc-snippets.cs
 scripts/release-notes.sh
 scripts/generate-api-docs.sh

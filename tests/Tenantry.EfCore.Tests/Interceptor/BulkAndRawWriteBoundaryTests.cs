@@ -174,6 +174,8 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
             "join" => d => d.Orders.Join(d.Orders, a => a.Id, b => b.Id, (a, b) => new { a, Owner = b.TenantId })
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
+            // The inner query is part of the shape under test, and EF Core translates it.
+            // ReSharper disable once EntityFramework.UnsupportedServerSideFunctionCall
             "select many" => d => d.Orders.SelectMany(a => d.Orders.Where(b => b.Id == a.Id), (a, b) => new { a.Id, Owner = b.TenantId })
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.Owner, "moved")),
             _ => throw new ArgumentOutOfRangeException(nameof(shape)),

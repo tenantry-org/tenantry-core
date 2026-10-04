@@ -55,6 +55,6 @@ for id in "$@"; do
 done
 
 if [[ ${#published[@]} -gt 0 ]]; then
-  echo "::error::$version is already on the feed for ${published[*]}. A published version cannot be replaced: release the next version (RELEASING.md)." >&2
+  echo "::error::$version is already on the feed for ${published[*]}. A published version cannot be replaced: release the next version." >&2
   exit 1
 fi

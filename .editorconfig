@@ -49,6 +49,10 @@ dotnet_diagnostic.CA2007.severity = warning
 [src/**/Tenantry*Extensions.cs]
 resharper_check_namespace_highlighting = none
 
+# Test and sample entities are small models for one behaviour each, where a string column's length changes nothing.
+[{tests,samples}/**/*.cs]
+resharper_entity_framework_model_validation_unlimited_string_length_highlighting = none
+
 # EF Core's generated migrations and model snapshots
 [**/Migrations/{20*,*ModelSnapshot}.cs]
 generated_code = true
