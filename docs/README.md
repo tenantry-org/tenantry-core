@@ -51,7 +51,7 @@ UseTenantry()  ──►  resolver(s) extract an identifier  ──►  ITenantS
    │                                                                              │
    │                                          (optional) access validators run    │
    ▼                                                                              ▼
-ITenantContextSetter.Use(tenant)  sets the AsyncLocal tenant for the rest of the request
+ITenantContextSetter.MakeCurrent(tenant)  sets the AsyncLocal tenant for the rest of the request
    │
    ▼
 Your endpoint + EF Core
@@ -60,4 +60,4 @@ Your endpoint + EF Core
 ```
 
 In a console or worker app there is no request, so you make the tenant current yourself with
-`ITenantScopeFactory` (or `ITenantContextSetter.Use`); everything below that line behaves identically.
+`ITenantScopeFactory` (or `ITenantContextSetter.MakeCurrent`); everything below that line behaves identically.

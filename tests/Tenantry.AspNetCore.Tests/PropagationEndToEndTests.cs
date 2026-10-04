@@ -22,7 +22,7 @@ public sealed class PropagationEndToEndTests
         await using var service = await StartServiceAsync();
         await using var caller = BuildCaller(service);
 
-        using (caller.GetRequiredService<ITenantContextSetter<Guid>>().Use(SlugStore.Acme))
+        using (caller.GetRequiredService<ITenantContextSetter<Guid>>().MakeCurrent(SlugStore.Acme))
         {
             var answer = await caller.GetRequiredService<IHttpClientFactory>().CreateClient("service")
                 .GetStringAsync("/tenant", TestContext.Current.CancellationToken);

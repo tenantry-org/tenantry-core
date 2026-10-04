@@ -23,7 +23,7 @@ await using var provider = services.BuildServiceProvider();
 var cache = provider.GetRequiredService<HybridCache>();
 var tenantContext = provider.GetRequiredService<ITenantContextSetter<string>>();
 
-using (tenantContext.Use(acme))
+using (tenantContext.MakeCurrent(acme))
 {
     Expect("HybridCache", await cache.GetOrCreateAsync("plan", _ => ValueTask.FromResult(tenantContext.CurrentTenantId)), "acme");
     Expect("HybridCache with state", await cache.GetOrCreateAsync("double", 21, (n, _) => ValueTask.FromResult(n * 2)), 42);

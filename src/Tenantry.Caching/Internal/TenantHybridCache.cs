@@ -30,7 +30,7 @@ internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant curren
         // a wrapped state would grow a new generic instantiation each time, which Native AOT cannot compile.
         Func<CancellationToken, ValueTask<T>> asTheTenant = async token =>
         {
-            using (tenant.Use())
+            using (tenant.MakeCurrent())
             {
                 return await factory(state, token);
             }

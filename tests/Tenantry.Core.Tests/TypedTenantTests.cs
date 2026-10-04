@@ -54,12 +54,12 @@ public sealed class TypedTenantTests
 
         context.GetCurrentTenant<AppTenant>().Should().BeNull();
 
-        using (context.Use(Acme))
+        using (context.MakeCurrent(Acme))
         {
             context.GetCurrentTenant<AppTenant>().Should().BeSameAs(Acme);
         }
 
-        using (context.Use(new TenantDescriptor<Guid> { TenantId = Guid.NewGuid(), Name = "Globex" }))
+        using (context.MakeCurrent(new TenantDescriptor<Guid> { TenantId = Guid.NewGuid(), Name = "Globex" }))
         {
             context.Invoking(c => c.GetCurrentTenant<AppTenant>()).Should().Throw<InvalidOperationException>()
                 .WithMessage("*of type TenantDescriptor<Guid>, not AppTenant*");

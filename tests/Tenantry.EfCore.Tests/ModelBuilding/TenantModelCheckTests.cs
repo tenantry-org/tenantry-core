@@ -73,13 +73,13 @@ public sealed class TenantModelCheckTests : IDisposable
         var db = scope.ServiceProvider.GetRequiredService<IntKeyContext>();
         await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
 
-        using (tenants.Use(new TenantDescriptor<int> { TenantId = 1, Name = "one" }))
+        using (tenants.MakeCurrent(new TenantDescriptor<int> { TenantId = 1, Name = "one" }))
         {
             db.Items.Add(new IntItem());
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        using (tenants.Use(new TenantDescriptor<int> { TenantId = 2, Name = "two" }))
+        using (tenants.MakeCurrent(new TenantDescriptor<int> { TenantId = 2, Name = "two" }))
         {
             (await db.Items.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
         }

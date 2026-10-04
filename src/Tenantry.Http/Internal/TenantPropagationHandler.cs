@@ -38,7 +38,7 @@ internal sealed class TenantPropagationHandler(ITenantHeaderSource source, Propa
                 $"The request already carries the {TenantPropagation.HeaderName} header with " +
                 $"'{string.Join("', '", existing)}', but the current tenant is '{tenantId}'. Remove the header from the " +
                 "request (header propagation, copied incoming headers or the client's DefaultRequestHeaders); to call " +
-                "as another tenant, make it current with ITenantContextSetter.Use.");
+                "as another tenant, make it current with ITenantContextSetter.MakeCurrent.");
         }
 
         ThrowIfNotSendable(tenantId);

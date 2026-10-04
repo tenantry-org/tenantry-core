@@ -13,12 +13,12 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
-    public void Use_SetsCurrentTenantAndHasTenant()
+    public void MakeCurrent_SetsCurrentTenantAndHasTenant()
     {
         var tenantContext = BuildSetter();
         TenantDescriptor<string> descriptor = new() { TenantId = "acme", Name = "Acme Corp" };
 
-        using (tenantContext.Use(descriptor))
+        using (tenantContext.MakeCurrent(descriptor))
         {
             tenantContext.HasTenant.Should().BeTrue();
             tenantContext.CurrentTenant.Should().Be(descriptor);
@@ -29,17 +29,17 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
-    public void Use_WhenNested_ShadowsOuterThenRestoresOnDispose()
+    public void MakeCurrent_WhenNested_ShadowsOuterThenRestoresOnDispose()
     {
         var tenantContext = BuildSetter();
         TenantDescriptor<string> outer = new() { TenantId = "acme", Name = "Acme Corp" };
         TenantDescriptor<string> inner = new() { TenantId = "globex", Name = "Globex" };
 
-        using (tenantContext.Use(outer))
+        using (tenantContext.MakeCurrent(outer))
         {
             tenantContext.CurrentTenant.Should().Be(outer);
 
-            using (tenantContext.Use(inner))
+            using (tenantContext.MakeCurrent(inner))
             {
                 tenantContext.CurrentTenant.Should().Be(inner, "the inner tenantContext shadows the outer tenant");
             }
@@ -55,10 +55,10 @@ public sealed class TenantContextSetterTests
     public void Dispose_CalledTwice_DoesNotDisturbALaterScope()
     {
         var tenantContext = BuildSetter();
-        var first = tenantContext.Use(Tenant("acme"));
+        var first = tenantContext.MakeCurrent(Tenant("acme"));
         first.Dispose();
 
-        using (tenantContext.Use(Tenant("globex")))
+        using (tenantContext.MakeCurrent(Tenant("globex")))
         {
             first.Dispose();
 
@@ -72,8 +72,8 @@ public sealed class TenantContextSetterTests
     public void Dispose_OutOfOrder_KeepsTheInnerScopeAndThenRestoresNoTenant()
     {
         var tenantContext = BuildSetter();
-        var outer = tenantContext.Use(Tenant("acme"));
-        var inner = tenantContext.Use(Tenant("globex"));
+        var outer = tenantContext.MakeCurrent(Tenant("acme"));
+        var inner = tenantContext.MakeCurrent(Tenant("globex"));
 
         outer.Dispose();
         tenantContext.CurrentTenantId.Should().Be("globex", "closing the outer tenantContext first leaves the inner one active");
@@ -86,9 +86,9 @@ public sealed class TenantContextSetterTests
     public void Dispose_MiddleScopeFirst_RestoresTheNearestOpenScope()
     {
         var tenantContext = BuildSetter();
-        using var outer = tenantContext.Use(Tenant("acme"));
-        var middle = tenantContext.Use(Tenant("globex"));
-        var inner = tenantContext.Use(Tenant("initech"));
+        using var outer = tenantContext.MakeCurrent(Tenant("acme"));
+        var middle = tenantContext.MakeCurrent(Tenant("globex"));
+        var inner = tenantContext.MakeCurrent(Tenant("initech"));
 
         middle.Dispose();
         inner.Dispose();
@@ -101,10 +101,10 @@ public sealed class TenantContextSetterTests
     {
         var tenantContext = BuildSetter();
 
-        using (tenantContext.Use(Tenant("acme")))
+        using (tenantContext.MakeCurrent(Tenant("acme")))
         {
             // The tenantContext begins inside Task.Run, so it is never visible to this flow.
-            var handle = await Task.Run(() => tenantContext.Use(Tenant("globex")));
+            var handle = await Task.Run(() => tenantContext.MakeCurrent(Tenant("globex")));
 
             handle.Dispose();
 
@@ -119,9 +119,9 @@ public sealed class TenantContextSetterTests
     {
         var tenantContext = BuildSetter();
 
-        using (tenantContext.Use(Tenant("old")))
+        using (tenantContext.MakeCurrent(Tenant("old")))
         {
-            var handle = tenantContext.Use(Tenant("acme"));
+            var handle = tenantContext.MakeCurrent(Tenant("acme"));
 
             // The child flow inherits the tenantContext and closes it. Its restore only affects the child's own flow.
             await Task.Run(handle.Dispose, TestContext.Current.CancellationToken);
@@ -139,7 +139,7 @@ public sealed class TenantContextSetterTests
     {
         var tenantContext = BuildSetter();
 
-        using (var handle = tenantContext.Use(Tenant("acme")))
+        using (var handle = tenantContext.MakeCurrent(Tenant("acme")))
         {
             await Task.Run(handle.Dispose, TestContext.Current.CancellationToken);
         }
@@ -151,8 +151,8 @@ public sealed class TenantContextSetterTests
     public async Task Dispose_OfAnOuterScopeByAChildFlow_IsSkippedWhenTheCallersInnerScopeCloses()
     {
         var tenantContext = BuildSetter();
-        var outer = tenantContext.Use(Tenant("acme"));
-        var inner = tenantContext.Use(Tenant("globex"));
+        var outer = tenantContext.MakeCurrent(Tenant("acme"));
+        var inner = tenantContext.MakeCurrent(Tenant("globex"));
 
         await Task.Run(outer.Dispose, TestContext.Current.CancellationToken);
         tenantContext.CurrentTenantId.Should().Be("globex");
@@ -169,9 +169,9 @@ public sealed class TenantContextSetterTests
     {
         var tenantContext = BuildSetter();
 
-        using (tenantContext.Use(Tenant("acme")))
+        using (tenantContext.MakeCurrent(Tenant("acme")))
         {
-            var inner = tenantContext.Use(Tenant("globex"));
+            var inner = tenantContext.MakeCurrent(Tenant("globex"));
             await Task.Run(inner.Dispose, TestContext.Current.CancellationToken);
 
             inner.Dispose();
@@ -183,19 +183,19 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
-    public void Use_TenantWithTheKeyTypesDefaultId_ThrowsAndLeavesNoTenant()
+    public void MakeCurrent_TenantWithTheKeyTypesDefaultId_ThrowsAndLeavesNoTenant()
     {
         var strings = BuildSetter();
         var guids = Setter<Guid>();
         var ints = Setter<int>();
 
-        FluentActions.Invoking(() => strings.Use(new TenantDescriptor<string> { TenantId = "", Name = "Empty" }))
+        FluentActions.Invoking(() => strings.MakeCurrent(new TenantDescriptor<string> { TenantId = "", Name = "Empty" }))
             .Should().Throw<ArgumentException>().WithMessage("*reserves*\"no tenant\"*");
-        FluentActions.Invoking(() => strings.Use(new TenantDescriptor<string> { TenantId = null!, Name = "Null" }))
+        FluentActions.Invoking(() => strings.MakeCurrent(new TenantDescriptor<string> { TenantId = null!, Name = "Null" }))
             .Should().Throw<ArgumentException>();
-        FluentActions.Invoking(() => guids.Use(new TenantDescriptor<Guid> { TenantId = Guid.Empty, Name = "Empty" }))
+        FluentActions.Invoking(() => guids.MakeCurrent(new TenantDescriptor<Guid> { TenantId = Guid.Empty, Name = "Empty" }))
             .Should().Throw<ArgumentException>();
-        FluentActions.Invoking(() => ints.Use(new TenantDescriptor<int> { TenantId = 0, Name = "Zero" }))
+        FluentActions.Invoking(() => ints.MakeCurrent(new TenantDescriptor<int> { TenantId = 0, Name = "Zero" }))
             .Should().Throw<ArgumentException>();
 
         strings.HasTenant.Should().BeFalse();
@@ -212,19 +212,19 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
-    public void UseNoTenant_HidesTheTenant_UntilDisposed()
+    public void MakeNoTenantCurrent_HidesTheTenant_UntilDisposed()
     {
         var setter = BuildSetter();
 
-        using (setter.Use(Tenant("acme")))
+        using (setter.MakeCurrent(Tenant("acme")))
         {
-            using (setter.UseNoTenant())
+            using (setter.MakeNoTenantCurrent())
             {
                 setter.HasTenant.Should().BeFalse();
                 setter.CurrentTenant.Should().BeNull();
                 setter.CurrentTenantId.Should().BeNull();
 
-                using (setter.Use(Tenant("globex")))
+                using (setter.MakeCurrent(Tenant("globex")))
                 {
                     setter.CurrentTenantId.Should().Be("globex");
                 }
@@ -239,13 +239,13 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
-    public void UseNoTenant_ClosedOutOfOrder_LeavesTheInnermostScopeCurrent()
+    public void MakeNoTenantCurrent_ClosedOutOfOrder_LeavesTheInnermostScopeCurrent()
     {
         var setter = BuildSetter();
 
-        using var outer = setter.Use(Tenant("acme"));
-        var none = setter.UseNoTenant();
-        var inner = setter.Use(Tenant("globex"));
+        using var outer = setter.MakeCurrent(Tenant("acme"));
+        var none = setter.MakeNoTenantCurrent();
+        var inner = setter.MakeCurrent(Tenant("globex"));
 
         none.Dispose();
         setter.CurrentTenantId.Should().Be("globex");

@@ -34,11 +34,11 @@ internal sealed class TenantScopeFactory<TKey>(
     {
         ArgumentNullException.ThrowIfNull(tenant);
 
-        // Checked before the services are created, so a tenant Use rejects leaves nothing to dispose.
+        // Checked before the services are created, so a tenant MakeCurrent rejects leaves nothing to dispose.
         TenantIds.ThrowIfReserved(tenant, nameof(tenant));
         var scope = serviceScopes.CreateAsyncScope();
 
-        return new TenantScope<TKey>(scope, tenantContext.Use(tenant), tenant);
+        return new TenantScope<TKey>(scope, tenantContext.MakeCurrent(tenant), tenant);
     }
 
     /// <inheritdoc />

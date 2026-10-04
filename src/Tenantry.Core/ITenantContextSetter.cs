@@ -17,7 +17,7 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
 {
     /// <summary>
     /// Makes <paramref name="tenant"/> the current tenant until the returned handle is disposed.
-    /// Uses may nest: an inner one shadows the outer tenant, and disposing it restores the outer tenant (the
+    /// Calls may nest: an inner one shadows the outer tenant, and disposing it restores the outer tenant (the
     /// outermost one restores "no tenant").
     /// </summary>
     /// <param name="tenant">The tenant to make current.</param>
@@ -33,25 +33,24 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
     /// <para>
     /// Pass a tenant you already hold: one that request resolution found, one read from
     /// <see cref="ITenantLookup{TKey}"/>, or one being onboarded before its store row exists. For an id from outside
-    /// the application, such as a queue message or a command-line argument, use
-    /// <see cref="ITenantScopeFactory{TKey}.RunInScopeAsync(TKey, Func{ITenantScope{TKey}, CancellationToken, Task}, CancellationToken)"/>,
-    /// which looks the tenant up and refuses a missing or inactive one.
+    /// the application, such as a queue message or a command-line argument, use the <c>RunInScopeAsync</c> method of
+    /// <see cref="ITenantScopeFactory{TKey}"/>, which looks the tenant up and refuses a missing or inactive one.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">
     /// The tenant's id is the key type's default value (<see cref="Guid.Empty"/>, <c>0</c>) or an empty string,
     /// which Tenantry reserves for "no tenant".
     /// </exception>
-    IDisposable Use(ITenantDescriptor<TKey> tenant);
+    IDisposable MakeCurrent(ITenantDescriptor<TKey> tenant);
 
     /// <summary>
-    /// Makes no tenant current until the returned handle is disposed, as <see cref="Use"/> makes one current: code
-    /// inside sees no tenant, and disposing it restores the tenant that was current before.
+    /// Makes no tenant current until the returned handle is disposed, as <see cref="MakeCurrent"/> makes one current:
+    /// code inside sees no tenant, and disposing it restores the tenant that was current before.
     /// </summary>
     /// <returns>A handle that restores the previously current tenant on disposal.</returns>
     /// <remarks>
     /// For code that must run as no tenant inside a tenant's flow, such as the rest of a request whose tenant was
     /// refused after it was made current.
     /// </remarks>
-    IDisposable UseNoTenant();
+    IDisposable MakeNoTenantCurrent();
 }

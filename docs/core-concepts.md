@@ -127,49 +127,49 @@ tenant" apart. [Below](#how-ef-core-queries-see-the-current-tenant) is how EF Co
 ```csharp no-compile
 public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
 {
-    IDisposable Use(ITenantDescriptor<TKey> tenant);
-    IDisposable UseNoTenant();
+    IDisposable MakeCurrent(ITenantDescriptor<TKey> tenant);
+    IDisposable MakeNoTenantCurrent();
 }
 ```
 
-`Use` makes a tenant current and returns a handle that restores the previous tenant on dispose:
+`MakeCurrent` makes a tenant current and returns a handle that restores the previous tenant on dispose:
 
 ```csharp
-using (tenantContext.Use(acme))
+using (tenantContext.MakeCurrent(acme))
 {
     // ITenantContext.CurrentTenant == acme here, and inside anything this calls/awaits
 }
 // previous tenant (or "none") restored here
 ```
 
-In ASP.NET Core the middleware calls `Use` for you once the tenant is resolved. In console and worker apps,
+In ASP.NET Core the middleware calls `MakeCurrent` for you once the tenant is resolved. In console and worker apps,
 `ITenantScopeFactory<TKey>` makes a tenant current together with a fresh DI scope, which is what most code
-wants; call `Use` yourself only when you need no new scope.
+wants; call `MakeCurrent` yourself only when you need no new scope.
 
-`Use` trusts the descriptor it is given. It does not look the tenant up in the store or check whether it is active,
-so a descriptor the store does not hold becomes current like any other: shared-database queries are filtered by its
-id and new rows are stamped with it. Pass it a tenant you already hold, and run work that starts from an id with
+`MakeCurrent` trusts the descriptor it is given. It does not look the tenant up in the store or check whether it is
+active, so a descriptor the store does not hold becomes current like any other: shared-database queries are filtered by
+its id and new rows are stamped with it. Pass it a tenant you already hold, and run work that starts from an id with
 `ITenantScopeFactory.RunInScopeAsync`, which refuses a missing or inactive tenant.
 [Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant) has a table for choosing between `RunInScopeAsync`,
-`CreateScope` and `Use`.
+`CreateScope` and `MakeCurrent`.
 
-`UseNoTenant()` does the opposite: code inside it sees no tenant, and disposing it restores the tenant that was
-current. The middleware uses it for the rest of a request whose tenant the access validators refused.
+`MakeNoTenantCurrent()` does the opposite: code inside it sees no tenant, and disposing it restores the tenant that
+was current. The middleware uses it for the rest of a request whose tenant the access validators refused.
 
-### Uses nest
+### Nesting
 
-An inner `Use` shadows the outer tenant and the outer one is restored on dispose:
+An inner `MakeCurrent` shadows the outer tenant and the outer one is restored on dispose:
 
 ```csharp
-using (tenantContext.Use(acme))       // current = Acme
+using (tenantContext.MakeCurrent(acme))       // current = Acme
 {
-    using (tenantContext.Use(globex)) // current = Globex
+    using (tenantContext.MakeCurrent(globex)) // current = Globex
     {
-    }                                 // current = Acme again
-}                                     // current = none
+    }                                         // current = Acme again
+}                                             // current = none
 ```
 
-Use it in maintenance code that acts as another tenant for a moment.
+Nest them in maintenance code that acts as another tenant for a moment.
 
 ## The `AsyncLocal` model
 
@@ -177,7 +177,7 @@ Use it in maintenance code that acts as another tenant for a moment.
 belongs to the async flow, not to an object. It flows into code you call and await, never back to your caller, and
 concurrent requests never see each other's tenant.
 
-- Make a tenant current (`Use`, or `ITenantScopeFactory.CreateScope`) in the method that does the work. A tenant
+- Make a tenant current (`MakeCurrent`, or `ITenantScopeFactory.CreateScope`) in the method that does the work. A tenant
   made current inside an `async` helper is not current for the helper's caller.
 - A `Task.Run(...)` started inside a scope inherits the tenant it had then. For work that runs after the scope is
   disposed, capture the tenant id and run the work by id (see [Non-HTTP hosts](non-http-hosts.md)).
@@ -197,7 +197,8 @@ Outside a request, `ITenantScopeFactory<TKey>` creates an `ITenantScope<TKey>`: 
 tenant current, so the scoped services resolved from it (such as a `DbContext`) are the tenant's. It follows the
 `IServiceScopeFactory` → `IServiceScope` pattern. `RunInScopeAsync(tenantId, …)` looks the tenant up in the store,
 refuses a missing or inactive one, and runs your work in such a scope. `CreateScope(tenant)` opens one for a tenant
-you already hold and, like `Use`, checks nothing. See [Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant).
+you already hold and, like `MakeCurrent`, checks nothing. See
+[Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant).
 
 ## Exceptions
 

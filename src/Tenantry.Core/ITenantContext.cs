@@ -43,7 +43,7 @@ public interface ITenantContext<TKey>
     /// A default interface method: a mock of <see cref="ITenantContext{TKey}"/> (NSubstitute, Moq) intercepts it and
     /// returns <see langword="null"/> unless it is configured too, so code under test with a mocked context can read
     /// <c>CurrentTenant?.As&lt;TTenant&gt;()</c> instead, or tests can use a real context
-    /// (<see cref="ITenantContextSetter{TKey}.Use"/>).
+    /// (<see cref="ITenantContextSetter{TKey}.MakeCurrent"/>).
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// The current tenant is not a <typeparamref name="TTenant"/>: the tenant store returns another type.

@@ -14,7 +14,7 @@ not have.
 | One or more stores: `WithInMemoryStore()`, `WithEFCoreStore<…>()`, … | One `ITenantStore<TKey>`: `UseInMemoryStore(…)` or `UseStore<TStore>()` |
 | `UseMultiTenant()`, before `UseAuthentication()` | `UseTenantry()`, after `UseAuthentication()`; with per-tenant authentication, `UseTenantResolution()` before it too |
 | `IMultiTenantContextAccessor<TTenantInfo>`, `HttpContext.GetMultiTenantContext<TTenantInfo>()` | `ITenantContext<TKey>` |
-| `IMultiTenantContextSetter`, `HttpContext.SetTenantInfo(…)` | `ITenantContextSetter<TKey>.Use(tenant)`, or `ITenantScopeFactory<TKey>` for a new DI scope |
+| `IMultiTenantContextSetter`, `HttpContext.SetTenantInfo(…)` | `ITenantContextSetter<TKey>.MakeCurrent(tenant)`, or `ITenantScopeFactory<TKey>` for a new DI scope |
 | Finbuckle's base context class, or `IMultiTenantDbContext` with `EnforceMultiTenant()` | A plain `DbContext` registered with `options.UseTenantry()` |
 | `[MultiTenant]`, `IsMultiTenant()` | `ITenantEntity<TKey>` or `TenantEntity<TKey>` on the entity |
 | `IsNotMultiTenant()` | Nothing: an entity without `ITenantEntity<TKey>` is shared |

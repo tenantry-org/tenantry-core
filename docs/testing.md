@@ -44,7 +44,7 @@ public class InvoiceNumbersTests
 `validateScopes: true` makes the provider refuse a scoped service resolved from the root, as the host does in
 Development. `CreateScope` trusts the descriptor and does not look it up in the store, which suits a test that holds
 its tenants. Code that receives only a tenant id is tested the same way with `RunInScopeAsync(id, …)`, which does
-look it up, and code that already has its services with `ITenantContextSetter<TKey>.Use(tenant)`
+look it up, and code that already has its services with `ITenantContextSetter<TKey>.MakeCurrent(tenant)`
 ([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant)). Background work is tested the same way too: run the
 work for one tenant inside that tenant's scope.
 

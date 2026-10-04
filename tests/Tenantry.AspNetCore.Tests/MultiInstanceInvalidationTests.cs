@@ -102,7 +102,7 @@ public sealed class MultiInstanceInvalidationTests
     private static async Task<(Guid Options, Guid Cached)> ReadAsync(IHost instance)
     {
         var tenant = await instance.Services.GetRequiredService<ITenantLookup<string>>().GetTenantAsync("acme", Ct);
-        using var current = instance.Services.GetRequiredService<ITenantContextSetter<string>>().Use(tenant!);
+        using var current = instance.Services.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(tenant!);
         var options = instance.Services.GetRequiredService<IOptionsMonitor<PlanOptions>>().CurrentValue.Built;
         var cached = await instance.Services.GetRequiredService<HybridCache>()
             .GetOrCreateAsync("plan", _ => ValueTask.FromResult(Guid.NewGuid()), cancellationToken: Ct);

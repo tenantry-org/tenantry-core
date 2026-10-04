@@ -3,8 +3,8 @@
 // This sample shows how AddTenantry wires up the full tenant-isolation
 // infrastructure for a non-HTTP host (console app, worker service, desktop UI, CLI…).
 // There is no middleware and no request: YOU make a tenant current manually
-// with ITenantContextSetter<TKey>.Use(...) around the work that should run as a tenant.
-// Use and ITenantScopeFactory.CreateScope trust the descriptor they are given: they do not look it
+// with ITenantContextSetter<TKey>.MakeCurrent(...) around the work that should run as a tenant.
+// MakeCurrent and ITenantScopeFactory.CreateScope trust the descriptor they are given: they do not look it
 // up in the store or check whether it is active. Work that starts from an id, such as a queue
 // message, goes through ITenantScopeFactory.RunInScopeAsync, which does both.
 //
@@ -71,7 +71,7 @@ await db.Database.EnsureCreatedAsync();
 
 // ── 3. Do some work as Acme ───────────────────────────────────────────────────────────────
 Order acmeOrder;
-using (tenantContext.Use(acme))
+using (tenantContext.MakeCurrent(acme))
 {
     db.Orders.Add(new Order { Description = "Acme widget order" });
     db.Orders.Add(new Order { Description = "Acme gadget order" });
@@ -84,7 +84,7 @@ using (tenantContext.Use(acme))
 }
 
 // ── 4. Do some work as Globex (note the automatic read isolation) ──────────────────────────
-using (tenantContext.Use(globex))
+using (tenantContext.MakeCurrent(globex))
 {
     db.Orders.Add(new Order { Description = "Globex sprocket order" });
     await db.SaveChangesAsync();
@@ -108,7 +108,7 @@ using (tenantContext.Use(globex))
     }
 
     // ── 6. Nested scopes: temporarily act as Acme, then fall back to Globex ────────────────
-    using (tenantContext.Use(acme))
+    using (tenantContext.MakeCurrent(acme))
     {
         Print("Globex→Acme (nested)", $"sees {await db.Orders.CountAsync()} order(s)");
     }

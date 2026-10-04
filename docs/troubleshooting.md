@@ -32,7 +32,7 @@ With no tenant current, the query filter matches nothing. Check:
 
 1. Is a tenant in scope? `ITenantContext<TKey>.HasTenant` must be true at the query. On the web, `UseTenantry()` must
    have run and resolved one; in a worker, you must be inside an `ITenantScopeFactory` scope (or
-   `ITenantContextSetter.Use`).
+   `ITenantContextSetter.MakeCurrent`).
 2. Did the request name a tenant? A missing or blank header (or other source) means none. Add `.RequireTenant()` to
    get a `400` instead of empty results.
 3. Does the entity use the registered `TKey`? A `Guid` registration and an `ITenantEntity<string>` entity never match.

@@ -62,7 +62,7 @@ public sealed class TenantConnectionStringProviderTests
         using var services = Build(options => options.GetConnectionString = t => $"Database=app_{t.TenantId}");
         var current = services.GetRequiredService<CurrentTenantConnectionString<string>>();
 
-        using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
+        using (services.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(Acme))
         {
             current.Get().Should().Be("Database=app_acme");
             (await current.GetAsync(TestContext.Current.CancellationToken)).Should().Be("Database=app_acme");

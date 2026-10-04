@@ -27,7 +27,7 @@ public sealed class TenantPropagationHandlerTests
 
         try
         {
-            using (Use(provider, -5))
+            using (MakeCurrent(provider, -5))
             {
                 await Client(provider).GetAsync("/invoices", TestContext.Current.CancellationToken);
             }
@@ -60,7 +60,7 @@ public sealed class TenantPropagationHandlerTests
         using HttpRequestMessage request = new(HttpMethod.Get, "/invoices");
         request.Headers.Add(TenantPropagation.HeaderName, "globex");
 
-        using (Use(provider, "acme"))
+        using (MakeCurrent(provider, "acme"))
         {
             await FluentActions.Awaiting(() => Client(provider).SendAsync(request, TestContext.Current.CancellationToken))
                 .Should().ThrowAsync<InvalidOperationException>().WithMessage("*'globex'*current tenant is 'acme'*");
@@ -76,7 +76,7 @@ public sealed class TenantPropagationHandlerTests
         await using var _ = provider;
         var client = Client(provider);
 
-        using (Use(provider, "acme"))
+        using (MakeCurrent(provider, "acme"))
         {
             using HttpRequestMessage same = new(HttpMethod.Get, "/invoices");
             same.Headers.Add(TenantPropagation.HeaderName, "acme");
@@ -97,7 +97,7 @@ public sealed class TenantPropagationHandlerTests
         await using var _ = provider;
         var client = Client(provider);
 
-        using (Use(provider, "acme"))
+        using (MakeCurrent(provider, "acme"))
         {
             await client.GetAsync("/invoices", TestContext.Current.CancellationToken);
             await client.GetAsync("https://BILLING.internal/other", TestContext.Current.CancellationToken);
@@ -115,7 +115,7 @@ public sealed class TenantPropagationHandlerTests
         var (provider, recorder) = Build<string>(configureAfter: client => client.BaseAddress = Billing);
         await using var _ = provider;
 
-        using (Use(provider, "acme"))
+        using (MakeCurrent(provider, "acme"))
         {
             await Client(provider).GetAsync("https://payments.example.com/charge", TestContext.Current.CancellationToken);
             await Client(provider).GetAsync("/invoices", TestContext.Current.CancellationToken);
@@ -141,7 +141,7 @@ public sealed class TenantPropagationHandlerTests
         var (provider, recorder) = Build<string>(serviceAddress: new Uri("https://inventory.internal"));
         await using var _ = provider;
 
-        using (Use(provider, "acme"))
+        using (MakeCurrent(provider, "acme"))
         {
             await Client(provider).GetAsync("https://payments.example.com/charge", TestContext.Current.CancellationToken);
             await Client(provider).GetAsync("https://inventory.internal/item", TestContext.Current.CancellationToken);
@@ -165,7 +165,7 @@ public sealed class TenantPropagationHandlerTests
         var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing);
         await using var _ = provider;
 
-        using (Use(provider, "acme"))
+        using (MakeCurrent(provider, "acme"))
         {
             using HttpRequestMessage request = new(HttpMethod.Get, "/invoices");
             Client(provider).Send(request, TestContext.Current.CancellationToken).Dispose();
@@ -184,7 +184,7 @@ public sealed class TenantPropagationHandlerTests
         var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing);
         await using var _ = provider;
 
-        using (Use(provider, tenantId))
+        using (MakeCurrent(provider, tenantId))
         {
             await FluentActions.Awaiting(() => Client(provider).GetAsync("/invoices", TestContext.Current.CancellationToken))
                 .Should().ThrowAsync<InvalidOperationException>().WithMessage("*cannot be sent in the tenantry-tenant-id header*");
@@ -247,10 +247,10 @@ public sealed class TenantPropagationHandlerTests
     private static HttpClient Client(IServiceProvider provider) =>
         provider.GetRequiredService<IHttpClientFactory>().CreateClient("billing");
 
-    private static IDisposable Use<TKey>(IServiceProvider provider, TKey tenantId)
+    private static IDisposable MakeCurrent<TKey>(IServiceProvider provider, TKey tenantId)
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         provider.GetRequiredService<ITenantContextSetter<TKey>>()
-            .Use(new TenantDescriptor<TKey> { TenantId = tenantId, Name = "Tenant" });
+            .MakeCurrent(new TenantDescriptor<TKey> { TenantId = tenantId, Name = "Tenant" });
 
     // The primary handler: answers 200 and records the header each request arrived with.
     private sealed class Recorder : HttpMessageHandler

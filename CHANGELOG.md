@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.6
 
+- `ITenantContextSetter<TKey>.Use(tenant)` is now `MakeCurrent(tenant)`, and `UseNoTenant()` is
+  `MakeNoTenantCurrent()`. Replace `.Use(` with `.MakeCurrent(` where it is called on the tenant context, and
+  `UseNoTenant` with `MakeNoTenantCurrent`. A class of your own that implements the interface renames both methods.
 - In a transaction without savepoints, or a `TransactionScope`, where a save relied on a tenant check, a concurrency
   conflict of any save that sent statements now stops the commit, even when an interceptor of yours suppresses it
   (a "last write wins" policy, say). Tenantry hears of the conflict before your interceptor decides, so it cannot tell
@@ -86,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ITenantContextSetter<TKey>.Use` and `UseNoTenant` are renamed `MakeCurrent` and `MakeNoTenantCurrent`, which say
+  what they do. Elsewhere in .NET, `Use…` names configuration, as in `app.UseTenantry()`.
 - `UseResolver(sp => …)` creates the resolver in each request's scope, as `UseResolver<TResolver>()` does. It was a
   singleton, so a factory that passed it a scoped service such as a `DbContext` shared one instance across requests.
 - `UseConnectionStrings(options => …)` throws when another provider is already set, by `UseConnectionStrings(sp => …)`

@@ -17,7 +17,7 @@ internal interface ICapturedTenant
     string Prefix { get; }
 
     /// <summary>Makes the tenant current again, until the result is disposed.</summary>
-    IDisposable Use();
+    IDisposable MakeCurrent();
 }
 
 internal sealed class CurrentTenant<TKey>(ITenantContextSetter<TKey> tenantContext) : ICurrentTenant
@@ -30,7 +30,7 @@ internal sealed class CurrentTenant<TKey>(ITenantContextSetter<TKey> tenantConte
     {
         public string Prefix { get; } = TenantCacheKeys.TenantPrefix(TenantIds.Format(tenant.TenantId));
 
-        public IDisposable Use() => tenantContext.Use(tenant);
+        public IDisposable MakeCurrent() => tenantContext.MakeCurrent(tenant);
     }
 }
 

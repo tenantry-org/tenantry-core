@@ -55,7 +55,7 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
         }
 
         using var current = early.Resolution is { Result: ResolutionResult.Resolved, Tenant: { } tenant }
-            ? tenantContext.Use(tenant)
+            ? tenantContext.MakeCurrent(tenant)
             : null;
 
         try

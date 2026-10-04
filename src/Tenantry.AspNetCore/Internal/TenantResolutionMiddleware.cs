@@ -93,7 +93,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 TagRequestMetrics(context, tenant, tenantId);
             }
 
-            using var current = _tenantContext.Use(tenant);
+            using var current = _tenantContext.MakeCurrent(tenant);
             using var logScope = _logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId));
 
             TenantResolutionLog.TenantResolved(_logger, tenantId, context.Request.Method, context.Request.Path);
@@ -109,7 +109,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         // A tenant app.UseTenantResolution() made current, and the access validators then refused, is not current for the
         // rest of the request.
-        using var noTenant = _tenantContext.HasTenant ? _tenantContext.UseNoTenant() : null;
+        using var noTenant = _tenantContext.HasTenant ? _tenantContext.MakeNoTenantCurrent() : null;
 
         if (resolution is { Result: ResolutionResult.AccessDenied or ResolutionResult.Inactive, Tenant: { } refused })
         {

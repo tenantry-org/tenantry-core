@@ -37,11 +37,11 @@ take them in their constructor. Choose by what you have:
 |------|------|----------|--------|
 | `scopes.RunInScopeAsync(tenantId, work)` | You have an id, such as from a queue message or a command-line argument | Opens one | Looks the tenant up and refuses a missing or inactive one |
 | `scopes.CreateScope(tenant)` | You already loaded the tenant: iterating the store, or onboarding one before its store row exists | Opens one | None |
-| `tenantContext.Use(tenant)` | You already loaded the tenant and a scope already exists: custom middleware, or a framework that opened the scope, such as a message consumer | None | None |
+| `tenantContext.MakeCurrent(tenant)` | You already loaded the tenant and a scope already exists: custom middleware, or a framework that opened the scope, such as a message consumer | None | None |
 
-`CreateScope` and `Use` trust the descriptor they are given. They do not look it up in the store or check whether
-it is active, so a descriptor the store does not hold becomes current like any other: shared-database queries are
-filtered by its id and new rows are stamped with it. Pass them only a tenant you already hold, and run work that
+`CreateScope` and `MakeCurrent` trust the descriptor they are given. They do not look it up in the store or check
+whether it is active, so a descriptor the store does not hold becomes current like any other: shared-database queries
+are filtered by its id and new rows are stamped with it. Pass them only a tenant you already hold, and run work that
 starts from an id with `RunInScopeAsync`. It takes the work as a callback because the tenant is held in an
 `AsyncLocal`: a scope opened inside an asynchronous lookup would not be current for the code that awaited it
 ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
@@ -109,9 +109,9 @@ across tenants. Disposing the scope disposes its services while the tenant is st
 restores whichever tenant was current before it, in the code that disposed it. That holds for `using`
 and `await using`, in loops and when nested.
 
-### Lower level: `ITenantContextSetter.Use`
+### Lower level: `ITenantContextSetter.MakeCurrent`
 
-`ITenantScopeFactory` is built on `ITenantContextSetter<TKey>.Use(tenant)`, which only changes the ambient
+`ITenantScopeFactory` is built on `ITenantContextSetter<TKey>.MakeCurrent(tenant)`, which only changes the ambient
 tenant and creates no DI scope. It is for code that runs in a scope something else opened, such as custom middleware,
 a message consumer whose framework opened the scope, or a console tool with one long-lived scope. Like `CreateScope`,
 it trusts the descriptor:
@@ -119,7 +119,7 @@ it trusts the descriptor:
 ```csharp
 var tenantContext = sp.GetRequiredService<ITenantContextSetter<Guid>>();
 
-using (tenantContext.Use(tenant))
+using (tenantContext.MakeCurrent(tenant))
 {
     db.Orders.Add(new Order { Description = "Created by a tool" });
     await db.SaveChangesAsync();

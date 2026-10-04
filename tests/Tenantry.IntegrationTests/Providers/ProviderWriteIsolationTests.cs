@@ -25,7 +25,7 @@ public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : Pro
             .UseTenantry()
             .Options;
 
-        using (Tenants.Use(Tenant(Globex)))
+        using (Tenants.MakeCurrent(Tenant(Globex)))
         {
             await using ProviderOrdersContext db = new(options);
             await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
@@ -51,7 +51,7 @@ public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : Pro
             .UseTenantry()
             .Options;
 
-        using (Tenants.Use(Tenant(Globex)))
+        using (Tenants.MakeCurrent(Tenant(Globex)))
         {
             await using ProviderOrdersContext db = new(options);
             await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
@@ -73,7 +73,7 @@ public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : Pro
         var options = WithHiddenFailureAndNestedSave(new DbContextOptionsBuilder<ProviderOrdersContext>()
             .UseSqlServer(new SqlConnectionStringBuilder(fixture.ConnectionString) { MultipleActiveResultSets = true }.ConnectionString));
 
-        using (Tenants.Use(Tenant(Globex)))
+        using (Tenants.MakeCurrent(Tenant(Globex)))
         {
             await using ProviderOrdersContext db = new(options);
             await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
@@ -97,7 +97,7 @@ public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : P
         var id = await AddDogAsync(Acme, "acme detail");
         var connectionString = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { MaxPoolSize = 1 }.ConnectionString;
 
-        using (Tenants.Use(Tenant(Globex)))
+        using (Tenants.MakeCurrent(Tenant(Globex)))
         {
             await using ProviderOrdersContext db = new(new DbContextOptionsBuilder<ProviderOrdersContext>()
                 .UseNpgsql(connectionString)
@@ -117,7 +117,7 @@ public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : P
             await connection.OpenAsync(TestContext.Current.CancellationToken);
             await using var next = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
-            using (Tenants.Use(Tenant(Acme)))
+            using (Tenants.MakeCurrent(Tenant(Acme)))
             {
                 await using ProviderOrdersContext db = new(new DbContextOptionsBuilder<ProviderOrdersContext>()
                     .UseNpgsql(connection)
@@ -410,7 +410,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
         {
             using TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled);
 
-            using (_tenants.Use(Tenant(_globex)))
+            using (_tenants.MakeCurrent(Tenant(_globex)))
             {
                 await using ProviderOrdersContext db = new(options);
                 // One connection for the scope: SqlClient could hand back another pooled one after a close, which
@@ -440,7 +440,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
         using (TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled))
         {
-            using (_tenants.Use(Tenant(_acme)))
+            using (_tenants.MakeCurrent(Tenant(_acme)))
             {
                 await using ProviderOrdersContext db = new(options);
                 // One connection for the scope: SqlClient could hand back another pooled one after a close, which
@@ -551,12 +551,12 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
             var db = scope.ServiceProvider.GetRequiredService<ProviderOrdersContext>();
             ProviderOrder order;
 
-            using (_tenants.Use(Tenant(_acme)))
+            using (_tenants.MakeCurrent(Tenant(_acme)))
             {
                 order = await db.Orders.SingleAsync(o => o.Id == id);
             }
 
-            using (_tenants.Use(Tenant(_globex)))
+            using (_tenants.MakeCurrent(Tenant(_globex)))
             {
                 order.Description = "moved";
                 order.TenantId = _globex;
@@ -646,7 +646,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
         foreach (var tenantId in new[] { _acme, _globex, _acme })
         {
-            using (tenants.Use(Tenant(tenantId)))
+            using (tenants.MakeCurrent(Tenant(tenantId)))
             {
                 await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
                 db.Orders.Add(new ProviderOrder { Description = "pooled" });
@@ -705,7 +705,7 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
     private async Task<T> AsTenantAsync<T>(string tenantId, Func<ProviderOrdersContext, Task<T>> work)
     {
-        using var _ = _tenants.Use(Tenant(tenantId));
+        using var _ = _tenants.MakeCurrent(Tenant(tenantId));
         await using var scope = _services.CreateAsyncScope();
         return await work(scope.ServiceProvider.GetRequiredService<ProviderOrdersContext>());
     }

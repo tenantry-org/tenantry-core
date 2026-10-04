@@ -36,7 +36,7 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
     /// handle it inherited, the caller keeps that tenant until it disposes the handle too, which then
     /// restores the caller's previous tenant. Further disposals change nothing.
     /// </remarks>
-    public IDisposable Use(ITenantDescriptor<TKey> tenant)
+    public IDisposable MakeCurrent(ITenantDescriptor<TKey> tenant)
     {
         ArgumentNullException.ThrowIfNull(tenant);
         TenantIds.ThrowIfReserved(tenant, nameof(tenant));
@@ -47,15 +47,17 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
     }
 
     /// <inheritdoc />
-    /// <remarks>A scope like any other, with no tenant: it nests, and closes in any order, as <see cref="Use"/>'s do.</remarks>
-    public IDisposable UseNoTenant()
+    /// <remarks>
+    /// A scope like any other, with no tenant: it nests, and closes in any order, as <see cref="MakeCurrent"/>'s do.
+    /// </remarks>
+    public IDisposable MakeNoTenantCurrent()
     {
         Frame frame = new(null, CurrentFrame.Value);
         CurrentFrame.Value = frame;
         return frame;
     }
 
-    // A frame with no tenant is one UseNoTenant opened.
+    // A frame with no tenant is one MakeNoTenantCurrent opened.
     private sealed class Frame(ITenantDescriptor<TKey>? tenant, Frame? parent) : IDisposable
     {
         private int _disposed;

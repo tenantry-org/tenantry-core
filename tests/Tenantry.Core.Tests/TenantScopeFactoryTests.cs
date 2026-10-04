@@ -44,7 +44,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     [Fact]
     public async Task CreateScope_WithAwaitUsing_RestoresThePreviousTenant()
     {
-        using (Ambient.Use(Tenant("old")))
+        using (Ambient.MakeCurrent(Tenant("old")))
         {
             await using (Scopes.CreateScope(Tenant("acme")))
             {
@@ -72,7 +72,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     [Fact]
     public void CreateScope_WithUsing_RestoresThePreviousTenant()
     {
-        using (Ambient.Use(Tenant("old")))
+        using (Ambient.MakeCurrent(Tenant("old")))
         {
             using (Scopes.CreateScope(Tenant("acme")))
             {
@@ -145,7 +145,7 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     {
         _store.Yield = true;
 
-        using (Ambient.Use(Tenant("old")))
+        using (Ambient.MakeCurrent(Tenant("old")))
         {
             await Scopes.RunInScopeAsync("acme", async (scope, _) =>
             {
@@ -323,12 +323,12 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     [Fact]
     public async Task DisposingTwice_IsHarmless()
     {
-        using (Ambient.Use(Tenant("old")))
+        using (Ambient.MakeCurrent(Tenant("old")))
         {
             var scope = Scopes.CreateScope(Tenant("acme"));
             await scope.DisposeAsync();
 
-            using (Ambient.Use(Tenant("later")))
+            using (Ambient.MakeCurrent(Tenant("later")))
             {
                 await scope.DisposeAsync();
                 scope.Dispose();

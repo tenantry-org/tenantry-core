@@ -100,7 +100,7 @@ public sealed class TenantCachingTests
         using CancellationTokenSource source = new();
         var token = cancellable ? source.Token : CancellationToken.None;
 
-        using (tenants.Use(new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }))
+        using (tenants.MakeCurrent(new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }))
         {
             (await cache.GetOrCreateAsync($"seen-{cancellable}", _ => ValueTask.FromResult(tenants.CurrentTenantId), cancellationToken: token))
                 .Should().Be("acme");

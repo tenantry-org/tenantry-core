@@ -17,13 +17,13 @@ internal interface ICurrentTenantId
     string? Current { get; }
 
     /// <summary>Makes no tenant current until disposed.</summary>
-    IDisposable UseNoTenant();
+    IDisposable MakeNoTenantCurrent();
 
     /// <summary>
     /// When the current tenant has been invalidated since the application started, makes the store's copy of it current
     /// until disposed, so a value built now does not come from a copy read before the invalidation. Null otherwise.
     /// </summary>
-    IDisposable? UseLatest();
+    IDisposable? MakeLatestCurrent();
 }
 
 internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantContext, TenantOptionsCaches caches, IServiceProvider services)
@@ -35,9 +35,9 @@ internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantCon
 
     public string? Current => tenantContext.CurrentTenant is { } tenant ? TenantIds.Format(tenant.TenantId) : null;
 
-    public IDisposable UseNoTenant() => tenantContext.UseNoTenant();
+    public IDisposable MakeNoTenantCurrent() => tenantContext.MakeNoTenantCurrent();
 
-    public IDisposable? UseLatest()
+    public IDisposable? MakeLatestCurrent()
     {
         if (tenantContext.CurrentTenant is not { } tenant ||
             !caches.WasInvalidated(TenantIds.Format(tenant.TenantId)) ||
@@ -51,14 +51,14 @@ internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantCon
         // The store is read as no tenant, as it is when a request is resolved.
         ITenantDescriptor<TKey>? latest;
 
-        using (tenantContext.UseNoTenant())
+        using (tenantContext.MakeNoTenantCurrent())
         {
             var read = lookup.GetTenantAsync(tenant.TenantId);
             latest = read.IsCompletedSuccessfully ? read.Result : read.AsTask().GetAwaiter().GetResult();
         }
 
-        // A tenant the store does not have (set with Use, or since removed) keeps the copy the caller has.
-        return latest is null || ReferenceEquals(latest, tenant) ? null : tenantContext.Use(latest);
+        // A tenant the store does not have (made current with MakeCurrent, or since removed) keeps the caller's copy.
+        return latest is null || ReferenceEquals(latest, tenant) ? null : tenantContext.MakeCurrent(latest);
     }
 
     private ITenantLookup<TKey>? Lookup()
@@ -163,7 +163,7 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
 
     private TOptions Create(Func<TOptions> createOptions)
     {
-        using (_tenant.UseLatest())
+        using (_tenant.MakeLatestCurrent())
             return createOptions();
     }
 
@@ -254,7 +254,7 @@ internal sealed class TenantFreeOptions<[DynamicallyAccessedMembers(DynamicallyA
             lock (_gate)
             {
                 // Not kept when the build throws, so the next read tries again.
-                using (tenant.UseNoTenant())
+                using (tenant.MakeNoTenantCurrent())
                     return _value ??= factory.Create(Microsoft.Extensions.Options.Options.DefaultName);
             }
         }

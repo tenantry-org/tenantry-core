@@ -142,14 +142,14 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         var factory = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
         var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.Use(Globex))
+        using (ambient.MakeCurrent(Globex))
         {
             await using var db = factory.CreateDbContext();
             db.Notes.Add(new PooledNote { Text = "sync lease" });
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        using (ambient.Use(Acme))
+        using (ambient.MakeCurrent(Acme))
         {
             await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
             db.Notes.Add(new PooledNote { Text = "async lease" });
@@ -197,13 +197,13 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
         PooledNotesContext db;
 
-        using (ambient.Use(Acme))
+        using (ambient.MakeCurrent(Acme))
         {
             db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
         }
 
         await using (db)
-        using (ambient.Use(Globex))
+        using (ambient.MakeCurrent(Globex))
         {
             db.Notes.Add(new PooledNote { Text = "globex row in acme's database" });
             var act = () => db.SaveChangesAsync();
@@ -247,7 +247,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         var factory = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
         PooledNotesContext db;
 
-        using (ambient.Use(Acme))
+        using (ambient.MakeCurrent(Acme))
         {
             await using (var seed = factory.CreateDbContext())
             {
@@ -268,7 +268,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         }
 
         await using (db)
-        using (ambient.Use(Globex))
+        using (ambient.MakeCurrent(Globex))
         {
             db.Notes.Add(new PooledNote { Text = "globex row in acme's database" });
 
@@ -301,7 +301,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         await using var services = Build();
         var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.Use(Acme))
+        using (ambient.MakeCurrent(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
 
@@ -313,7 +313,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
             var note = new PooledNote { Text = "added by acme" };
             db.Notes.Add(note);
 
-            using (ambient.Use(Globex))
+            using (ambient.MakeCurrent(Globex))
             {
                 await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
             }
@@ -334,7 +334,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
         PooledNotesContext db;
 
-        using (ambient.Use(Acme))
+        using (ambient.MakeCurrent(Acme))
         {
             db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
         }
@@ -358,7 +358,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         await using var services = Build();
         var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.Use(Acme))
+        using (ambient.MakeCurrent(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             var transaction = openedBy == "BeginTransaction" ? await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken) : null;
@@ -391,14 +391,14 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         await using var services = Build();
         var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.Use(Globex))
+        using (ambient.MakeCurrent(Globex))
         {
             await using var seed = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             seed.Notes.Add(new PooledNote { Text = "globex's own note" });
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        using (ambient.Use(Acme))
+        using (ambient.MakeCurrent(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
 
@@ -429,7 +429,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         await using var services = Build();
         var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.Use(Globex))
+        using (ambient.MakeCurrent(Globex))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
 
@@ -447,7 +447,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         await using var services = Build(asyncOnly: true);
         var factory = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>();
 
-        using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
+        using (services.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(Acme))
         {
             await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
             (await db.Notes.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
@@ -579,7 +579,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         await using var services = Build(useTenantryToo: true);
         var ambient = services.GetRequiredService<ITenantContextSetter<string>>();
 
-        using (ambient.Use(Acme))
+        using (ambient.MakeCurrent(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             db.Notes.Add(new PooledNote { Text = "once" });
@@ -597,7 +597,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
     {
         await using var services = Build(poolSize: 7);
 
-        using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
+        using (services.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
 
@@ -624,7 +624,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         StampObserver observer = new();
         await using var services = Build(interceptor: observer);
 
-        using (services.GetRequiredService<ITenantContextSetter<string>>().Use(Acme))
+        using (services.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(Acme))
         {
             await using var db = services.GetRequiredService<IDbContextFactory<PooledNotesContext>>().CreateDbContext();
             db.Notes.Add(new PooledNote { Text = "observed" });

@@ -4,8 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Tenantry.Core.Tests;
 
 /// <summary>
-/// <c>Use</c> and <c>CreateScope</c> trust the descriptor they are given: they neither look it up in the store nor ask
-/// <see cref="ITenantActivity{TKey}"/>. <c>RunInScopeAsync</c> takes an id and does both.
+/// <c>MakeCurrent</c> and <c>CreateScope</c> trust the descriptor they are given: they neither look it up in the store
+/// nor ask <see cref="ITenantActivity{TKey}"/>. <c>RunInScopeAsync</c> takes an id and does both.
 /// </summary>
 public sealed class TrustedDescriptorTests : IAsyncLifetime
 {
@@ -36,11 +36,11 @@ public sealed class TrustedDescriptorTests : IAsyncLifetime
 
     [Theory]
     [MemberData(nameof(Unchecked))]
-    public void Use_MakesTheDescriptorCurrentWithoutCheckingIt(string tenantId)
+    public void MakeCurrent_MakesTheDescriptorCurrentWithoutCheckingIt(string tenantId)
     {
         var tenant = Descriptor(tenantId);
 
-        using (Ambient.Use(tenant))
+        using (Ambient.MakeCurrent(tenant))
         {
             Ambient.CurrentTenant.Should().BeSameAs(tenant);
         }
@@ -59,11 +59,11 @@ public sealed class TrustedDescriptorTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UseAndCreateScope_KeepACopyThatDiffersFromTheStores()
+    public async Task MakeCurrentAndCreateScope_KeepACopyThatDiffersFromTheStores()
     {
         TenantDescriptor<string> stale = new() { TenantId = "acme", Name = "Acme (old name)" };
 
-        using (Ambient.Use(stale))
+        using (Ambient.MakeCurrent(stale))
         {
             Ambient.CurrentTenant.Should().BeSameAs(stale);
         }

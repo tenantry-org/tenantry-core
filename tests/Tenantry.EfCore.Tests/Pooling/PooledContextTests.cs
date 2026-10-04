@@ -38,7 +38,7 @@ public sealed class PooledContextTests : IDisposable
         var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
         Guid instanceId;
 
-        using (tenants.Use(Tenant("acme")))
+        using (tenants.MakeCurrent(Tenant("acme")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -48,7 +48,7 @@ public sealed class PooledContextTests : IDisposable
             instanceId = db.ContextId.InstanceId;
         }
 
-        using (tenants.Use(Tenant("globex")))
+        using (tenants.MakeCurrent(Tenant("globex")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -60,7 +60,7 @@ public sealed class PooledContextTests : IDisposable
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        using (tenants.Use(Tenant("acme")))
+        using (tenants.MakeCurrent(Tenant("acme")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -78,7 +78,7 @@ public sealed class PooledContextTests : IDisposable
         var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
         int acmeOrderId;
 
-        using (tenants.Use(Tenant("acme")))
+        using (tenants.MakeCurrent(Tenant("acme")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -89,7 +89,7 @@ public sealed class PooledContextTests : IDisposable
             acmeOrderId = order.Id;
         }
 
-        using (tenants.Use(Tenant("globex")))
+        using (tenants.MakeCurrent(Tenant("globex")))
         await using (var scope = services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PooledOrdersContext>();
@@ -112,7 +112,7 @@ public sealed class PooledContextTests : IDisposable
         var tenants = services.GetRequiredService<ITenantContextSetter<string>>();
         var factory = services.GetRequiredService<IDbContextFactory<PooledOrdersContext>>();
 
-        using (tenants.Use(Tenant("setup")))
+        using (tenants.MakeCurrent(Tenant("setup")))
         await using (var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken))
         {
             await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
@@ -122,7 +122,7 @@ public sealed class PooledContextTests : IDisposable
 
         var seen = await Task.WhenAll(tenantIds.Select(tenantId => Task.Run(async () =>
         {
-            using var _ = tenants.Use(Tenant(tenantId));
+            using var _ = tenants.MakeCurrent(Tenant(tenantId));
 
             for (var i = 0; i < 3; i++)
             {

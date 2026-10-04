@@ -102,7 +102,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
 
         foreach (var tenant in new[] { _acme, _globex })
         {
-            using (Ambient.Use(tenant))
+            using (Ambient.MakeCurrent(tenant))
             {
                 await using var db = await Factory.CreateDbContextAsync();
                 await db.Database.EnsureCreatedAsync();
@@ -116,7 +116,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
 
         foreach (var tenant in new[] { _acme, _globex })
         {
-            using (Ambient.Use(tenant))
+            using (Ambient.MakeCurrent(tenant))
             {
                 await using var db = await Factory.CreateDbContextAsync();
                 await db.Database.EnsureDeletedAsync();
@@ -137,7 +137,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
         var acmeBefore = await ReadSequenceAsync(Database(_acme));
         TContext db;
 
-        using (Ambient.Use(_acme))
+        using (Ambient.MakeCurrent(_acme))
         {
             db = await Factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
 
@@ -154,7 +154,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
         HiLoItem item = new() { Text = "globex item" };
 
         await using (db)
-        using (Ambient.Use(_globex))
+        using (Ambient.MakeCurrent(_globex))
         {
             Func<Task> add = async ? async () => await db.AddAsync(item) : () => Task.FromResult(db.Add(item));
 
@@ -171,7 +171,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
     [InlineData(true)]
     public async Task HiLoKey_AddedByTheOwningTenant_Works(bool openConnection)
     {
-        using (Ambient.Use(_acme))
+        using (Ambient.MakeCurrent(_acme))
         {
             await using var db = await Factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
 
@@ -244,7 +244,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
 
         foreach (var tenant in new[] { _acme, _globex })
         {
-            using (Ambient.Use(tenant))
+            using (Ambient.MakeCurrent(tenant))
             {
                 await using var db = await Factory.CreateDbContextAsync();
                 await db.Database.EnsureCreatedAsync();
@@ -260,7 +260,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
 
         foreach (var tenant in new[] { _acme, _globex })
         {
-            using (Ambient.Use(tenant))
+            using (Ambient.MakeCurrent(tenant))
             {
                 await using var db = await Factory.CreateDbContextAsync();
                 await db.Database.EnsureDeletedAsync();
@@ -287,7 +287,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
     {
         ProviderOrdersContext db;
 
-        using (Ambient.Use(_acme))
+        using (Ambient.MakeCurrent(_acme))
         {
             db = await Factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
             await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
@@ -296,7 +296,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
         Exception? error = null;
 
         await using (db)
-        using (Ambient.Use(_globex))
+        using (Ambient.MakeCurrent(_globex))
         {
             try
             {
@@ -338,7 +338,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
         ProviderOrdersContext db;
         TransactionScope? scope = null;
 
-        using (Ambient.Use(_acme))
+        using (Ambient.MakeCurrent(_acme))
         {
             if (scopeStartedByAcme)
             {
@@ -350,7 +350,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
         }
 
         await using (db)
-        using (Ambient.Use(_globex))
+        using (Ambient.MakeCurrent(_globex))
         {
             scope ??= new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
 
@@ -375,7 +375,7 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
 
     private async Task<List<string>> DescriptionsAsync(TenantDescriptor<string> tenant)
     {
-        using (Ambient.Use(tenant))
+        using (Ambient.MakeCurrent(tenant))
         {
             await using var db = await Factory.CreateDbContextAsync();
             return await db.Orders.IgnoreQueryFilters().Select(o => o.Description).ToListAsync();
@@ -437,7 +437,7 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture)
         {
             foreach (var tenant in new[] { _acme, _globex })
             {
-                using (ambient.Use(tenant))
+                using (ambient.MakeCurrent(tenant))
                 {
                     await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
                     databases.Add($"{tenant.TenantId} -> {db.Database.GetDbConnection().Database}");
@@ -451,7 +451,7 @@ public sealed class NpgsqlDataSourcePooledTests(PostgreSqlFixture fixture)
         {
             foreach (var tenant in new[] { _acme, _globex })
             {
-                using (ambient.Use(tenant))
+                using (ambient.MakeCurrent(tenant))
                 {
                     await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
                     await db.Database.EnsureDeletedAsync(TestContext.Current.CancellationToken);

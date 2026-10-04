@@ -100,7 +100,7 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
         var ambient = _services.GetRequiredService<ITenantContextSetter<string>>();
         ProviderOrdersContext db;
 
-        using (ambient.Use(_acme))
+        using (ambient.MakeCurrent(_acme))
         {
             db = await _services.GetRequiredService<IDbContextFactory<ProviderOrdersContext>>().CreateDbContextAsync(TestContext.Current.CancellationToken);
 
@@ -115,7 +115,7 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
         }
 
         await using (db)
-        using (ambient.Use(_globex))
+        using (ambient.MakeCurrent(_globex))
         {
             db.Orders.Add(new ProviderOrder { Description = "globex order in acme's database" });
             var save = () => db.SaveChangesAsync();

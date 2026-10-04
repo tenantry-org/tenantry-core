@@ -57,7 +57,7 @@ For each request, the middleware:
    [active](tenant-stores.md#suspended-and-inactive-tenants). If either refuses, a request that requires a tenant is
    rejected (see [Status codes](#status-codes)). A caller the validators refuse is denied access whether or not the
    tenant is active, so only a caller they allow can learn that a tenant is suspended.
-5. Makes the tenant current (`ITenantContextSetter.Use`) for the remainder of the request, tags the request's
+5. Makes the tenant current (`ITenantContextSetter.MakeCurrent`) for the remainder of the request, tags the request's
    trace span `tenant.id` and opens a log scope with `TenantId`, and raises [`OnResolved`](#events). The tenant is
    restored when the request ends.
 

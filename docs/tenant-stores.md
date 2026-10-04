@@ -111,7 +111,7 @@ singleton; every registered check must allow the tenant. Tenantry then refuses a
 - `RunInScopeAsync` throws `TenantInactiveException`, a `TenantNotResolvedException`.
 - Tenantry.Pro's background services, schedulers and message integrations skip it.
 
-`CreateScope` and `ITenantContextSetter.Use` do not check: they take a tenant you already hold and trust it, for
+`CreateScope` and `ITenantContextSetter.MakeCurrent` do not check: they take a tenant you already hold and trust it, for
 work such as migrations that must reach suspended tenants. When you loop over tenants for work of your own, ask
 `ITenantActivity<TKey>`:
 

@@ -26,7 +26,7 @@ public sealed class PerTenantOptionsTests
 
         foreach (var (tenant, colour) in new[] { (Acme, "red"), (Globex, "blue"), ((TenantDescriptor<string>?)null, "grey") })
         {
-            using var _ = tenant is null ? null : Use(provider, tenant);
+            using var _ = tenant is null ? null : MakeCurrent(provider, tenant);
 
             scope.ServiceProvider.GetRequiredService<IOptionsSnapshot<BrandingOptions>>().Value.Colour.Should().Be(colour);
             provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>().CurrentValue.Colour.Should().Be(colour);
@@ -41,7 +41,7 @@ public sealed class PerTenantOptionsTests
 
         foreach (var tenant in new[] { Acme, Globex })
         {
-            using (Use(provider, tenant))
+            using (MakeCurrent(provider, tenant))
                 provider.GetRequiredService<IOptions<BrandingOptions>>().Value.Should().Match<BrandingOptions>(o => o.Colour == "grey" && o.Name == "default");
         }
 
@@ -58,10 +58,10 @@ public sealed class PerTenantOptionsTests
         _ = options.Value;
         loggers.Entries.Should().BeEmpty("without a tenant the ordinary value is what is meant");
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             _ = options.Value;
 
-        using (Use(provider, Globex))
+        using (MakeCurrent(provider, Globex))
             _ = options.Value;
 
         loggers.Entries.Should().ContainSingle().Which.Should().Match<(string Category, int EventId, string Message)>(e =>
@@ -75,10 +75,10 @@ public sealed class PerTenantOptionsTests
         // The usual pattern, _settings = options.CurrentValue: whatever it keeps, it keeps for every tenant.
         using var provider = Build(services => services.AddSingleton<CapturedBranding>());
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             provider.GetRequiredService<CapturedBranding>().Colour.Should().Be("grey");
 
-        using (Use(provider, Globex))
+        using (MakeCurrent(provider, Globex))
             provider.GetRequiredService<CapturedBranding>().Colour.Should().Be("grey");
     }
 
@@ -88,10 +88,10 @@ public sealed class PerTenantOptionsTests
         using var provider = Build(services => services.AddSingleton<Branding>());
         var branding = provider.GetRequiredService<Branding>();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             branding.Colour.Should().Be("red");
 
-        using (Use(provider, Globex))
+        using (MakeCurrent(provider, Globex))
             branding.Colour.Should().Be("blue");
     }
 
@@ -126,7 +126,7 @@ public sealed class PerTenantOptionsTests
     {
         using var provider = Build(services => services.Configure<BrandingOptions>(o => o.Colour = "green"));
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>().CurrentValue.Colour.Should().Be("red");
 
         provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>().CurrentValue.Colour.Should().Be("green", "without a tenant");
@@ -143,7 +143,7 @@ public sealed class PerTenantOptionsTests
                 .Configure<BrandingOptions>((o, t) => o.Colour += $"-{t.Name}")));
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>().CurrentValue.Colour.Should().Be("red-Acme");
 
         services.Count(d => d.ServiceType == typeof(IOptionsMonitorCache<BrandingOptions>)).Should().Be(1);
@@ -159,7 +159,7 @@ public sealed class PerTenantOptionsTests
             .CacheTenants());
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>().CurrentValue.Name.Should().Be("ACME");
     }
 
@@ -173,7 +173,7 @@ public sealed class PerTenantOptionsTests
             .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t, sp) => o.Colour = sp.GetRequiredService<ColourSource>().For(t))));
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>().CurrentValue.Colour.Should().Be("from-store-Acme");
 
         ColourSource.Disposed.Should().BeGreaterThan(0);
@@ -186,13 +186,13 @@ public sealed class PerTenantOptionsTests
         using var provider = Build(services => services.Configure<BrandingOptions>(configuration.GetSection("Branding")));
         var options = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             options.CurrentValue.Name.Should().Be("first");
 
         configuration["Branding:Name"] = "second";
         configuration.Reload();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             options.CurrentValue.Should().Match<BrandingOptions>(o => o.Name == "second" && o.Colour == "red");
     }
 
@@ -204,7 +204,7 @@ public sealed class PerTenantOptionsTests
         provider.GetRequiredService<IOptions<OtherOptions>>().GetType().Assembly
             .Should().NotBeSameAs(typeof(TenantryOptionsTenantBuilderExtensions).Assembly);
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             provider.GetRequiredService<IOptions<OtherOptions>>().Value.Value.Should().Be("plain");
     }
 
@@ -214,7 +214,7 @@ public sealed class PerTenantOptionsTests
         using var provider = Build(services => services.Configure<BrandingOptions>("print", o => o.Name = "print"));
         using var scope = provider.CreateScope();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             scope.ServiceProvider.GetRequiredService<IOptionsSnapshot<BrandingOptions>>().Get("print")
                 .Should().Match<BrandingOptions>(o => o.Name == "print" && o.Colour == "grey");
     }
@@ -230,14 +230,14 @@ public sealed class PerTenantOptionsTests
         });
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
         {
             monitor.Get("print").Should().Match<BrandingOptions>(o => o.Name == "print" && o.Colour == "ink-Acme");
             monitor.Get("web").Colour.Should().Be("grey");
             monitor.CurrentValue.Colour.Should().Be("red", "the default name keeps its own step");
         }
 
-        using (Use(provider, Globex))
+        using (MakeCurrent(provider, Globex))
             monitor.Get("print").Colour.Should().Be("ink-Globex");
 
         monitor.Get("print").Colour.Should().Be("grey", "without a tenant");
@@ -250,7 +250,7 @@ public sealed class PerTenantOptionsTests
             tenant.ConfigurePerTenant(perTenant => perTenant.ConfigureAll<BrandingOptions>((o, t, sp) => o.Name = $"all-{t.Name}"))));
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
         {
             monitor.Get("anything").Name.Should().Be("all-Acme");
             monitor.CurrentValue.Should().Match<BrandingOptions>(o => o.Name == "all-Acme" && o.Colour == "red");
@@ -268,7 +268,7 @@ public sealed class PerTenantOptionsTests
         });
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
         {
             monitor.CurrentValue.Name.Should().Be("built-from-red");
             monitor.Get("print").Name.Should().Be("built-from-ink");
@@ -281,10 +281,10 @@ public sealed class PerTenantOptionsTests
         using var provider = Build(services => services.AddOptions<BrandingOptions>().Validate(o => o.Colour != "blue", "No blue."));
         var options = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
             options.CurrentValue.Colour.Should().Be("red");
 
-        using (Use(provider, Globex))
+        using (MakeCurrent(provider, Globex))
             FluentActions.Invoking(() => options.CurrentValue).Should().Throw<OptionsValidationException>().WithMessage("No blue.");
     }
 
@@ -305,7 +305,7 @@ public sealed class PerTenantOptionsTests
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
         {
             FluentActions.Invoking(() => monitor.CurrentValue).Should().Throw<TimeoutException>();
             monitor.CurrentValue.Colour.Should().Be("red");
@@ -329,7 +329,7 @@ public sealed class PerTenantOptionsTests
         using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
         var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
 
-        using (Use(provider, Acme))
+        using (MakeCurrent(provider, Acme))
         {
             monitor.CurrentValue.Name.Should().Be("Acme");
 
@@ -339,7 +339,7 @@ public sealed class PerTenantOptionsTests
             monitor.CurrentValue.Name.Should().Be("Acme Renamed");
         }
 
-        using (Use(provider, store.Tenant))
+        using (MakeCurrent(provider, store.Tenant))
             monitor.CurrentValue.Name.Should().Be("Acme Renamed");
     }
 
@@ -370,14 +370,14 @@ public sealed class PerTenantOptionsTests
     private ServiceProvider Build(Action<IServiceCollection>? configure = null) =>
         Services(configure).BuildServiceProvider(Conformance.ProviderOptions);
 
-    private static IDisposable Use(IServiceProvider provider, ITenantDescriptor<string> tenant) =>
-        provider.GetRequiredService<ITenantContextSetter<string>>().Use(tenant);
+    private static IDisposable MakeCurrent(IServiceProvider provider, ITenantDescriptor<string> tenant) =>
+        provider.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(tenant);
 
     private static void ReadAs(IServiceProvider provider, IOptionsMonitor<BrandingOptions> options, params ITenantDescriptor<string>[] tenants)
     {
         foreach (var tenant in tenants)
         {
-            using (Use(provider, tenant))
+            using (MakeCurrent(provider, tenant))
                 _ = options.CurrentValue;
         }
     }

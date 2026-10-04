@@ -407,13 +407,13 @@ public sealed class IsolateCachesTests
 
     private static async Task<T> AsAsync<T>(IServiceProvider provider, ITenantDescriptor<string> tenant, Func<ValueTask<T>> work)
     {
-        using var _ = provider.GetRequiredService<ITenantContextSetter<string>>().Use(tenant);
+        using var _ = provider.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(tenant);
         return await work();
     }
 
     private static async Task AsAsync(IServiceProvider provider, ITenantDescriptor<string> tenant, Func<Task> work)
     {
-        using var _ = provider.GetRequiredService<ITenantContextSetter<string>>().Use(tenant);
+        using var _ = provider.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(tenant);
         await work();
     }
 
