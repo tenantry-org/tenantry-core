@@ -28,6 +28,20 @@ rest. Only the maintainer can push `v*` tags.
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
 
+## Patching an older minor
+
+A security fix for an older minor in the supported window ([security policy](.github/SECURITY.md#supported-versions))
+is released from a `release/X.Y` branch:
+
+1. Cut the branch from the minor's last release tag, once: `git branch release/0.7 v0.7.0`, then push it.
+2. Cherry-pick the fix, and add the patch's section to `CHANGELOG.md` on the branch and on `master`.
+3. Push the branch and wait for CI to pass on it, then tag its head and push the tag, as above. The GitHub release is
+   not marked as the latest while a newer version is released.
+
+The workflows do not support this yet: CI runs only on `master`, and the release workflow refuses a tag that is not
+on `master`. Before the first such patch, CI must run on `release/*` branches and the release workflow must accept a
+`vX.Y.Z` tag on `release/X.Y`.
+
 ## After any release
 
 - Set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, and remove the

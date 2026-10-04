@@ -24,14 +24,16 @@ Please include:
 
 ## Supported versions
 
-Security fixes are provided for the latest released minor version of each package. Older versions
-may receive fixes at the maintainers' discretion.
+Security fixes are released for the latest released minor version of each package. Until 1.0, they are also released
+for the Tenantry Core minor versions that the latest two minor versions of Tenantry.Pro run on, so that every
+Tenantry.Pro release that still gets security patches runs on a Tenantry Core that gets them too. The supported
+versions from 1.0 will be set out here before 1.0 is released.
 
-| Package | Supported |
+| Package | Supported until 1.0 |
 |---|---|
-| `Tenantry.Core` | latest minor |
-| `Tenantry.AspNetCore` | latest minor |
-| `Tenantry.EfCore` | latest minor |
-| `Tenantry.Http` | latest minor |
-| `Tenantry.Caching` | latest minor |
-| `Tenantry.Options` | latest minor |
+| `Tenantry.Core` | the latest minor, and the minors the latest two Tenantry.Pro minors run on |
+| `Tenantry.AspNetCore` | the latest minor, and the minors the latest two Tenantry.Pro minors run on |
+| `Tenantry.EfCore` | the latest minor, and the minors the latest two Tenantry.Pro minors run on |
+| `Tenantry.Http` | the latest minor, and the minors the latest two Tenantry.Pro minors run on |
+| `Tenantry.Caching` | the latest minor, and the minors the latest two Tenantry.Pro minors run on |
+| `Tenantry.Options` | the latest minor, and the minors the latest two Tenantry.Pro minors run on |
