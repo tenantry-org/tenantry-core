@@ -1,11 +1,11 @@
-// Tenantry EF Core Sample — Demonstrates realistic multi-tenant EF Core usage
+// Tenantry EF Core sample: multi-tenant EF Core usage in a web application
 //
 // This sample shows:
 // - Real EF Core migrations (not EnsureCreated)
 // - Tenants stored as EF entities, looked up via EfCoreTenantStore
-// - Inactive tenants kept in the store and refused by an access validator (403)
+// - Inactive tenants kept in the store and refused by ValidateTenantActivity (403)
 // - A tenant required by default (400 without one), and the global endpoints allowing a missing tenant
-// - Mixed tenanted/non-tenanted entities (Orders are tenanted, Products are global)
+// - Tenant-owned and shared entities in one context (Orders are tenant-owned, Products are [SharedAcrossTenants])
 // - Relationships across tenant boundaries (OrderItem → Product)
 // - Seeding global reference data and tenants
 // - Admin queries with IgnoreQueryFilters()
@@ -28,7 +28,7 @@
 //   # List Acme's orders
 //   curl -H "X-Tenant-Id: acme" http://localhost:5181/orders
 //
-//   # List Globex's orders (different tenant — empty, isolation working)
+//   # List Globex's orders (another tenant, so empty)
 //   curl -H "X-Tenant-Id: globex" http://localhost:5181/orders
 //
 //   # Admin stats (crosses tenant boundaries with IgnoreQueryFilters)
@@ -48,8 +48,8 @@ builder.Services.AddTenantry<string>(tenant =>
     tenant.ResolveFromHeader("X-Tenant-Id");
     tenant.UseStore<EfCoreTenantStore>();
 
-    // The store returns inactive tenants too; refuse them here (403) before any scope opens.
-    tenant.ValidateTenantAccess((_, t) => t is Tenant { IsActive: true });
+    // The store returns inactive tenants too. Refuse them here: requests get 403, and no scope opens for them.
+    tenant.ValidateTenantActivity(t => t is Tenant { IsActive: true });
 
     // Every endpoint needs a tenant (400 without one) unless it allows a missing one, as the catalogue and the
     // admin report below do. Handlers that need a tenant then always have one.
@@ -79,7 +79,7 @@ using (var scope = app.Services.CreateScope())
 
 // ── 5. Endpoints ──────────────────────────────────────────────────────────────
 
-// Get product catalog (global reference data, NOT tenanted)
+// Get product catalog (reference data every tenant shares)
 app.MapGet("/products", async (AppDbContext db) =>
 {
     var products = await db.Products

@@ -1,4 +1,4 @@
-// Tenantry.Samples.SecureApi — a production-shaped multi-tenant API.
+// Tenantry.Samples.SecureApi: a production-shaped multi-tenant API.
 //
 // 1. Callers authenticate with a JWT bearer token. Anonymous requests get 401.
 // 2. The caller selects a tenant with the X-Tenant-Id header. Tenantry checks it against the token's

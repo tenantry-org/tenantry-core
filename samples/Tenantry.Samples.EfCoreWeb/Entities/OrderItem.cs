@@ -5,10 +5,10 @@ using Tenantry;
 namespace Tenantry.Samples.EfCoreWeb.Entities;
 
 /// <summary>
-/// Tenanted entity — isolated per tenant.
+/// Tenant-owned entity, isolated per tenant.
 /// Order items inherit tenant isolation from their parent Order.
-/// Demonstrates relationships between tenanted entities and cross-boundary
-/// navigation to non-tenanted reference data (Product).
+/// Demonstrates relationships between tenant-owned entities, and navigation to
+/// reference data every tenant shares (Product).
 /// </summary>
 public class OrderItem : TenantEntity<string>
 {

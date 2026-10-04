@@ -4,11 +4,11 @@ using Tenantry;
 namespace Tenantry.Samples.EfCoreWeb.Data;
 
 /// <summary>
-/// EF Core-backed tenant store. Registered as scoped — one instance per request,
+/// EF Core-backed tenant store. Registered as scoped: one instance per request,
 /// sharing the request's AppDbContext. No caching: the middleware calls this once
 /// per request, so a single DB lookup is fine.
-/// Returns every tenant, active or not: Program.cs refuses inactive tenants with an
-/// access validator, so tools that maintain every tenant's database still find them.
+/// Returns every tenant, active or not: Program.cs refuses inactive tenants with
+/// ValidateTenantActivity, so tools that maintain every tenant's database still find them.
 /// </summary>
 public sealed class EfCoreTenantStore(AppDbContext db, ILogger<EfCoreTenantStore> logger)
     : ITenantStore<string>

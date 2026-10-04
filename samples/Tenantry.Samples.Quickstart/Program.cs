@@ -32,7 +32,7 @@ builder.Services.AddTenantry<string>(tenant =>
     tenant.ValidateTenantAccess(async (ctx, tenantInfo, ct) =>
         await ValueTask.FromResult(!ctx.Request.Headers.ContainsKey("X-Also-Block-Access")));
 
-    // In-memory store — replace with a database/cache-backed ITenantStore implementation in production.
+    // In-memory store: replace it with a database/cache-backed ITenantStore implementation in production.
     // app.UseTenantry() fails at startup without a registered store
     tenant.UseInMemoryStore(
     [
