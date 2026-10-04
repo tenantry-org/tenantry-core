@@ -114,12 +114,12 @@ static bool HasScope(ClaimsPrincipal user, string scope) =>
     user.FindAll("scope").SelectMany(c => c.Value.Split(' ')).Contains(scope);
 ```
 
-### A header is a claim, not proof
+### A trusted caller can name any tenant
 
-A trusted caller can still name any tenant. Where a calling service should act only for some tenants, check that with
-an [access validator](access-control.md). A service that only other services call should not be reachable from
-outside at all. Where the calling service already sends a token that names the tenant, `ResolveFromClaim` reads it from
-the token instead, and the header is not needed.
+Where a calling service should act only for some tenants, check that with an [access validator](access-control.md).
+A service that only other services call should not be reachable from outside at all. Where the calling service
+already sends a token that names the tenant, `ResolveFromClaim` reads it from the token instead, and the header is not
+needed.
 
 ## Jobs and messages
 

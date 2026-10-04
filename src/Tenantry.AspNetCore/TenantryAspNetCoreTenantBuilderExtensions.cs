@@ -117,15 +117,18 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// <summary>
     /// Resolves the tenant another service sent with its request: the tenant id in the
     /// <see cref="TenantPropagation.HeaderName"/> header, which Tenantry.Http's <c>UseTenantry()</c> adds to an
-    /// HttpClient's or gRPC client's requests. The value is read as a tenant id (<see cref="TenantIds.TryParse{TKey}"/>)
-    /// and looked up with the store's <see cref="ITenantStore{TKey}.GetTenantAsync"/>, not its
-    /// <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/>; a value that is not a tenant id finds no tenant.
+    /// HttpClient's or gRPC client's requests.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A header is a claim, not proof: any caller that reaches the service can set it. So the header is read only when
+    /// Any caller that reaches the service can set the header, so it is read only when
     /// <paramref name="isTrustedCaller"/> returns <see langword="true"/> for the request, typically because the caller
     /// authenticated as one of your services. From any other caller it is ignored, and the next resolver runs.
+    /// </para>
+    /// <para>
+    /// The value is read as a tenant id (<see cref="TenantIds.TryParse{TKey}"/>) and looked up with the store's
+    /// <see cref="ITenantStore{TKey}.GetTenantAsync"/>, not its <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/>;
+    /// a value that is not a tenant id finds no tenant.
     /// </para>
     /// <para>
     /// <paramref name="isTrustedCaller"/> runs after authentication, so it can read <c>HttpContext.User</c>:
@@ -238,9 +241,8 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// <param name="parameterName">The name of the query string parameter that carries the tenant identifier.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// <strong>For local development and testing only — do not use in production.</strong> Query string
-    /// parameters are routinely logged by servers, proxies, and analytics, and are trivially spoofable,
-    /// so they are not a safe tenant-resolution mechanism for production traffic.
+    /// For local development and tests only. Do not use it in production: query string parameters are logged by
+    /// servers, proxies and analytics, and any caller can set them.
     /// </remarks>
     public static ITenantBuilder<TKey> ResolveFromQueryString<TKey>(
         this ITenantBuilder<TKey> builder,
@@ -253,11 +255,13 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     }
 
     /// <summary>
-    /// Registers a custom <see cref="ITenantResolver"/> implementation, created through dependency injection in each
-    /// request's scope, so it can depend on scoped services such as a <c>DbContext</c>.
+    /// Registers a custom <see cref="ITenantResolver"/> implementation, created through dependency injection.
     /// </summary>
     /// <typeparam name="TResolver">The resolver type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
+    /// <remarks>
+    /// The resolver is created in each request's scope, so it can depend on scoped services such as a <c>DbContext</c>.
+    /// </remarks>
     /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first, or call it as a statement of its own.</returns>
     public static ITenantBuilder UseResolver<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TResolver>(
@@ -290,11 +294,12 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     }
 
     /// <summary>
-    /// Registers a custom <see cref="ITenantResolver"/> created by a factory, as a singleton.
+    /// Registers a custom <see cref="ITenantResolver"/> created by a factory.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="factory">Creates the resolver from the application's services.</param>
+    /// <remarks>The resolver is a singleton, created once and used for every request.</remarks>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> UseResolver<TKey>(
         this ITenantBuilder<TKey> builder,
@@ -398,10 +403,13 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     }
 
     /// <summary>
-    /// Adds an access validator of type <typeparamref name="TValidator"/>, created in each request's scope, so it can
-    /// depend on scoped services such as a <c>DbContext</c>. Every validator must allow a request before its tenant is
-    /// made current.
+    /// Adds an access validator of type <typeparamref name="TValidator"/>. Every validator must allow a request before
+    /// its tenant is made current.
     /// </summary>
+    /// <remarks>
+    /// The validator is created in each request's scope, so it can depend on scoped services such as a
+    /// <c>DbContext</c>.
+    /// </remarks>
     /// <typeparam name="TValidator">The validator type, which implements <see cref="ITenantAccessValidator{TKey}"/> for the application's tenant key type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <returns>The same <paramref name="builder"/>, without its key type: call methods that need it first, or call it as a statement of its own.</returns>

@@ -35,10 +35,12 @@ public sealed class TenantResolutionOptions<TKey>
 
     /// <summary>
     /// The status code when the request's identifier names no tenant: the tenant store's
-    /// <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/> finds none. Default <c>404 Not Found</c>. When access
-    /// validators are configured, <see cref="AccessDeniedStatusCode"/> and its response are used instead, so a caller
-    /// cannot tell a tenant that does not exist from one it may not use.
+    /// <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/> finds none. Default <c>404 Not Found</c>.
     /// </summary>
+    /// <remarks>
+    /// When access validators are configured, <see cref="AccessDeniedStatusCode"/> and its response are used instead,
+    /// so a caller cannot tell a tenant that does not exist from one it may not use.
+    /// </remarks>
     public int TenantNotFoundStatusCode { get; set; } = StatusCodes.Status404NotFound;
 
     /// <summary>

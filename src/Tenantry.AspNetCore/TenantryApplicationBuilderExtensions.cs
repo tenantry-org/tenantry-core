@@ -11,18 +11,18 @@ namespace Microsoft.AspNetCore.Builder;
 public static class TenantryApplicationBuilderExtensions
 {
     /// <summary>
-    /// Adds the tenant resolution middleware to the pipeline.
-    /// Must be called after authentication middleware (<c>app.UseAuthentication()</c>)
-    /// if using claim-based resolution, and before any middleware that requires
-    /// a resolved tenant (e.g. authorisation, controllers).
-    /// When using <c>RequireTenant()</c> or <c>AllowMissingTenant()</c> endpoint metadata,
-    /// ensure routing has executed before this middleware. <see cref="WebApplication"/>
-    /// handles this automatically for minimal APIs and controllers.
-    /// After <see cref="UseTenantResolution"/>, it completes what that started: it runs the access validators on the
-    /// tenant found before authentication, and the claim resolvers if nothing else named one.
+    /// Resolves each request's tenant, checks it, and makes it current for the rest of the request. A request to an
+    /// endpoint that requires a tenant is rejected if it names none, or one that is unknown or refused.
     /// </summary>
     /// <param name="app">The application's request pipeline.</param>
     /// <returns>The same <paramref name="app"/> for chaining.</returns>
+    /// <remarks>
+    /// Call it after <c>app.UseAuthentication()</c>, because claim resolvers and claim validators read the user. Call it
+    /// after routing, because it reads <c>RequireTenant()</c> and <c>AllowMissingTenant()</c>
+    /// (<see cref="WebApplication"/> adds routing first). Call it before anything that needs the tenant. After
+    /// <see cref="UseTenantResolution"/>, it runs the access validators on the tenant found before authentication, and
+    /// the claim resolvers if nothing else named a tenant.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// Tenantry is not registered with a way to resolve requests (a <c>ResolveFrom…</c> or <c>UseResolver</c>
     /// method in <c>AddTenantry</c>), or no tenant store is registered.
@@ -37,18 +37,23 @@ public static class TenantryApplicationBuilderExtensions
     /// <summary>
     /// Resolves the request's tenant before authentication and makes it current, so authentication handlers read the
     /// tenant's options (<c>Configure&lt;JwtBearerOptions&gt;(scheme, …)</c> in Tenantry.Options' <c>ConfigurePerTenant</c>).
-    /// Call it before <c>app.UseAuthentication()</c>, and <see cref="UseTenantry"/> after it: that runs the access validators, and the
-    /// claim resolvers if nothing else named a tenant, then rejects or continues as it does alone.
     /// </summary>
     /// <param name="app">The application's request pipeline.</param>
     /// <returns>The same <paramref name="app"/> for chaining.</returns>
     /// <remarks>
+    /// <para>
+    /// Call it before <c>app.UseAuthentication()</c>, and <see cref="UseTenantry"/> after it, which runs the access
+    /// validators, and the claim resolvers if nothing else named a tenant, then rejects or continues as it does alone.
     /// Between the two, the tenant is current but not yet checked against the user, so put only
-    /// <c>app.UseAuthentication()</c> between them. An endpoint whose request did not pass through <see cref="UseTenantry"/>
-    /// after this does not run: it gets <c>500</c> and log event 1011. Only the resolvers added before the first that
-    /// needs the user (a claim resolver, or <c>ResolveFromPropagationHeader</c>) run here, in order. If they find nothing, <see cref="UseTenantry"/> runs every resolver, in order, after
-    /// authentication, so a resolver added after a claim resolver never wins over the claim; authentication then used
-    /// the default settings.
+    /// <c>app.UseAuthentication()</c> between them. An endpoint whose request did not pass through
+    /// <see cref="UseTenantry"/> after this does not run: it gets <c>500</c> and log event 1011.
+    /// </para>
+    /// <para>
+    /// Only the resolvers added before the first that needs the user (a claim resolver, or
+    /// <c>ResolveFromPropagationHeader</c>) run here, in order. If they find nothing, <see cref="UseTenantry"/> runs
+    /// every resolver, in order, after authentication, so a resolver added after a claim resolver never wins over the
+    /// claim; authentication then used the default settings.
+    /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// Tenantry is not registered with a way to resolve requests, or no tenant store is registered. The application

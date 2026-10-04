@@ -8,10 +8,8 @@ namespace Tenantry.AspNetCore;
 /// </summary>
 /// <param name="parameterName">The name of the query string parameter that carries the tenant identifier.</param>
 /// <remarks>
-/// A parameter given more than once names no tenant.
-/// Intended for local development and testing convenience only.
-/// Do not enable in production — query string parameters are logged and may appear
-/// in analytics, CDN caches, and browser history.
+/// A parameter given more than once names no tenant. For local development and tests only. Do not use it in
+/// production: query string parameters are logged, and appear in analytics, CDN caches and browser history.
 /// </remarks>
 public sealed class QueryStringTenantResolver(string parameterName = "tenantId") : ITenantResolver
 {
