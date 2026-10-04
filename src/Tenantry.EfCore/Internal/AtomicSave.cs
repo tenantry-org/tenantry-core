@@ -49,13 +49,17 @@ namespace Tenantry.EfCore.Internal;
 /// A confirmation must not be counted for the wrong save, as that could balance a failed one. Each context keeps the
 /// saves that began and have not ended, the latest last, and a notice is taken for the latest. <c>SavedChanges</c>
 /// confirms the latest only if it sent a statement and EF Core reports that the save wrote entities. A failure notice
-/// that follows a confirmation with nothing in between takes that confirmation back, and ends the latest save too: it
-/// is that save's second notice (an interceptor threw from its <c>SavedChanges</c>), or another save's that a save in
-/// between was confirmed before (one a <c>SaveChangesFailed</c> handler ran).
+/// ends the latest save, and, as the failed save may be any save still noted (one above it, stopped before it sent
+/// anything, took the notice), counts every noted save that sent a statement as failed. Only a save Tenantry itself
+/// rejected in <c>SavingChanges</c> is surely the latest, and ends alone. A failure notice that follows a confirmation
+/// with nothing in between also takes that confirmation back: it is that save's second notice (an interceptor threw
+/// from its <c>SavedChanges</c>), or another save's that a save in between was confirmed before (one a
+/// <c>SaveChangesFailed</c> handler ran).
 /// </para>
 /// <para>
-/// Two sequences still confirm a failed save. Both need a nested save that sent statements and failed without any
-/// failure notice reaching Tenantry: no failed or cancelled command, no failed check seen by Tenantry's
+/// A failed save is therefore counted as failed whenever any notice of its failure reaches Tenantry. Two sequences
+/// still confirm a failed save. Both need a nested save that sent statements and failed without any failure notice
+/// reaching Tenantry: no failed or cancelled command, no failed check seen by Tenantry's
 /// <c>ThrowingConcurrencyException</c>, and its <c>SaveChangesFailed</c> or <c>SaveChangesCanceled</c> notice stopped
 /// by an interceptor before Tenantry's that throws from it, or by a <c>SaveChangesFailed</c> handler added before
 /// Tenantry's that throws. In the first, an interceptor after Tenantry's runs that save from another's
@@ -266,14 +270,18 @@ internal sealed class AtomicSave
 
     /// <summary>
     /// Notes that the latest save of <paramref name="context"/> ended without succeeding: it failed, was cancelled, or
-    /// Tenantry rejected it. A notice right after a confirmation also takes that confirmation back.
+    /// Tenantry rejected it. Unless Tenantry rejected it, every save still noted that sent a statement counts as
+    /// failed, and a notice right after a confirmation also takes that confirmation back.
     /// </summary>
     /// <param name="context">The context whose save ended.</param>
     /// <param name="failure">
     /// What the save interceptor's <c>SaveChangesFailed</c> was given, which the context's <c>SaveChangesFailed</c>
     /// event then reports again, or <see langword="null"/>.
     /// </param>
-    public static void Failed(DbContext context, Exception? failure = null)
+    /// <param name="rejected">
+    /// Whether Tenantry's own <c>SavingChanges</c> stopped the save, so the notice is surely the latest save's.
+    /// </param>
+    public static void Failed(DbContext context, Exception? failure = null, bool rejected = false)
     {
         if (Find(context) is not { } lease)
         {
@@ -291,6 +299,19 @@ internal sealed class AtomicSave
         if (End(context, lease, own: lease.Confirmed is null) is { _sent: true, _ledger: { } ledger })
         {
             ledger.Fail(null);
+        }
+
+        // The failed save may be any of those still noted: a save above it that ended unheard, one an interceptor
+        // stopped before it sent anything, takes the notice in its place.
+        if (!rejected)
+        {
+            foreach (var other in lease.Saves)
+            {
+                if (other is { _sent: true, _ledger: { } listed })
+                {
+                    listed.Fail(null);
+                }
+            }
         }
 
         lease.Confirmed = null;

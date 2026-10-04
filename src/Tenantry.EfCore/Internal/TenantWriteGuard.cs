@@ -93,7 +93,7 @@ internal sealed class TenantWriteGuard<TKey>
         catch
         {
             // EF Core raises no failure for a save that a SavingChanges interceptor stops.
-            AtomicSave.Failed(context);
+            AtomicSave.Failed(context, rejected: true);
             throw;
         }
     }
@@ -123,7 +123,7 @@ internal sealed class TenantWriteGuard<TKey>
         }
         catch
         {
-            AtomicSave.Failed(context);
+            AtomicSave.Failed(context, rejected: true);
             throw;
         }
     }

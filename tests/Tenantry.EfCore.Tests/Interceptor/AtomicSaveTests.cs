@@ -734,6 +734,54 @@ public sealed class AtomicSaveTests : IDisposable
         }
     }
 
+    [Theory]
+    [MemberData(nameof(UndoableTransactions))]
+    public async Task AFailedSaveWhoseNoticeEndsAnAuditSaveThatWasStopped_StopsTheCommit(Undoable undoable, bool sync)
+    {
+        // An interceptor after Tenantry's runs the forged save from another save's SavingChanges and swallows its
+        // failure: the owned row's INSERT runs, then a rating's UPDATE matches no row, before the owner's check. A
+        // SaveChangesFailed handler tries to record the failure with a save of its own, which a validation interceptor
+        // stops before it sends anything, so that save is still noted when Tenantry hears of the failure.
+        await SeedAcmeAsync();
+        _tenant.As("globex");
+        StopWhile validation = new();
+
+        var committed = await CommitsAsync(undoable, new Setup { Later = new StartOverWhenSaving(), Last = validation }, async open =>
+        {
+            var db = await open();
+            db.SaveChangesFailed += (_, _) =>
+            {
+                try
+                {
+                    validation.Stopping = true;
+                    db.Add(new Supplier());
+                    db.SaveChanges();
+                }
+                catch (InvalidOperationException)
+                {
+                    // The audit is best effort.
+                }
+                finally
+                {
+                    validation.Stopping = false;
+                }
+            };
+
+            Forge(db, Forgery.StubOwnerAddsOwnedRow);
+            Rating rating = new() { Id = 9, TenantId = "globex", Stars = 1 };
+            db.Attach(rating);
+            rating.Stars = 5;
+            await SaveAsync(db, sync);
+        });
+
+        committed.Should().BeFalse();
+
+        if (undoable == Undoable.WithoutSavepoints)
+        {
+            (await AcmeStateAsync()).Should().Be(AcmeState);
+        }
+    }
+
     [Fact]
     public void ContextsOpeningOneAmbientTransactionAtOnce_ShareOneLedger()
     {
@@ -1662,7 +1710,7 @@ public sealed class AtomicSaveTests : IDisposable
             builder.AddInterceptors(last);
         }
 
-        foreach (var interceptor in new IInterceptor?[] { setup.Later, setup.Transactions, setup.Commands })
+        foreach (var interceptor in new IInterceptor?[] { setup.Later, setup.Last, setup.Transactions, setup.Commands })
         {
             if (interceptor is not null)
             {
@@ -1702,6 +1750,8 @@ public sealed class AtomicSaveTests : IDisposable
         public IInterceptor? Before { get; init; }
 
         public IInterceptor? Later { get; init; }
+
+        public IInterceptor? Last { get; init; }
 
         public DbTransactionInterceptor? Transactions { get; init; }
 
@@ -1794,6 +1844,21 @@ public sealed class AtomicSaveTests : IDisposable
 
             return result;
         }
+    }
+
+    // A validation interceptor after Tenantry's that stops a save in SavingChanges while told to.
+    private sealed class StopWhile : SaveChangesInterceptor
+    {
+        public bool Stopping { get; set; }
+
+        public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result) =>
+            Stopping ? throw new InvalidOperationException("not valid") : result;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            Stopping ? throw new InvalidOperationException("not valid") : ValueTask.FromResult(result);
     }
 
     // Records a failed save with a supplier of its own, saved through the context.
