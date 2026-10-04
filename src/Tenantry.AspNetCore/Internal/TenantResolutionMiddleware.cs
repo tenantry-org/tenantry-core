@@ -153,7 +153,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         {
             if (early is { RefusedSignedIn: true })
             {
-                await SignOutAuthenticatedSchemeAsync(context).ConfigureAwait(false);
+                await SignOutLocalSchemesAsync(context).ConfigureAwait(false);
             }
 
             await RejectAsync(context, resolution).ConfigureAwait(false);
@@ -275,27 +275,39 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         }
     }
 
-    // The scheme that signed the refused user in may keep it on the server (a cookie's SessionStore) and renew it as
-    // the response starts, which the cookies restored then cannot undo. Signing it out stops the renewal and ends the
-    // stored session. Only a scheme that signs out locally: a remote one (OpenID Connect, say) would start a sign-out
-    // at the identity provider. The cookie it deletes is dropped with the others the response would have set.
-    private static async Task SignOutAuthenticatedSchemeAsync(HttpContext context)
+    // A scheme that signed the refused user in may keep it on the server (a cookie's SessionStore) and renew it as the
+    // response starts, which the cookies restored then cannot undo. The scheme that authenticated the request may be a
+    // remote one over a cookie (OpenID Connect as the default), so every scheme that signs out locally is signed out:
+    // its handler renews nothing, and a stored session is removed. A remote scheme would start a sign-out at the
+    // identity provider, and a policy scheme forwards to one of the others, so neither is. The cookies the sign-outs
+    // delete are dropped with the others the response would have set. A failed sign-out is logged, and the others
+    // and the rejection still happen.
+    private async Task SignOutLocalSchemesAsync(HttpContext context)
     {
-        var scheme = context.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult?.Ticket?.AuthenticationScheme;
-
-        if (scheme is null || context.RequestServices.GetService<IAuthenticationHandlerProvider>() is not { } handlers)
+        if (context.RequestServices.GetService<IAuthenticationSchemeProvider>() is not { } schemes)
         {
             return;
         }
 
-        var handler = await handlers.GetHandlerAsync(context, scheme).ConfigureAwait(false);
-
-        if (handler is IAuthenticationRequestHandler || handler is not IAuthenticationSignOutHandler)
+        foreach (var scheme in await schemes.GetAllSchemesAsync().ConfigureAwait(false))
         {
-            return;
-        }
+            if (!typeof(IAuthenticationSignOutHandler).IsAssignableFrom(scheme.HandlerType) ||
+                typeof(IAuthenticationRequestHandler).IsAssignableFrom(scheme.HandlerType) ||
+                typeof(PolicySchemeHandler).IsAssignableFrom(scheme.HandlerType))
+            {
+                continue;
+            }
 
-        await context.SignOutAsync(scheme).ConfigureAwait(false);
+            try
+            {
+                await context.SignOutAsync(scheme.Name).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                TenantResolutionLog.SignOutFailed(
+                    _logger, exception, scheme.Name, context.Request.Method, context.Request.Path);
+            }
+        }
     }
 
     // Keeps the endpoint's metadata, so authorization and the rest of the pipeline treat the request as before.

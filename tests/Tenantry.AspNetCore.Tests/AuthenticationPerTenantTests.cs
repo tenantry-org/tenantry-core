@@ -547,6 +547,82 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task ARefusedRequest_SignsOutTheCookieUnderARemoteDefaultScheme_SoItsStoreKeepsNothingOfTheTenant()
+    {
+        // The default authenticate scheme is a remote one (OpenID Connect, as Microsoft.Identity.Web sets it up), which
+        // authenticates through the cookie and returns the ticket under its own name.
+        RecordingTicketStore store = new();
+        await using var app = await StartPlanCookieAsync(
+            o => o.SessionStore = store,
+            more: authentication =>
+            {
+                authentication.AddScheme<AuthenticationSchemeOptions, RemoteStyleHandler>("remote", null);
+                authentication.Services.Configure<AuthenticationOptions>(o => o.DefaultAuthenticateScheme = "remote");
+            });
+        using var client = app.GetTestClient();
+
+        using var signIn = await SendAs(client, "acme", "/sign-in", cookie: null);
+        var acmeCookie = AuthCookie(signIn, "auth")!;
+
+        using (var refused = await SendAs(client, "globex", "/plan", acmeCookie))
+        {
+            refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            refused.Headers.Contains("Set-Cookie").Should().BeFalse();
+        }
+
+        store.Renewed.Should().NotContain(ticket => ticket.Principal.HasClaim("plan", "premium"));
+        store.Removed.Should().ContainSingle();
+
+        using var plan = await SendAs(client, "acme", "/plan", acmeCookie);
+        plan.StatusCode.Should().NotBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ASignOutThatFails_IsLogged_AndTheOtherSchemesAndTheRejectionStillHappen()
+    {
+        RecordingLoggerProvider logs = new();
+        var otherSignedOut = false;
+        await using var app = await StartPlanCookieAsync(
+            o => o.SessionStore = new RecordingTicketStore { FailRemoving = true },
+            more: authentication => authentication.AddCookie("other", o => o.Events.OnSigningOut = _ =>
+            {
+                otherSignedOut = true;
+                return Task.CompletedTask;
+            }),
+            logs: logs);
+        using var client = app.GetTestClient();
+
+        using var signIn = await SendAs(client, "acme", "/sign-in", cookie: null);
+
+        using (var refused = await SendAs(client, "globex", "/plan", AuthCookie(signIn, "auth")))
+        {
+            refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            refused.Headers.Contains("Set-Cookie").Should().BeFalse();
+        }
+
+        logs.For(1015).Should().ContainSingle().Which.Message.Should().Contain(CookieAuthenticationDefaults.AuthenticationScheme);
+        otherSignedOut.Should().BeTrue();
+    }
+
+    // Like OpenID Connect as the default authenticate scheme: handles requests of its own, and authenticates through
+    // the cookie, returning the ticket under its own name.
+    private sealed class RemoteStyleHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, System.Text.Encodings.Web.UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder), IAuthenticationRequestHandler
+    {
+        public Task<bool> HandleRequestAsync() => Task.FromResult(false);
+
+        protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            var cookie = await Context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            return cookie.Succeeded
+                ? AuthenticateResult.Success(new AuthenticationTicket(cookie.Principal!, cookie.Properties, Scheme.Name))
+                : cookie;
+        }
+    }
+
+    [Fact]
     public async Task ACookieNamePerTenant_LeavesAnotherTenantsCookieUnread()
     {
         await using var app = await StartPlanCookieAsync(tenants: tenant => tenant.ConfigurePerTenant(perTenant => perTenant
@@ -582,7 +658,10 @@ public sealed class AuthenticationPerTenantTests
     // Cookie authentication whose event takes the plan from the current tenant and renews the cookie, as Identity's
     // security stamp check renews it: the renewal is written as the response starts, after Tenantry refused the request.
     private static Task<WebApplication> StartPlanCookieAsync(
-        Action<CookieAuthenticationOptions>? cookie = null, Action<ITenantBuilder<string>>? tenants = null) =>
+        Action<CookieAuthenticationOptions>? cookie = null,
+        Action<ITenantBuilder<string>>? tenants = null,
+        Action<AuthenticationBuilder>? more = null,
+        RecordingLoggerProvider? logs = null) =>
         StartAsync(
             tenant =>
             {
@@ -591,7 +670,7 @@ public sealed class AuthenticationPerTenantTests
             },
             services =>
             {
-                services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
+                var authentication = services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
                 {
                     o.Cookie.Name = "auth";
                     o.Events.OnValidatePrincipal = c =>
@@ -611,6 +690,7 @@ public sealed class AuthenticationPerTenantTests
                     };
                     cookie?.Invoke(o);
                 });
+                more?.Invoke(authentication);
                 services.AddAuthorizationBuilder().AddPolicy("Premium", policy => policy.RequireClaim("plan", "premium"));
             },
             a =>
@@ -628,7 +708,8 @@ public sealed class AuthenticationPerTenantTests
                 }).AllowMissingTenant();
                 a.MapGet("/plan", () => "premium").RequireAuthorization("Premium");
                 a.MapGet("/me", (HttpContext http) => http.User.FindFirst("tenant_id")?.Value ?? "(anonymous)").AllowMissingTenant();
-            });
+            },
+            logs);
 
     private static async Task<HttpResponseMessage> SendAs(HttpClient client, string tenant, string path, string? cookie)
     {
@@ -655,6 +736,8 @@ public sealed class AuthenticationPerTenantTests
     // Keeps tickets in memory, and records what the cookie handler renews and removes.
     private sealed class RecordingTicketStore : ITicketStore
     {
+        public bool FailRemoving { get; init; }
+
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AuthenticationTicket> _tickets = new();
 
         public System.Collections.Concurrent.ConcurrentQueue<AuthenticationTicket> Renewed { get; } = new();
@@ -680,6 +763,9 @@ public sealed class AuthenticationPerTenantTests
 
         public Task RemoveAsync(string key)
         {
+            if (FailRemoving)
+                throw new InvalidOperationException("The session store is down.");
+
             Removed.Enqueue(key);
             _tickets.TryRemove(key, out _);
             return Task.CompletedTask;

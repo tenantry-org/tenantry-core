@@ -25,6 +25,7 @@ between versions, so you can alert on it. Alert on 2001 above all: a save that t
 | 1012 | `TenantInactive` | Warning | A request's tenant is not active (`ValidateTenantActivity`). |
 | 1013 | `AuthorizationBeforeTenantry` | Error | The authorization middleware ran after `app.UseTenantResolution()` and before `app.UseTenantry()`, so it saw a tenant the access validators had not checked. The request was refused (500). |
 | 1014 | `AuthorizationMarkersMissing` | Warning | The running ASP.NET Core does not set the keys Tenantry reads to catch authorization between `app.UseTenantResolution()` and `app.UseTenantry()`, so that order is no longer caught. Logged once, as the application starts. |
+| 1015 | `SignOutFailed` | Error | Signing out a scheme failed while Tenantry refused a request whose user was signed in under a tenant the access validators refused. A session that scheme keeps may still hold that user; the request was refused as usual. |
 | 2001 | `TenantIsolationViolation` | Error | `SaveChanges` refused to write an entity of another tenant. |
 | 2002 | `WriteWithoutTenant` | Warning | `SaveChanges` wrote tenant-owned entities without a tenant, under `OnMissingTenant = Warn`. |
 | 2003 | `WriteMatchedNoRow` | Warning | An update or delete of a tenant-owned entity matched no row: it does not exist, belongs to another tenant, or changed concurrently. |

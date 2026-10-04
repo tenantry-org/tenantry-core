@@ -92,4 +92,12 @@ internal static partial class TenantResolutionLog
         "app.UseAuthentication() between the two, and report this to Tenantry",
         EventName = "AuthorizationMarkersMissing")]
     public static partial void AuthorizationMarkersMissing(ILogger logger, string keys);
+
+    [LoggerMessage(1015, LogLevel.Error,
+        "Signing out scheme {Scheme} failed while refusing request {Method} {Path}, whose user was signed in under a " +
+        "tenant the access validators refused. A session that scheme keeps may still hold that user. The request was " +
+        "refused as usual",
+        EventName = "SignOutFailed")]
+    public static partial void SignOutFailed(
+        ILogger logger, Exception exception, string scheme, string method, string path);
 }

@@ -152,9 +152,10 @@ outcomes:
   them, so Identity rejects the cookie and deletes it: the request runs anonymous, and the user is signed out of
   their own tenant too.
 - Otherwise the validator refuses the tenant for a signed-in user, so the whole request is refused (`403`), sign-in
-  page and other `AllowMissingTenant()` pages included. Tenantry signs the application cookie out on that request and
-  the response sets no cookie, so the browser keeps its cookie and the user stays signed in to their own tenant,
-  unless the cookie's ticket is kept in a `SessionStore`: that session is removed, and the user is signed out.
+  page and other `AllowMissingTenant()` pages included. Tenantry signs Identity's cookies out on that request
+  (application, external and two-factor) and the response sets no cookie, so the browser keeps its cookies and the
+  user stays signed in to their own tenant, unless the cookie's ticket is kept in a `SessionStore`: that session is
+  removed, and the user is signed out.
 
 Either way the user must sign out before using another tenant. Static files can go before
 `app.UseTenantResolution()`; a sign-in page cannot, since it needs the tenant's cookie settings.

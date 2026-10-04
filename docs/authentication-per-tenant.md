@@ -82,12 +82,15 @@ Between the two, the tenant is current but not yet checked against the user. So:
   that is valid on several tenants carries those claims to the others.
 - If the validators refuse a tenant that was current during authentication, and the request has a signed-in user (an
   authenticated identity, or any claims), the request is refused with the access-denied response, whether or not its
-  endpoint requires a tenant: the user was authenticated as a tenant it may not use. Tenantry signs out the scheme
-  that authenticated the user, if it signs out locally (a cookie scheme does; JWT bearer has nothing to sign out, and
-  a remote scheme such as OpenID Connect is left alone), so its handler renews nothing and a `SessionStore` drops the
-  session. The response then carries none of the cookies set after `app.UseTenantResolution()`, the sign-out's
-  deletion included. A caller with no identity and no claims, such as an anonymous one, is treated as without early
-  resolution: the tenant is not current, and an endpoint that does not require one runs.
+  endpoint requires a tenant: the user was authenticated as a tenant it may not use. Tenantry signs out every scheme
+  that signs out locally: each cookie scheme, Identity's external and two-factor cookies included, so no handler renews
+  the user and a `SessionStore` drops the session. That covers a cookie under a remote default scheme, such as OpenID
+  Connect set up by `AddMicrosoftIdentityWebApp`. Remote schemes are not signed out, since that would start a sign-out
+  at the identity provider, nor are policy schemes, which forward to the others; JWT bearer has nothing to sign out. A
+  sign-out that fails is logged (event 1015) and the others still run. The response then carries none of the cookies set
+  after `app.UseTenantResolution()`, the sign-outs' deletions included. A caller with no identity and no claims, such as
+  an anonymous one, is treated as without early resolution: the tenant is not current, and an endpoint that does not
+  require one runs.
 - Middleware before `app.UseTenantResolution()` must not store `HttpContext.User` as the response starts: its
   `OnStarting` callbacks run after Tenantry's, so they see the refused user.
 - An endpoint the request reaches without passing `app.UseTenantry()` (in a branch, say) does not run: it gets `500`
@@ -132,7 +135,8 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 ```
 
 Without it, what follows is the safety net. A cookie replayed on another tenant is refused there, on every endpoint,
-since its user names a tenant the validator refuses. Tenantry signs the cookie scheme out on that request:
+since its user names a tenant the validator refuses. Tenantry signs every cookie scheme out on that request, whether
+the cookie scheme or a remote scheme over it is the default:
 
 | Cookie set-up | On the other tenant | Back on their own tenant |
 |---|---|---|
