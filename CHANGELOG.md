@@ -86,6 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the request's tenant as `tenant.id`, or with a value of your own per tenant to keep the series few. It replaces
   Tenantry.Pro's `AddTenantMetrics()`, whose package, Tenantry.Pro.AspNetCore, existed only for it. See
   [Diagnostics](docs/diagnostics.md#request-metrics-per-tenant).
+- Docs: [For AI coding agents](docs/ai-agents.md), the steps a coding agent follows to add Tenantry to an
+  application, a test that shows one tenant cannot read or write another's rows, the mistakes agents make and the
+  correct form of each, and rules to copy into an application's AGENTS.md or CLAUDE.md.
 
 ### Changed
 

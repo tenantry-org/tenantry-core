@@ -29,7 +29,8 @@ If you are new, start with [Getting started](getting-started.md) and [Core conce
 18. [Compatibility](compatibility.md): supported .NET and EF Core versions, databases, and dependency ranges.
 19. [Troubleshooting](troubleshooting.md): common pitfalls and how to diagnose them.
 20. [Migrating from Finbuckle.MultiTenant](migrating-from-finbuckle.md): how Finbuckle's concepts and EF Core setup map to Tenantry, and what changes.
-21. [API reference](api/README.md): every public type and member, generated from the XML documentation comments.
+21. [For AI coding agents](ai-agents.md): the steps an agent follows to add Tenantry, a test that proves isolation, the common mistakes, and rules to copy into AGENTS.md.
+22. [API reference](api/README.md): every public type and member, generated from the XML documentation comments.
 
 ## How the pieces fit together
 
