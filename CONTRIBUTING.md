@@ -33,7 +33,9 @@ Pro also uses, `eng/common/Packages.props`; each sample declares its own, as an 
 Test and sample projects commit a `packages.lock.json`, and CI restores with `--locked-mode`, so it fails
 when a lock file is stale. When you change a package version, run `dotnet restore Tenantry.slnx` and commit the
 lock files it rewrites. `src/` projects have no lock files; the version ranges their packages declare are checked
-by `scripts/check-package-ranges.cs` instead.
+by `scripts/check-package-ranges.cs` instead. In Rider, set Settings > Build, Execution, Deployment > NuGet > restore
+engine to MSBuild: Rider's embedded engine writes the samples' lock files differently from the CLI, and CI's locked
+restore then fails.
 
 The build settings, scripts and package versions that `eng/common/shared-files.txt` lists are shared with the
 Tenantry Pro repository, which copies them from here, so they hold nothing specific to this repository. CI also
