@@ -9,28 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading
 
-- A resolver registered with `UseResolver(sp => …)` is created in each request's scope. To create one resolver for the
-  application's lifetime, create it yourself and pass the instance to `UseResolver(resolver)`.
-- `UseConnectionStrings(options => …)` and `UseConnectionStrings(sp => …)` throw when combined, in either order, and
-  `UseConnectionStrings(options => …)` throws after an `ITenantConnectionStringProvider<TKey>` registered before
-  `AddTenantry`. Keep the one you mean.
-- `TenantConnectionStringProvider<TKey>` is internal. To wrap the registered provider, use `DecorateConnectionStrings`;
-  in a test, build a provider with `UseConnectionStrings(options => …)` and resolve
-  `ITenantConnectionStringProvider<TKey>`.
-
-- An HTTP client with `UseTenantry()` sets an absolute `BaseAddress` in its registration, or passes its service's
-  address to `UseTenantry(address)`, as a gRPC client or a typed client that sets `BaseAddress` in its constructor
-  must.
-- A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
-  `InvalidateAllLocallyAsync`.
+- Mark every entity type that is not tenant-owned, in a context that has tenant-owned ones, with
+  `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`, or the context's first query or save throws. ASP.NET Core
+  Identity's types need it too ([ASP.NET Core Identity](docs/aspnetcore-identity.md#the-user-type-and-context)).
+- Give each HTTP client with `UseTenantry()` an absolute `BaseAddress` in its registration, or pass its service's
+  address to `UseTenantry(address)`, as a gRPC client must.
+- A resolver from `UseResolver(sp => …)` is created per request. For one resolver for the application's lifetime,
+  pass an instance to `UseResolver(resolver)`.
+- Keep one of `UseConnectionStrings(options => …)` and `UseConnectionStrings(sp => …)`, or an
+  `ITenantConnectionStringProvider<TKey>` registered before `AddTenantry`. Code that resolved
+  `TenantConnectionStringProvider<TKey>` resolves `ITenantConnectionStringProvider<TKey>`.
 - An `OnRejected` handler or log alert that looked for a suspended tenant under `TenantRejectionReason.AccessDenied`
   or event 1005 looks for `TenantRejectionReason.Inactive` or event 1012.
-
-- Mark every entity type that is not tenant-owned, in a context that has tenant-owned ones, with
-  `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`, or its first query or save throws. ASP.NET Core Identity's
-  types need it too ([ASP.NET Core Identity](docs/aspnetcore-identity.md#the-user-type-and-context)).
-- `TenantModel.FindUnisolatedEntityTypes` returns only the roots of hierarchies, and no owned or many-to-many join
-  entity types, and `TenantModel.IsSharedAcrossTenants` is true for a type whose base type is marked.
+- A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
+  `InvalidateAllLocallyAsync`.
+- Code that calls `TenantModel.FindUnisolatedEntityTypes` gets the roots of hierarchies only, and no owned or
+  many-to-many join entity types, which follow the types they belong to. `TenantModel.IsSharedAcrossTenants` is true
+  for a type whose base type is marked.
 
 ### Added
 
@@ -68,7 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UseTenantry()` on an HTTP or gRPC client with no base address in its registration fails when the client is created.
   It sent the tenant's id to any host the client called. `UseTenantry(address)` names the service for a client that
   sets its address elsewhere.
-
 - A transaction that EF Core cannot undo a failed save in (an ambient `TransactionScope`, or SQL Server with multiple
   active result sets) is rolled back when a save whose tenant check failed is followed by a save that succeeds. Before,
   a later save that wrote no owned rows and no entity mapped to more than one table, or ran without a tenant, marked
