@@ -89,10 +89,9 @@ public enum TenantIsolationViolationKind
     SaveWithoutTransaction,
 
     /// <summary>
-    /// A transaction was about to commit, or an ambient one to complete, holding a <c>SaveChanges</c> that failed, or
-    /// did not end, after sending some of its statements, among them rows whose tenant another of its statements
-    /// checks, and EF Core could not undo that save in it (no savepoint, or an ambient transaction). It was rolled back
-    /// instead.
+    /// A save in this transaction failed, or never finished, after sending statements whose tenant check was another of
+    /// its statements. EF Core could not undo only that save (no savepoint, or an ambient transaction), so the
+    /// transaction was rolled back instead of committed.
     /// </summary>
     TransactionRolledBack,
 

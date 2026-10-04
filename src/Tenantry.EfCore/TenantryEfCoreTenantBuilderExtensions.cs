@@ -57,8 +57,7 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// <summary>
     /// Registers <typeparamref name="TContext"/> for a database per tenant: each context is connected to the current
     /// tenant's database, through <see cref="ITenantConnectionStringProvider{TKey}"/>, and uses
-    /// <c>UseTenantry()</c>. Registers a scoped <typeparamref name="TContext"/> and a singleton
-    /// <see cref="IDbContextFactory{TContext}"/>.
+    /// <c>UseTenantry()</c>.
     /// </summary>
     /// <typeparam name="TContext">The context type.</typeparam>
     /// <param name="builder">The tenant builder, after <c>UseConnectionStrings</c> (or another registration of <see cref="ITenantConnectionStringProvider{TKey}"/>).</param>
@@ -74,6 +73,7 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// <returns>The same builder, without its key type: call methods that need it (such as <c>UseConnectionStrings</c>) first.</returns>
     /// <remarks>
     /// <para>
+    /// Registers a scoped <typeparamref name="TContext"/> and a singleton <see cref="IDbContextFactory{TContext}"/>.
     /// A context that is not pooled is created with its options and any other services its constructor needs, and
     /// has them as its application service provider, as with <c>AddDbContext</c>: the scoped
     /// <typeparamref name="TContext"/> from its scope, and one from the factory from the root provider, as EF Core's

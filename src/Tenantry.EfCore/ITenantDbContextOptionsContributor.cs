@@ -4,11 +4,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Tenantry.EfCore;
 
 /// <summary>
-/// Adds to the options of every <see cref="DbContext"/> that uses <c>UseTenantry()</c>. Register implementations in
-/// the application's service collection, as singletons; <c>UseTenantry()</c> applies each of them.
+/// Adds to the options of every <see cref="DbContext"/> that uses <c>UseTenantry()</c>.
 /// </summary>
 /// <remarks>
-/// Packages that build on Tenantry use this to configure contexts without asking the application to add another
+/// Register implementations in the application's service collection, as singletons. Packages that build on Tenantry use this to configure contexts without asking the application to add another
 /// call to each one, for example to add an interceptor. Contributors run when <c>UseTenantry()</c> is called with the
 /// application service provider in place, as it is inside <c>AddDbContext</c>, <c>AddDbContextPool</c>,
 /// <c>AddDbContextFactory</c>, <c>AddPooledDbContextFactory</c> and <c>AddDbContextPerTenantDatabase</c>; options
