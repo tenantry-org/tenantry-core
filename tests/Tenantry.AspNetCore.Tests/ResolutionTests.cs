@@ -376,6 +376,7 @@ public sealed class ResolutionTests
             provider.GetRequiredService<ITenantContextSetter<string>>(),
             provider.GetRequiredService<IOptions<TenantResolutionOptions<string>>>(),
             provider.GetRequiredService<TenantResolutionMetrics>(),
+            provider.GetRequiredService<IOptions<TenantRequestMetricsOptions<string>>>(),
             provider.GetRequiredService<ILoggerFactory>());
         DefaultHttpContext context = new() { RequestServices = scope.ServiceProvider };
         context.Request.Headers["X-Tenant-Id"] = "initech";

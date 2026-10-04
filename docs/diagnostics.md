@@ -79,8 +79,7 @@ The `Tenantry.AspNetCore` meter has one instrument:
 | `tenantry.resolutions` | Counter | `{request}` | `tenantry.resolution.result` (`resolved`, `missing`, `not_found`, `access_denied`); `tenantry.resolution.rejected` (`true` when the request was refused) |
 
 It counts every request the middleware handles, including the ones an endpoint that requires a tenant refuses,
-which never reach your endpoints. It has no `tenant.id` tag, to keep its series few: Tenantry.Pro's tenant metrics
-add the tenant to ASP.NET Core's own request metric.
+which never reach your endpoints. It has no `tenant.id` tag, to keep its series few.
 
 ```csharp
 using OpenTelemetry.Metrics;
@@ -91,4 +90,23 @@ builder.Services.AddOpenTelemetry()
 
 ```bash
 dotnet-counters monitor --counters Tenantry.AspNetCore --process-id <pid>
+```
+
+### Request metrics per tenant
+
+`TagRequestMetrics()` adds the tenant to ASP.NET Core's own request metric, `http.server.request.duration`, as
+`tenant.id`, so latency and errors can be read per tenant. A request without a tenant gets no tag.
+
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .ResolveFromSubdomain()
+    .UseStore<AppTenantStore>()
+    .TagRequestMetrics());
+```
+
+Each tag value is a series of its own for every route, method and status code. With many tenants, tag the ones you
+watch and group the rest: the function returns the tag for a tenant, or `null` to leave it off.
+
+```csharp
+tenant.TagRequestMetrics(t => t.TenantId.StartsWith("enterprise-") ? t.TenantId : "other");
 ```

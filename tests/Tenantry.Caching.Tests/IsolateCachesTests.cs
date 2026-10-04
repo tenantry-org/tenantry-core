@@ -282,6 +282,24 @@ public sealed class IsolateCachesTests
         }
     }
 
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped, false)]
+    [InlineData(ServiceLifetime.Transient, false)]
+    [InlineData(ServiceLifetime.Scoped, true)]
+    [InlineData(ServiceLifetime.Transient, true)]
+    public void AHybridCacheThatIsNotASingleton_IsRefusedWhenRegistered_SinceInvalidationClearsItOutsideAnyScope(
+        ServiceLifetime lifetime, bool keyed)
+    {
+        ServiceCollection services = new();
+        services.Add(keyed
+            ? new ServiceDescriptor(typeof(HybridCache), "reports", (_, _) => new InMemoryHybridCache(), lifetime)
+            : new ServiceDescriptor(typeof(HybridCache), _ => new InMemoryHybridCache(), lifetime));
+
+        services.Invoking(s => s.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches()))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage(keyed ? "*key 'reports'*needs a singleton*" : "The HybridCache is registered as*needs a singleton*");
+    }
+
     // The check a host runs before it starts (ValidateOnStart), without building one: reading the options validates them.
     private static void RunStartupChecks(IServiceProvider provider) =>
         _ = provider.GetRequiredService<IOptions<CacheIsolationCheck>>().Value;

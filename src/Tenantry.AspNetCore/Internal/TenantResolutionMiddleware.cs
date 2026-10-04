@@ -40,6 +40,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     private readonly TenantResolutionMetrics _metrics;
     private readonly ILogger _logger;
     private readonly TenantRequestResolution<TKey> _resolution;
+    private readonly TenantRequestMetricsOptions<TKey> _requestMetrics;
     private int _warnedBeforeRouting;
     private int _warnedBeforeAuthentication;
 
@@ -49,6 +50,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         ITenantContextSetter<TKey> tenantContext,
         IOptions<TenantResolutionOptions<TKey>> options,
         TenantResolutionMetrics metrics,
+        IOptions<TenantRequestMetricsOptions<TKey>> requestMetrics,
         ILoggerFactory loggerFactory)
     {
         _next = next;
@@ -56,6 +58,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         _tenantContext = tenantContext;
         _options = options.Value;
         _metrics = metrics;
+        _requestMetrics = requestMetrics.Value;
         _logger = loggerFactory.CreateLogger(TenantResolutionLog.Category);
     }
 
@@ -84,6 +87,11 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         {
             var tenantId = TenantIds.Format(tenant.TenantId);
             requestActivity?.SetTag(TenantTelemetry.TenantIdTag, tenantId);
+
+            if (_requestMetrics.Enabled)
+            {
+                TagRequestMetrics(context, tenant, tenantId);
+            }
 
             using var current = _tenantContext.Use(tenant);
             using var logScope = _logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId));
@@ -234,6 +242,24 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     private static bool HasTenantMetadata(Endpoint endpoint) =>
         endpoint.Metadata.GetMetadata<RequireTenantAttribute>() is not null ||
         endpoint.Metadata.GetMetadata<AllowMissingTenantAttribute>() is not null;
+
+    private void TagRequestMetrics(HttpContext context, ITenantDescriptor<TKey> tenant, string tenantId)
+    {
+        // ASP.NET Core adds the feature only while something listens to the metric.
+        if (context.Features.Get<IHttpMetricsTagsFeature>() is not { } metrics)
+        {
+            return;
+        }
+
+        var value = _requestMetrics.GetTagValue is { } getTagValue ? getTagValue(tenant) : tenantId;
+
+        // A request the pipeline runs again (UseExceptionHandler("/error"), UseStatusCodePagesWithReExecute) is resolved
+        // twice with the same feature.
+        if (value is not null && !metrics.Tags.Any(tag => tag.Key == TenantTelemetry.TenantIdTag))
+        {
+            metrics.Tags.Add(new KeyValuePair<string, object?>(TenantTelemetry.TenantIdTag, value));
+        }
+    }
 
     private bool IsTenantRequired(Endpoint? endpoint)
     {
