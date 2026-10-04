@@ -55,7 +55,7 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AnOwnerWhoseTenantIdWasChangedUnseen_IsRefused_AndIsNotMovedToTheOtherTenant(bool async)
+    public async Task AnOwnerWhoseTenantIdWasChangedUnseen_IsRefused_AndIsNotMovedToTheOtherTenant(bool sync)
     {
         // Set after the last change detection, the owner's TenantId is not seen to change, so the owner stays
         // Unchanged: confirming its stored row must not write that value.
@@ -69,7 +69,7 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
             db.ChangeTracker.AutoDetectChangesEnabled = false;
             customer.TenantId = "globex";
 
-            Func<Task> save = async ? () => db.SaveChangesAsync() : () => Task.FromResult(db.SaveChanges());
+            Func<Task> save = sync ? () => Task.FromResult(db.SaveChanges()) : () => db.SaveChangesAsync();
             (await save.Should().ThrowAsync<TenantIsolationViolationException>()).Which.OffendingTenantId.Should().Be("globex");
         }
 

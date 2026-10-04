@@ -127,12 +127,12 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("None", true)]
     [InlineData("None", false)]
-    [InlineData("OpenConnection", true)]
+    [InlineData("None", true)]
     [InlineData("OpenConnection", false)]
-    [InlineData("BeginTransaction", true)]
-    public async Task HiLoKey_AddedAsGlobex_OnAcmesContext_Throws(string openedBy, bool async)
+    [InlineData("OpenConnection", true)]
+    [InlineData("BeginTransaction", false)]
+    public async Task HiLoKey_AddedAsGlobex_OnAcmesContext_Throws(string openedBy, bool sync)
     {
         var acmeBefore = await ReadSequenceAsync(Database(_acme));
         TContext db;
@@ -156,7 +156,7 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
         await using (db)
         using (Ambient.MakeCurrent(_globex))
         {
-            Func<Task> add = async ? async () => await db.AddAsync(item) : () => Task.FromResult(db.Add(item));
+            Func<Task> add = sync ? () => Task.FromResult(db.Add(item)) : async () => await db.AddAsync(item);
 
             (await add.Should().ThrowAsync<TenantIsolationViolationException>())
                 .WithMessage("*tenant 'acme'*current tenant is 'globex'*");

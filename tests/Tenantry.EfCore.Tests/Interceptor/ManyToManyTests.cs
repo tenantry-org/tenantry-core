@@ -25,7 +25,7 @@ public sealed class ManyToManyTests : IDisposable
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ThroughStubsOfAnotherTenantsRows_ItsJoinRowsAreNotDeleted(bool async)
+    public async Task ThroughStubsOfAnotherTenantsRows_ItsJoinRowsAreNotDeleted(bool sync)
     {
         await SeedAsync();
 
@@ -35,14 +35,14 @@ public sealed class ManyToManyTests : IDisposable
         db.Attach(stub);
         stub.Tags.Clear();
 
-        await Refused(db, async);
+        await Refused(db, sync);
         (await LinksAsync()).Should().Equal("1-1", "1-2");
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ThroughStubsOfAnotherTenantsRows_NoJoinRowIsAddedBetweenThem(bool async)
+    public async Task ThroughStubsOfAnotherTenantsRows_NoJoinRowIsAddedBetweenThem(bool sync)
     {
         await SeedAsync();
 
@@ -53,14 +53,14 @@ public sealed class ManyToManyTests : IDisposable
         db.AttachRange(post, tag);
         post.Tags.Add(tag);
 
-        await Refused(db, async);
+        await Refused(db, sync);
         (await LinksAsync()).Should().Equal("1-1", "1-2");
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ThroughAStubOfAnotherTenantsRow_NoJoinRowLinksTheTenantsOwnRowToIt(bool async)
+    public async Task ThroughAStubOfAnotherTenantsRow_NoJoinRowLinksTheTenantsOwnRowToIt(bool sync)
     {
         await SeedAsync();
 
@@ -73,7 +73,7 @@ public sealed class ManyToManyTests : IDisposable
         db.Attach(stub);
         own.Tags.Add(stub);
 
-        await Refused(db, async);
+        await Refused(db, sync);
         (await LinksAsync()).Should().Equal("1-1", "1-2");
     }
 
@@ -97,7 +97,7 @@ public sealed class ManyToManyTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AnEndWhoseTenantIdWasChangedUnseen_IsRefused_AndIsNotMovedToTheOtherTenant(bool async)
+    public async Task AnEndWhoseTenantIdWasChangedUnseen_IsRefused_AndIsNotMovedToTheOtherTenant(bool sync)
     {
         await SeedAsync();
 
@@ -110,7 +110,7 @@ public sealed class ManyToManyTests : IDisposable
             post.TenantId = "globex";
             db.Set<Dictionary<string, object>>("PostTag").Add(new Dictionary<string, object> { ["PostsId"] = 1, ["TagsId"] = 3 });
 
-            Func<Task> save = async ? () => db.SaveChangesAsync() : () => Task.FromResult(db.SaveChanges());
+            Func<Task> save = sync ? () => Task.FromResult(db.SaveChanges()) : () => db.SaveChangesAsync();
             (await save.Should().ThrowAsync<TenantIsolationViolationException>()).Which.OffendingTenantId.Should().Be("globex");
         }
 
@@ -132,7 +132,7 @@ public sealed class ManyToManyTests : IDisposable
         post.Property(p => p.TenantId).CurrentValue = "globex";
         post.Entity.Tags.Add(db.Attach(new Tag { Id = 3, TenantId = "globex" }).Entity);
 
-        await Refused(db, async: true);
+        await Refused(db, sync: false);
         (await LinksAsync()).Should().Equal("1-1", "1-2");
     }
 
@@ -291,7 +291,7 @@ public sealed class ManyToManyTests : IDisposable
         db.Attach(stub);
         stub.Tags.Clear();
 
-        await Refused(db, async: true);
+        await Refused(db, sync: false);
         (await LinksAsync("PlainPostTag", "PostId", "TagId")).Should().Equal("1-1", "1-2");
     }
 
@@ -308,7 +308,7 @@ public sealed class ManyToManyTests : IDisposable
             var join = db.Attach(new NotedPostTag { PostId = 1, TagId = 1, Note = "seeded" });
             join.Entity.Note = "changed by globex";
 
-            await Refused(db, async: true);
+            await Refused(db, sync: false);
         }
 
         _tenant.As("acme");
@@ -397,7 +397,7 @@ public sealed class ManyToManyTests : IDisposable
             Article stub = new() { Id = 1, TenantId = "globex" };
             db.Attach(stub);
             stub.Labels.Add(db.Set<Label>().Local.Single());
-            await Refused(db, async: true);
+            await Refused(db, sync: false);
         }
     }
 
@@ -419,7 +419,7 @@ public sealed class ManyToManyTests : IDisposable
             db.Attach(one);
             one.Friends.Clear();
             one.Friends.Add(db.Attach(new Person { Id = 3, TenantId = "globex" }).Entity);
-            await Refused(db, async: true);
+            await Refused(db, sync: false);
         }
 
         (await LinksAsync("PersonPerson", "FriendOfId", "FriendsId")).Should().Equal("1-2");
@@ -451,7 +451,7 @@ public sealed class ManyToManyTests : IDisposable
             Document stub = new() { Code = "a", Version = 1, TenantId = "globex", Topics = { new Topic { Id = 1, TenantId = "globex" } } };
             db.Attach(stub);
             stub.Topics.Clear();
-            await Refused(db, async: true);
+            await Refused(db, sync: false);
         }
 
         _tenant.As("acme");
@@ -475,7 +475,7 @@ public sealed class ManyToManyTests : IDisposable
             Video stub = new() { Id = 1, TenantId = "globex", Keywords = { new Keyword { Id = 1, TenantId = "globex" } } };
             db.Attach(stub);
             stub.Keywords.Clear();
-            await Refused(db, async: true);
+            await Refused(db, sync: false);
         }
 
         _tenant.As("acme");
@@ -538,7 +538,7 @@ public sealed class ManyToManyTests : IDisposable
             db.Add(new Board { Id = 5 });
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             db.Set<Board>().Local.Single().Badges.Add(db.Attach(new Badge { Id = 2, TenantId = "globex" }).Entity);
-            await Refused(db, async: true);
+            await Refused(db, sync: false);
         }
 
         _tenant.As("acme");
@@ -560,9 +560,9 @@ public sealed class ManyToManyTests : IDisposable
 
     // ── Helpers ──
 
-    private static async Task Refused(DbContext db, bool async)
+    private static async Task Refused(DbContext db, bool sync)
     {
-        Func<Task> save = async ? () => db.SaveChangesAsync() : () => Task.FromResult(db.SaveChanges());
+        Func<Task> save = sync ? () => Task.FromResult(db.SaveChanges()) : () => db.SaveChangesAsync();
 
         // A stub naming the current tenant passes the in-memory check; the write-back of its TenantId matches no row.
         await save.Should().ThrowAsync<DbUpdateConcurrencyException>();
