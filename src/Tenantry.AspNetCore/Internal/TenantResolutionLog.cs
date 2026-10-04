@@ -85,4 +85,11 @@ internal static partial class TenantResolutionLog
         "Call app.UseAuthorization() after app.UseTenantry()",
         EventName = "AuthorizationBeforeTenantry")]
     public static partial void AuthorizationBeforeTenantry(ILogger logger, string method, string path);
+
+    [LoggerMessage(1014, LogLevel.Warning,
+        "This version of ASP.NET Core does not set {Keys}, which Tenantry reads to refuse authorization between " +
+        "app.UseTenantResolution() and app.UseTenantry(), so that order is no longer caught. Put only " +
+        "app.UseAuthentication() between the two, and report this to Tenantry",
+        EventName = "AuthorizationMarkersMissing")]
+    public static partial void AuthorizationMarkersMissing(ILogger logger, string keys);
 }

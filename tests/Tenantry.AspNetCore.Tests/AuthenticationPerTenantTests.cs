@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Tenantry.AspNetCore.Internal;
 
 namespace Tenantry.AspNetCore.Tests;
 
@@ -293,12 +294,42 @@ public sealed class AuthenticationPerTenantTests
         builder.Services.AddAuthorization();
         await using var app = builder.Build();
         app.UseAuthorization();
-        app.MapGet("/marker", (HttpContext http) => http.Items["__AuthorizationMiddlewareWithEndpointInvoked"] is not null);
+        app.MapGet("/marker", (HttpContext http) => http.Items.ContainsKey(AuthorizationMarkers.MiddlewareRan));
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        ((IApplicationBuilder)app).Properties.Should().ContainKey("__AuthorizationMiddlewareSet");
+        ((IApplicationBuilder)app).Properties.Should().ContainKey(AuthorizationMarkers.MiddlewareAdded);
         using var client = app.GetTestClient();
         (await client.GetStringAsync("/marker", TestContext.Current.CancellationToken)).Should().Be("true");
+    }
+
+    [Fact]
+    public async Task TheStartupProbe_FindsTheMarkersOfTheRunningAspNetCore_AndNamesAKeyItDoesNotSet()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddAuthorization();
+        await using var app = builder.Build();
+
+        AuthorizationMarkers.Missing(app.Services).Should().BeEmpty();
+        AuthorizationMarkers.Missing(app.Services, added: "__Renamed").Should().Equal("__Renamed");
+        AuthorizationMarkers.Missing(app.Services, ran: "__Renamed").Should().Equal("__Renamed");
+    }
+
+    [Fact]
+    public async Task UseTenantResolution_LogsNoMissingMarkers_OnThisAspNetCore()
+    {
+        RecordingLoggerProvider logs = new();
+        await using var app = await StartPremiumAsync(
+            a =>
+            {
+                a.UseTenantResolution();
+                a.UseAuthentication();
+                a.UseTenantry();
+                a.UseAuthorization();
+            },
+            logs);
+
+        (await GetPremium(app, "globex", claim: "globex")).Should().Be(HttpStatusCode.OK);
+        logs.For(1014).Should().BeEmpty();
     }
 
     [Fact]

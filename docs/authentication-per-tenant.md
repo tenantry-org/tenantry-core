@@ -49,9 +49,17 @@ before your middleware, so authentication would use no tenant's settings (event 
 Authorization comes after `app.UseTenantry()` in this order, so an anonymous caller to an endpoint that requires a
 tenant gets the tenant's rejection (`403` when an access validator refuses it) rather than `401`. Before
 `app.UseTenantry()`, an authorization policy that reads the tenant would see the one the request names before the
-validators refuse it, and could let the caller in. The application fails to start if `app.UseAuthorization()` is
-between `app.UseTenantResolution()` and `app.UseTenantry()`. If the authorization middleware is added there some
-other way, each request it runs for gets `500` and log event 1013.
+validators refuse it, and could let the caller in.
+
+The rule is to put only `app.UseAuthentication()` between `app.UseTenantResolution()` and `app.UseTenantry()`. Two
+checks catch the usual mistake, as a safety net: the application fails to start if `app.UseAuthorization()` is between
+them, and if the authorization middleware is added there some other way, each request it runs for gets `500` and log
+event 1013. Both read keys ASP.NET Core sets but does not document; if a version stops setting them, the application
+logs event 1014 as it starts, and the checks no longer catch anything. They cannot see:
+
+- middleware of your own between the two that calls `IAuthorizationService` itself (an endpoint filter that does
+  runs after `app.UseTenantry()`, so it sees only a checked tenant), and
+- a fallback policy evaluated for a request with no endpoint, which the authorization middleware does not mark.
 
 ## How the two steps work
 

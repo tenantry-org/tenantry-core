@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Tenantry.AspNetCore.Internal;
 
@@ -60,7 +61,16 @@ internal sealed class TenantResolutionMiddlewareConfigurator<TKey> : ITenantReso
     public IApplicationBuilder UseResolution(IApplicationBuilder app)
     {
         CheckRegistration(app);
-        app.ApplicationServices.GetRequiredService<TenantryPipeline>().HasEarlyResolution = true;
+        var pipeline = app.ApplicationServices.GetRequiredService<TenantryPipeline>();
+
+        // The order checks read keys ASP.NET Core does not document: say so if this version does not set them.
+        if (!pipeline.HasEarlyResolution && AuthorizationMarkers.Missing(app.ApplicationServices) is [_, ..] missing)
+        {
+            var logger = app.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger(TenantResolutionLog.Category);
+            TenantResolutionLog.AuthorizationMarkersMissing(logger, string.Join(", ", missing));
+        }
+
+        pipeline.HasEarlyResolution = true;
         var authorizationBefore = app.Properties.ContainsKey(AuthorizationMarkers.MiddlewareAdded);
         app.Properties[AuthorizationBeforeEarlyResolutionKey] = authorizationBefore;
 
