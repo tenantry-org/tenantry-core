@@ -1,12 +1,15 @@
 namespace Tenantry;
 
 /// <summary>
-/// The current tenant, for a request or an <see cref="ITenantScopeFactory{TKey}"/> scope. A singleton over an
-/// <see cref="System.Threading.AsyncLocal{T}"/>: the value belongs to the async flow, not to the instance.
+/// The current tenant, for a request or an <see cref="ITenantScopeFactory{TKey}"/> scope.
 /// </summary>
 /// <typeparam name="TKey">
 /// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.
 /// </typeparam>
+/// <remarks>
+/// A singleton over an <see cref="System.Threading.AsyncLocal{T}"/>: the value belongs to the async flow, not to the
+/// instance.
+/// </remarks>
 public interface ITenantContext<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
@@ -22,12 +25,13 @@ public interface ITenantContext<TKey>
     bool HasTenant { get; }
 
     /// <summary>
-    /// The current tenant's identifier, or <c>default(TKey)</c> if no tenant is current: <see langword="null"/>
-    /// for reference-type keys such as <see langword="string"/>, but <see cref="Guid.Empty"/> or <c>0</c> for
-    /// value-type keys, because <c>TKey?</c> is not nullable for them. Check <see cref="HasTenant"/> to tell "no
-    /// tenant" apart; Tenantry never lets a tenant have the default id. Equivalent to
+    /// The current tenant's id, or <c>default(TKey)</c> when no tenant is current. Equivalent to
     /// <c>CurrentTenant?.TenantId</c>.
     /// </summary>
+    /// <remarks>
+    /// For value-type keys that default is <see cref="Guid.Empty"/> or <c>0</c>, not <see langword="null"/>, because
+    /// <c>TKey?</c> is not nullable for them, so check <see cref="HasTenant"/>. No tenant can have the default id.
+    /// </remarks>
     TKey? CurrentTenantId { get; }
 
     /// <summary>

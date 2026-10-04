@@ -3,16 +3,13 @@ using Tenantry.Internal;
 namespace Tenantry;
 
 /// <summary>
-/// Persists and retrieves tenant definitions.
-/// Implement this interface to back tenants with a database, configuration file,
-/// or any other store.
+/// Finds and lists the application's tenants. Implement it to keep tenants in a database, a configuration file or
+/// any other store.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A custom store registered via <c>UseStore&lt;TStore&gt;()</c> is <strong>scoped</strong>, and Tenantry
-/// resolves it per operation from a fresh dependency-injection scope (so singleton/background services
-/// can read tenants without capturing it). Implementations may therefore depend on scoped services such
-/// as a <c>DbContext</c>, but must not assume a singleton lifetime or cache scope-bound state across calls.
+/// A store registered with <c>UseStore</c> is scoped, and Tenantry reads it through <see cref="ITenantLookup{TKey}"/>.
+/// It may depend on scoped services such as a <c>DbContext</c>, but must not keep scope-bound state across calls.
 /// </para>
 /// <para>
 /// Return every tenant that exists, suspended or inactive ones included, from both methods: tools that
@@ -41,14 +38,14 @@ public interface ITenantStore<TKey>
     ValueTask<IReadOnlyList<ITenantDescriptor<TKey>>> GetAllTenantsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns the tenant a request's identifier names, or <c>null</c> if it names none. An identifier is what a
-    /// resolver reads from a request: the tenant's id, or a name your store maps to a tenant, such as a subdomain
-    /// (<c>acme</c>), a slug in a route or a custom domain (<c>app.acme.com</c>).
+    /// Returns the tenant a request's identifier names, or <c>null</c> if it names none.
     /// </summary>
     /// <param name="identifier">The identifier, as the resolver returned it.</param>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <remarks>
-    /// By default the identifier is the tenant's id: it is parsed as <typeparamref name="TKey"/> with the invariant
+    /// An identifier is what a resolver reads from a request: the tenant's id, or a name your store maps to a tenant,
+    /// such as a subdomain (<c>acme</c>), a slug in a route or a custom domain (<c>app.acme.com</c>). By default the
+    /// identifier is the tenant's id: it is parsed as <typeparamref name="TKey"/> with the invariant
     /// culture and looked up with <see cref="GetTenantAsync"/>, and an identifier that does not parse, or parses to
     /// the key type's default (<see cref="Guid.Empty"/>, <c>0</c>) or an empty string, names no tenant. Implement it
     /// to resolve tenants by another name, for example a <see cref="Guid"/>-keyed store whose tenants have slugs. A

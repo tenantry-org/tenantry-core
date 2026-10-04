@@ -25,10 +25,9 @@ namespace Tenantry;
 /// </description></item>
 /// </list>
 /// <para>
-/// There is deliberately no <c>CreateScopeAsync(tenantId)</c>. The tenant is held in an
-/// <see cref="AsyncLocal{T}"/>, and changes an <see langword="async"/> method makes to one never reach its
-/// caller, so a scope opened inside an asynchronous lookup would not be active for the code that awaited
-/// it. <see cref="RunInScopeAsync"/> does the lookup and then runs your work inside the scope instead.
+/// There is no <c>CreateScopeAsync(tenantId)</c>: a scope opened inside an asynchronous lookup would not be current
+/// for the code that awaited it, because the tenant is held in an <see cref="AsyncLocal{T}"/>.
+/// <see cref="RunInScopeAsync"/> does the lookup and runs your work inside the scope instead.
 /// </para>
 /// </remarks>
 public interface ITenantScopeFactory<TKey>

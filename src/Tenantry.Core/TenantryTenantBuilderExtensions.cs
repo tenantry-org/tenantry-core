@@ -13,9 +13,10 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class TenantryTenantBuilderExtensions
 {
     /// <summary>
-    /// Registers a pre-populated in-memory tenant store.
-    /// Suitable for testing and simple single-instance deployments.
+    /// Registers an in-memory tenant store that holds <paramref name="tenants"/>, for tests and single-instance
+    /// deployments whose tenants do not change.
     /// </summary>
+    /// <remarks>The store is a singleton, built when this is called.</remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="tenants">The tenants the store holds. The store does not change after registration.</param>
@@ -48,8 +49,8 @@ public static class TenantryTenantBuilderExtensions
     /// <param name="factory">Creates the store from the scope's services.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// The store is registered with a <strong>scoped</strong> lifetime and is resolved per operation, so
-    /// the factory may return an instance that depends on scoped services such as a <c>DbContext</c>.
+    /// The store is scoped and read through <see cref="ITenantLookup{TKey}"/>, which resolves it from a new scope for
+    /// each lookup, so the factory may use scoped services such as a <c>DbContext</c>.
     /// </remarks>
     /// <exception cref="InvalidOperationException">A tenant store is already registered.</exception>
     public static ITenantBuilder<TKey> UseStore<TKey>(
@@ -158,16 +159,15 @@ public static class TenantryTenantBuilderExtensions
     }
 
     /// <summary>
-    /// Configures how each tenant's connection string is found, and registers
-    /// <see cref="ITenantConnectionStringProvider{TKey}"/> and <see cref="CurrentTenantConnectionString{TKey}"/>
-    /// as singletons.
+    /// Configures how each tenant's connection string is found.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="configure">Sets the delegates that return a tenant's connection string.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// Calling it again configures the same options instance, so a later call can replace a delegate.
+    /// Registers <see cref="ITenantConnectionStringProvider{TKey}"/> and <see cref="CurrentTenantConnectionString{TKey}"/>
+    /// as singletons. Calling it again configures the same options instance, so a later call can replace a delegate.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Neither delegate is set after <paramref name="configure"/> runs.</exception>
     /// <example>
@@ -220,16 +220,15 @@ public static class TenantryTenantBuilderExtensions
 
     /// <summary>
     /// Registers the provider that returns each tenant's connection string, built from the application's services,
-    /// so it can use a secrets client or other services registered in DI. Registers
-    /// <see cref="ITenantConnectionStringProvider{TKey}"/> and <see cref="CurrentTenantConnectionString{TKey}"/> as
-    /// singletons.
+    /// so it can use a secrets client or other services registered in DI.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="factory">Creates the provider, once, from the application's services.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// It replaces a provider set before, by this method or by <c>UseConnectionStrings(options =&gt; …)</c>. A provider
+    /// Registers <see cref="ITenantConnectionStringProvider{TKey}"/> and <see cref="CurrentTenantConnectionString{TKey}"/>
+    /// as singletons. It replaces a provider set before, by this method or by <c>UseConnectionStrings(options =&gt; …)</c>. A provider
     /// that can only read connection strings asynchronously returns <see langword="false"/> from
     /// <see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>.
     /// </remarks>

@@ -37,9 +37,8 @@ public interface ITenantBuilder<TKey> : ITenantBuilder
     /// </summary>
     /// <typeparam name="TStore">The store type, created through dependency injection.</typeparam>
     /// <remarks>
-    /// The store is registered with a <strong>scoped</strong> lifetime and is resolved per operation —
-    /// Tenantry creates a fresh scope for singleton/background callers — so the implementation may safely
-    /// depend on scoped services such as a <c>DbContext</c>.
+    /// The store is scoped and read through <see cref="ITenantLookup{TKey}"/>, which resolves it from a new scope for
+    /// each lookup, so it may depend on scoped services such as a <c>DbContext</c>.
     /// </remarks>
     /// <exception cref="InvalidOperationException">A tenant store is already registered.</exception>
     ITenantBuilder<TKey> UseStore<

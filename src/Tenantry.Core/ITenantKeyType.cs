@@ -3,13 +3,12 @@ using System.ComponentModel;
 namespace Tenantry;
 
 /// <summary>
-/// The tenant key type the application registered Tenantry with, for code that has only a service provider or a
-/// service collection, such as a health check registration or a host extension, so its callers never repeat the
-/// key type. <c>AddTenantry</c> registers it as a singleton; <c>services.FindTenantKeyType()</c> reads it while
-/// services are being registered.
+/// The tenant key type the application registered Tenantry with, for code that has only a service provider, such as
+/// a health check registration or a host extension, so its callers never repeat the key type.
 /// </summary>
 /// <remarks>
-/// <see cref="Accept{TResult}"/> calls a generic method with the key type known at compile time, so Native AOT
+/// <c>AddTenantry</c> registers it as a singleton. While services are being registered, read it with
+/// <c>services.FindTenantKeyType()</c>. <see cref="Accept{TResult}"/> calls a generic method with the key type known at compile time, so Native AOT
 /// compiles it, unlike <c>MakeGenericType</c> on <see cref="Type"/>.
 /// </remarks>
 [EditorBrowsable(EditorBrowsableState.Advanced)]
