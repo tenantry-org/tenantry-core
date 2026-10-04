@@ -66,6 +66,16 @@ NuGet.org.
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
 
+Before anything is built, the workflow checks that no package already has the version on NuGet.org
+(`scripts/check-unpublished.sh`), and the push refuses a duplicate rather than skipping it. So a tag moved or pushed
+again for a released version fails, instead of creating a GitHub release whose checksums do not match the published
+packages. A dry run given a version checks it too.
+
+If a release stops part way, after some packages were pushed, do not rerun it: the check refuses the version, since
+it is partly published, and a published package cannot be replaced. Release the next patch instead, from the same
+branch: add its `CHANGELOG.md` section, which says it replaces the incomplete release, and tag it. Unlist the
+incomplete version's packages on NuGet.org, so no one picks a set that does not match.
+
 ## The templates package
 
 `templates/Tenantry.Templates.csproj` packs the `dotnet new` templates, and CI checks them

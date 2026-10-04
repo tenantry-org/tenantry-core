@@ -82,6 +82,20 @@ jobs:
         if: github.event_name == 'push'
         run: bash scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
 
+      - name: Require the version to be unpublished on NuGet.org
+        # A published version cannot be replaced, and the push below refuses a duplicate: a moved or re-pushed tag for
+        # a released version stops here, before anything is built, rather than releasing packages whose checksums do not
+        # match the published ones. A dry run with a version checks that version.
+        if: github.event_name == 'push' || inputs.version != ''
+        env:
+          RELEASE: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+        run: |
+          ids=()
+          for project in src/*/*.csproj; do
+            ids+=("$(basename "$project" .csproj)")
+          done
+          bash scripts/check-unpublished.sh "${RELEASE#v}" "${ids[@]}"
+
   # Re-run build + tests + coverage gate + AOT publish against the tagged commit before
   # publishing. SonarCloud is skipped: it cannot analyze a tag ref (auto-detection fails with
   # "Not authorized or project not found"), and the source job checked that the tagged commit passed
@@ -160,7 +174,9 @@ jobs:
         # The key reaches the script as an environment variable, never expanded into the script text.
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
-        run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        # No --skip-duplicate: a version already there fails the push rather than being skipped (RELEASING.md says what
+        # to do when a release stops part way).
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
 
       - name: Create GitHub Release
         # The packages are on NuGet.org; the release carries their checksums and SBOMs. A version with a
