@@ -23,11 +23,12 @@ namespace Tenantry.EfCore.Analyzers;
 /// <c>&lt;Type&gt;Id</c> property, a <c>[Key]</c>, or a <c>[PrimaryKey]</c> without <c>TenantId</c>).
 /// </para>
 /// <para>
-/// A marker in a generic method, on its type parameter, marks the type each call in the compilation passes for it. A
-/// marker whose type the analyzer cannot tell (a builder of a type it cannot see, or a call that passes a type
-/// parameter of its own) silences the contexts that apply it: the context whose methods contain it, the contexts that
-/// call the method containing it or create the configuration containing it, and the contexts derived from them. One
-/// that no context applies, as far as the analyzer can see, silences every context.
+/// A marker in a generic method, on its type parameter, marks the type each call in the compilation passes for it,
+/// through generic methods that pass their own type parameter on. A marker whose type the analyzer cannot tell (a
+/// builder of a type it cannot see, or a type parameter of a generic type) silences the contexts that apply it: the
+/// context whose methods contain it, the contexts that call the method containing it or create the configuration
+/// containing it, and the contexts derived from them. One that no context in the compilation applies, such as dead
+/// code, silences nothing.
 /// </para>
 /// <para>
 /// It reports each type once, where it is first mapped, at the end of the compilation, when every context and marker
@@ -103,7 +104,7 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
                 switch (MarkedType(invocation, types))
                 {
                     case ITypeParameterSymbol { DeclaringMethod: not null } parameter:
-                        state.GenericMarkers.Add((context.ContainingSymbol, parameter));
+                        state.GenericMarkers.Add(parameter);
                         break;
                     case null or ITypeParameterSymbol:
                         state.UnknownMarkers.Add(context.ContainingSymbol);
@@ -148,9 +149,6 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
     private static void Report(CompilationAnalysisContext context, KnownTypes types, State state)
     {
         var silenced = SilencedContexts(types, state);
-
-        if (silenced is null)
-            return;
 
         var byContext = state.Mapped.ToLookup(mapping => mapping.Context, SymbolEqualityComparer.Default);
 
@@ -204,40 +202,44 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // The contexts the unknown markers silence, after the generic markers are resolved to the types their calls pass;
-    // null when one is applied by no context the analyzer can see, so every context is silenced.
-    private static HashSet<INamedTypeSymbol>? SilencedContexts(KnownTypes types, State state)
+    // The contexts the unknown markers silence, after the generic markers are resolved to the types their calls pass.
+    private static HashSet<INamedTypeSymbol> SilencedContexts(KnownTypes types, State state)
     {
         var callsTo = state.Calls.ToLookup(call => call.Callee.OriginalDefinition, SymbolEqualityComparer.Default);
         var unknown = state.UnknownMarkers.ToList();
 
-        foreach (var (containing, parameter) in state.GenericMarkers)
+        // A call that passes its caller's own type parameter marks whatever the caller's calls pass for it, in turn.
+        var pending = new Stack<ITypeParameterSymbol>(state.GenericMarkers);
+        var resolved = new HashSet<ITypeParameterSymbol>(SymbolEqualityComparer.Default);
+
+        while (pending.Count > 0)
         {
-            var calls = callsTo[parameter.DeclaringMethod!.OriginalDefinition].ToList();
+            var parameter = pending.Pop();
 
-            if (calls.Count == 0)
-                unknown.Add(containing);
+            if (!resolved.Add(parameter))
+                continue;
 
-            foreach (var (caller, callee) in calls)
+            foreach (var (caller, callee) in callsTo[parameter.DeclaringMethod!.OriginalDefinition])
             {
-                if (callee.TypeArguments[parameter.Ordinal] is ITypeParameterSymbol)
-                    unknown.Add(caller);
-                else
-                    state.MarkedShared.TryAdd(callee.TypeArguments[parameter.Ordinal], 0);
+                switch (callee.TypeArguments[parameter.Ordinal])
+                {
+                    case ITypeParameterSymbol { DeclaringMethod: not null } passedOn:
+                        pending.Push(passedOn);
+                        break;
+                    case ITypeParameterSymbol:
+                        unknown.Add(caller);
+                        break;
+                    case var marked:
+                        state.MarkedShared.TryAdd(marked, 0);
+                        break;
+                }
             }
         }
 
         var silenced = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
         foreach (var marker in unknown)
-        {
-            var owners = ContextsApplying(marker, types, state, callsTo, new HashSet<ISymbol>(SymbolEqualityComparer.Default));
-
-            if (owners.Count == 0)
-                return null;
-
-            silenced.UnionWith(owners);
-        }
+            silenced.UnionWith(ContextsApplying(marker, types, state, callsTo, new HashSet<ISymbol>(SymbolEqualityComparer.Default)));
 
         return silenced;
     }
@@ -380,8 +382,8 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
         /// <summary>The members containing a marker whose type the analyzer cannot tell.</summary>
         public ConcurrentBag<ISymbol> UnknownMarkers { get; } = [];
 
-        /// <summary>The markers on a generic method's type parameter, with the member containing each.</summary>
-        public ConcurrentBag<(ISymbol Containing, ITypeParameterSymbol Parameter)> GenericMarkers { get; } = [];
+        /// <summary>The generic methods' type parameters a marker marks.</summary>
+        public ConcurrentBag<ITypeParameterSymbol> GenericMarkers { get; } = [];
 
         /// <summary>The calls to the compilation's own methods, with the member making each.</summary>
         public ConcurrentBag<(ISymbol Caller, IMethodSymbol Callee)> Calls { get; } = [];

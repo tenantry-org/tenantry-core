@@ -292,9 +292,15 @@ public sealed class TenantEntityTests
             """);
 
     [Fact]
-    public Task AGenericHelperCalledWithATypeParameter_IsAnUnknownMarker() =>
+    public Task AGenericHelperThatPassesItsTypeParameterOn_MarksTheTypeTheOuterCallPasses() =>
         Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
             public class Order
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class Refund
             {
                 public int Id { get; set; }
                 public Guid TenantId { get; set; }
@@ -311,8 +317,29 @@ public sealed class TenantEntityTests
             {
                 public DbSet<Invoice> Invoices => Set<Invoice>();
                 public DbSet<Order> Orders => Set<Order>();
+                public DbSet<Refund> {|TNY1001:Refunds|} => Set<Refund>();
 
                 protected override void OnModelCreating(ModelBuilder modelBuilder) => Sharing.Forward<Order>(modelBuilder);
+            }
+            """);
+
+    [Fact]
+    public Task AGenericHelperNothingCalls_SilencesNothing() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class Order
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Order> {|TNY1001:Orders|} => Set<Order>();
+
+                private static void Shared<T>(ModelBuilder b) where T : class => b.Entity<T>().IsSharedAcrossTenants();
+
+                private static void SharedNested<T>(ModelBuilder b) where T : class => Shared<T>(b);
             }
             """);
 
@@ -377,7 +404,7 @@ public sealed class TenantEntityTests
             """);
 
     [Fact]
-    public Task AnUnknownMarkerNoContextIsSeenToApply_SilencesEveryContext() =>
+    public Task AnUnknownMarkerInAHelper_SilencesOnlyTheContextThatCallsIt() =>
         Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
             public class Order
             {
@@ -385,7 +412,40 @@ public sealed class TenantEntityTests
                 public Guid TenantId { get; set; }
             }
 
-            // Called through a delegate, or from another assembly: the analyzer cannot tell which context it serves.
+            public static class Sharing
+            {
+                public static void MarkAll(ModelBuilder b)
+                {
+                    foreach (var entityType in b.Model.GetEntityTypes())
+                        b.Entity(entityType.ClrType).IsSharedAcrossTenants();
+                }
+            }
+
+            public class ImportDbContext(DbContextOptions<ImportDbContext> options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Order> Orders => Set<Order>();
+
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => Sharing.MarkAll(modelBuilder);
+            }
+
+            public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Order> {|TNY1001:Orders|} => Set<Order>();
+            }
+            """);
+
+    [Fact]
+    public Task AnUnknownMarkerNoContextApplies_SilencesNothing() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class Order
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            // Dead code: nothing calls it.
             public static class Sharing
             {
                 public static void MarkAll(ModelBuilder b)
@@ -398,7 +458,7 @@ public sealed class TenantEntityTests
             public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
             {
                 public DbSet<Invoice> Invoices => Set<Invoice>();
-                public DbSet<Order> Orders => Set<Order>();
+                public DbSet<Order> {|TNY1001:Orders|} => Set<Order>();
             }
             """);
 
