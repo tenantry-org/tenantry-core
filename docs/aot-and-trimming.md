@@ -34,8 +34,8 @@ published with Native AOT:
 ```
 
 It uses `WebApplication.CreateSlimBuilder`, header-based resolution, the in-memory store, and source-generated
-JSON (`JsonSerializerContext`). Your own AOT app needs a `JsonSerializerContext` for the types it serialises too;
-that is an ASP.NET Core requirement, not a Tenantry one.
+JSON (`JsonSerializerContext`). ASP.NET Core needs a `JsonSerializerContext` for the types your own AOT app
+serialises too.
 
 ```bash
 dotnet publish samples/Tenantry.Samples.Aot -c Release
@@ -56,7 +56,7 @@ An app that uses Tenantry.EfCore cannot publish with Native AOT.
 
 ## Recommendations
 
-- **AOT web app:** use `Tenantry.Core` and `Tenantry.AspNetCore`, with a store over a client that supports AOT
+- For an AOT web app, use `Tenantry.Core` and `Tenantry.AspNetCore`, with a store over a client that supports AOT
   (a hand-written `ITenantStore`, say).
-- **EF Core app:** publish without Native AOT. Trimming works, but test the trimmed build: EF Core providers and
+- Publish an EF Core app without Native AOT. Trimming works, but test the trimmed build: EF Core providers and
   your model may need trim roots, as EF Core's guidance describes.

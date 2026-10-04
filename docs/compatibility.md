@@ -36,10 +36,9 @@ Core that matches your target framework, as you would in any EF Core application
 
 Tenantry uses only standard EF Core features, so it works with any relational EF Core provider that reports the rows
 an `UPDATE` or `DELETE` matched: a forged write matches no row, which EF Core reports as a concurrency failure. These
-combinations run the write-isolation suite (forged writes,
-entities loaded under another tenant, unchanged-value updates, writes without a tenant, `ExecuteUpdate`/`ExecuteDelete`
-and the `TenantId` guard, `GetDatabaseValues` of another tenant's row, pooled contexts, and a database per tenant)
-against a real database:
+combinations run the write-isolation suite (forged writes, entities loaded under another tenant, unchanged-value
+updates, writes without a tenant, `ExecuteUpdate`/`ExecuteDelete` and the `TenantId` guard, `GetDatabaseValues` of
+another tenant's row, pooled contexts, and a database per tenant) against a real database:
 
 | Database | EF Core provider | Framework | Status |
 |----------|------------------|-----------|--------|
@@ -66,9 +65,9 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does. See [
   first with `HybridCache`. Microsoft ships every `Microsoft.Extensions` major for all supported frameworks, and current
   Azure SDKs need 10.x even on .NET 8.
 - **EF Core**: the target framework's major only, as above.
-- **Tenantry packages**: `Tenantry.EfCore`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` take `Tenantry.Core` from their own
-  release up to the next minor (`[0.6.0, 0.7.0)` for 0.6), because a minor release may break the API before 1.0. Within a
-  minor they can be updated separately.
+- **Tenantry packages**: `Tenantry.EfCore`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and
+  `Tenantry.Options` take `Tenantry.Core` from their own release up to the next minor (`[0.6.0, 0.7.0)` for 0.6),
+  because a minor release may break the API before 1.0. Within a minor they can be updated separately.
 - **Tenantry.Pro**: in the beta it releases each minor version with Tenantry Core's, and runs on that Core minor
   (Tenantry.Pro 0.5 on Tenantry Core 0.5.x).
 
