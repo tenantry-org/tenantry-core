@@ -32,7 +32,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 `Configure` and before the handler's own post-configuration, which builds the scheme's metadata manager and data
 protector from them.
 
-Then resolve the tenant **before** authentication, and check it **after**:
+Then resolve the tenant before authentication, and check it after:
 
 ```csharp
 var app = builder.Build();

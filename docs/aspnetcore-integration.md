@@ -43,12 +43,12 @@ app.UseTenantry();
 
 For each request, the middleware:
 
-1. Tries each registered resolver **in registration order** and takes the **first** identifier one returns (`null`,
+1. Tries each registered resolver in registration order and takes the first identifier one returns (`null`,
    an empty string or whitespace counts as none, and the next resolver runs).
 2. If no resolver produced an identifier:
-   - if a tenant is **required** for this request (see [Access control](access-control.md)), rejects it
+   - if a tenant is required for this request (see [Access control](access-control.md)), rejects it
      (`400 Bad Request`) and stops;
-   - otherwise continues the pipeline with **no** tenant context.
+   - otherwise continues the pipeline with no tenant.
 3. Finds the tenant the identifier names, with `ITenantLookup<TKey>.FindByIdentifierAsync`, which calls your
    store's `FindByIdentifierAsync` (by default: parse the identifier as `TKey` and look the id up) and serves it from
    the cache with [`CacheTenants`](tenant-stores.md#caching). If none, a request that requires a tenant is
@@ -75,7 +75,7 @@ created in the request's service scope, so they can depend on a scoped `DbContex
 | No resolver produced an identifier | `400 Bad Request` | `MissingTenantStatusCode` |
 | The identifier names no tenant (with the default lookup: it does not parse, is the key type's default, or is not in the store) | `404 Not Found` | `TenantNotFoundStatusCode` |
 | The tenant is not active (`ValidateTenantActivity`), or an access validator refused it | `403 Forbidden` | `AccessDeniedStatusCode` |
-| The identifier names no tenant, **and access validators are configured** | same as access denied | `AccessDeniedStatusCode` |
+| The identifier names no tenant, and access validators are configured | same as access denied | `AccessDeniedStatusCode` |
 
 With access validators, a tenant that does not exist gets exactly the response of one the caller may not use,
 so an authenticated user of one tenant cannot probe for others. Change the codes with `ConfigureResolution`:
