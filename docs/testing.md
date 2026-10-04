@@ -47,9 +47,9 @@ that already has its services with `ITenantContextSetter<TKey>.Use(tenant)`
 ([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant)). Background work is tested the same way too: run the
 work for one tenant inside that tenant's scope.
 
-Make the tenant current in the test method itself. The current tenant is held in an `AsyncLocal`, so a tenant made
-current inside an `async` setup method (an `InitializeAsync` that awaits, say) is no longer current when that method
-returns, and the test runs with no tenant.
+Make the tenant current in the test method itself. A tenant made current in an `async` setup method (an
+`InitializeAsync` that awaits, say) is not current when it returns
+([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)), so the test would run with no tenant.
 
 ## Requests: `WebApplicationFactory`
 
