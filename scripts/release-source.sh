@@ -12,8 +12,10 @@ sha="${GITHUB_SHA:?GITHUB_SHA is not set}"
 
 case "$ref" in
   v*)
-    # vX.Y.Z or vX.Y.Z-prerelease, with no leading zeros: v0.08.0, v0.6.2.1, v1 and vfoo are not release tags.
-    if [[ ! "$ref" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+    # vX.Y.Z or vX.Y.Z-prerelease as SemVer has them, with no leading zeros and no empty prerelease identifier:
+    # v0.08.0, v0.6.2.1, v1, vfoo, v0.6.1-.. and v0.6.1-rc.01 are not release tags.
+    identifier='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+    if [[ ! "$ref" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-$identifier(\.$identifier)*)?$ ]]; then
       echo "::error::$ref is not a release tag: a release tag is vX.Y.Z, or vX.Y.Z-<prerelease> (v0.7.0-rc.1)" >&2
       exit 1
     fi
