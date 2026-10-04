@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ master, 'release/*' ]   # release/X.Y: patches to an older minor (RELEASING.md)
+    branches: [ master, 'release/*' ]   # release/X.Y: every release is tagged there (RELEASING.md)
   pull_request:
     branches: [ master, 'release/*' ]
   workflow_dispatch:   # started by dependabot-lock-files.yml after it commits regenerated lock files

@@ -21,11 +21,11 @@ concurrency:
   cancel-in-progress: false   # never cancel a half-done publish
 
 jobs:
-  # Release only commits on master, or for a patch to an older minor on its release/X.Y branch, which CI has already
-  # built and tested: a tag pushed anywhere else (a stray or mistyped tag, one on an unmerged branch, or one on another
-  # minor's release branch) fails here before anything is built.
-  on-master:
-    name: Tag is on master or its release branch
+  # Release only commits on the tag's own branch, release/X.Y, which CI has already built and tested: a tag pushed
+  # anywhere else (master, another minor's branch, an unmerged branch, or a stray or mistyped tag) fails here before
+  # anything is built.
+  source:
+    name: Tag is on its release branch
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,35 +36,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0   # all branches and tags, so origin/master, origin/release/* and the release tags are available
+          fetch-depth: 0   # all branches and tags, so origin/release/* and the release tags are available
 
-      - name: Require the tagged commit to be on master or its release branch
-        # vX.Y.Z from release/X.Y, or from master while no tag names a higher minor; a dry run on master or on a release
-        # branch itself (scripts/release-source.sh). The branches that hold the commit, space-separated.
+      - name: Require the tagged commit to be on its release branch
+        # vX.Y.Z only from release/X.Y; a dry run on master or on a release branch itself (scripts/release-source.sh)
         id: branch
         run: |
           git fetch --quiet --force --tags origin
-          branches="$(bash scripts/release-source.sh)"
-          echo "branches=${branches//$'\n'/ }" >> "$GITHUB_OUTPUT"
+          branch="$(bash scripts/release-source.sh)"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
       - name: Require CI, SonarCloud included, to have passed on the tagged commit
-        # A run of ci.yml for a push that put the commit on one of the branches found above. The rerun below skips
-        # SonarCloud, so this is where its quality gate is required: CI on master and release/* runs it in the Build &
-        # Test job, which fails when the gate does.
+        # The run of ci.yml for the push that put the commit on its release branch. The rerun below skips SonarCloud, so
+        # this is where its quality gate is required: CI on release/* runs it in the Build & Test job, which fails when
+        # the gate does.
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCHES: ${{ steps.branch.outputs.branches }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
         run: |
-          for branch in $BRANCHES; do
-            passed="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --event push \
-              --branch "$branch" --status success --json databaseId --jq 'length')"
-            if [ "$passed" != "0" ]; then
-              exit 0
-            fi
-          done
-          echo "::error::CI has not passed on $GITHUB_SHA in a push to $BRANCHES. Wait for it, or rerun it, before tagging."
-          exit 1
+          passed="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --event push \
+            --branch "$BRANCH" --status success --json databaseId --jq 'length')"
+          if [ "$passed" = "0" ]; then
+            echo "::error::CI has not passed on $GITHUB_SHA, a push to $BRANCH. Wait for it, or rerun it, before tagging."
+            exit 1
+          fi
 
       - name: Find whether this is the newest release
         # GitHub shows one release as Latest. A patch to an older minor, or a prerelease, must not take that from a
@@ -72,7 +68,9 @@ jobs:
         id: latest
         if: github.event_name == 'push'
         run: |
-          newest="$(git tag --list 'v[0-9]*' | { grep -v -- - || true; } | sort -V | tail -n 1)"
+          # Release versions only (vX.Y.Z, no prerelease part, no leading zeros): a stray tag cannot take Latest.
+          release='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          newest="$(git tag --list 'v[0-9]*' | { grep -E "$release" || true; } | sort -V | tail -n 1)"
           if [ "$newest" = "$GITHUB_REF_NAME" ]; then
             echo "latest=true" >> "$GITHUB_OUTPUT"
           else
@@ -86,10 +84,10 @@ jobs:
 
   # Re-run build + tests + coverage gate + AOT publish against the tagged commit before
   # publishing. SonarCloud is skipped: it cannot analyze a tag ref (auto-detection fails with
-  # "Not authorized or project not found"), and on-master checked that the tagged commit passed
-  # CI, the Sonar quality gate included, on master.
+  # "Not authorized or project not found"), and the source job checked that the tagged commit passed
+  # CI, the Sonar quality gate included, on its release branch.
   ci:
-    needs: on-master
+    needs: source
     uses: ./.github/workflows/build-test.yml
     with:
       run_sonar: false
@@ -97,7 +95,7 @@ jobs:
   publish:
     name: Publish to NuGet
     runs-on: ubuntu-latest
-    needs: [on-master, ci]
+    needs: [source, ci]
     if: github.event_name == 'push'
     environment: release   # manual-approval gate + OIDC scoped to this environment (see repo settings)
     permissions:
@@ -172,7 +170,7 @@ jobs:
         with:
           body_path: ${{ runner.temp }}/release-notes.md
           prerelease: ${{ contains(github.ref_name, '-') }}
-          make_latest: ${{ needs.on-master.outputs.latest }}
+          make_latest: ${{ needs.source.outputs.latest }}
           files: |
             ./artifacts/SHA256SUMS
             ./artifacts/sbom/*.cdx.json
