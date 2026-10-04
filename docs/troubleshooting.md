@@ -225,13 +225,14 @@ requests that resolve a tenant. See [Diagnostics](diagnostics.md).
 
 The `AsyncLocal` tenant flows into awaited work but not past the scope's disposal. Capture the tenant id when
 enqueuing and run the work with `ITenantScopeFactory.RunInScopeAsync(id, …)`. See
-[Non-HTTP hosts](non-http-hosts.md#scopes-async-and-threads).
+[Non-HTTP hosts](non-http-hosts.md#work-that-runs-later).
 
 ## The tenant is missing after a helper opened a scope
 
-An `async` method's changes to an `AsyncLocal` are undone when it returns, so a scope it opens is not active for its
-caller. Open the scope in the method that does the work (`await using var scope = scopes.CreateScope(tenant);`), or
-pass the work in with `ITenantScopeFactory.RunInScopeAsync`.
+A scope opened in an `async` helper is not current for the helper's caller
+([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)). Open the scope in the method that does the work
+(`await using var scope = scopes.CreateScope(tenant);`), or pass the work in with
+`ITenantScopeFactory.RunInScopeAsync`.
 
 ## AOT or trim warnings from the EF Core integration
 

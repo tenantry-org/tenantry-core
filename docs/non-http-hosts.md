@@ -1,12 +1,8 @@
 # Non-HTTP hosts
 
-Multi-tenancy is not just an HTTP concern. Worker services that drain a per-tenant queue, scheduled
-jobs that run maintenance for every tenant, CLI tools, and desktop apps all need the same isolation.
-`Tenantry.Core` provides it with **no dependency on ASP.NET Core**.
-
-The one difference from a web app: there is no request and no middleware, so **you** decide when a
-tenant becomes current and when it stops being current. `ITenantScopeFactory<TKey>` does this for background work, and everything
-below it (EF Core read filtering and write stamping and validation) behaves exactly as it does on the web.
+Worker services, scheduled jobs, CLI tools and desktop apps get the same isolation as a web app, from
+`Tenantry.Core`, with no ASP.NET Core dependency. With no request or middleware, you decide when a tenant is current,
+usually with `ITenantScopeFactory<TKey>`. EF Core filtering, stamping and checks then work as they do on the web.
 
 ## Registration with `AddTenantry`
 
@@ -19,21 +15,18 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     // Where tenants are listed and looked up by id (e.g. a queue message carries only the tenant id).
     .UseInMemoryStore(tenants));
 
-// Same EF Core isolation as the web — strongly recommended in background work.
+// The same EF Core isolation as in a web app.
 builder.Services.AddDbContext<AppDbContext>(options => options
     .UseSqlite(connectionString)
     .UseTenantry());
 ```
 
-`AddTenantry` registers `ITenantContext<TKey>` and `ITenantContextSetter<TKey>` (the same `AsyncLocal`
-singleton used by the web layer), plus the `ITenantScopeFactory<TKey>` and `ITenantLookup<TKey>`
-singletons described below, and lets you compose stores and isolation.
-
-`ITenantLookup` needs a store: creating it without one throws `InvalidOperationException` naming
-`UseStore` and `UseInMemoryStore`, so a hosted service that depends on it fails as the host starts, not on its first
-tenant. `ITenantScopeFactory.RunInScopeAsync` looks tenants up too, and throws the same error. A host that only
-creates scopes for tenants it already has (`CreateScope`), or makes them current with `ITenantContextSetter`
-(below), needs no store.
+[Registration](core-concepts.md#registration) lists what it registers. A hosted service reads tenants through
+`ITenantLookup<TKey>`, not by injecting the scoped store ([lifetimes](tenant-stores.md#registration-and-lifetimes)).
+`ITenantLookup` and `RunInScopeAsync` need a store: without one, creating `ITenantLookup` throws
+`InvalidOperationException`, so a hosted service that depends on it fails as the host starts. A host that only
+creates scopes for tenants it already has (`CreateScope`), or makes them current with `ITenantContextSetter`, needs
+no store.
 
 ## Running work as a tenant
 
@@ -89,22 +82,14 @@ It throws `TenantNotFoundException`, with the id in its `TenantId` property, if 
 There is an overload whose work returns a value. With `ValidateTenantActivity`, it throws `TenantInactiveException`
 for a suspended tenant without running the work.
 
-There is deliberately no `CreateScopeAsync(tenantId)`. The tenant lives in an `AsyncLocal`, and an
-`async` method's changes to one never reach its caller, so a scope opened inside an asynchronous lookup
-would not be active for the code that awaited it. Either use `RunInScopeAsync`, or look the tenant up
-first and then call the synchronous `CreateScope`:
+There is no `CreateScopeAsync(tenantId)`: a scope opened inside an asynchronous lookup would not be current for the
+code that awaited it ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)). Use `RunInScopeAsync`, or
+look the tenant up first and call `CreateScope`:
 
 ```csharp
 var tenant = await tenants.GetTenantAsync(tenantId, ct) ?? throw new InvalidOperationException("Unknown tenant");
 await using var scope = scopes.CreateScope(tenant);
 ```
-
-### Reading tenants from a singleton
-
-Use `ITenantLookup<TKey>` rather than injecting `ITenantStore<TKey>` into a hosted service. A
-store registered with `UseStore` is scoped and may depend on a `DbContext`; a singleton that captures it
-fails scope validation in Development and shares one store instance for the life of the app in
-Production. The lookup resolves the store from a fresh scope on each call, whatever its lifetime.
 
 ### Lower level: `ITenantContextSetter.Use`
 
@@ -123,34 +108,27 @@ using (ambient.Use(tenant))
 // The previous tenant (or none) is restored here.
 ```
 
-Like `CreateScope`, call it directly in the method that does the work, not inside an `async` helper
-that returns the handle: the helper's change to the ambient tenant would not reach you.
+Like `CreateScope`, call it in the method that does the work, not in an `async` helper that returns the handle.
 
-## Scopes, `async`, and threads
+## Work that runs later
 
-The current tenant is stored in an `AsyncLocal`, so it flows **down** into everything you `await` or
-call within the scope, across threads, automatically. It never flows back **up** to a caller. Two
-consequences:
+Work queued to run after the scope is disposed must not rely on the current tenant: depending on how it was queued,
+it has none, or a stale one whose scope's services are already disposed. Capture the tenant id, and run the work by
+id when it happens:
 
-- **Fire-and-forget started inside a scope** inherits the tenant at the moment the `Task` is created.
-- **Deferred work** (queued to run after the scope disposes) must not rely on the ambient tenant: depending on
-  how it was queued, it has none, or a stale one whose scope's services are already disposed. Capture the tenant
-  id, then run the work by id when it actually happens:
+```csharp
+queue.Enqueue(tenant.TenantId);   // capture the id, not the ambient scope
+// … later, on a different turn:
+await scopes.RunInScopeAsync(dequeuedId, (scope, ct) => HandleAsync(scope, ct), ct);
+```
 
-  ```csharp
-  queue.Enqueue(tenant.TenantId);   // capture the id, not the ambient scope
-  // … later, on a different turn:
-  await scopes.RunInScopeAsync(dequeuedId, (scope, ct) => HandleAsync(scope, ct), ct);
-  ```
-
-Never cache `CurrentTenant` in a field on a singleton and expect it to be correct later. It is only
-valid for the duration of the scope, within the async flow that opened it.
+For the same reason, do not keep `CurrentTenant` in a singleton's field. The rules for `async` code and threads are
+in [the `AsyncLocal` model](core-concepts.md#the-asynclocal-model).
 
 ## Runnable sample
 
-[`Tenantry.Samples.EfCoreConsole`](../samples/Tenantry.Samples.EfCoreConsole) is a complete, runnable
-demonstration using `Host.CreateApplicationBuilder`, SQLite, and a plain `DbContext` with `UseTenantry()`. It
-shows automatic stamping, read isolation, nested tenants, a cross-tenant write rejected,
+[`Tenantry.Samples.EfCoreConsole`](../samples/Tenantry.Samples.EfCoreConsole) uses
+`Host.CreateApplicationBuilder`, SQLite and a plain `DbContext` with `UseTenantry()`. It shows stamping, read isolation, nested tenants, a cross-tenant write rejected,
 fail-closed reads with no tenant, `IgnoreQueryFilters()` for admin access, and a sweep over every tenant
 with `ITenantScopeFactory`:
 
