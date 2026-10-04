@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using Tenantry;
 using Tenantry.EfCore.Internal;
 
@@ -496,6 +498,35 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
                 .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)))
             .Should().Throw<InvalidOperationException>().WithMessage("*PooledNotesContext*call UseConnectionStrings before it*");
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public void AConnectionStringProviderThatIsNotASingleton_FailsAtRegistration_WithGuidance(ServiceLifetime lifetime)
+    {
+        ServiceCollection services = new();
+        services.Add(ServiceDescriptor.Describe(
+            typeof(ITenantConnectionStringProvider<string>),
+            _ => Substitute.For<ITenantConnectionStringProvider<string>>(),
+            lifetime));
+
+        services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
+                .DecorateConnectionStrings((_, inner) => inner)
+                .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage($"*PooledNotesContext*ITenantConnectionStringProvider<String> is registered as {lifetime.ToString().ToLowerInvariant()}*singleton*");
+    }
+
+    [Fact]
+    public void AConnectionStringProviderOfTheApplicationsOwn_ThatIsASingleton_IsAccepted()
+    {
+        ServiceCollection services = new();
+        services.AddSingleton(Substitute.For<ITenantConnectionStringProvider<string>>());
+
+        services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
+                .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)))
+            .Should().NotThrow();
     }
 
     [Fact]

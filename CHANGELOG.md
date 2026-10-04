@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a save through a stub with another tenant's key could delete that tenant's join rows or add to them. Configure the
   join entity with `UsingEntity<TJoin>()` and implement `ITenantEntity<TKey>` on it, and add `TenantId` to an existing
   join table. See [Many-to-many relationships](docs/efcore-advanced.md#many-to-many-relationships).
+- `AddDbContextPerTenantDatabase` throws for an `ITenantConnectionStringProvider<TKey>` registered as scoped or
+  transient. It accepted one before, and the singleton context factory then kept one instance of it, with its scoped
+  dependencies, for the application's lifetime, or failed scope validation on the first context.
 - `IsolateCaches()` throws for a `HybridCache` registered as scoped or transient. It accepted one before, and
   invalidating a tenant then failed, because invalidation clears the cache outside any scope.
 
