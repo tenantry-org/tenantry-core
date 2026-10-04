@@ -6,15 +6,15 @@ namespace Tenantry.Samples.EfCoreWeb.Data;
 // A plain DbContext: UseTenantry() in Program.cs isolates the tenant-owned entities (ITenantEntity<string>).
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    // Tenanted entities — isolated per tenant
+    // Tenant-owned entities, isolated per tenant
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
-    // Non-tenanted entities — shared across all tenants
+    // Entities every tenant shares, marked [SharedAcrossTenants]
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Category> Categories => Set<Category>();
 
-    // Tenant registry — global, not tenanted
+    // The tenant registry, shared too
     public DbSet<Tenant> Tenants => Set<Tenant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

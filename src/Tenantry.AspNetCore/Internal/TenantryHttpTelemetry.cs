@@ -26,6 +26,7 @@ internal static class TenantryHttpTelemetry
             ResolutionResult.Resolved => "resolved",
             ResolutionResult.Missing => "missing",
             ResolutionResult.NotFound => "not_found",
+            ResolutionResult.Inactive => "inactive",
             _ => "access_denied",
         };
 }
@@ -39,6 +40,7 @@ internal enum ResolutionResult
     Missing,
     NotFound,
     AccessDenied,
+    Inactive,
 }
 
 /// <summary>

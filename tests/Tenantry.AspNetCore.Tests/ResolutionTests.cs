@@ -21,6 +21,7 @@ public sealed class ResolutionTests
 {
     private static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme Corp" };
     private static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex LLC" };
+    private static readonly TenantDescriptor<string> Umbrella = new() { TenantId = "umbrella", Name = "Umbrella" };
 
     [Fact]
     public async Task AGuidKeyedStore_ResolvesSubdomainsAndCustomDomains_ByItsOwnMapping()
@@ -81,6 +82,40 @@ public sealed class ResolutionTests
         first.Should().MatchRegex("^acme [0-9a-f-]{36} same same$");
         second.Should().MatchRegex("^acme [0-9a-f-]{36} same same$");
         second.Split(' ')[1].Should().NotBe(first.Split(' ')[1], "each request has its own scope");
+    }
+
+    [Fact]
+    public async Task AResolverFromAFactory_IsCreatedInEachRequestsScope()
+    {
+        await using var app = await StartAsync<string>(
+            tenant => tenant
+                .UseInMemoryStore([Acme])
+                .UseResolver(sp => new ScopedResolver(sp.GetRequiredService<RequestServices>()))
+                .ValidateTenantAccess<ScopedValidator>(),
+            services => services.AddScoped<RequestServices>());
+        using var client = app.GetTestClient();
+
+        var first = await client.GetStringAsync("/scoped", TestContext.Current.CancellationToken);
+        var second = await client.GetStringAsync("/scoped", TestContext.Current.CancellationToken);
+
+        first.Should().MatchRegex("^acme [0-9a-f-]{36} same same$");
+        second.Split(' ')[1].Should().NotBe(first.Split(' ')[1], "each request has its own scope");
+    }
+
+    [Fact]
+    public async Task AResolverAFactoryReturns_IsOwnedByTheRequestsScope_SoASharedOneIsDisposedWithIt()
+    {
+        DisposableResolver shared = new();
+        await using var app = await StartAsync<string>(
+            tenant => tenant
+                .UseInMemoryStore([Acme])
+                .UseResolver(sp => sp.GetRequiredService<DisposableResolver>()),
+            services => services.AddSingleton(shared));
+        using var client = app.GetTestClient();
+
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("acme");
+
+        shared.Disposed.Should().BeTrue("the scope disposes what a scoped factory returns: pass a shared resolver as an instance");
     }
 
     [Fact]
@@ -426,18 +461,104 @@ public sealed class ResolutionTests
     }
 
     [Fact]
-    public async Task AnInactiveTenant_IsRefusedLikeOneAnAccessValidatorRefuses()
+    public async Task AnInactiveTenant_IsRejectedAsInactive_WithTheAccessDeniedResponseByDefault()
     {
-        var (app, _) = await StartWithLogsAsync<string>(tenant => tenant
-            .ResolveFromHeader("X-Tenant-Id")
-            .UseInMemoryStore([Acme, Globex])
-            .ValidateTenantActivity(t => t.TenantId != "globex"));
+        List<string> seen = [];
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant
+                .ResolveFromHeader("X-Tenant-Id")
+                .UseInMemoryStore([Acme, Globex])
+                .ValidateTenantActivity(t => t.TenantId != "globex")
+                .ConfigureResolution(o => o.OnRejected = context =>
+                {
+                    seen.Add($"{context.Reason} {context.StatusCode} {context.Tenant?.TenantId}");
+                    return Task.CompletedTask;
+                }),
+            services => services.AddProblemDetails());
         await using var _ = app;
         using var client = app.GetTestClient();
 
         (await Get(client, "acme", "/required")).Should().Be(HttpStatusCode.OK);
-        (await Get(client, "globex", "/required")).Should().Be(HttpStatusCode.Forbidden);
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
+        var inactive = await client.GetAsync("/required", TestContext.Current.CancellationToken);
         (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+
+        inactive.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await inactive.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+            .Should().Contain("Tenant access denied", "a caller cannot tell a suspended tenant from one it may not use");
+        seen.Should().Equal("Inactive 403 globex");
+        logs.For(1012).Should().HaveCount(2).And.OnlyContain(e => e.Message.Contains("globex"));
+        logs.For(1005).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ACallerTheValidatorsRefuse_IsDeniedAccess_WhetherOrNotTheTenantIsSuspended(bool activityFirst)
+    {
+        List<string> seen = [];
+        await using var app = await StartAsync<string>(tenant =>
+        {
+            tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme, Globex]);
+
+            if (activityFirst)
+            {
+                tenant.ValidateTenantActivity(t => t.TenantId != "globex");
+            }
+
+            tenant.ValidateTenantAccess((http, _) => http.Request.Headers.ContainsKey("X-Member"));
+
+            if (!activityFirst)
+            {
+                tenant.ValidateTenantActivity(t => t.TenantId != "globex");
+            }
+
+            tenant.ConfigureResolution(o =>
+            {
+                o.InactiveTenantStatusCode = StatusCodes.Status402PaymentRequired;
+                o.OnRejected = context =>
+                {
+                    seen.Add($"{context.Reason} {context.StatusCode} {context.Tenant?.TenantId}");
+                    return Task.CompletedTask;
+                };
+            });
+        });
+        using var client = app.GetTestClient();
+
+        (await Send(client, "globex", member: false)).Should().Be(HttpStatusCode.Forbidden, "a stranger learns nothing about the tenant");
+        (await Send(client, "acme", member: false)).Should().Be(HttpStatusCode.Forbidden);
+        (await Send(client, "globex", member: true)).Should().Be(HttpStatusCode.PaymentRequired);
+        (await Send(client, "acme", member: true)).Should().Be(HttpStatusCode.OK);
+        seen.Should().Equal("AccessDenied 403 globex", "AccessDenied 403 acme", "Inactive 402 globex");
+
+        static async Task<HttpStatusCode> Send(HttpClient client, string tenant, bool member)
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, "/required");
+            request.Headers.Add("X-Tenant-Id", tenant);
+
+            if (member)
+            {
+                request.Headers.Add("X-Member", "yes");
+            }
+
+            using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+            return response.StatusCode;
+        }
+    }
+
+    [Fact]
+    public async Task AnInactiveTenant_GetsInactiveTenantStatusCode()
+    {
+        await using var app = await StartAsync<string>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .UseInMemoryStore([Acme, Globex])
+            .ValidateTenantActivity(t => t.TenantId != "globex")
+            .ValidateTenantAccess((_, t) => t.TenantId != "acme")
+            .ConfigureResolution(o => o.InactiveTenantStatusCode = StatusCodes.Status402PaymentRequired));
+        using var client = app.GetTestClient();
+
+        (await Get(client, "globex", "/required")).Should().Be(HttpStatusCode.PaymentRequired);
+        (await Get(client, "acme", "/required")).Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
@@ -445,8 +566,9 @@ public sealed class ResolutionTests
     {
         await using var app = await StartAsync<string>(tenant => tenant
             .ResolveFromHeader("X-Tenant-Id")
-            .UseInMemoryStore([Acme, Globex])
-            .ValidateTenantAccess((_, t) => t.TenantId != "globex"));
+            .UseInMemoryStore([Acme, Globex, Umbrella])
+            .ValidateTenantAccess((_, t) => t.TenantId != "globex")
+            .ValidateTenantActivity(t => t.TenantId != "umbrella"));
         List<string> measurements = [];
         using MeterListener listener = new();
         var meterFactory = app.Services.GetRequiredService<IMeterFactory>();
@@ -474,9 +596,11 @@ public sealed class ResolutionTests
         await Get(client, null, "/required");
         await Get(client, "initech", "/required");
         await Get(client, "globex");
+        await Get(client, "umbrella", "/required");
 
         measurements.Should().Equal(
-            "1 resolved False", "1 missing False", "1 missing True", "1 not_found True", "1 access_denied False");
+            "1 resolved False", "1 missing False", "1 missing True", "1 not_found True", "1 access_denied False",
+            "1 inactive True");
     }
 
     private static bool Record(List<string> calls, string name, bool allow)
@@ -604,6 +728,16 @@ public sealed class ResolutionTests
     private sealed class RequestServices
     {
         public Guid Id { get; } = Guid.NewGuid();
+    }
+
+    private sealed class DisposableResolver : ITenantResolver, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<string?>("acme");
+
+        public void Dispose() => Disposed = true;
     }
 
     private sealed class ScopedResolver(RequestServices services) : ITenantResolver

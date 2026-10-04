@@ -41,7 +41,8 @@ public static class TenantryDbContextOptionsBuilderExtensions
     /// <para>
     /// Every <see cref="ITenantDbContextOptionsContributor"/> registered in the application service provider
     /// configures the options here, and every <see cref="ITenantModelContributor"/> the model; without an application
-    /// service provider, none runs. Calling this again changes nothing.
+    /// service provider, none runs. The application's <see cref="EfCoreIsolationOptions"/> are read here too, so set
+    /// the application service provider before calling it. Calling this again changes nothing.
     /// </para>
     /// <para>
     /// It installs Tenantry's own EF Core model customizer, so the options must not also replace
@@ -67,7 +68,10 @@ public static class TenantryDbContextOptionsBuilderExtensions
             return optionsBuilder;
         }
 
-        return Add(optionsBuilder, new TenantryOptionsExtension());
+        // The application's options, read now, so that contexts of applications with other options never share EF
+        // Core's caches (TenantryOptionsExtension).
+        var isolation = ApplicationServices.Find(optionsBuilder.Options)?.GetService<IOptions<EfCoreIsolationOptions>>()?.Value.Clone();
+        return Add(optionsBuilder, new TenantryOptionsExtension(isolation));
     }
 
     /// <summary>

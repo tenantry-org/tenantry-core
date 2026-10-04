@@ -11,8 +11,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  # A newer push to a pull request cancels its older run; every commit on master finishes, so each can be released.
+  # A newer push to a pull request cancels its older run. A push to master gets a group of its own, by its commit: a
+  # shared group would let a third push cancel the second's run while it waited for the first's. So the run of every
+  # push finishes, and its commit can be released.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

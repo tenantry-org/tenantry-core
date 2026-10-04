@@ -59,7 +59,7 @@ at startup if no resolver or no store is registered. The rules are in [Registrat
 
 ## 4. Mark your tenant-owned entities
 
-An entity becomes tenant-scoped by implementing `ITenantEntity<TKey>`. The convenience base class
+An entity becomes tenant-owned by implementing `ITenantEntity<TKey>`. The convenience base class
 `TenantEntity<TKey>` implements it for you:
 
 ```csharp
@@ -73,8 +73,10 @@ public class Order : TenantEntity<Guid>   // adds a `Guid TenantId { get; set; }
 ```
 
 Entities that do not implement `ITenantEntity<TKey>` are shared by all tenants (product catalogues, reference
-tables) and are never filtered or stamped. Leave `TenantId` unset: Tenantry stamps it on insert
-([Core concepts](core-concepts.md#itenantentity)).
+tables) and are never filtered or stamped. Mark them `[SharedAcrossTenants]` (namespace `Tenantry.EfCore`): a context
+with tenant-owned entities refuses one that is neither
+([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)). Leave
+`TenantId` unset: Tenantry stamps it on insert ([Core concepts](core-concepts.md#itenantentity)).
 
 ## 5. Keep your DbContext as it is
 

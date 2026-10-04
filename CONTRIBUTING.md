@@ -49,6 +49,7 @@ ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them re
 | Check | Command | When it fails |
 |-------|---------|---------------|
 | Every action is pinned to a commit | The `grep` in `build-test.yml` | Pin the action to a full commit SHA, with its version in a comment (`uses: owner/repo@<sha> # vX.Y.Z`) |
+| The workflows are valid | `actionlint` (the `Lint the workflows` step in `build-test.yml`), which also runs shellcheck on each `run:` block | Fix what it reports |
 | Dependabot's list of banded packages matches the project files | `dotnet run scripts/check-dependabot.cs` | Update the list in `.github/dependabot.yml` |
 | No API or package that no longer exists is named in the README, docs, samples or `src/` | `dotnet run scripts/check-removed-names.cs` | Use the name it gives; the removed names are in `eng/common/removed-names.txt` |
 | Every link reaches a file, page and heading | `dotnet run scripts/check-doc-links.cs` | Fix the link it names. Links in `docs/` are checked as tenantry.dev serves them: another page as `page.md#heading`, any other file through `../` |
@@ -58,14 +59,14 @@ ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them re
 | The build has no warnings | `dotnet build Tenantry.slnx -c Release --no-restore` | Warnings are errors, trim (`IL2xxx`) and AOT (`IL3xxx`) warnings in `src/` included |
 | The samples start | `bash scripts/smoke-samples.sh` | After the Release build |
 | Every test passes on every target framework, with coverage | `bash scripts/test-with-coverage.sh` | Docker runs the integration tests; it writes `coverage/coverage.xml` |
-| SonarCloud quality gate | CI only | On every push to `master` and every pull request into it. A pull request from a fork, or from Dependabot, gets no `SONAR_TOKEN`, so its Sonar step fails until a maintainer runs the change from a branch of this repository |
+| SonarCloud quality gate | CI only | On every push to `master` and every pull request into it. A pull request from a fork, or from Dependabot, gets no `SONAR_TOKEN`, so its Sonar step fails. For a result, a maintainer pushes its commits to a branch of this repository (`git fetch origin pull/<number>/head && git push origin FETCH_HEAD:refs/heads/<branch>`) and opens a pull request from that branch |
 | Line coverage is at least 90% | `dotnet reportgenerator -reports:coverage/coverage.xml -targetdir:coverage/report -reporttypes:JsonSummary`, then `jq '.summary.linecoverage' coverage/report/Summary.json` | CI fails below 90: add tests for the new code |
 | The public API still works for code built against the last release | `for p in src/*/*.csproj; do dotnet pack "$p" -c Release --no-build -o artifacts; done` (the pack validates each package against `TenantryPackageBaseline`) | Keep the old member, or, for an intended break in a minor release, record it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true` |
-| A CycloneDX SBOM per package | The `dotnet CycloneDX` loop in `build-test.yml` | The release attaches them |
+| A CycloneDX SBOM per package | The `dotnet CycloneDX` loop in `build-test.yml` | Run it after the pack, as it reads each package's version from `artifacts`, and fix the project it names |
 | The packages' dependency ranges | `dotnet run scripts/check-package-ranges.cs -- artifacts` | Each dependency has its intended range (see the script) |
 | The API reference is up to date | `bash scripts/generate-api-docs.sh --check` | `bash scripts/generate-api-docs.sh`, then commit `docs/api`: a change to the public API or its XML documentation changes it |
-| An application can restore and run the packages | `bash scripts/check-package-consumer.sh artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http' 'Tenantry.Caching' 'Tenantry.Options'` | From an empty cache, with package source mapping, on every target framework |
-| The docs' code blocks build | `bash scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.EfCore' 'Tenantry.AspNetCore' 'Tenantry.Http' 'Tenantry.Caching' 'Tenantry.Options'` | Every `csharp` code block in the README and `docs/` builds against the packages |
+| An application can restore and run the packages | `bash scripts/check-package-consumer.sh artifacts 'Tenantry.*'` | From an empty cache, with package source mapping, on every target framework |
+| The docs' code blocks build | `bash scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.*'` | Every `csharp` code block in the README and `docs/` builds against the packages |
 | Native AOT publish | `dotnet publish samples/Tenantry.Samples.Aot -c Release` | No trim or AOT warnings |
 | Native AOT smoke test | `dotnet publish eng/aot-smoke -c Release -o artifacts/aot-smoke`, then `artifacts/aot-smoke/AotSmoke` | Tenantry.Http and Tenantry.Caching compile whole for Native AOT, and the binary runs them |
 

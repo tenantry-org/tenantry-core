@@ -56,7 +56,7 @@ public static class DataSeeder
         }
 
         // Seed global reference data (Categories and Products)
-        // This data is NOT tenanted and will be visible to all tenants
+        // Every tenant shares this data
         categories.AddRange(Electronics, Office, Furniture);
 
         // Seed Products
@@ -76,7 +76,7 @@ public static class DataSeeder
         }
 
         // Seed global reference data (Categories and Products)
-        // This data is NOT tenanted and will be visible to all tenants
+        // Every tenant shares this data
         categories.AddRange(Electronics, Office, Furniture);
 
         // Seed Products

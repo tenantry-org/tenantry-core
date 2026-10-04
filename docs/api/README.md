@@ -62,7 +62,7 @@ the pieces fit together; this reference is for the details of each type and memb
 | Type | Kind | Summary |
 |------|------|---------|
 | [`TenantryServiceCollectionExtensions`](microsoft-extensions-dependencyinjection-tenantryservicecollectionextensions.md) | class | Registers Tenantry. |
-| [`TenantryTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantrytenantbuilderextensions.md) | class | Tenantry's core features on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): the tenant store, its cache and per-tenant connection strings. |
+| [`TenantryTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantrytenantbuilderextensions.md) | class | Tenantry's core features on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): the tenant store, its cache, invalidation across instances, and per-tenant connection strings. |
 
 ### `Tenantry`
 
@@ -79,7 +79,7 @@ the pieces fit together; this reference is for the details of each type and memb
 | [`ITenantDescriptor`](tenantry-itenantdescriptor.md) | interface | A tenant, without its identifier type: the base of [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md), for code that does not need the tenant's id, such as [`TenantDescriptorExtensions.As<TTenant>`](tenantry-tenantdescriptorextensions.md). |
 | [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md) | interface | Represents a resolved tenant. |
 | [`ITenantEntity<TKey>`](tenantry-itenantentity.md) | interface | Marks an entity that belongs to a tenant. |
-| [`ITenantInvalidationHandler<TKey>`](tenantry-itenantinvalidationhandler.md) | interface | Clears data kept per tenant when the tenant changes. Every registered handler runs on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md) invalidation, with or without `CacheTenants`. Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options register their own. |
+| [`ITenantInvalidationHandler<TKey>`](tenantry-itenantinvalidationhandler.md) | interface | Clears data kept per tenant when the tenant changes, or, registered with `BroadcastInvalidations`, publishes the invalidation to the application's other instances. Every registered handler runs on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md) invalidation, with or without `CacheTenants`. |
 | [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md) | interface | Clears everything Tenantry keeps for a tenant when the tenant changes: its cached copy (with `CacheTenants`) and what each [`ITenantInvalidationHandler<TKey>`](tenantry-itenantinvalidationhandler.md) keeps, such as Tenantry.Caching's entries, cached responses and Tenantry.Options' values. |
 | [`ITenantLookup<TKey>`](tenantry-itenantlookup.md) | interface | Reads tenants from the registered [`ITenantStore<TKey>`](tenantry-itenantstore.md) on behalf of singletons, such as hosted services, resolving the store from a fresh dependency-injection scope for each call. |
 | [`ITenantScope<TKey>`](tenantry-itenantscope.md) | interface | A dependency-injection scope with a tenant current, created by [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md). |
@@ -106,7 +106,6 @@ For code that extends the package, such as another package that builds on it. An
 | [`ITenantKeyType`](tenantry-itenantkeytype.md) | `Tenantry` | interface | The tenant key type the application registered Tenantry with, for code that has only a service provider, such as a health check registration or a host extension, so its callers never repeat the key type. |
 | [`ITenantKeyTypeVisitor<TResult>`](tenantry-itenantkeytypevisitor.md) | `Tenantry` | interface | Code that needs the tenant key type, given it by [`ITenantKeyType`](tenantry-itenantkeytype.md). |
 | [`ITenantRegistration`](tenantry-itenantregistration.md) | `Tenantry` | interface | A registration that needs the tenant key type, added through [`ITenantBuilder.Add`](tenantry-itenantbuilder.md). Packages use it for builder methods that take a type parameter of their own, such as a `DbContext` type. |
-| [`TenantConnectionStringProvider<TKey>`](tenantry-tenantconnectionstringprovider.md) | `Tenantry` | class | The default [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md): calls the configured delegates on every call, without caching. |
 | [`TenantIds`](tenantry-tenantids.md) | `Tenantry` | class | Tenant ids as text, and the ids Tenantry reserves for "no tenant". Tenantry formats and parses tenant ids this way wherever they leave or enter the process: in log scopes and traces, in the headers Tenantry.Http and Tenantry.Pro's jobs and messages carry, and in the identifiers [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md) reads by default. |
 
 ## Tenantry.EfCore
@@ -131,10 +130,11 @@ For code that extends the package, such as another package that builds on it. An
 | [`EfCoreIsolationOptions`](tenantry-efcore-efcoreisolationoptions.md) | class | Options for EF Core tenant isolation: the application's, set with `tenant.ConfigureEfCoreIsolation(options => …)`, or one context's, set with `options.UseTenantry(o => …)`. |
 | [`MissingTenantBehavior`](tenantry-efcore-missingtenantbehavior.md) | enum | What `SaveChanges` does when it writes tenant-owned entities and no tenant is current. Set with [`EfCoreIsolationOptions.OnMissingTenant`](tenantry-efcore-efcoreisolationoptions.md). |
 | [`SaveWithoutTransactionBehavior`](tenantry-efcore-savewithouttransactionbehavior.md) | enum | What `SaveChanges` does when `Database.AutoTransactionBehavior` is `Never`, no transaction is open, and some rows it writes are tenant-checked by another of its statements. Set with [`EfCoreIsolationOptions.OnSaveWithoutTransaction`](tenantry-efcore-efcoreisolationoptions.md). |
-| [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) | class | Marks an entity type whose rows every tenant shares, such as a country list or the tenant table itself, so [`TenantModel.FindUnisolatedEntityTypes`](tenantry-efcore-tenantmodel.md) does not report it. |
+| [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) | class | Marks an entity type whose rows every tenant shares, such as a country list or the tenant table itself. |
 | [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) | class | Thrown when EF Core would read or write across tenants. [`TenantIsolationViolationException.Kind`](tenantry-efcore-tenantisolationviolationexception.md) says which check failed. |
 | [`TenantIsolationViolationKind`](tenantry-efcore-tenantisolationviolationkind.md) | enum | Which isolation check threw a [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md). |
 | [`TenantryQueryFilters`](tenantry-efcore-tenantryqueryfilters.md) | class | The names of the query filters Tenantry adds or names on EF Core 10 and later. |
+| [`UnclassifiedEntityTypeBehavior`](tenantry-efcore-unclassifiedentitytypebehavior.md) | enum | What a context does when its model has tenant-owned entity types and also entity types that are neither tenant-owned nor marked as shared across tenants. Set with [`EfCoreIsolationOptions.OnUnclassifiedEntityType`](tenantry-efcore-efcoreisolationoptions.md). |
 
 ### Extension points
 

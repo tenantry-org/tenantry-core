@@ -346,7 +346,8 @@ internal sealed class IntegrationOrder : ITenantEntity<string>
     public string Description { get; init; } = string.Empty;
 }
 
-/// <summary>Non-tenanted global reference entity — no ITenantEntity, no query filter.</summary>
+/// <summary>Reference data every tenant shares: no ITenantEntity, no query filter.</summary>
+[SharedAcrossTenants]
 internal sealed class IntegrationLabel
 {
     public int Id { get; set; }

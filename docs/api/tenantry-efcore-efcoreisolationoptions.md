@@ -4,7 +4,7 @@ Namespace: `Tenantry.EfCore` · Package: `Tenantry.EfCore` · [API reference](RE
 
 Options for EF Core tenant isolation: the application's, set with `tenant.ConfigureEfCoreIsolation(options => …)`, or one context's, set with `options.UseTenantry(o => …)`.
 
-Reads always fail closed, a new entity that names another tenant is always rejected, and `ExecuteUpdate` can never set `TenantId`. Whenever a tenant is current, `Modified` and `Deleted` entities must belong to it, checked before saving and again in each `UPDATE` and `DELETE`. These options decide what happens to writes without a tenant, and to saves without a transaction. Raw SQL and `IgnoreQueryFilters()` are outside Tenantry's isolation.
+Reads always fail closed, a new entity that names another tenant is always rejected, and `ExecuteUpdate` can never set `TenantId`. Whenever a tenant is current, `Modified` and `Deleted` entities must belong to it, checked before saving and again in each `UPDATE` and `DELETE`. These options decide what happens to writes without a tenant, to saves without a transaction, and to entity types neither tenant-owned nor shared. `Database.SqlQuery`, `ExecuteSql` and `IgnoreQueryFilters()` are outside Tenantry's isolation.
 
 ```csharp
 public sealed class EfCoreIsolationOptions
@@ -31,3 +31,15 @@ public SaveWithoutTransactionBehavior OnSaveWithoutTransaction { get; set; }
 ```
 
 Value: [`SaveWithoutTransactionBehavior`](tenantry-efcore-savewithouttransactionbehavior.md)
+
+### `OnUnclassifiedEntityType`
+
+What a context does when its model has tenant-owned entity types and also entity types that are neither tenant-owned nor marked as shared across tenants. Defaults to [`UnclassifiedEntityTypeBehavior.Reject`](tenantry-efcore-unclassifiedentitytypebehavior.md).
+
+```csharp
+public UnclassifiedEntityTypeBehavior OnUnclassifiedEntityType { get; set; }
+```
+
+Value: [`UnclassifiedEntityTypeBehavior`](tenantry-efcore-unclassifiedentitytypebehavior.md)
+
+Mark an entity type whose rows every tenant shares with [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) or `IsSharedAcrossTenants()`. [`TenantModel.FindUnisolatedEntityTypes`](tenantry-efcore-tenantmodel.md) lists the types this checks.

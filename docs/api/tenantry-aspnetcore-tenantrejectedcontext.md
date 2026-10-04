@@ -68,7 +68,7 @@ Value: `int`
 
 ### `Tenant`
 
-The tenant that was refused, because it is inactive or an access validator refused it, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for any other reason.
+The tenant that was refused, for [`TenantRejectionReason.Inactive`](tenantry-aspnetcore-tenantrejectionreason.md) and [`TenantRejectionReason.AccessDenied`](tenantry-aspnetcore-tenantrejectionreason.md); otherwise [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null).
 
 ```csharp
 public ITenantDescriptor<TKey>? Tenant { get; }

@@ -146,7 +146,6 @@ public sealed class TenantConnectionStringProviderTests
         services.Should().ContainSingle(d => d.ServiceType == typeof(CurrentTenantConnectionString<string>))
             .Which.Lifetime.Should().Be(ServiceLifetime.Singleton);
         Provider(provider).Get(Acme).Should().Be("second");
-        Provider(provider).Should().BeSameAs(provider.GetRequiredService<TenantConnectionStringProvider<string>>());
     }
 
     [Fact]
@@ -155,7 +154,7 @@ public sealed class TenantConnectionStringProviderTests
         ServiceCollection services = new();
         services.AddSingleton(new Vault("secret"));
         services.AddTenantry<string>(tenant => tenant
-            .UseConnectionStrings(options => options.GetConnectionString = _ => "replaced")
+            .UseConnectionStrings(_ => new VaultProvider(new Vault("replaced")))
             .UseConnectionStrings(sp => new VaultProvider(sp.GetRequiredService<Vault>())));
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
 
@@ -164,6 +163,42 @@ public sealed class TenantConnectionStringProviderTests
         await provider.GetRequiredService<CurrentTenantConnectionString<string>>()
             .Awaiting(c => c.GetAsync(TestContext.Current.CancellationToken).AsTask())
             .Should().ThrowAsync<TenantNotResolvedException>();
+    }
+
+    [Fact]
+    public void TheDelegates_AfterAProviderFromDI_Throw()
+    {
+        ServiceCollection services = new();
+
+        services.Invoking(s => s.AddTenantry<string>(tenant => tenant
+                .UseConnectionStrings(_ => new VaultProvider(new Vault("first")))
+                .UseConnectionStrings(options => options.GetConnectionString = _ => "second")))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("UseConnectionStrings(options => …) cannot be combined with UseConnectionStrings(sp => …)*use one*");
+    }
+
+    [Fact]
+    public void TheDelegates_AfterAProviderTheApplicationRegistered_Throw()
+    {
+        ServiceCollection services = new();
+        services.AddSingleton<ITenantConnectionStringProvider<string>>(new VaultProvider(new Vault("own")));
+
+        services.Invoking(s => s.AddTenantry<string>(tenant => tenant
+                .UseConnectionStrings(options => options.GetConnectionString = _ => "second")))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*ITenantConnectionStringProvider<String> registered before AddTenantry*use one*");
+    }
+
+    [Fact]
+    public void AProviderFromDI_AfterTheDelegates_Throws()
+    {
+        ServiceCollection services = new();
+
+        services.Invoking(s => s.AddTenantry<string>(tenant => tenant
+                .UseConnectionStrings(options => options.GetConnectionString = _ => "first")
+                .UseConnectionStrings(_ => new VaultProvider(new Vault("second")))))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("UseConnectionStrings(sp => …) cannot be combined with UseConnectionStrings(options => …)*use one*");
     }
 
     [Theory]

@@ -123,7 +123,8 @@ every tenant, and leaves shared entries. Call it when a tenant changes or is rem
 
 - It takes effect on the instance that calls it. Microsoft's `HybridCache` marks the tag invalid in its second level,
   but each instance keeps the invalidation times it has already read, so other instances of the application serve
-  their copies until the entries expire. Where that matters, keep entries short-lived
+  their copies until the entries expire, unless you
+  [publish the invalidation to them](tenant-stores.md#several-instances). Otherwise keep entries short-lived
   (`HybridCacheEntryOptions.Expiration` and `LocalCacheExpiration`), as with the tenant cache.
 - The output cache's in-memory store (the default) is per instance too; a store shared between instances shares the
   eviction.

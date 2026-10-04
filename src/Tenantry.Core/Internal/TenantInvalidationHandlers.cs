@@ -4,19 +4,23 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Tenantry.Internal;
 
 /// <summary>
-/// Runs every registered <see cref="ITenantInvalidationHandler{TKey}"/>, resolving them the first time, so a handler may
-/// depend on <see cref="ITenantInvalidator{TKey}"/> itself.
+/// Runs every registered <see cref="ITenantInvalidationHandler{TKey}"/>, then, when asked to, every broadcasting one
+/// (<c>BroadcastInvalidations</c>, keyed with <see cref="BroadcastKey"/>). They are resolved the first time, so a handler
+/// may depend on <see cref="ITenantInvalidator{TKey}"/> itself.
 /// </summary>
 internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services)
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
+    public const string BroadcastKey = "Tenantry.Invalidation.Broadcast";
+
     private ITenantInvalidationHandler<TKey>[]? _handlers;
+    private ITenantInvalidationHandler<TKey>[]? _broadcasters;
 
-    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken) =>
-        RunEachAsync(handler => handler.InvalidateAsync(tenantId, cancellationToken), cancellationToken);
+    public ValueTask InvalidateAsync(TKey tenantId, bool broadcast, CancellationToken cancellationToken) =>
+        RunEachAsync(handler => handler.InvalidateAsync(tenantId, cancellationToken), broadcast, cancellationToken);
 
-    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken) =>
-        RunEachAsync(handler => handler.InvalidateAllAsync(cancellationToken), cancellationToken);
+    public ValueTask InvalidateAllAsync(bool broadcast, CancellationToken cancellationToken) =>
+        RunEachAsync(handler => handler.InvalidateAllAsync(cancellationToken), broadcast, cancellationToken);
 
     // No tenant has an id reserved for "no tenant", and a handler could read an empty one as every tenant.
     public static void ThrowIfReserved(TKey tenantId)
@@ -33,12 +37,23 @@ internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services
         }
     }
 
-    private async ValueTask RunEachAsync(Func<ITenantInvalidationHandler<TKey>, ValueTask> run, CancellationToken cancellationToken)
+    private async ValueTask RunEachAsync(
+        Func<ITenantInvalidationHandler<TKey>, ValueTask> run,
+        bool broadcast,
+        CancellationToken cancellationToken)
     {
         _handlers ??= services.GetServices<ITenantInvalidationHandler<TKey>>().ToArray();
+        var handlers = _handlers.AsEnumerable();
+
+        if (broadcast)
+        {
+            _broadcasters ??= services.GetKeyedServices<ITenantInvalidationHandler<TKey>>(BroadcastKey).ToArray();
+            handlers = handlers.Concat(_broadcasters);
+        }
+
         List<Exception>? errors = null;
 
-        foreach (var handler in _handlers)
+        foreach (var handler in handlers)
         {
             cancellationToken.ThrowIfCancellationRequested();
 

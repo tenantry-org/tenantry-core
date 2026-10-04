@@ -298,8 +298,12 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="factory">Creates the resolver from the application's services.</param>
-    /// <remarks>The resolver is a singleton, created once and used for every request.</remarks>
+    /// <param name="factory">Creates the resolver from the request's services.</param>
+    /// <remarks>
+    /// The factory runs in each request's scope, so the resolver can depend on scoped services such as a
+    /// <c>DbContext</c>. The scope owns what it returns, and disposes it when the request ends, so return a new
+    /// resolver: pass an instance instead for a resolver created once and used for every request.
+    /// </remarks>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> UseResolver<TKey>(
         this ITenantBuilder<TKey> builder,
@@ -310,7 +314,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(factory);
 
         TenantResolutionMiddlewareConfigurator<TKey>.Register(builder.Services);
-        builder.Services.AddSingleton(factory);
+        builder.Services.AddScoped(factory);
         return builder;
     }
 

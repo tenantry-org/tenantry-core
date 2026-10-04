@@ -5,7 +5,7 @@ using Tenantry;
 namespace Tenantry.Samples.EfCoreWeb.Entities;
 
 /// <summary>
-/// Tenanted entity — isolated per tenant.
+/// Tenant-owned entity, isolated per tenant.
 /// Each tenant sees only their own orders.
 /// </summary>
 public class Order : TenantEntity<string>

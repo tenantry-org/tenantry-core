@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.6
 
+- Mark every entity type that is not tenant-owned, in a context that has tenant-owned ones, with
+  `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`, or the context's first query or save throws. ASP.NET Core
+  Identity's types need it too ([ASP.NET Core Identity](docs/aspnetcore-identity.md#the-user-type-and-context)).
+- Give each HTTP client with `UseTenantry()` an absolute `BaseAddress` in its registration, or pass its service's
+  address to `UseTenantry(address)`, as a gRPC client must. `UseTenantry()` on an HTTP client gained an optional
+  parameter, so a library compiled against 0.6 that calls it must be compiled again.
+- A resolver from `UseResolver(sp => …)` is created per request. For one resolver for the application's lifetime,
+  pass an instance to `UseResolver(resolver)`. The request's scope owns what the factory returns and disposes it, so
+  a factory must not return a shared resolver, such as a singleton from the container.
+- Keep one of `UseConnectionStrings(options => …)` and `UseConnectionStrings(sp => …)`, or an
+  `ITenantConnectionStringProvider<TKey>` registered before `AddTenantry`. Code that resolved
+  `TenantConnectionStringProvider<TKey>` resolves `ITenantConnectionStringProvider<TKey>`.
+- An `OnRejected` handler or log alert that looked for a suspended tenant under `TenantRejectionReason.AccessDenied`
+  or event 1005 looks for `TenantRejectionReason.Inactive` or event 1012. Dashboards that count suspended tenants'
+  requests by the `tenantry.resolution.result` trace tag or metric value look for `inactive`, which was
+  `access_denied`.
+- A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
+  `InvalidateAllLocallyAsync`.
+- Code that calls `TenantModel.FindUnisolatedEntityTypes` gets the roots of hierarchies only, and no owned types or
+  many-to-many join entity types that hold only their two foreign keys, which follow the types they belong to.
+  `TenantModel.IsSharedAcrossTenants` is true for a type whose base type is marked.
 - In a transaction without savepoints (SQL Server with multiple active result sets, or a `TransactionScope` on any
   provider) where a save writes owned rows in their own table or an entity mapped to more than one table, any save that
   failed after sending a statement now stops the commit with `TenantIsolationViolationException` of kind
@@ -19,13 +40,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tenant.BroadcastInvalidations(sp => …)`, `ITenantInvalidator<TKey>.InvalidateLocallyAsync` and
+  `InvalidateAllLocallyAsync` (Tenantry.Core), to clear a tenant on every instance of the application. The handler
+  `BroadcastInvalidations` registers publishes each invalidation to the other instances, after this instance is
+  cleared; each instance applies what it receives with the local methods, which do not run it, so nothing is published
+  twice. See [Several instances](docs/tenant-stores.md#several-instances).
+- `EfCoreIsolationOptions.OnUnclassifiedEntityType` (Tenantry.EfCore). In a model with tenant-owned entity types,
+  the context's first query or save throws `TenantIsolationViolationException` of kind `ModelConfiguration`, naming
+  every other entity type that is not marked `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`. `Warn` logs event
+  2006 instead, and `Allow` accepts the model. A model with no tenant-owned type is not checked. See
+  [Entity types that are not tenant-owned](docs/efcore-integration.md#entity-types-that-are-not-tenant-owned).
+- `TenantRejectionReason.Inactive` and `TenantResolutionOptions<TKey>.InactiveTenantStatusCode` (Tenantry.AspNetCore).
+  A request for a tenant `ValidateTenantActivity` refuses is rejected with the reason `Inactive`, event 1012
+  (`TenantInactive`) and the resolution result `inactive`, where it was `AccessDenied`. The status stays `403
+  Forbidden` with the access-denied response unless you set `InactiveTenantStatusCode`, for example to `402 Payment
+  Required` for a lapsed subscription. The access validators run before the activity check, so a caller they refuse
+  is denied access whether or not the tenant is suspended. `TenantRejectedContext<TKey>.Tenant` is the suspended
+  tenant.
 - `tenant.TagRequestMetrics()` (Tenantry.AspNetCore) tags ASP.NET Core's request metric, `http.server.request.duration`,
   with the request's tenant as `tenant.id`, or with a value of your own per tenant to keep the series few. It replaces
   Tenantry.Pro's `AddTenantMetrics()`, whose package, Tenantry.Pro.AspNetCore, existed only for it. See
   [Diagnostics](docs/diagnostics.md#request-metrics-per-tenant).
 
+### Changed
+
+- `UseResolver(sp => …)` creates the resolver in each request's scope, as `UseResolver<TResolver>()` does. It was a
+  singleton, so a factory that passed it a scoped service such as a `DbContext` shared one instance across requests.
+- `UseConnectionStrings(options => …)` throws when another provider is already set, by `UseConnectionStrings(sp => …)`
+  or by the application before `AddTenantry`, and `UseConnectionStrings(sp => …)` throws after
+  `UseConnectionStrings(options => …)`. The delegates were ignored in the first case, and replaced in the second.
+- `TenantConnectionStringProvider<TKey>` is internal. Resolving it directly bypassed any decorator.
+
 ### Fixed
 
+- `UseTenantry()` on an HTTP or gRPC client with no base address in its registration fails when the client is created.
+  It sent the tenant's id to any host the client called. `UseTenantry(address)` names the service for a client that
+  sets its address elsewhere.
 - A transaction that EF Core cannot undo a failed save in (an ambient `TransactionScope`, or SQL Server with multiple
   active result sets) is rolled back if any save in it failed after sending statements, once a save in it has written
   owned rows in their own table or an entity mapped to more than one table. Tenantry counts the saves of each such
@@ -47,9 +97,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a save through a stub with another tenant's key could delete that tenant's join rows or add to them. Configure the
   join entity with `UsingEntity<TJoin>()` and implement `ITenantEntity<TKey>` on it, and add `TenantId` to an existing
   join table. See [Many-to-many relationships](docs/efcore-advanced.md#many-to-many-relationships).
-- `AddDbContextPerTenantDatabase` throws for an `ITenantConnectionStringProvider<TKey>` registered as scoped or
-  transient. It accepted one before, and the singleton context factory then kept one instance of it, with its scoped
-  dependencies, for the application's lifetime, or failed scope validation on the first context.
+- The first context from `AddDbContextPerTenantDatabase` throws for an `ITenantConnectionStringProvider<TKey>`
+  registered as scoped or transient, before or after `AddTenantry`. It was accepted before, and the singleton context
+  factory then kept one instance of it, with its scoped dependencies, for the application's lifetime, or failed scope
+  validation on the first context. A scoped provider registered before `AddTenantry` and replaced by
+  `UseConnectionStrings(sp => …)` no longer leaves the replacement scoped.
 - `IsolateCaches()` throws for a `HybridCache` registered as scoped or transient. It accepted one before, and
   invalidating a tenant then failed, because invalidation clears the cache outside any scope.
 

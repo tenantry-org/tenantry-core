@@ -13,8 +13,8 @@ internal sealed record TenantResolution<TKey>(
     where TKey : IEquatable<TKey>, IParsable<TKey>;
 
 /// <summary>
-/// Finds a request's tenant: the resolvers in registration order, the store lookup, the activity check, and the access
-/// validators. <c>app.UseTenantry()</c> runs all of it; <c>app.UseTenantResolution()</c>, before authentication, runs
+/// Finds a request's tenant: the resolvers in registration order, the store lookup, the access validators, and the
+/// activity check. <c>app.UseTenantry()</c> runs all of it; <c>app.UseTenantResolution()</c>, before authentication, runs
 /// only the resolvers added before the first that needs the user (a claim or propagation header resolver), and no
 /// access validators. When those find nothing,
 /// <c>app.UseTenantry()</c> runs every resolver again, in order, after authentication.
@@ -140,15 +140,16 @@ internal sealed class TenantRequestResolution<TKey>
             return new(ResolutionResult.NotFound, identifier, null, null);
         }
 
-        // An inactive (suspended) tenant is refused like one an access validator refuses.
-        if (_activity is not null && !await _activity.IsActiveAsync(tenant, cancellationToken))
+        // The access validators first, so only a caller they allow can learn that a tenant is suspended. Before
+        // authentication they cannot run yet: app.UseTenantry() runs them on an inactive tenant too (CompleteAsync).
+        if (!beforeAuthentication && !await ValidateAsync(context, tenant))
         {
             return new(ResolutionResult.AccessDenied, identifier, tenant, null);
         }
 
-        if (!beforeAuthentication && !await ValidateAsync(context, tenant))
+        if (_activity is not null && !await _activity.IsActiveAsync(tenant, cancellationToken))
         {
-            return new(ResolutionResult.AccessDenied, identifier, tenant, null);
+            return new(ResolutionResult.Inactive, identifier, tenant, null);
         }
 
         return new(ResolutionResult.Resolved, identifier, tenant, null);

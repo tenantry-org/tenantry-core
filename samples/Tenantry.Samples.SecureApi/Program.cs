@@ -1,10 +1,10 @@
-// Tenantry.Samples.SecureApi — a production-shaped multi-tenant API.
+// Tenantry.Samples.SecureApi: a production-shaped multi-tenant API.
 //
 // 1. Callers authenticate with a JWT bearer token. Anonymous requests get 401.
 // 2. The caller selects a tenant with the X-Tenant-Id header. Tenantry checks it against the token's
 //    "tenant" claims, so a caller can only select tenants they belong to (403 otherwise).
 // 3. Every endpoint requires a tenant unless it opts out (400 without one). EF Core reads and writes are
-//    isolated to the selected tenant, and tenant-scoped writes without a tenant are rejected.
+//    isolated to the selected tenant, and tenant-owned writes without a tenant are rejected.
 //
 // The header-only quickstarts skip steps 1 and 2, which lets any caller select any tenant. Use them to
 // learn the API, and this sample as the starting point for real applications.

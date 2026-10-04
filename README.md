@@ -30,7 +30,7 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 - `options.UseTenantry()` isolates any `DbContext`, pooled or not, with your own model configuration in any order.
 - It fails closed. With no tenant, queries return nothing and tenant-owned writes are refused. A write to another
   tenant's row is rejected before saving, and `TenantId` is part of every `UPDATE` and `DELETE`, so a forged key
-  matches no row. Raw SQL and `IgnoreQueryFilters()` are not isolated
+  matches no row. `Database.SqlQuery`, `ExecuteSql` and `IgnoreQueryFilters()` are not isolated
   ([details](docs/efcore-integration.md#what-is-and-isnt-isolated)).
 - One `AddTenantry` serves ASP.NET Core, console apps, workers and desktop apps.
 - Built for .NET 10. .NET 8 and 9 are supported until 10 November 2027 ([compatibility](docs/compatibility.md)).
@@ -75,21 +75,26 @@ API, with the steps to update in the [changelog](CHANGELOG.md).
 
 ## Quick start (ASP.NET Core)
 
-> Resolving the tenant from a header without authentication lets any caller select any tenant. Use this setup to
-> learn the API. In production, authenticate callers and check that they belong to the tenant they select, as the
-> [`SecureApi` sample](samples/Tenantry.Samples.SecureApi) does.
+The request names its tenant in a header, and the signed-in user's `tenant_id` claims must include it, so a caller
+cannot select a tenant it does not belong to. The [`SecureApi` sample](samples/Tenantry.Samples.SecureApi) runs this
+with JWT authentication.
 
 ```csharp
 using Tenantry;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddAuthentication().AddJwtBearer();   // your sign-in, configured as usual
+
 builder.Services.AddTenantry<Guid>(tenant =>
 {
     // 1. How is the tenant identified on each request? (resolvers are tried in order)
     tenant.ResolveFromHeader("X-Tenant-Id");
 
-    // 2. Which tenants exist? (swap for a DB/cache-backed store in production)
+    // 2. May the signed-in user use it? (their "tenant_id" claims must name it)
+    tenant.ValidateTenantAccessByClaim("tenant_id");
+
+    // 3. Which tenants exist? (swap for a DB/cache-backed store in production)
     tenant.UseInMemoryStore(
     [
         new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" },
@@ -99,11 +104,12 @@ builder.Services.AddTenantry<Guid>(tenant =>
 
 var app = builder.Build();
 
-// Resolves the tenant and populates ITenantContext<Guid> for the rest of the request.
+// Resolves the tenant, checks it against the user, and populates ITenantContext<Guid> for the rest of the request.
+app.UseAuthentication();
 app.UseTenantry();
 
 app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.CurrentTenant!.Name))
-   .RequireTenant();          // 400 without a tenant, so the handler always has one
+   .RequireTenant();          // 400 without a tenant, 403 for one the user may not use
 
 app.Run();
 ```

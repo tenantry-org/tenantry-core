@@ -138,22 +138,34 @@ internal sealed class TenantStoreCache<TKey>
 
 /// <summary>
 /// The <see cref="ITenantInvalidator{TKey}"/>: removes the tenant from <c>CacheTenants</c>' cache, when there is one,
-/// then runs every <see cref="ITenantInvalidationHandler{TKey}"/>.
+/// then runs every <see cref="ITenantInvalidationHandler{TKey}"/>, and the broadcasting ones unless it is local.
 /// </summary>
 internal sealed class TenantInvalidator<TKey>(TenantStoreCache<TKey>? cache, TenantInvalidationHandlers<TKey> handlers)
     : ITenantInvalidator<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken = default)
+    public ValueTask InvalidateAsync(TKey tenantId, CancellationToken cancellationToken = default) =>
+        Invalidate(tenantId, broadcast: true, cancellationToken);
+
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken = default) =>
+        InvalidateAll(broadcast: true, cancellationToken);
+
+    public ValueTask InvalidateLocallyAsync(TKey tenantId, CancellationToken cancellationToken = default) =>
+        Invalidate(tenantId, broadcast: false, cancellationToken);
+
+    public ValueTask InvalidateAllLocallyAsync(CancellationToken cancellationToken = default) =>
+        InvalidateAll(broadcast: false, cancellationToken);
+
+    private ValueTask Invalidate(TKey tenantId, bool broadcast, CancellationToken cancellationToken)
     {
         TenantInvalidationHandlers<TKey>.ThrowIfReserved(tenantId);
         cache?.Remove(tenantId);
-        return handlers.InvalidateAsync(tenantId, cancellationToken);
+        return handlers.InvalidateAsync(tenantId, broadcast, cancellationToken);
     }
 
-    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken = default)
+    private ValueTask InvalidateAll(bool broadcast, CancellationToken cancellationToken)
     {
         cache?.RemoveAll();
-        return handlers.InvalidateAllAsync(cancellationToken);
+        return handlers.InvalidateAllAsync(broadcast, cancellationToken);
     }
 }

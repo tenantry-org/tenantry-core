@@ -20,13 +20,25 @@ public sealed class TenantResolutionOptions<TKey> where TKey : IEquatable<TKey>,
 
 ### `AccessDeniedStatusCode`
 
-The status code when the request's tenant is inactive or an access validator refuses it. Default `403 Forbidden`.
+The status code when an access validator refuses the request's tenant. Default `403 Forbidden`.
 
 ```csharp
 public int AccessDeniedStatusCode { get; set; }
 ```
 
 Value: `int`
+
+### `InactiveTenantStatusCode`
+
+The status code when the request's tenant is not active (`ValidateTenantActivity`). Default `403 Forbidden`.
+
+```csharp
+public int InactiveTenantStatusCode { get; set; }
+```
+
+Value: `int`
+
+The response is the access-denied one, so by default a caller cannot tell a suspended tenant from one it may not use. Set another status, such as `402 Payment Required`, to tell it. The access validators run first, so a caller they refuse gets [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md) whether or not the tenant is active.
 
 ### `MissingTenantStatusCode`
 

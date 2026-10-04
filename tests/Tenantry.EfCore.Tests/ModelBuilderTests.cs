@@ -5,8 +5,9 @@ using Tenantry;
 
 namespace Tenantry.EfCore.Tests;
 
-// Non-tenanted entity — intentionally does NOT implement ITenantEntity<string>.
-// UseTenantry() must skip it; all rows remain visible regardless of tenant.
+// Shared by every tenant, so it does not implement ITenantEntity<string>. UseTenantry() must skip it; all rows remain
+// visible regardless of tenant.
+[SharedAcrossTenants]
 internal sealed class NonTenantedProduct
 {
     public int Id { get; set; }

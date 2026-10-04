@@ -1,4 +1,4 @@
-// Tenantry EF Core Console Sample — multi-tenancy with NO ASP.NET Core.
+// Tenantry EF Core console sample: multi-tenancy without ASP.NET Core.
 //
 // This sample shows how AddTenantry wires up the full tenant-isolation
 // infrastructure for a non-HTTP host (console app, worker service, desktop UI, CLI…).
@@ -43,7 +43,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
 {
     // A store is optional for AddTenantry (nothing resolves tenants for you off the
     // request like the ASP.NET middleware does), but registering one lets you look tenants
-    // up by id from anywhere — e.g. when a queued message only carries the tenant id.
+    // up by id from anywhere, for example when a queued message only carries the tenant id.
     tenant.UseInMemoryStore([acme, globex]);
 });
 
@@ -73,7 +73,7 @@ using (tenantContext.Use(acme))
     db.Orders.Add(new Order { Description = "Acme widget order" });
     db.Orders.Add(new Order { Description = "Acme gadget order" });
 
-    // We never set TenantId — the interceptor stamps it from the active scope.
+    // We never set TenantId: the interceptor stamps it from the active scope.
     await db.SaveChangesAsync();
 
     acmeOrder = await db.Orders.FirstAsync();
@@ -86,7 +86,7 @@ using (tenantContext.Use(globex))
     db.Orders.Add(new Order { Description = "Globex sprocket order" });
     await db.SaveChangesAsync();
 
-    // The global query filter restricts this to Globex's rows only — Acme's are invisible.
+    // The global query filter restricts this to Globex's rows, so Acme's are not seen.
     Print("Globex", $"sees {await db.Orders.CountAsync()} order(s) (Acme's are filtered out)");
 
     // ── 5. Write isolation blocks a cross-tenant write ─────────────────────────────────────
@@ -115,8 +115,8 @@ using (tenantContext.Use(globex))
 
 // ── 7. No active scope = fail closed ───────────────────────────────────────────────────────
 // With no tenant resolved, the filter matches nothing, so reads return zero rows rather than
-// leaking every tenant's data. A SaveChanges of tenant-scoped entities here would be rejected.
-Print("No scope", $"sees {await db.Orders.CountAsync()} order(s) — isolation fails closed");
+// leaking every tenant's data. A SaveChanges of tenant-owned entities here would be rejected.
+Print("No scope", $"sees {await db.Orders.CountAsync()} order(s): isolation fails closed");
 
 // ── 8. Admin / reporting: bypass isolation on purpose ───────────────────────────────────────
 var total = await db.Orders.IgnoreQueryFilters().CountAsync();

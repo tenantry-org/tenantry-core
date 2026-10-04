@@ -501,19 +501,37 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(ServiceLifetime.Scoped)]
-    [InlineData(ServiceLifetime.Transient)]
-    public void AConnectionStringProviderThatIsNotASingleton_FailsAtRegistration_WithGuidance(ServiceLifetime lifetime)
+    [InlineData(ServiceLifetime.Scoped, true)]
+    [InlineData(ServiceLifetime.Transient, true)]
+    [InlineData(ServiceLifetime.Scoped, false)]
+    [InlineData(ServiceLifetime.Transient, false)]
+    public void AConnectionStringProviderThatIsNotASingleton_FailsOnTheFirstContext_WithGuidance(
+        ServiceLifetime lifetime,
+        bool beforeAddTenantry)
     {
         ServiceCollection services = new();
-        services.Add(ServiceDescriptor.Describe(
+        var provider = ServiceDescriptor.Describe(
             typeof(ITenantConnectionStringProvider<string>),
             _ => Substitute.For<ITenantConnectionStringProvider<string>>(),
-            lifetime));
+            lifetime);
 
-        services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
-                .DecorateConnectionStrings((_, inner) => inner)
-                .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)))
+        if (beforeAddTenantry)
+        {
+            services.Add(provider);
+        }
+
+        services.AddTenantry<string>(tenant => tenant
+            .DecorateConnectionStrings((_, inner) => inner)
+            .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled));
+
+        if (!beforeAddTenantry)
+        {
+            services.Add(provider);
+        }
+
+        using var built = services.BuildServiceProvider();
+
+        built.Invoking(sp => sp.GetRequiredService<IDbContextFactory<PooledNotesContext>>())
             .Should().Throw<InvalidOperationException>()
             .WithMessage($"*PooledNotesContext*ITenantConnectionStringProvider<String> is registered as {lifetime.ToString().ToLowerInvariant()}*singleton*");
     }
@@ -523,10 +541,24 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
     {
         ServiceCollection services = new();
         services.AddSingleton(Substitute.For<ITenantConnectionStringProvider<string>>());
+        services.AddTenantry<string>(tenant => tenant
+            .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled));
+        using var built = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
-        services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
-                .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)))
-            .Should().NotThrow();
+        built.Invoking(sp => sp.GetRequiredService<IDbContextFactory<PooledNotesContext>>()).Should().NotThrow();
+    }
+
+    [Fact]
+    public void AScopedProviderReplacedByUseConnectionStrings_IsAccepted()
+    {
+        ServiceCollection services = new();
+        services.AddScoped(_ => Substitute.For<ITenantConnectionStringProvider<string>>());
+        services.AddTenantry<string>(tenant => tenant
+            .UseConnectionStrings(_ => Substitute.For<ITenantConnectionStringProvider<string>>())
+            .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled));
+        using var built = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        built.Invoking(sp => sp.GetRequiredService<IDbContextFactory<PooledNotesContext>>()).Should().NotThrow();
     }
 
     [Fact]

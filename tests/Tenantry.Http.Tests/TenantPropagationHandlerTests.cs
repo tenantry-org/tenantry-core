@@ -125,17 +125,38 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
-    public async Task WithoutABaseAddress_EveryRequestCarriesTheTenant()
+    public void AClientWithoutABaseAddress_IsRefusedWhenItIsCreated()
     {
-        var (provider, recorder) = Build<string>();
+        var (provider, _) = Build<string>();
+        using var _ = provider;
+
+        FluentActions.Invoking(() => Client(provider))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("The HTTP client 'billing' calls UseTenantry(), but its registration sets no absolute BaseAddress*UseTenantry(address)*");
+    }
+
+    [Fact]
+    public async Task AServiceAddressGivenToUseTenantry_LimitsTheTenantToIt_WithoutABaseAddress()
+    {
+        var (provider, recorder) = Build<string>(serviceAddress: new Uri("https://inventory.internal"));
         await using var _ = provider;
 
         using (Use(provider, "acme"))
         {
+            await Client(provider).GetAsync("https://payments.example.com/charge", TestContext.Current.CancellationToken);
             await Client(provider).GetAsync("https://inventory.internal/item", TestContext.Current.CancellationToken);
         }
 
-        recorder.TenantHeaders.Should().Equal("acme");
+        recorder.TenantHeaders.Should().Equal(null, "acme");
+    }
+
+    [Fact]
+    public void ARelativeServiceAddress_IsRefused()
+    {
+        ServiceCollection services = new();
+
+        FluentActions.Invoking(() => services.AddHttpClient("inventory").UseTenantry(new Uri("/inventory", UriKind.Relative)))
+            .Should().Throw<ArgumentException>().WithMessage("*must be absolute*");
     }
 
     [Fact]
@@ -177,7 +198,7 @@ public sealed class TenantPropagationHandlerTests
     {
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
-        services.AddHttpClient("inventory").UseTenantry();
+        services.AddHttpClient("inventory").UseTenantry(new Uri("https://inventory.internal"));
         using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get("inventory").HttpClientActions.Should().BeEmpty();
@@ -206,14 +227,15 @@ public sealed class TenantPropagationHandlerTests
 
     private static (ServiceProvider Provider, Recorder Recorder) Build<TKey>(
         Action<HttpClient>? configure = null,
-        Action<HttpClient>? configureAfter = null)
+        Action<HttpClient>? configureAfter = null,
+        Uri? serviceAddress = null)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         Recorder recorder = new();
         ServiceCollection services = new();
         services.AddTenantry<TKey>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
         var client = services.AddHttpClient("billing", c => configure?.Invoke(c))
-            .UseTenantry()
+            .UseTenantry(serviceAddress)
             .ConfigurePrimaryHttpMessageHandler(() => recorder);
 
         if (configureAfter is not null)

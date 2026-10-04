@@ -102,7 +102,12 @@ tenant's.
 After an invalidation, a value is built from the tenant as the store has it then, even in a request that was resolved
 before the invalidation and still carries the old copy. A change to the configuration the options are bound to (a
 reloaded `appsettings.json`) clears every tenant's value of that options type. Each instance of the application has its
-own values, so invalidate on each one, or keep the settings in configuration that reloads.
+own values, so [publish the invalidation](tenant-stores.md#several-instances) to the others, or keep the settings in
+configuration that reloads.
+
+The values are kept in memory, one per tenant for each options type and name, until an invalidation or a
+configuration reload clears them: there is no size limit or expiry. An application with many tenants and large
+options types holds them all once each tenant has been served.
 
 ## Validation
 

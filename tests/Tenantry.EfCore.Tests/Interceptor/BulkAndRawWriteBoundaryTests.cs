@@ -12,7 +12,8 @@ namespace Tenantry.EfCore.Tests.Interceptor;
 /// <summary>
 /// Pins the isolation boundary for writes that bypass <c>SaveChanges</c>: bulk <c>ExecuteUpdate</c> and
 /// <c>ExecuteDelete</c> are limited to the current tenant by the query filter and may not change
-/// <c>TenantId</c>; <c>IgnoreQueryFilters</c> and raw SQL are deliberately unisolated.
+/// <c>TenantId</c>; <c>IgnoreQueryFilters</c>, <c>SqlQuery</c> and <c>ExecuteSql</c> are deliberately unisolated, and
+/// <c>FromSql</c> on a tenant-owned entity is filtered.
 /// </summary>
 public sealed class BulkAndRawWriteBoundaryTests : IDisposable
 {
@@ -244,15 +245,50 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     }
 
     [Fact]
-    public async Task RawSql_IsNotTenantIsolated()
+    public async Task FromSql_OnATenantOwnedEntity_IsFiltered()
     {
-        // Raw SQL is outside EF Core's query pipeline: neither the filter nor the interceptors apply.
+        // EF Core composes the entity's query filters over the SQL, so these read only the current tenant's rows.
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
+        var ct = TestContext.Current.CancellationToken;
+        var tenant = "acme";
+
+        (await db.Orders.FromSql($"SELECT * FROM Orders").Select(o => o.Description).ToListAsync(ct))
+            .Should().Equal("globex order");
+        (await db.Orders.FromSqlRaw("SELECT * FROM Orders").Select(o => o.Description).ToListAsync(ct))
+            .Should().Equal("globex order");
+        (await db.Orders.FromSqlInterpolated($"SELECT * FROM Orders WHERE TenantId = {tenant}").ToListAsync(ct))
+            .Should().BeEmpty("the filter applies to the SQL's own predicate too");
+    }
+
+    [Fact]
+    public async Task FromSql_ThatCannotBeComposed_OnATenantOwnedEntity_Throws()
+    {
+        // EF Core must compose the tenant filter over the SQL, and refuses SQL that is not a SELECT, such as a stored
+        // procedure call (on SQLite, a PRAGMA).
         await SeedAsync();
         await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
 
-        var deleted = await db.Database.ExecuteSqlRawAsync("DELETE FROM Orders WHERE TenantId = 'acme'", cancellationToken: TestContext.Current.CancellationToken);
+        await db.Awaiting(context => context.Orders.FromSqlRaw("PRAGMA table_info('Orders')").ToListAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*non-composable SQL*");
+    }
 
-        deleted.Should().Be(1);
+    [Fact]
+    public async Task SqlQueryAndExecuteSql_AreNotTenantIsolated()
+    {
+        // Neither maps to an entity type, so no query filter applies, and no interceptor sees what they change.
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
+        var ct = TestContext.Current.CancellationToken;
+        var tenant = "acme";
+
+        (await db.Database.SqlQuery<string>($"SELECT Description AS Value FROM Orders ORDER BY Id").ToListAsync(ct))
+            .Should().Equal("acme order", "globex order");
+
+        (await db.Database.ExecuteSqlAsync($"UPDATE Orders SET Description = 'changed' WHERE TenantId = {tenant}", ct))
+            .Should().Be(1);
+        (await db.Database.ExecuteSqlRawAsync("DELETE FROM Orders WHERE TenantId = 'acme'", cancellationToken: ct))
+            .Should().Be(1);
         Rows().Should().BeEquivalentTo([("globex", "globex order")]);
     }
 

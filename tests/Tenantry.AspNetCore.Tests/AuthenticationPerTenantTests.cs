@@ -95,6 +95,21 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task ASuspendedTenant_IsNotCurrentForAuthentication_AndOnlyACallerTheValidatorsAllowLearnsItIsSuspended()
+    {
+        await using var app = await StartJwtAsync(tenant => tenant
+            .ValidateTenantActivity(t => t.TenantId != "globex")
+            .ValidateTenantAccess((http, _) => http.User.Identity?.Name == "bob")
+            .ConfigureResolution(o => o.InactiveTenantStatusCode = StatusCodes.Status402PaymentRequired));
+
+        // Globex's settings would accept its token; a suspended tenant's are never used, so no one is signed in.
+        (await Get(app, "globex", "/required", Token("globex", "bob"))).Status.Should().Be(HttpStatusCode.Forbidden);
+        (await Get(app, "globex", "/required", Token("default", "bob"))).Status.Should().Be(HttpStatusCode.PaymentRequired);
+        (await Get(app, "globex", "/required", Token("default", "eve"))).Status.Should().Be(HttpStatusCode.Forbidden);
+        (await Get(app, "globex", "/tenant", Token("default", "bob"))).Should().Be((HttpStatusCode.OK, "(none)"));
+    }
+
+    [Fact]
     public async Task WithNothingToResolveBeforeAuthentication_UseTenantryTriesTheClaimResolvers()
     {
         await using var app = await StartJwtAsync(tenant => tenant.ResolveFromClaim("tenant_id"));

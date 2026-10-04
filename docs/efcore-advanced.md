@@ -2,15 +2,15 @@
 
 Owned rows in a table of their own, and the rows of an entity mapped to more than one table, have no tenant check of
 their own. Tenantry checks them through another statement and keeps the save all-or-nothing. The join rows of a
-many-to-many relationship have none either, so their join entity must be tenant-scoped.
+many-to-many relationship have none either, so their join entity must be tenant-owned.
 
 ## Owned entities
 
 EF Core reads owned rows only through their owner and allows them no filter of their own, so an owned type is isolated
-through its owner whether or not it implements `ITenantEntity<TKey>`. A tenant-scoped owned type's `TenantId` is still
+through its owner whether or not it implements `ITenantEntity<TKey>`. A tenant-owned owned type's `TenantId` is still
 a concurrency token.
 
-Writes are checked through the nearest tenant-scoped owner. A save that adds an owned entity, moves one with its own
+Writes are checked through the nearest tenant-owned owner. A save that adds an owned entity, moves one with its own
 key to another owner (by changing its foreign key), or changes or deletes one with no `TenantId` of its own needs that
 owner loaded or attached as the current tenant. The database then confirms the owner's tenant:
 
@@ -26,7 +26,7 @@ owner loaded or attached as the current tenant. The database then confirms the o
   your filter hides (an archived one, say) can still be given owned entities.
 
 An owned entity saved without its owner in the same context is rejected. With no tenant, `OnMissingTenant` treats
-owned entities as tenant-scoped. Owned rows in their own table rely on the owner's statement, so the save must succeed
+owned entities as tenant-owned. Owned rows in their own table rely on the owner's statement, so the save must succeed
 or fail as a whole (below).
 
 ## Entities mapped to more than one table
@@ -42,8 +42,8 @@ table with `TenantId` rely on that table's statement, so the save must succeed o
 
 The join rows of a many-to-many relationship hold the keys of the two rows they join. EF Core inserts and deletes them
 when a collection changes, while the entities at both ends stay unchanged and are not written, so no statement of the
-save checks a `TenantId`. `UseTenantry()` therefore refuses a many-to-many relationship with a tenant-scoped type at
-either end unless its join entity is tenant-scoped too. That includes the join entity EF Core creates when you configure
+save checks a `TenantId`. `UseTenantry()` therefore refuses a many-to-many relationship with a tenant-owned type at
+either end unless its join entity is tenant-owned too. That includes the join entity EF Core creates when you configure
 none, and a relationship whose other end is shared across tenants.
 
 Give the relationship a join entity of your own that implements `ITenantEntity<TKey>`:
@@ -80,10 +80,10 @@ public class BlogDbContext(DbContextOptions<BlogDbContext> options) : DbContext(
 }
 ```
 
-The join rows are then tenant-scoped rows like any other. `post.Tags.Add(tag)` inserts one stamped with the current
+The join rows are then tenant-owned rows like any other. `post.Tags.Add(tag)` inserts one stamped with the current
 tenant, queries through `Tags` and `Posts` read only the current tenant's join rows, and a delete checks the stored
 `TenantId`, so it matches no row of another tenant's. An existing join table needs a migration that adds the `TenantId`
-column and fills it from the row at a tenant-scoped end.
+column and fills it from the row at a tenant-owned end.
 
 ## Saves that succeed or fail as a whole
 
@@ -141,28 +141,28 @@ Not covered:
 
 Building these models throws `TenantIsolationViolationException` (or `InvalidOperationException` for the registration):
 
-- a tenant-scoped type whose base entity type is not tenant-scoped;
-- a tenant-scoped owned type whose owner is not tenant-scoped;
-- an owned type with no `TenantId`, under a tenant-scoped owner, whose key does not include its owner's key
+- a tenant-owned type whose base entity type is not tenant-owned;
+- a tenant-owned owned type whose owner is not tenant-owned;
+- an owned type with no `TenantId`, under a tenant-owned owner, whose key does not include its owner's key
   (`OwnsMany(…, b => b.HasKey(x => x.Id))`): an update or delete by that key could reach another tenant's row. Keep EF
   Core's default key, or implement `ITenantEntity<TKey>` on it;
-- an owned type owned by a tenant-scoped type through a key that neither includes nor is part of the owner's primary
+- an owned type owned by a tenant-owned type through a key that neither includes nor is part of the owner's primary
   key, nor includes its `TenantId` (`WithOwner().HasPrincipalKey(o => o.Code)`): Tenantry checks the owner by its
   primary key, which need not be the row the owned rows name;
-- a many-to-many relationship with a tenant-scoped type at either end whose join entity is not tenant-scoped (see
+- a many-to-many relationship with a tenant-owned type at either end whose join entity is not tenant-owned (see
   [Many-to-many relationships](#many-to-many-relationships));
-- a tenant-scoped owned type mapped to JSON (`ToJson()`): it lives in its owner's row, under the owner's `TenantId`,
+- a tenant-owned owned type mapped to JSON (`ToJson()`): it lives in its owner's row, under the owner's `TenantId`,
   and EF Core cannot check a `TenantId` of its own (EF Core 10 rejects the concurrency token itself), so do not
   implement `ITenantEntity<TKey>` on it;
-- a type that is not tenant-scoped mapped to a tenant-scoped entity's table (table splitting): with no filter or
+- a type that is not tenant-owned mapped to a tenant-owned entity's table (table splitting): with no filter or
   `TenantId`, it would read and change every tenant's rows there. This fails on the first query or save, as only the
   finished model says which tables a type is mapped to;
 - entities that implement `ITenantEntity<TKey>` with more than one key type;
 - entities whose key type Tenantry is not registered for (`AddTenantry<Guid>` with `ITenantEntity<string>`);
-- a tenant-scoped entity whose `TenantId` is not a mapped public property of the key type, such as one implemented
+- a tenant-owned entity whose `TenantId` is not a mapped public property of the key type, such as one implemented
   explicitly (`Guid ITenantEntity<Guid>.TenantId => OrganizationId`);
 - on EF Core 10, a filter of your own named `TenantryQueryFilters.Tenant`, which the tenant filter would replace.
 
 Something that runs after `UseTenantry()`, such as a model-building convention, can still remove the tenant filter or
 concurrency token. The interceptors check each model on its first query and first save, and throw
-`TenantIsolationViolationException` instead of running either if a tenant-scoped entity type has lost one.
+`TenantIsolationViolationException` instead of running either if a tenant-owned entity type has lost one.

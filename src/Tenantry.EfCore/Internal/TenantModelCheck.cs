@@ -8,8 +8,8 @@ namespace Tenantry.EfCore.Internal;
 
 /// <summary>
 /// Checks, once per model, that tenant isolation is in place on every entity type that implements
-/// <see cref="ITenantEntity{TKey}"/>, and that no other entity type shares their tables, and throws
-/// <see cref="TenantIsolationViolationException"/> when it is not.
+/// <see cref="ITenantEntity{TKey}"/>, that no other entity type shares their tables, and that every other entity type
+/// is marked as shared across tenants, and throws <see cref="TenantIsolationViolationException"/> when it is not.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -37,29 +37,72 @@ internal static class TenantModelCheck
     {
         var model = context.Model;
 
-        if (Passed.TryGetValue(model, out var passed))
+        if (!Passed.TryGetValue(model, out var passed))
         {
-            return passed.Isolation;
-        }
+            var isolation = TenantIsolation.ForModel(model);
+            string? unclassified = null;
 
-        var isolation = TenantIsolation.ForModel(model);
-
-        if (isolation is not null)
-        {
-            foreach (var entityType in model.GetEntityTypes())
+            if (isolation is not null)
             {
-                Verify(entityType, isolation.KeyType);
+                foreach (var entityType in model.GetEntityTypes())
+                {
+                    Verify(entityType, isolation.KeyType);
+                }
+
+                // Only a relational provider maps tables.
+                if (context.Database.IsRelational())
+                {
+                    TenantEntityTypes.ThrowIfATenantTableIsShared(model, isolation.KeyType);
+                }
+
+                var types = TenantModel.FindUnisolatedEntityTypes(model);
+                unclassified = types.Count == 0
+                    ? null
+                    : string.Join(", ", types.Select(type => type.DisplayName()).Order(StringComparer.Ordinal));
             }
 
-            // Only a relational provider maps tables.
-            if (context.Database.IsRelational())
-            {
-                TenantEntityTypes.ThrowIfATenantTableIsShared(model, isolation.KeyType);
-            }
+            passed = new Checked(isolation, unclassified);
+            Passed.AddOrUpdate(model, passed);
         }
 
-        Passed.AddOrUpdate(model, new Checked(isolation));
-        return isolation;
+        // Contexts that share a model can follow different options, so each applies its own.
+        if (passed.Unclassified is { } names)
+        {
+            ApplyUnclassifiedBehavior(context, passed, names);
+        }
+
+        return passed.Isolation;
+    }
+
+    private static void ApplyUnclassifiedBehavior(DbContext context, Checked passed, string names)
+    {
+        var services = ApplicationServices.Find(context);
+
+        switch (ApplicationServices.Isolation(context, services).OnUnclassifiedEntityType)
+        {
+            case UnclassifiedEntityTypeBehavior.Warn:
+                if (Interlocked.Exchange(ref passed.Warned, 1) == 0 && TenantIsolationLog.Find(services) is { } logger)
+                {
+                    TenantIsolationLog.UnclassifiedEntityTypes(logger, context.GetType().Name, names);
+                }
+
+                break;
+
+            case UnclassifiedEntityTypeBehavior.Allow:
+                break;
+
+            // Reject, and any value outside the enum, as OnMissingTenant treats one.
+            default:
+                throw new TenantIsolationViolationException(
+                    TenantIsolationViolationKind.ModelConfiguration,
+                    context.GetType().Name,
+                    $"'{context.GetType().Name}' has tenant-owned entity types, and these entity types are neither " +
+                    $"tenant-owned nor marked as shared across tenants, so every tenant reads and writes their rows: " +
+                    $"{names}. Implement ITenantEntity<{passed.Isolation!.KeyType.Name}> on each whose rows belong to a " +
+                    "tenant, and mark each that every tenant shares with [SharedAcrossTenants] or, in OnModelCreating, " +
+                    "IsSharedAcrossTenants(). EfCoreIsolationOptions.OnUnclassifiedEntityType decides what happens to " +
+                    "such a model.");
+        }
     }
 
     private static void Verify(IEntityType entityType, Type keyType)
@@ -169,7 +212,15 @@ internal static class TenantModelCheck
         return expression;
     }
 
-    private sealed record Checked(TenantIsolation? Isolation);
+    private sealed class Checked(TenantIsolation? isolation, string? unclassified)
+    {
+        public TenantIsolation? Isolation { get; } = isolation;
+
+        /// <summary>The entity types that are neither tenant-owned nor shared, or <see langword="null"/> when there are none.</summary>
+        public string? Unclassified { get; } = unclassified;
+
+        public int Warned;
+    }
 }
 
 /// <summary>

@@ -100,8 +100,9 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">
-    /// No <see cref="ITenantConnectionStringProvider{TKey}"/> is registered yet, the one registered is scoped or
-    /// transient, or <typeparamref name="TContext"/> is already registered this way.
+    /// No <see cref="ITenantConnectionStringProvider{TKey}"/> is registered yet, or <typeparamref name="TContext"/> is
+    /// already registered this way. The first context created throws it when the registered provider is scoped or
+    /// transient.
     /// </exception>
     /// <example>
     /// <code>
@@ -144,26 +145,12 @@ public static class TenantryEfCoreTenantBuilderExtensions
         {
             var services = tenant.Services;
 
-            // The registration that resolves: the last one without a key.
-            var provider = services.LastOrDefault(d => d.ServiceType == typeof(ITenantConnectionStringProvider<TKey>) && !d.IsKeyedService);
-
-            if (provider is null)
+            if (!services.Any(d => d.ServiceType == typeof(ITenantConnectionStringProvider<TKey>) && !d.IsKeyedService))
             {
                 throw new InvalidOperationException(
                     $"AddDbContextPerTenantDatabase<{typeof(TContext).Name}> connects each context to its tenant's " +
                     "database, so it needs the tenants' connection strings: call UseConnectionStrings before it, in " +
                     "the same AddTenantry.");
-            }
-
-            // The contexts' factory and the guard are singletons, which would keep one scoped or transient provider,
-            // and what it depends on, for the application's lifetime.
-            if (provider.Lifetime != ServiceLifetime.Singleton)
-            {
-                throw new InvalidOperationException(
-                    $"AddDbContextPerTenantDatabase<{typeof(TContext).Name}> reads the tenants' connection strings " +
-                    $"from a singleton, and ITenantConnectionStringProvider<{typeof(TKey).Name}> is registered as " +
-                    $"{provider.Lifetime.ToString().ToLowerInvariant()}. Register it as a singleton, or with " +
-                    "UseConnectionStrings, and have it create a scope for any scoped service it needs.");
             }
 
             if (services.Any(d => d.ServiceType == typeof(TenantDatabaseContexts<TContext, TKey>)))
@@ -172,10 +159,33 @@ public static class TenantryEfCoreTenantBuilderExtensions
                     $"AddDbContextPerTenantDatabase<{typeof(TContext).Name}> was already called. Register each context type once.");
             }
 
-            services.AddSingleton(sp => new TenantDatabaseContexts<TContext, TKey>(sp, configure, pooled, poolSize));
+            services.AddSingleton(sp =>
+            {
+                RequireSingletonConnectionStrings<TKey>(services);
+                return new TenantDatabaseContexts<TContext, TKey>(sp, configure, pooled, poolSize);
+            });
             services.AddSingleton<IDbContextFactory<TContext>>(sp =>
                 new TenantDatabaseDbContextFactory<TContext, TKey>(sp.GetRequiredService<TenantDatabaseContexts<TContext, TKey>>(), sp));
             services.AddScoped(sp => sp.GetRequiredService<TenantDatabaseContexts<TContext, TKey>>().Create(sp));
+        }
+
+        // The contexts' factory and the guard are singletons, which would keep one scoped or transient provider, and
+        // what it depends on, for the application's lifetime. It is checked when the first context is created, so that a
+        // registration made after AddTenantry counts.
+        private static void RequireSingletonConnectionStrings<TKey>(IServiceCollection services)
+            where TKey : IEquatable<TKey>, IParsable<TKey>
+        {
+            // The registration that resolves: the last one without a key.
+            var provider = services.Last(d => d.ServiceType == typeof(ITenantConnectionStringProvider<TKey>) && !d.IsKeyedService);
+
+            if (provider.Lifetime != ServiceLifetime.Singleton)
+            {
+                throw new InvalidOperationException(
+                    $"AddDbContextPerTenantDatabase<{typeof(TContext).Name}> reads the tenants' connection strings " +
+                    $"from a singleton, and ITenantConnectionStringProvider<{typeof(TKey).Name}> is registered as " +
+                    $"{provider.Lifetime.ToString().ToLowerInvariant()}. Register it as a singleton, or with " +
+                    "UseConnectionStrings, and have it create a scope for any scoped service it needs.");
+            }
         }
     }
 }
