@@ -158,14 +158,13 @@ Register it by type, instance, or factory:
 
 ```csharp
 tenant.UseResolver(new CookieTenantResolver());                      // a specific instance
-tenant.UseResolver(sp => new CookieTenantResolver(/* deps */));      // via a factory, once
+tenant.UseResolver(sp => new CookieTenantResolver(/* deps */));      // by a factory, in each request's scope
 tenant.UseResolver<CookieTenantResolver>();                          // created in each request's scope
 ```
 
-`UseResolver<TResolver>()` creates the resolver in each request's scope, so it can depend on scoped services
-such as a `DbContext`. Like `ValidateTenantAccess<T>()`, it returns the builder without its key type
-([Registration](core-concepts.md#registration)). An instance or a factory's resolver is created once and used for
-every request.
+`UseResolver<TResolver>()` and the factory overload create the resolver in each request's scope, so it can depend on
+scoped services such as a `DbContext`. Like `ValidateTenantAccess<T>()`, `UseResolver<TResolver>()` returns the
+builder without its key type ([Registration](core-concepts.md#registration)). An instance is used for every request.
 
 A custom resolver runs in the order it was added among the built-in ones.
 

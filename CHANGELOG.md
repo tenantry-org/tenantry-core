@@ -7,12 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading
+
+- A resolver registered with `UseResolver(sp => …)` is created in each request's scope. To create one resolver for the
+  application's lifetime, create it yourself and pass the instance to `UseResolver(resolver)`.
+
 ### Added
 
 - `tenant.TagRequestMetrics()` (Tenantry.AspNetCore) tags ASP.NET Core's request metric, `http.server.request.duration`,
   with the request's tenant as `tenant.id`, or with a value of your own per tenant to keep the series few. It replaces
   Tenantry.Pro's `AddTenantMetrics()`, whose package, Tenantry.Pro.AspNetCore, existed only for it. See
   [Diagnostics](docs/diagnostics.md#request-metrics-per-tenant).
+
+### Changed
+
+- `UseResolver(sp => …)` creates the resolver in each request's scope, as `UseResolver<TResolver>()` does. It was a
+  singleton, so a factory that passed it a scoped service such as a `DbContext` shared one instance across requests.
 
 ### Fixed
 

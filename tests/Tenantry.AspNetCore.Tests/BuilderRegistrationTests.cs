@@ -231,7 +231,8 @@ public sealed class BuilderRegistrationTests
 
         services.Should().Contain(sd =>
             sd.ServiceType == typeof(ITenantResolver) &&
-            sd.ImplementationFactory != null);
+            sd.ImplementationFactory != null &&
+            sd.Lifetime == ServiceLifetime.Scoped);
     }
 
     private sealed class TestValidator : ITenantAccessValidator<Guid>

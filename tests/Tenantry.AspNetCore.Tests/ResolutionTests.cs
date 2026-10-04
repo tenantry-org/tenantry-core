@@ -84,6 +84,24 @@ public sealed class ResolutionTests
     }
 
     [Fact]
+    public async Task AResolverFromAFactory_IsCreatedInEachRequestsScope()
+    {
+        await using var app = await StartAsync<string>(
+            tenant => tenant
+                .UseInMemoryStore([Acme])
+                .UseResolver(sp => new ScopedResolver(sp.GetRequiredService<RequestServices>()))
+                .ValidateTenantAccess<ScopedValidator>(),
+            services => services.AddScoped<RequestServices>());
+        using var client = app.GetTestClient();
+
+        var first = await client.GetStringAsync("/scoped", TestContext.Current.CancellationToken);
+        var second = await client.GetStringAsync("/scoped", TestContext.Current.CancellationToken);
+
+        first.Should().MatchRegex("^acme [0-9a-f-]{36} same same$");
+        second.Split(' ')[1].Should().NotBe(first.Split(' ')[1], "each request has its own scope");
+    }
+
+    [Fact]
     public async Task AValidatorAddedByType_IsCreatedInEachRequestsScope_AndRunsInOrderWithTheOthers()
     {
         List<string> calls = [];
