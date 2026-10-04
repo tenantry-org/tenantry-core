@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageDescription>EF Core integration for Tenantry: options.UseTenantry() gives any DbContext, pooled or not, tenant query filters, stamping and checking of tenant-owned writes and guarded bulk updates; AddDbContextPerTenantDatabase connects a context to each tenant's own database.</PackageDescription>
-    <PackageTags>multi-tenancy;multitenancy;multi-tenant;efcore;entity-framework-core;row-level;database-per-tenant;tenant-isolation;saas;aspnetcore;tenantry</PackageTags>
+    <PackageTags>multi-tenancy;multitenancy;multi-tenant;efcore;entity-framework-core;database-per-tenant;tenant-isolation;saas;aspnetcore;tenantry</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
