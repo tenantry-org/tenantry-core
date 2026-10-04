@@ -2,18 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, 'release/*' ]   # release/X.Y: patches to an older minor (RELEASING.md)
   pull_request:
-    branches: [ master ]
+    branches: [ master, 'release/*' ]
   workflow_dispatch:   # started by dependabot-lock-files.yml after it commits regenerated lock files
 
 permissions:
   contents: read
 
 concurrency:
-  # A newer push to a pull request cancels its older run. A push to master gets a group of its own, by its commit: a
-  # shared group would let a third push cancel the second's run while it waited for the first's. So the run of every
-  # push finishes, and its commit can be released.
+  # A newer push to a pull request cancels its older run. A push to master or a release branch gets a group of its
+  # own, by its commit: a shared group would let a third push cancel the second's run while it waited for the first's.
+  # So the run of every push finishes, and its commit can be released (release.yml requires that run).
   group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -23,9 +23,10 @@ jobs:
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
-      # SonarCloud analyses pushes to master and every pull request into it. A fork's or Dependabot's pull request
-      # gets no SONAR_TOKEN, so its Sonar step fails until a maintainer runs the change from a branch of this
-      # repository. A run started by hand or by dependabot-lock-files.yml is neither a push nor a pull request.
+      # SonarCloud analyses pushes to master and release/*, whose runs release.yml requires, and every pull request
+      # into them. A fork's or Dependabot's pull request gets no SONAR_TOKEN, so its Sonar step fails until a
+      # maintainer runs the change from a branch of this repository. A run started by hand or by
+      # dependabot-lock-files.yml is neither a push nor a pull request.
       run_sonar: ${{ github.event_name != 'workflow_dispatch' }}
 
   # Windows, where paths use backslashes: restore and build only (the tests need Docker with Linux containers).
