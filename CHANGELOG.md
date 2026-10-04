@@ -82,6 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- With `CacheTenants`, a store read that began before a tenant was invalidated and ended after it is no longer cached,
+  even for an instant. Before, its answer was written to the cache and then removed, and a lookup in between, such as
+  one that builds the tenant's options, could read the copy the invalidation had replaced and keep what it built from
+  it.
 - `UseTenantry()` on an HTTP or gRPC client with no base address in its registration fails when the client is created.
   It sent the tenant's id to any host the client called. `UseTenantry(address)` names the service for a client that
   sets its address elsewhere.

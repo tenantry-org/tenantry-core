@@ -1,3 +1,4 @@
+using System.Globalization;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -121,6 +122,72 @@ public sealed class TenantStoreCacheTests
             await read();
             _store.Reads.Should().HaveCount(2, "the answer read before the change is not kept");
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AReadThatEndsAfterAnInvalidation_NeverReplacesWhatAReaderCachedSince(bool byIdentifier)
+    {
+        VersionedStore store = new();
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant.UseStore(_ => store).CacheTenants());
+        await using var provider = services.BuildServiceProvider();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
+        var invalidator = provider.GetRequiredService<ITenantInvalidator<string>>();
+        ValueTask<ITenantDescriptor<string>?> Read() =>
+            byIdentifier ? tenants.FindByIdentifierAsync("acme") : tenants.GetTenantAsync("acme");
+
+        // The first read is held open across an invalidation; a second reader looks the tenant up meanwhile.
+        store.HoldNextRead();
+        var first = Read().AsTask();
+        await store.Held.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        store.Version = 2;
+        await invalidator.InvalidateAsync("acme", TestContext.Current.CancellationToken);
+        (await Read())!.Name.Should().Be("v2");
+        store.Release();
+        (await first)!.Name.Should().Be("v1", "the held read returns what the store answered");
+
+        (await Read())!.Name.Should().Be("v2");
+        store.Reads.Should().Be(2, "the second reader's entry is still cached, and the held read's was never published");
+    }
+
+    [Fact]
+    public async Task UnderConcurrentReadsAndInvalidations_NoLookupAfterAnInvalidation_ReturnsWhatItRemoved()
+    {
+        VersionedStore store = new() { Yield = true };
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant.UseStore(_ => store).CacheTenants());
+        await using var provider = services.BuildServiceProvider();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
+        var invalidator = provider.GetRequiredService<ITenantInvalidator<string>>();
+        var invalidated = 0;
+        var stop = false;
+
+        async Task ReadAsync(bool byIdentifier)
+        {
+            while (!Volatile.Read(ref stop))
+            {
+                var minimum = Volatile.Read(ref invalidated);
+                var tenant = byIdentifier
+                    ? await tenants.FindByIdentifierAsync("acme")
+                    : await tenants.GetTenantAsync("acme");
+                int.Parse(tenant!.Name[1..], CultureInfo.InvariantCulture).Should().BeGreaterThanOrEqualTo(minimum);
+            }
+        }
+
+        var readers = Enumerable.Range(0, 8).Select(i => Task.Run(() => ReadAsync(i % 2 == 0))).ToList();
+
+        for (var version = 2; version < 500; version++)
+        {
+            store.Version = version;
+            await invalidator.InvalidateAsync("acme", TestContext.Current.CancellationToken);
+            Volatile.Write(ref invalidated, version);
+            await Task.Yield();
+        }
+
+        Volatile.Write(ref stop, true);
+        await Task.WhenAll(readers).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -432,6 +499,54 @@ public sealed class TenantStoreCacheTests
     }
 
     // Matches identifiers without regard to case, as a database's default collation would.
+    // Answers "acme" with the version current when the read begins; the next read can be held open.
+    private sealed class VersionedStore : ITenantStore<string>
+    {
+        private readonly TaskCompletionSource _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _holdNext;
+        private int _reads;
+
+        public int Version { get; set; } = 1;
+
+        public bool Yield { get; init; }
+
+        public int Reads => Volatile.Read(ref _reads);
+
+        public Task Held => _held.Task;
+
+        public void HoldNextRead() => Volatile.Write(ref _holdNext, 1);
+
+        public void Release() => _release.SetResult();
+
+        public ValueTask<ITenantDescriptor<string>?> GetTenantAsync(string tenantId, CancellationToken cancellationToken = default) =>
+            ReadAsync();
+
+        public ValueTask<ITenantDescriptor<string>?> FindByIdentifierAsync(string identifier, CancellationToken cancellationToken = default) =>
+            ReadAsync();
+
+        public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        private async ValueTask<ITenantDescriptor<string>?> ReadAsync()
+        {
+            Interlocked.Increment(ref _reads);
+            TenantDescriptor<string> tenant = new() { TenantId = "acme", Name = $"v{Version}" };
+
+            if (Interlocked.Exchange(ref _holdNext, 0) == 1)
+            {
+                _held.SetResult();
+                await _release.Task;
+            }
+            else if (Yield)
+            {
+                await Task.Yield();
+            }
+
+            return tenant;
+        }
+    }
+
     private sealed class RecordingStore(IEnumerable<TenantDescriptor<string>> tenants) : ITenantStore<string>
     {
         private readonly List<TenantDescriptor<string>> _tenants = [.. tenants];

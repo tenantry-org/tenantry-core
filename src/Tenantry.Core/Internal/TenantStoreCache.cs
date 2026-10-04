@@ -19,6 +19,11 @@ internal sealed class TenantStoreCache<TKey>
     private readonly Map<string> _byIdentifier = new(StringComparer.Ordinal);
     private readonly TenantStoreCacheOptions _options;
     private readonly TimeProvider _time;
+
+    // Taken by Set's check and write, and by an invalidation's change of generation and removal, so a store's answer
+    // read before an invalidation is never published after it: Set sees the new generation and writes nothing, or
+    // writes first and the invalidation removes it. Lookups take no lock.
+    private readonly object _writes = new();
     private long _generation;
 
     public TenantStoreCache(TenantStoreCacheOptions options, TimeProvider time)
@@ -43,17 +48,23 @@ internal sealed class TenantStoreCache<TKey>
     /// <summary>Removes the tenant's cached copies, by its id and every identifier, without running the handlers.</summary>
     public void Remove(TKey tenantId)
     {
-        Interlocked.Increment(ref _generation);
-        _byId.RemoveWhere((key, entry) => key.Equals(tenantId) || entry.Tenant.TenantId.Equals(tenantId));
-        _byIdentifier.RemoveWhere((_, entry) => entry.Tenant.TenantId.Equals(tenantId));
+        lock (_writes)
+        {
+            Interlocked.Increment(ref _generation);
+            _byId.RemoveWhere((key, entry) => key.Equals(tenantId) || entry.Tenant.TenantId.Equals(tenantId));
+            _byIdentifier.RemoveWhere((_, entry) => entry.Tenant.TenantId.Equals(tenantId));
+        }
     }
 
     /// <summary>Removes every cached tenant, without running the handlers.</summary>
     public void RemoveAll()
     {
-        Interlocked.Increment(ref _generation);
-        _byId.Entries.Clear();
-        _byIdentifier.Entries.Clear();
+        lock (_writes)
+        {
+            Interlocked.Increment(ref _generation);
+            _byId.Entries.Clear();
+            _byIdentifier.Entries.Clear();
+        }
     }
 
     private void Set<TLookup>(Map<TLookup> map, TLookup key, ITenantDescriptor<TKey> tenant, long generation)
@@ -70,12 +81,14 @@ internal sealed class TenantStoreCache<TKey>
 
         // A duration too long to add to the current time (TimeSpan.MaxValue, say) never expires.
         Entry entry = new(tenant, duration < DateTimeOffset.MaxValue - now ? now + duration : DateTimeOffset.MaxValue);
-        map.Entries[key] = entry;
 
-        // Invalidated while the store was read, or since: the store's answer may predate the change, so drop it.
-        if (Generation != generation)
+        lock (_writes)
         {
-            map.Entries.TryRemove(KeyValuePair.Create(key, entry));
+            // Invalidated while the store was read: its answer may predate the change, so it is not cached.
+            if (Generation == generation)
+            {
+                map.Entries[key] = entry;
+            }
         }
     }
 
