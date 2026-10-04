@@ -21,11 +21,15 @@ the tenant and keeps caches and options per tenant, but nothing keeps your data 
 3. Make each tenant-owned entity implement `ITenantEntity<TKey>`, or derive from `TenantEntity<TKey>`. Leave
    `TenantId` unset when you add a row: Tenantry stamps it on save. Entities that every tenant shares (reference
    data, a product catalogue) implement nothing.
-4. Add `UseTenantry()` to the `DbContext` options. The context needs no base class and no other change.
+4. Add `UseTenantry()` to the `DbContext` options, in a registration method of the application's own that
+   `Program.cs` calls, so the isolation test can call the same one ([Verify isolation](#verify-isolation)). The
+   context needs no base class and no other change.
 5. Register Tenantry with a resolver, a store, and an access validator. A resolver that reads the request (a header,
    a route value, the query string, the host or subdomain) lets any caller name any tenant, so check the tenant
    against the authenticated user.
-6. Add `app.UseTenantry()` after `app.UseAuthentication()` and `app.UseAuthorization()`, before the endpoints.
+6. Add `app.UseTenantry()` after `app.UseAuthentication()`, and before the endpoints. Put it after
+   `app.UseAuthorization()` too, so an anonymous caller gets 401 rather than 403, unless an authorization policy needs
+   the tenant: then put it before `app.UseAuthorization()`.
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -48,6 +52,18 @@ public class BillingDbContext(DbContextOptions<BillingDbContext> options) : DbCo
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Currency> Currencies => Set<Currency>();
 }
+
+public static class BillingRegistration
+{
+    // The one registration of the context, which Program.cs and the isolation test both call.
+    public static IServiceCollection AddBillingDbContext(
+        this IServiceCollection services, Action<DbContextOptionsBuilder> database) =>
+        services.AddDbContext<BillingDbContext>(options =>
+        {
+            database(options);
+            options.UseTenantry();
+        });
+}
 ```
 
 ```csharp
@@ -57,9 +73,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .RequireTenantByDefault()                     // 400 for an endpoint called without a tenant
     .UseStore<EfCoreTenantStore>());              // your ITenantStore<Guid>, which lists the tenants
 
-builder.Services.AddDbContext<BillingDbContext>(options => options
-    .UseSqlServer(connectionString)
-    .UseTenantry());
+builder.Services.AddBillingDbContext(options => options.UseSqlServer(connectionString));
 
 var app = builder.Build();
 
@@ -96,8 +110,12 @@ from the store goes to `CreateScope`, or to `ITenantContextSetter<TKey>.MakeCurr
 
 ## Verify isolation
 
-Write a test that uses Tenantry's real services and two tenants: one tenant's rows must not be visible to the other,
-and a row for another tenant must be refused. This one runs on SQLite in memory with xUnit:
+Write a test that runs the application's own registration of its context with Tenantry's real services and two
+tenants: one tenant's rows must not be visible to the other, and a row for another tenant must be refused. The test
+calls the same `AddBillingDbContext` that `Program.cs` calls, and replaces only the database, so it fails if the
+application's registration loses `UseTenantry()`. A test that registers the context again with its own
+`AddDbContext(... .UseTenantry())` passes whatever the application does, and proves nothing. This one runs on SQLite
+in memory with xUnit:
 
 ```csharp
 using Microsoft.Data.Sqlite;
@@ -109,8 +127,8 @@ using Xunit;
 
 public sealed class IsolationTests : IAsyncLifetime
 {
-    private static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme" };
-    private static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex" };
+    private static readonly TenantDescriptor<Guid> Acme = new() { TenantId = Guid.NewGuid(), Name = "Acme" };
+    private static readonly TenantDescriptor<Guid> Globex = new() { TenantId = Guid.NewGuid(), Name = "Globex" };
 
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private ServiceProvider _services = null!;
@@ -119,12 +137,12 @@ public sealed class IsolationTests : IAsyncLifetime
     {
         await _connection.OpenAsync();
         _services = new ServiceCollection()
-            .AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme, Globex]))
-            .AddDbContext<NotesDbContext>(options => options.UseSqlite(_connection).UseTenantry())
+            .AddTenantry<Guid>(tenant => tenant.UseInMemoryStore([Acme, Globex]))
+            .AddBillingDbContext(options => options.UseSqlite(_connection))   // the application's own registration
             .BuildServiceProvider(validateScopes: true);
 
         await using var scope = _services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<NotesDbContext>().Database.EnsureCreatedAsync();
+        await scope.ServiceProvider.GetRequiredService<BillingDbContext>().Database.EnsureCreatedAsync();
     }
 
     public async ValueTask DisposeAsync()
@@ -136,43 +154,34 @@ public sealed class IsolationTests : IAsyncLifetime
     [Fact]
     public async Task EachTenantSeesOnlyItsOwnRows_AndAnotherTenantsRowIsRefused()
     {
-        var scopes = _services.GetRequiredService<ITenantScopeFactory<string>>();
+        var scopes = _services.GetRequiredService<ITenantScopeFactory<Guid>>();
 
-        await scopes.RunInScopeAsync("acme", async (scope, ct) =>
+        await scopes.RunInScopeAsync(Acme.TenantId, async (scope, ct) =>
         {
-            var db = scope.ServiceProvider.GetRequiredService<NotesDbContext>();
-            db.Notes.Add(new Note { Text = "acme's" });
+            var db = scope.ServiceProvider.GetRequiredService<BillingDbContext>();
+            db.Invoices.Add(new Invoice { Amount = 10 });
             await db.SaveChangesAsync(ct);
         });
 
-        await scopes.RunInScopeAsync("globex", async (scope, ct) =>
+        await scopes.RunInScopeAsync(Globex.TenantId, async (scope, ct) =>
         {
-            var db = scope.ServiceProvider.GetRequiredService<NotesDbContext>();
-            Assert.Empty(await db.Notes.ToListAsync(ct));
+            var db = scope.ServiceProvider.GetRequiredService<BillingDbContext>();
+            Assert.Empty(await db.Invoices.ToListAsync(ct));
 
-            db.Notes.Add(new Note { TenantId = "acme", Text = "written as acme" });
+            db.Invoices.Add(new Invoice { TenantId = Acme.TenantId, Amount = 20 });
             await Assert.ThrowsAsync<TenantIsolationViolationException>(() => db.SaveChangesAsync(ct));
         });
     }
 }
-
-public class Note : TenantEntity<string>
-{
-    public int Id { get; set; }
-    public string Text { get; set; } = "";
-}
-
-public class NotesDbContext(DbContextOptions<NotesDbContext> options) : DbContext(options)
-{
-    public DbSet<Note> Notes => Set<Note>();
-}
 ```
 
-Run it with the application's own `DbContext` and entities in place of `NotesDbContext`. To check that every entity
-type is either tenant-owned or meant to be shared, assert that `TenantModel.FindUnisolatedEntityTypes(db.Model)` lists
-only the types every tenant shares
+Check that the test can fail: remove `options.UseTenantry()` from `AddBillingDbContext` and run it. It must fail;
+put the call back. Tenantry's own tests run this test against a registration without `UseTenantry()` and check that it
+fails. To check that every entity type is either tenant-owned or meant to be shared, assert that
+`TenantModel.FindUnisolatedEntityTypes(db.Model)` lists only the types every tenant shares
 ([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
-[Testing](testing.md) covers requests through `WebApplicationFactory` too.
+A request test through `WebApplicationFactory<Program>` adds what this test cannot see: how requests name a tenant,
+that the access validator refuses a caller, and the pipeline order ([Testing](testing.md)).
 
 ## Mistakes and the correct form
 
@@ -203,6 +212,11 @@ only the types every tenant shares
 - `RunInScopeAsync` returns to the caller's synchronization context to start the work, so blocking on it
   (`.Result`, `.Wait()`, `.GetAwaiter().GetResult()`) on a desktop app's UI thread can deadlock. Await it
   ([Desktop apps](non-http-hosts.md#desktop-apps)).
+- With `string` tenant ids, the database compares `TenantId` under the column's collation, and SQL Server's and MySQL's
+  defaults ignore case: `acme` and `ACME` would read and change each other's rows. Use `Guid` ids, or ids the
+  collation cannot confuse, or a binary collation on `TenantId`
+  ([string tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)).
+  `UseInMemoryStore` refuses two ids that differ only in case.
 - A tenant made current inside an `async` helper is not current for the helper's caller. Make it current, or open
   the scope, in the method that does the work ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
 
@@ -225,6 +239,8 @@ Copy this into the application's agent instructions:
   awaited, never blocked on.
 - `CreateScope` and `MakeCurrent` only take a tenant read from the store, never one built from outside input.
 - Resolve DbContexts inside the tenant's scope; do not keep one across tenants.
+- Prefer `Guid` tenant ids. String ids must not differ only in case or accents, which SQL Server's and MySQL's default
+  collations ignore.
 - Every change to tenant-owned data access keeps the isolation test passing: one tenant cannot read or write
   another's rows.
 ```

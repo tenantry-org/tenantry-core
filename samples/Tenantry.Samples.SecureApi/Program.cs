@@ -78,7 +78,8 @@ await using (var scope = app.Services.CreateAsyncScope())
 }
 
 app.UseAuthentication();
-app.UseAuthorization(); // before UseTenantry, so anonymous callers get 401 rather than a tenant error
+// Authorization before Tenantry, so an anonymous caller gets 401 rather than 403: no policy here needs the tenant.
+app.UseAuthorization();
 app.UseTenantry();
 
 app.MapGet("/health", () => Results.Ok("healthy"))

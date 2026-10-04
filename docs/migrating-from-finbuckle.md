@@ -131,13 +131,13 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 var app = builder.Build();
 
 app.UseAuthentication();
-app.UseTenantry();
 app.UseAuthorization();
+app.UseTenantry();
 ```
 
-`UseTenantry()` goes after `UseAuthentication()`. Finbuckle's claim strategy authenticated the request itself.
-`ResolveFromClaim` reads `HttpContext.User`, which the authentication middleware sets
-([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). If your authentication settings differ per tenant
+`UseTenantry()` goes after `UseAuthentication()`, and after `UseAuthorization()` unless a policy needs the tenant.
+Finbuckle's claim strategy authenticated the request itself; `ResolveFromClaim` reads `HttpContext.User`, which the
+authentication middleware sets ([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). If your authentication settings differ per tenant
 (Finbuckle's `WithPerTenantAuthentication()`), also call `UseTenantResolution()` before `UseAuthentication()`, where
 `UseMultiTenant()` was (step 6).
 

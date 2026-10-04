@@ -39,8 +39,8 @@ var app = builder.Build();
 
 app.UseTenantResolution();   // finds the tenant and makes it current
 app.UseAuthentication();     // authenticates with the tenant's settings
+app.UseAuthorization();      // so an anonymous caller gets 401
 app.UseTenantry();           // runs the access validators, then rejects or continues
-app.UseAuthorization();
 ```
 
 Call `app.UseAuthentication()` yourself: the one `WebApplication` adds on its own runs before your middleware, so it

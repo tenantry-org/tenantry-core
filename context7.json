@@ -24,10 +24,11 @@
     "Never set TenantId on new rows and never add Where(x => x.TenantId == ...) to queries: UseTenantry() stamps and filters.",
     "Database.SqlQuery, SqlQueryRaw, ExecuteSql, ExecuteSqlRaw, ExecuteSqlInterpolated and IgnoreQueryFilters() are not tenant-isolated.",
     "Pair ResolveFromHeader, ResolveFromRouteValue, ResolveFromQueryString, ResolveFromHost and ResolveFromSubdomain with ValidateTenantAccessByClaim or ValidateTenantAccess in the same AddTenantry.",
-    "Call app.UseTenantry() after app.UseAuthentication() and app.UseAuthorization(), before the endpoints.",
+    "Call app.UseTenantry() after app.UseAuthentication(); put it after app.UseAuthorization() too, so anonymous callers get 401, unless an authorization policy needs the tenant: then before it.",
     "Run background work from a tenant id with ITenantScopeFactory<TKey>.RunInScopeAsync(id, work), and await it; never block on it.",
     "Pass CreateScope and MakeCurrent only a tenant read from the store, never a TenantDescriptor built from outside input.",
     "Resolve a DbContext inside the tenant's scope; a database-per-tenant context throws if used after the current tenant changes.",
+    "Prefer Guid tenant ids; string ids must not differ only in case, which SQL Server's and MySQL's default collations ignore.",
     "Test isolation with Tenantry's real services and two tenants: one tenant must not read or write the other's rows."
   ]
 }

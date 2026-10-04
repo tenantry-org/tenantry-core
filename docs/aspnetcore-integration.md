@@ -144,11 +144,13 @@ it.
 
 ## Pipeline ordering
 
-Put `UseTenantry()` before anything that needs the tenant: your endpoints, authorization that depends on it, and
-EF Core work driven by the request. Put it after `UseAuthentication()` when you resolve or validate from claims, and
-after routing, so it sees endpoint metadata (`WebApplication` adds routing first; a custom pipeline must call
-`UseRouting()` before `UseTenantry()`). For authentication settings that differ per tenant, also call
-`UseTenantResolution()` before `UseAuthentication()`: see [Authentication per tenant](authentication-per-tenant.md).
+Call `UseTenantry()` after `UseAuthentication()`, so the access validators and `ResolveFromClaim` see the user, and
+before anything that needs the tenant: your endpoints and EF Core work driven by the request. Put it after
+`UseAuthorization()` too, so an anonymous caller gets 401 rather than 403, unless an authorization policy needs the
+tenant: then put it before `UseAuthorization()`. Either way it comes after routing, so it sees endpoint metadata
+(`WebApplication` adds routing first; a custom pipeline must call `UseRouting()` before `UseTenantry()`). For
+authentication settings that differ per tenant, also call `UseTenantResolution()` before `UseAuthentication()`: see
+[Authentication per tenant](authentication-per-tenant.md).
 
 If the middleware runs before routing, a request without a tenant to an endpoint that requires one is still
 rejected, but `RequireTenantByDefault()` then applies to `AllowMissingTenant()` endpoints too, and route values are
@@ -161,10 +163,12 @@ A typical order:
 
 ```csharp
 app.UseAuthentication();
+app.UseAuthorization();   // first, so an anonymous caller gets 401
 app.UseTenantry();        // resolves the tenant (reads User if using claims; reads endpoint metadata)
-app.UseAuthorization();
 app.MapControllers();     // or minimal API endpoints
 ```
+
+With an authorization policy that reads the tenant, put `app.UseTenantry()` between the two instead.
 
 ## Reading the tenant in your code
 
