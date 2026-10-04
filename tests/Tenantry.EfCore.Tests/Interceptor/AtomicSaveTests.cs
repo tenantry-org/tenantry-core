@@ -1108,6 +1108,27 @@ public sealed class AtomicSaveTests : IDisposable
     }
 
     [Fact]
+    public async Task InATransactionWithoutSavepoints_AConflictAnInterceptorSuppresses_StopsTheCommit_AndTheRefusalSaysSo()
+    {
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme"), new Setup { NoSavepoints = true, Suppressor = new SuppressConcurrencyFailures() }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await ChangeAsync(db, Change.AddOwnedRow);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            Customer missing = new() { Id = 99, TenantId = "acme", Name = "missing" };
+            db.Attach(missing);
+            missing.Name = "changed";
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            (await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
+                .Which.Message.Should().Contain("an interceptor suppressed a concurrency conflict");
+        }
+    }
+
+    [Fact]
     public async Task InATransactionWithoutSavepoints_AConflictOnARowNothingReliesOn_StillCommits()
     {
         await SeedAcmeAsync();
