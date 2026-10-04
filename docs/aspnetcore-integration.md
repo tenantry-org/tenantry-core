@@ -65,7 +65,8 @@ one that is refused, it continues without a tenant, as if it had no identifier. 
 does not break your login and health endpoints.
 
 Resolvers and access validators added by type (`UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()`) are
-created in the **request's** service scope, so they can depend on a scoped `DbContext`. The store is resolved from a scope of `ITenantLookup<TKey>`'s own for each lookup.
+created in the request's service scope, so they can depend on a scoped `DbContext`. The store is read through
+`ITenantLookup<TKey>` ([lifetimes](tenant-stores.md#registration-and-lifetimes)).
 
 ### Status codes
 

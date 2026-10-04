@@ -1,9 +1,9 @@
 # Tenant stores
 
-A tenant store answers "which tenants exist, and what are their details?" It returns an
-`ITenantDescriptor<TKey>` for a tenant id, or for an identifier a request carries (or `null` if there is no such
-tenant), and lists every tenant that exists, suspended ones included; whether work may run for a tenant is decided
-elsewhere (see [Suspended and inactive tenants](#suspended-and-inactive-tenants)).
+A tenant store finds a tenant by id (`GetTenantAsync`) or by the identifier a request carries
+(`FindByIdentifierAsync`), returning `null` when there is none, and lists every tenant, suspended ones included
+(`GetAllTenantsAsync`). Whether work may run for a tenant is decided separately: see
+[Suspended and inactive tenants](#suspended-and-inactive-tenants).
 
 ```csharp no-compile
 public interface ITenantStore<TKey>
@@ -22,15 +22,14 @@ tenants by something other than their id, such as a subdomain slug or a custom d
 log, say) must forward `FindByIdentifierAsync` too: otherwise it gets the default, which never reaches the inner
 store's own mapping.
 
-Exactly one store may be registered: a second `UseStore`/`UseInMemoryStore` throws. A web application must
-register one: `app.UseTenantry()` checks at startup and throws a clear `InvalidOperationException` if none is
-registered. A non-HTTP host may create every scope from a descriptor it already holds and never need a store —
-see [Non-HTTP hosts](non-http-hosts.md). `ITenantLookup` and `ITenantScopeFactory.RunInScopeAsync` do
-need one, and say so if it is missing.
+## Registration and lifetimes
 
-Singletons such as hosted services should read tenants through `ITenantLookup<TKey>`, which
-resolves the store from a fresh scope on each call, rather than injecting a scoped store directly. The request
-middleware reads tenants through it too.
+Register one store; a second throws. `UseInMemoryStore` registers a singleton. `UseStore<T>()` and
+`UseStore(factory)` register a scoped store, which can use a scoped `DbContext` but must not keep state across calls.
+Tenantry reads the store through `ITenantLookup<TKey>`, which resolves it from a new scope for each lookup;
+singletons such as hosted services should do the same rather than inject the store. `app.UseTenantry()` fails at
+startup without a store. A [non-HTTP host](non-http-hosts.md) that only calls `CreateScope` with descriptors it
+already holds needs none, but `ITenantLookup` and `RunInScopeAsync` throw `InvalidOperationException` without one.
 
 ## In-memory store
 
@@ -44,13 +43,13 @@ tenant.UseInMemoryStore(
 ]);
 ```
 
-This registers `InMemoryTenantStore<TKey>` as a **singleton**, built when you register it. It does not see later
+This registers `InMemoryTenantStore<TKey>`, built when you register it. It does not see later
 changes to the collection. Two tenants with the same id, or a tenant with an id Tenantry reserves for "no tenant"
 (`Guid.Empty`, `0`, an empty string), throw `ArgumentException` at registration.
 
 ## Custom store
 
-For anything real — tenants in a database, a cache, a config service — implement `ITenantStore<TKey>`.
+For tenants in a database, a cache or a configuration service, implement `ITenantStore<TKey>`.
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -70,18 +69,15 @@ public sealed class EfCoreTenantStore(AppDbContext db) : ITenantStore<string>
 Register it one of two ways:
 
 ```csharp
-// 1. By type — resolved from DI, registered as Scoped.
+// 1. By type, created through dependency injection.
 tenant.UseStore<EfCoreTenantStore>();
 
-// 2. By factory — also Scoped; use when you need IServiceProvider to construct it.
+// 2. By factory, when you need IServiceProvider to construct it.
 tenant.UseStore(sp => new EfCoreTenantStore(sp.GetRequiredService<AppDbContext>()));
 ```
 
-> **Lifetimes.** `UseInMemoryStore` registers a **singleton**; `UseStore<T>()` and `UseStore(factory)`
-> register **scoped**. Scoped is the right default for stores that depend on a scoped `DbContext`:
-> `ITenantLookup<TKey>`, which the request middleware and background work use, resolves the store from a
-> scope of its own for each lookup. If a lookup is a database round trip you would rather not make on every
-> request, [cache the tenants](#caching).
+Both are scoped ([Registration and lifetimes](#registration-and-lifetimes)). To avoid a database round trip on
+every request, [cache the tenants](#caching).
 
 ## Suspended and inactive tenants
 
@@ -108,10 +104,10 @@ Check for the active status, as here, rather than the suspended one, so a descri
 rather than served. For a check that needs services, implement `ITenantActivityValidator<TKey>` and register it as a
 singleton; every registered check must allow the tenant. Tenantry then refuses an inactive tenant:
 
-- **HTTP requests** get `403 Forbidden` where a tenant is required, and run without a tenant elsewhere, as for a
+- An HTTP request gets `403 Forbidden` where a tenant is required, and runs without a tenant elsewhere, as for a
   tenant an [access validator](access-control.md#validating-tenant-access) refuses.
-- **`RunInScopeAsync`** throws `TenantInactiveException`, a `TenantNotResolvedException`.
-- **Tenantry.Pro's** background services, schedulers and message integrations skip it.
+- `RunInScopeAsync` throws `TenantInactiveException`, a `TenantNotResolvedException`.
+- Tenantry.Pro's background services, schedulers and message integrations skip it.
 
 `CreateScope` does not check, because it takes a tenant you already hold, for work such as migrations that must
 reach suspended tenants. When you loop over tenants for work of your own, ask `ITenantActivity<TKey>`:
@@ -129,12 +125,10 @@ With [caching](#caching), invalidate a tenant when you suspend it, or it is serv
 
 ## Bootstrapping with an EF Core-backed store
 
-There is a chicken-and-egg consideration if your tenant registry lives in the same database your
-tenanted entities do: the `Tenant` table itself must **not** be a tenanted entity (do not make it
-implement `ITenantEntity<TKey>`), or the query filter would prevent the store from reading it before a
-tenant is resolved. Keep the tenant registry global. See the
-[`EfCoreWeb` sample](../samples/Tenantry.Samples.EfCoreWeb) for a complete example with a `Tenant`
-entity, an `EfCoreTenantStore`, and seeded data.
+If your tenants are in the same database as your tenant-owned entities, the `Tenant` entity must not implement
+`ITenantEntity<TKey>`: with no tenant current, the query filter would hide every row from the store. The
+[`EfCoreWeb` sample](../samples/Tenantry.Samples.EfCoreWeb) has a `Tenant` entity, an `EfCoreTenantStore` and
+seeded data.
 
 ## Caching
 
