@@ -375,6 +375,9 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
             await AsTenantAsync(_globex, async db =>
             {
+                // One connection for the scope: SqlClient could hand back another pooled one after a close, which
+                // promotes the scope to a distributed transaction.
+                await db.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
                 ProviderDog stub = new() { Id = id, TenantId = _globex, Detail = "acme detail" };
                 db.Animals.Attach(stub);
                 stub.Detail = "overwritten";
@@ -410,6 +413,9 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
             using (_tenants.Use(Tenant(_globex)))
             {
                 await using ProviderOrdersContext db = new(options);
+                // One connection for the scope: SqlClient could hand back another pooled one after a close, which
+                // promotes the scope to a distributed transaction.
+                await db.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
                 await SaveHiddenFailureThenSaveAgainAsync(db, id);
             }
 
@@ -437,6 +443,9 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
             using (_tenants.Use(Tenant(_acme)))
             {
                 await using ProviderOrdersContext db = new(options);
+                // One connection for the scope: SqlClient could hand back another pooled one after a close, which
+                // promotes the scope to a distributed transaction.
+                await db.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
                 (await db.Animals.OfType<ProviderDog>().SingleAsync(d => d.Id == id, TestContext.Current.CancellationToken)).Detail = "changed";
                 await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<InvalidOperationException>().WithMessage("stopped");
                 await db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -488,6 +497,9 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
         {
             await AsTenantAsync(_acme, async db =>
             {
+                // One connection for the scope: SqlClient could hand back another pooled one after a close, which
+                // promotes the scope to a distributed transaction.
+                await db.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
                 (await db.Animals.OfType<ProviderDog>().SingleAsync(d => d.Id == id)).Detail = "changed";
                 return await db.SaveChangesAsync();
             });
