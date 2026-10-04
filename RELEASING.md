@@ -1,6 +1,7 @@
 # Releasing Tenantry
 
-A release is a `v*` tag on a commit on `master`; the release workflow (`.github/workflows/release.yml`) does the
+A release is a `v*` tag on a commit on `master`, or for a patch to an older minor on its `release/X.Y` branch
+([Patching an older minor](#patching-an-older-minor)); the release workflow (`.github/workflows/release.yml`) does the
 rest. Only the maintainer can push `v*` tags.
 
 ## Before the tag
@@ -21,26 +22,55 @@ rest. Only the maintainer can push `v*` tags.
    git push origin vx.y.z
    ```
 
-2. The workflow checks that the tag is on `master` and has notes, reruns CI on the tagged commit, then waits for
-   approval in the `release` environment. Once approved, it pushes the packages and their symbol packages to
-   NuGet.org and creates the GitHub release.
+2. The workflow checks that the tag is on `master` (or its `release/X.Y` branch), that CI passed on the push that put
+   the commit there, and that it has notes, reruns CI on the tagged commit, then waits for approval in the `release`
+   environment. Once approved, it pushes the packages and their symbol packages to NuGet.org and creates the GitHub
+   release, marked as the latest only if no higher version is released.
 3. NuGet.org validates and indexes the packages, which takes a few minutes. They are available once
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
 
 ## Patching an older minor
 
-A security fix for an older minor in the supported window ([security policy](.github/SECURITY.md#supported-versions))
-is released from a `release/X.Y` branch:
+Until the next minor is released, a patch is released from `master` as above. Once it is, a security fix for an older
+minor in the supported window ([security policy](.github/SECURITY.md#supported-versions)) is released from a
+`release/X.Y` branch, and only security fixes go there. The release workflow accepts a `vX.Y.Z` tag on `master` or on
+`release/X.Y`, and a tag below the newest release only on `release/X.Y` (`scripts/release-source.sh`).
 
-1. Cut the branch from the minor's last release tag, once: `git branch release/0.7 v0.7.0`, then push it.
-2. Cherry-pick the fix, and add the patch's section to `CHANGELOG.md` on the branch and on `master`.
-3. Push the branch and wait for CI to pass on it, then tag its head and push the tag, as above. The GitHub release is
-   not marked as the latest while a newer version is released.
+1. Cut the branch once, when the first such fix is needed, from the minor's last release tag, and push it:
 
-The workflows do not support this yet: CI runs only on `master`, and the release workflow refuses a tag that is not
-on `master`. Before the first such patch, CI must run on `release/*` branches and the release workflow must accept a
-`vX.Y.Z` tag on `release/X.Y`.
+   ```sh
+   git branch release/0.6 v0.6.1
+   git push origin release/0.6
+   ```
+
+   A tag made before release branches were supported has workflows that run only on `master`. On a branch cut from
+   one, cherry-pick the commit "CI and the release workflow accept patches from release branches" first, in a pull
+   request into the branch, so CI runs on the branch and its tags can be released.
+2. In a pull request into the branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the minor's last
+   release (`0.6.1`), and delete each `src/*/CompatibilitySuppressions.xml`: they record the minor's breaks against
+   the one before it, and a patch has none against its own minor.
+3. Fix it on `master` first, in a pull request as usual, unless the code is gone there. Then cherry-pick the fix onto
+   the branch in a pull request into `release/X.Y`, which runs CI, SonarCloud included.
+4. Add the patch's section to `CHANGELOG.md`, `## [0.6.2] - YYYY-MM-DD` with a `### Security` heading, in the same
+   pull request into the branch, and then the same section to `master`'s `CHANGELOG.md`, placed by version among the
+   other releases. The release's notes come from the branch's copy.
+5. Merge the pull request into the branch and wait for CI, SonarCloud included, to pass on the push. The release
+   workflow requires that run, on the push to `release/X.Y` that put the commit there. Rehearse it if you like:
+   Actions → Release → Run workflow on `release/X.Y`, with the tag as the version.
+6. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.6.*'`), that `git log
+   v0.6.1..origin/release/0.6` holds only the fix and the steps above, that `TenantryPackageBaseline` names the line's
+   last release, and that the CHANGELOG section is there. Then tag the branch's head and push the tag:
+
+   ```sh
+   git tag -a v0.6.2 -m "Tenantry 0.6.2 (beta)" origin/release/0.6
+   git push origin v0.6.2
+   ```
+
+   The release then runs as above, approval included. The GitHub release is not marked as the latest, as a newer
+   version is released. Publish the security advisory once the packages are on NuGet.org.
+7. On the branch, set `TenantryPackageBaseline` to the patch just released (After any release, below). `master` keeps
+   its own.
 
 ## After any release
 

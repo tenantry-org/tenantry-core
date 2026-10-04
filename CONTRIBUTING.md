@@ -41,7 +41,8 @@ builds on Windows.
 
 ## Checks your PR must pass
 
-CI runs these steps (`.github/workflows/build-test.yml`) on every push to `master` and every pull request, in this
+CI runs these steps (`.github/workflows/build-test.yml`) on every push to `master` or a `release/X.Y` branch and every
+pull request into them, in this
 order, and the release workflow runs them again on the tagged commit. Each one runs locally with the same command,
 from the repository root. `dotnet tool restore` installs the tools `dotnet-tools.json` pins (docfx, dotnet-coverage,
 ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them restore them too.
@@ -59,7 +60,7 @@ ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them re
 | The build has no warnings | `dotnet build Tenantry.slnx -c Release --no-restore` | Warnings are errors, trim (`IL2xxx`) and AOT (`IL3xxx`) warnings in `src/` included |
 | The samples start | `bash scripts/smoke-samples.sh` | After the Release build |
 | Every test passes on every target framework, with coverage | `bash scripts/test-with-coverage.sh` | Docker runs the integration tests; it writes `coverage/coverage.xml` |
-| SonarCloud quality gate | CI only | On every push to `master` and every pull request into it. A pull request from a fork, or from Dependabot, gets no `SONAR_TOKEN`, so its Sonar step fails. For a result, a maintainer pushes its commits to a branch of this repository (`git fetch origin pull/<number>/head && git push origin FETCH_HEAD:refs/heads/<branch>`) and opens a pull request from that branch |
+| SonarCloud quality gate | CI only | On every push to `master` or `release/X.Y` and every pull request into them. A pull request from a fork, or from Dependabot, gets no `SONAR_TOKEN`, so its Sonar step fails. For a result, a maintainer pushes its commits to a branch of this repository (`git fetch origin pull/<number>/head && git push origin FETCH_HEAD:refs/heads/<branch>`) and opens a pull request from that branch |
 | Line coverage is at least 90% | `dotnet reportgenerator -reports:coverage/coverage.xml -targetdir:coverage/report -reporttypes:JsonSummary`, then `jq '.summary.linecoverage' coverage/report/Summary.json` | CI fails below 90: add tests for the new code |
 | The public API still works for code built against the last release | `for p in src/*/*.csproj; do dotnet pack "$p" -c Release --no-build -o artifacts; done` (the pack validates each package against `TenantryPackageBaseline`) | Keep the old member, or, for an intended break in a minor release, record it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true` |
 | A CycloneDX SBOM per package | The `dotnet CycloneDX` loop in `build-test.yml` | Run it after the pack, as it reads each package's version from `artifacts`, and fix the project it names |
@@ -95,19 +96,20 @@ If you have signing configured, signed commits are appreciated. See GitHub's gui
 
 ## Releases (maintainers)
 
-Releases are cut by pushing a `v*` tag on a commit that is on `master`; a ruleset lets only the
-maintainer create, move or delete `v*` tags. The release workflow checks that the tag is on `master`,
-checks that CI, SonarCloud included, passed on the tagged commit on `master`, reruns the CI gate on it (without
+Releases are cut by pushing a `v*` tag on a commit that is on `master`, or for a patch to an older minor on its
+`release/X.Y` branch; a ruleset lets only the maintainer create, move or delete `v*` tags. The release workflow checks
+that the tag is on `master` or `release/X.Y` (a tag below the newest release only on `release/X.Y`), checks that CI,
+SonarCloud included, passed on the push that put the tagged commit there, reruns the CI gate on it (without
 SonarCloud),
 including both package checks, then **pauses for approval** in the `release` environment (only `v*`
 tags can deploy to it) and publishes those same packages, with their symbol packages, to NuGet.org via
 OIDC trusted publishing. The GitHub release's notes are the version's section of `CHANGELOG.md`
 (`scripts/release-notes.sh`), and a tag without one fails before anything is built. The release attests each
 package's build provenance and attaches the packages' checksums (`SHA256SUMS`) and a CycloneDX SBOM per package.
-A tag whose commit has no passing CI run on `master` fails before anything is built, and a tag with a prerelease
-suffix makes a GitHub prerelease.
+A tag whose commit has no passing CI run on that branch fails before anything is built, a tag with a prerelease
+suffix makes a GitHub prerelease, and only the highest released version is marked as the latest GitHub release.
 [RELEASING.md](RELEASING.md) has the steps.
 
 To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on
-`master`: it runs the same checks and builds the same packages, then lists what a release would
+`master`, or on `release/X.Y` for a patch to an older minor: it runs the same checks and builds the same packages, then lists what a release would
 publish, without publishing anything. Give it the tag to also see that release's notes.
