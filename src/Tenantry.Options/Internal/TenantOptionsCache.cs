@@ -16,17 +16,23 @@ internal interface ICurrentTenantId
     /// <summary>The current tenant's id, formatted by <see cref="TenantIds.Format{TKey}"/>, or null with no tenant.</summary>
     string? Current { get; }
 
+    /// <summary>The current tenant's descriptor, or null with no tenant.</summary>
+    object? CurrentTenant { get; }
+
     /// <summary>Makes no tenant current until disposed.</summary>
     IDisposable MakeNoTenantCurrent();
 
     /// <summary>
     /// Makes the store's copy of the current tenant current until disposed, so a value is built from the tenant as the
     /// store has it, not from the copy the caller holds, which may be older or not the store's at all. Null when there
-    /// is no tenant, no store, or the caller already holds the store's copy.
+    /// is no tenant, no store, the store does not hold the id, or the caller already holds the store's copy.
     /// </summary>
     /// <param name="keep">
-    /// False when the store does not hold the current tenant's id: the value is built from the caller's copy and must
-    /// not be kept, or every made-up id would add an entry and the next caller with that id would get this one's value.
+    /// False when the value must not be kept under the current id. The store does not hold the id: the value is built
+    /// from the caller's copy, and keeping it would add an entry for every made-up id and give the next caller with
+    /// that id this one's value. Or the store answered with a tenant whose id differs (a store that matches ids without
+    /// regard to case, say): the value is built from the store's copy, as request resolution would use it, but not kept
+    /// under the caller's id, which no invalidation of the store's id clears.
     /// </param>
     IDisposable? MakeStoreCopyCurrent(out bool keep);
 }
@@ -40,6 +46,8 @@ internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantCon
 
     public string? Current => tenantContext.CurrentTenant is { } tenant ? TenantIds.Format(tenant.TenantId) : null;
 
+    public object? CurrentTenant => tenantContext.CurrentTenant;
+
     public IDisposable MakeNoTenantCurrent() => tenantContext.MakeNoTenantCurrent();
 
     public IDisposable? MakeStoreCopyCurrent(out bool keep)
@@ -50,32 +58,27 @@ internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantCon
             return null;
 
         // Options have no asynchronous configuration, so the read blocks, once per value built: with CacheTenants it is
-        // usually answered from memory. It runs as no tenant, as it does when a request is resolved, and without the
-        // caller's synchronization context, so a store that awaits without ConfigureAwait(false) cannot deadlock it.
+        // usually answered from memory. It runs as no tenant, as it does when a request is resolved.
         ITenantDescriptor<TKey>? stored;
-        var context = SynchronizationContext.Current;
 
         using (tenantContext.MakeNoTenantCurrent())
-        {
-            SynchronizationContext.SetSynchronizationContext(null);
-            try
-            {
-                var read = lookup.GetTenantAsync(tenant.TenantId);
-                stored = read.IsCompletedSuccessfully ? read.Result : read.AsTask().GetAwaiter().GetResult();
-            }
-            finally
-            {
-                SynchronizationContext.SetSynchronizationContext(context);
-            }
-        }
+            stored = ReadBlocking(lookup, tenant.TenantId);
 
-        if (stored is null)
-        {
-            keep = false;
-            return null;
-        }
+        keep = stored is not null && stored.TenantId.Equals(tenant.TenantId);
 
-        return ReferenceEquals(stored, tenant) ? null : tenantContext.MakeCurrent(stored);
+        return stored is null || ReferenceEquals(stored, tenant) ? null : tenantContext.MakeCurrent(stored);
+    }
+
+    // A store that awaits without ConfigureAwait(false) continues on the caller's synchronization context or task
+    // scheduler, which blocking the caller can starve for good. With either in place the read runs on the thread pool,
+    // where the ambient tenant still flows; otherwise it runs here, so a read CacheTenants answers costs no thread.
+    private static ITenantDescriptor<TKey>? ReadBlocking(ITenantLookup<TKey> lookup, TKey tenantId)
+    {
+        if (SynchronizationContext.Current is not null || TaskScheduler.Current != TaskScheduler.Default)
+            return Task.Run(() => lookup.GetTenantAsync(tenantId).AsTask()).GetAwaiter().GetResult();
+
+        var read = lookup.GetTenantAsync(tenantId);
+        return read.IsCompletedSuccessfully ? read.Result : read.AsTask().GetAwaiter().GetResult();
     }
 
     private ITenantLookup<TKey>? Lookup()
@@ -161,10 +164,12 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
         {
             var built = entry.Value;
 
-            if (!built.Keep)
-                _values.TryRemove(KeyValuePair.Create(key, entry));
+            if (built.Keep)
+                return built.Value;
 
-            return built.Value;
+            // A value that is not kept is the reader's own: one that joined another reader's build builds its own.
+            _values.TryRemove(KeyValuePair.Create(key, entry));
+            return ReferenceEquals(built.Tenant, _tenant.CurrentTenant) ? built.Value : Create(createOptions).Value;
         }
         catch
         {
@@ -179,15 +184,17 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
 
     private Built Create(Func<TOptions> createOptions)
     {
+        var tenant = _tenant.CurrentTenant;
+
         using (_tenant.MakeStoreCopyCurrent(out var keep))
-            return new Built(createOptions(), keep);
+            return new Built(createOptions(), keep, tenant);
     }
 
     public bool TryAdd(string? name, TOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        return _values.TryAdd(Key(name), new Lazy<Built>(new Built(options, Keep: true)));
+        return _values.TryAdd(Key(name), new Lazy<Built>(new Built(options, Keep: true, Tenant: null)));
     }
 
     // A name's value is removed for every tenant: the configuration it is bound to changed, or it was set again.
@@ -219,7 +226,8 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
     private (string? Tenant, string Name) Key(string? name) =>
         (_tenant.Current, name ?? Microsoft.Extensions.Options.Options.DefaultName);
 
-    private sealed record Built(TOptions Value, bool Keep);
+    // Tenant is the descriptor that was current for the reader that built the value.
+    private sealed record Built(TOptions Value, bool Keep, object? Tenant);
 }
 
 /// <summary>

@@ -104,7 +104,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tenant was first invalidated, the first copy current when a value was built decided it for everyone: a copy made
   current with `MakeCurrent` or `CreateScope` whose fields differed from the store's (an older one, or one built by
   hand) set the tenant's options for every later request. A value for an id the store does not hold is now built on
-  each read and not kept, where before each such id added an entry kept until an invalidation.
+  each read and not kept, where before each such id added an entry kept until an invalidation; so is a value for an id
+  the store answers with another tenant's (matching without regard to case), which invalidating the store's id would
+  not clear. The store read that builds a value runs on the thread pool when a synchronization context or a task
+  scheduler other than the default is current, so a store that awaits without `ConfigureAwait(false)` no longer waits
+  for the thread the read blocks.
 - A save that adds, changes or deletes owned rows in their own table through an owner it does not otherwise write
   refuses the owner when the `TenantId` it holds in memory is not the current tenant's. 0.6.0 confirmed such an owner by
   writing its `TenantId` back, and wrote the value the owner held: when change detection had not seen that value

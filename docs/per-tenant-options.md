@@ -102,13 +102,22 @@ tenant's.
 A value is built from the tenant as the store has it, not from the copy that is current where the options are read.
 After an invalidation, a request resolved before it, which still carries the old copy, gets the new settings, and a copy
 made current with `MakeCurrent` or `CreateScope` whose fields differ from the store's cannot change a tenant's value.
-Building a value reads the store once, blocking, since options have no asynchronous configuration; with
-[`CacheTenants`](tenant-stores.md#caching) the read is usually answered from memory. For an id the store does not hold,
-the value is built from the current copy on every read and not kept. Without a store, it is built from the current copy
-and kept. A change to the configuration the options are bound to (a
-reloaded `appsettings.json`) clears every tenant's value of that options type. Each instance of the application has its
-own values, so [publish the invalidation](tenant-stores.md#several-instances) to the others, or keep the settings in
-configuration that reloads.
+For an id the store does not hold, the value is built from the current copy on every read and not kept. When the store
+answers with a tenant whose id differs from the one asked for (a store that matches ids without regard to case), the
+value is built from the store's copy and not kept either, since invalidating the store's id would not clear it. Without
+a store, the value is built from the current copy and kept.
+
+Building a value reads the store once, blocking, since options have no asynchronous configuration. Without
+[`CacheTenants`](tenant-stores.md#caching), every value built is a synchronous store read, so use it: then the read is
+usually answered from memory. When a synchronization context or a task scheduler other than the default is current,
+the read runs on the thread pool, so a store that awaits without `ConfigureAwait(false)` does not wait on the thread
+the read blocks. A store that fails fails the read of the options whose value is being built; the next read tries
+again.
+
+A change to the configuration the options are bound to (a reloaded `appsettings.json`) clears every tenant's value of
+that options type. Each instance of the application has its own values, so
+[publish the invalidation](tenant-stores.md#several-instances) to the others, or keep the settings in configuration
+that reloads.
 
 The values are kept in memory, one per tenant for each options type and name, until an invalidation or a
 configuration reload clears them: there is no size limit or expiry. An application with many tenants and large

@@ -18,6 +18,7 @@ public sealed class PerTenantOptionsTests
     private static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex" };
 
     private int _built;
+    private string? _slowName;
 
     [Fact]
     public void TheSnapshotAndTheMonitor_GiveTheCurrentTenantsValue_AndTheOrdinaryOneWithoutATenant()
@@ -391,6 +392,100 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public async Task ReadersSharingABuildForAnIdTheStoreDoesNotHold_EachGetTheirOwnCopysValue()
+    {
+        _slowName = "A";
+        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseInMemoryStore([Acme]));
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        var first = Task.Run(
+            () => ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "x", Name = "A" }),
+            TestContext.Current.CancellationToken);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        var second = ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "x", Name = "B" });
+
+        (await first).Should().Equal("A");
+        second.Should().Equal("B");
+        KeptValues(provider).Should().Be(0);
+    }
+
+    [Fact]
+    public void AStoreThatAnswersWithAnotherId_GivesItsCopysValue_ButItIsNotKept()
+    {
+        // A store whose ids match without regard to case: invalidating "acme" would never clear a value kept as "ACME".
+        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => new FuncStore((id, _) =>
+            ValueTask.FromResult<ITenantDescriptor<string>?>(
+                string.Equals(id, "acme", StringComparison.OrdinalIgnoreCase) ? Acme : null))));
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+
+        ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "ACME", Name = "Forged" })
+            .Should().Equal("Acme");
+        KeptValues(provider).Should().Be(0);
+
+        ReadNames(provider, monitor, Acme).Should().Equal("Acme");
+        KeptValues(provider).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AStoreThatAwaitsOnTheCallersScheduler_IsReadWithoutHanging_AsNoTenant()
+    {
+        bool? hadTenant = null;
+        ITenantContext<string>? ambient = null;
+        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => new FuncStore(async (id, ct) =>
+        {
+            await Task.Delay(20, ct);
+            hadTenant = ambient!.HasTenant;
+            return id == "acme" ? Acme : null;
+        })));
+        ambient = provider.GetRequiredService<ITenantContext<string>>();
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        TenantDescriptor<string> copy = new() { TenantId = "acme", Name = "Copy" };
+
+        var read = Task.Factory.StartNew(
+            () => ReadNames(provider, monitor, copy),
+            TestContext.Current.CancellationToken,
+            TaskCreationOptions.None,
+            new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler);
+
+        (await read.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)).Should().Equal("Acme");
+        hadTenant.Should().BeFalse("the store is read as no tenant");
+    }
+
+    [Fact]
+    public async Task AStoreThatAwaitsOnTheCallersSynchronizationContext_IsReadWithoutHanging()
+    {
+        using var provider = BuildNamedAfterTheTenant(tenant => tenant.UseStore(_ => new FuncStore(async (id, ct) =>
+        {
+            await Task.Delay(20, ct);
+            return id == "acme" ? Acme : null;
+        })));
+        var monitor = provider.GetRequiredService<IOptionsMonitor<BrandingOptions>>();
+        TaskCompletionSource<List<string>> result = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // A context that never runs what is posted to it: a continuation captured on it would never run.
+        Thread thread = new(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new NeverRunsContext());
+            try
+            {
+                result.SetResult(
+                    ReadNames(provider, monitor, new TenantDescriptor<string> { TenantId = "acme", Name = "Copy" }));
+            }
+            catch (Exception e)
+            {
+                result.SetException(e);
+            }
+        })
+        {
+            IsBackground = true,
+        };
+        thread.Start();
+
+        (await result.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken))
+            .Should().Equal("Acme");
+    }
+
+    [Fact]
     public void EveryRegistration_Resolves_InAValidatedProvider()
     {
         using var provider = Build();
@@ -429,7 +524,11 @@ public sealed class PerTenantOptionsTests
             store(tenant);
             tenant.ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) =>
             {
-                _built++;
+                Interlocked.Increment(ref _built);
+
+                if (t.Name == _slowName)
+                    Thread.Sleep(300);
+
                 o.Name = t.Name;
             }));
         });
@@ -520,6 +619,25 @@ public sealed class PerTenantOptionsTests
 
         public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([Tenant]);
+    }
+
+    private sealed class FuncStore(Func<string, CancellationToken, ValueTask<ITenantDescriptor<string>?>> get)
+        : ITenantStore<string>
+    {
+        public ValueTask<ITenantDescriptor<string>?> GetTenantAsync(
+            string tenantId, CancellationToken cancellationToken = default) => get(tenantId, cancellationToken);
+
+        public ValueTask<IReadOnlyList<ITenantDescriptor<string>>> GetAllTenantsAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<ITenantDescriptor<string>>>([]);
+    }
+
+    private sealed class NeverRunsContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            // Dropped: nothing runs what is posted here.
+        }
     }
 
     private sealed class ColourSource : IDisposable
