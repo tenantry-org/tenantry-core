@@ -108,8 +108,7 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
         while (builder is IConversionOperation conversion)
             builder = conversion.Operand;
 
-        return builder is IInvocationOperation { TargetMethod.Name: "Entity" } entity &&
-               entity.Arguments.Length == 1 &&
+        return builder is IInvocationOperation { TargetMethod.Name: "Entity", Arguments.Length: 1 } entity &&
                entity.Arguments[0].Value is ITypeOfOperation typeOf &&
                KnownTypes.IsDeclaredBy(entity.TargetMethod, types.ModelBuilder)
             ? typeOf.TypeOperand

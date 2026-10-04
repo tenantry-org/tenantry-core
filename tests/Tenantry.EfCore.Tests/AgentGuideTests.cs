@@ -31,6 +31,8 @@ public sealed class AgentGuideTests
         await connection.OpenAsync(ct);
         await using var services = new ServiceCollection()
             .AddTenantry<Guid>(tenant => tenant.UseInMemoryStore([Acme, Globex]))
+            // The provider, disposed before the connection, is all that uses it.
+            // ReSharper disable once AccessToDisposedClosure
             .AddBillingDbContext(options => options.UseSqlite(connection), isolated)
             .BuildServiceProvider(validateScopes: true);
 
