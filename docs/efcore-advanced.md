@@ -83,7 +83,7 @@ public class BlogDbContext(DbContextOptions<BlogDbContext> options) : DbContext(
 The join rows are then tenant-scoped rows like any other. `post.Tags.Add(tag)` inserts one stamped with the current
 tenant, queries through `Tags` and `Posts` read only the current tenant's join rows, and a delete checks the stored
 `TenantId`, so it matches no row of another tenant's. An existing join table needs a migration that adds the `TenantId`
-column and fills it from either end's row.
+column and fills it from the row at a tenant-scoped end.
 
 ## Saves that succeed or fail as a whole
 
