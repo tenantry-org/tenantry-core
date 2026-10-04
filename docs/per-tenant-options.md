@@ -21,6 +21,8 @@ builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limi
 
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .UseStore<EfCoreTenantStore>()
+    // Configure returns the per-tenant builder, so one call can name several types;
+    // ConfigurePerTenant returns the tenant builder, so the chain goes on after it.
     .ConfigurePerTenant(perTenant => perTenant.Configure<LimitsOptions>((options, t) =>
     {
         if (t.As<AppTenant>().Plan == "enterprise")
@@ -41,19 +43,14 @@ using Microsoft.Extensions.Options;
 app.MapGet("/limits", (IOptionsSnapshot<LimitsOptions> limits) => limits.Value.MaxUsers).RequireTenant();
 ```
 
-- **Built from the ordinary configuration, then the tenant.** Each tenant's value starts from the ordinary
-  configuration, then the tenant's steps run, in the order added.
-- **No tenant, no change.** Without a current tenant, the readers give the ordinary value.
-- **A singleton holds the monitor.** `IOptionsSnapshot<T>` is scoped, so scope validation refuses a singleton that
-  depends on it. A singleton holds `IOptionsMonitor<T>` and reads `CurrentValue` each time it needs the value.
-- **Only the types you name.** Every other options type behaves as before.
-- **After `services.Configure`, before `PostConfigure`.** The tenant's steps run after every `services.Configure`, in
-  any order they were added, and before every `PostConfigure`.
-- **The default name, or a name you give.** `Configure<T>(configure)` applies to the default-named options,
-  `Configure<T>(name, configure)` to one name (`Get("name")`), and `ConfigureAll<T>(configure)` to every name. For
-  authentication schemes, see [Authentication per tenant](authentication-per-tenant.md).
-- **Several types in one call.** `Configure` returns the builder, so one `ConfigurePerTenant` can set several options
-  types, and `ConfigurePerTenant` returns the tenant builder, so the chain goes on after it.
+- A tenant's value starts from the ordinary configuration. The tenant's steps run after every `services.Configure`
+  and before every `PostConfigure`, wherever those were registered, and in the order you add them.
+- Without a current tenant, the readers give the ordinary value.
+- `IOptionsSnapshot<T>` is scoped, so scope validation refuses a singleton that depends on it. A singleton holds
+  `IOptionsMonitor<T>` and reads `CurrentValue` each time it needs the value.
+- `Configure<T>(configure)` applies to the default-named options, `Configure<T>(name, configure)` to one name
+  (`Get("name")`), and `ConfigureAll<T>(configure)` to every name. For authentication schemes, see
+  [Authentication per tenant](authentication-per-tenant.md).
 
 ### Why IOptions keeps the ordinary value
 
@@ -115,5 +112,5 @@ it validates the ordinary value.
 
 ## See also
 
-- [Tenant stores](tenant-stores.md) — your tenant type, which the steps read with `As<T>()`
+- [Your own tenant type](core-concepts.md#your-own-tenant-type), which the steps read with `As<T>()`
 - [AOT & trimming](aot-and-trimming.md)
