@@ -262,6 +262,18 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
     }
 
     [Fact]
+    public async Task FromSql_ThatCannotBeComposed_OnATenantOwnedEntity_Throws()
+    {
+        // EF Core must compose the tenant filter over the SQL, and refuses SQL that is not a SELECT, such as a stored
+        // procedure call (on SQLite, a PRAGMA).
+        await SeedAsync();
+        await using var db = await DbContextFactory.CreateContextAsync(_tenant.As("globex"), _connection);
+
+        await db.Awaiting(context => context.Orders.FromSqlRaw("PRAGMA table_info('Orders')").ToListAsync())
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*non-composable SQL*");
+    }
+
+    [Fact]
     public async Task SqlQueryAndExecuteSql_AreNotTenantIsolated()
     {
         // Neither maps to an entity type, so no query filter applies, and no interceptor sees what they change.

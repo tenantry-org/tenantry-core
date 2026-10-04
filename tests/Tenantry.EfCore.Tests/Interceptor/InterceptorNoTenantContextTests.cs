@@ -25,7 +25,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
         db.Orders.Add(new Order { Description = "no tenant" });
 
         await db.Awaiting(d => d.SaveChangesAsync())
-            .Should().ThrowAsync<TenantNotResolvedException>().WithMessage("*Order*");
+            .Should().ThrowAsync<TenantNotResolvedException>().WithMessage("*writing tenant-owned entities (Order)*");
         CountRows().Should().Be(0);
     }
 

@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`, or the context's first query or save throws. ASP.NET Core
   Identity's types need it too ([ASP.NET Core Identity](docs/aspnetcore-identity.md#the-user-type-and-context)).
 - Give each HTTP client with `UseTenantry()` an absolute `BaseAddress` in its registration, or pass its service's
-  address to `UseTenantry(address)`, as a gRPC client must.
+  address to `UseTenantry(address)`, as a gRPC client must. `UseTenantry()` on an HTTP client gained an optional
+  parameter, so a library compiled against 0.6 that calls it must be compiled again.
 - A resolver from `UseResolver(sp => …)` is created per request. For one resolver for the application's lifetime,
   pass an instance to `UseResolver(resolver)`. The request's scope owns what the factory returns and disposes it, so
   a factory must not return a shared resolver, such as a singleton from the container.
@@ -21,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ITenantConnectionStringProvider<TKey>` registered before `AddTenantry`. Code that resolved
   `TenantConnectionStringProvider<TKey>` resolves `ITenantConnectionStringProvider<TKey>`.
 - An `OnRejected` handler or log alert that looked for a suspended tenant under `TenantRejectionReason.AccessDenied`
-  or event 1005 looks for `TenantRejectionReason.Inactive` or event 1012.
+  or event 1005 looks for `TenantRejectionReason.Inactive` or event 1012. Dashboards that count suspended tenants'
+  requests by the `tenantry.resolution.result` trace tag or metric value look for `inactive`, which was
+  `access_denied`.
 - A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
   `InvalidateAllLocallyAsync`.
 - Code that calls `TenantModel.FindUnisolatedEntityTypes` gets the roots of hierarchies only, and no owned types or

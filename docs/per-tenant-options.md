@@ -105,9 +105,9 @@ reloaded `appsettings.json`) clears every tenant's value of that options type. E
 own values, so [publish the invalidation](tenant-stores.md#several-instances) to the others, or keep the settings in
 configuration that reloads.
 
-The values are kept in memory until the tenant is invalidated, one per tenant for each options type and name, and
-nothing evicts them in between. An application with many tenants and large options types holds them all once each
-tenant has been served.
+The values are kept in memory, one per tenant for each options type and name, until an invalidation or a
+configuration reload clears them: there is no size limit or expiry. An application with many tenants and large
+options types holds them all once each tenant has been served.
 
 ## Validation
 

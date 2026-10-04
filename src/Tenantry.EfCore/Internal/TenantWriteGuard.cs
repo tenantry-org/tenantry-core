@@ -205,7 +205,7 @@ internal sealed class TenantWriteGuard<TKey>
 
             default:
                 throw new TenantNotResolvedException(
-                    $"SaveChanges is writing tenant-scoped entities ({entityTypes}) without a resolved tenant. " +
+                    $"SaveChanges is writing tenant-owned entities ({entityTypes}) without a resolved tenant. " +
                     "Run the write while a tenant is current (app.UseTenantry() for requests, " +
                     "ITenantScopeFactory.RunInScopeAsync or CreateScope elsewhere). Maintenance code that deliberately " +
                     "writes across tenants can use a context of its own, registered with " +
