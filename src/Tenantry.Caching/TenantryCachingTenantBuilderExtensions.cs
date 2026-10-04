@@ -16,12 +16,14 @@ public static class TenantryCachingTenantBuilderExtensions
 {
     /// <summary>
     /// Keys the application's <see cref="HybridCache"/> by tenant: an entry written while a tenant is current is read
-    /// only while that tenant is current, so one tenant's cached data is never served to another. Entries every tenant
-    /// shares go through <see cref="SharedHybridCache"/>; code that uses <see cref="IDistributedCache"/> directly can
-    /// inject <see cref="ITenantDistributedCache"/>. Invalidating a tenant
-    /// (<see cref="ITenantInvalidator{TKey}.InvalidateAsync"/>) removes its <see cref="HybridCache"/> entries.
+    /// only while that tenant is current.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Entries every tenant shares go through <see cref="SharedHybridCache"/>; code that uses
+    /// <see cref="IDistributedCache"/> directly can inject <see cref="ITenantDistributedCache"/>. Invalidating a tenant
+    /// (<see cref="ITenantInvalidator{TKey}.InvalidateAsync"/>) removes its <see cref="HybridCache"/> entries.
+    /// </para>
     /// <para>
     /// It wraps the <see cref="HybridCache"/> registered before it, so call <c>AddHybridCache()</c> before
     /// <c>AddTenantry</c>. When the host starts, it checks that <see cref="HybridCache"/> resolves to the cache it keys

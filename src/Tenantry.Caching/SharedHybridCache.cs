@@ -5,12 +5,11 @@ namespace Tenantry.Caching;
 
 /// <summary>
 /// The <see cref="HybridCache"/> for entries every tenant shares (exchange rates, reference data), where
-/// <c>IsolateCaches()</c> makes the injected <see cref="HybridCache"/> keep entries per tenant. Inject it where sharing
-/// is meant, so the constructor says so. Its keys and tags are its own: they never name a tenant's entry, and a tenant's
-/// never name one of these.
+/// <c>IsolateCaches()</c> makes the injected <see cref="HybridCache"/> keep entries per tenant.
 /// </summary>
 /// <remarks>
-/// It is the <see cref="HybridCache"/> registered before <c>IsolateCaches()</c>, with its serializers and options, and
+/// Inject it where sharing is meant, so the constructor says so. Its keys and tags are its own: they never name a
+/// tenant's entry, and a tenant's never name one of these. It is the <see cref="HybridCache"/> registered before <c>IsolateCaches()</c>, with its serializers and options, and
 /// works with or without a current tenant. A factory here runs with no current tenant, whoever calls, so what it loads
 /// cannot be one tenant's data: a query through a tenant's <c>DbContext</c> fails, as it does outside a tenant, rather
 /// than caching that tenant's rows for every tenant. It runs on the thread pool, without the caller's async context
