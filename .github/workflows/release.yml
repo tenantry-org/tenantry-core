@@ -21,9 +21,9 @@ concurrency:
   cancel-in-progress: false   # never cancel a half-done publish
 
 jobs:
-  # Release only commits on the tag's own branch, release/X.Y, which CI has already built and tested: a tag pushed
-  # anywhere else (master, another minor's branch, an unmerged branch, or a stray or mistyped tag) fails here before
-  # anything is built.
+  # Release only commits on the tag's own branch, release/X.Y, which CI has already built and tested, and which master
+  # does not contain: a tag pushed anywhere else (master's history, another minor's branch, an unmerged branch, or a
+  # stray or mistyped tag) fails here before anything is built.
   source:
     name: Tag is on its release branch
     runs-on: ubuntu-latest

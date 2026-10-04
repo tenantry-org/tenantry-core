@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Prints the branch a release run's commit is released from, or fails. Every release tag vX.Y.Z, release candidates
-# included, comes from its own branch release/X.Y, never from master or another minor's branch. A dry run may run on
-# master or on a release branch itself. Run by release.yml with GITHUB_REF_NAME (the tag, or the branch of a dry run)
-# and GITHUB_SHA, in a checkout with every branch fetched. Usage:
+# included, comes from its own branch release/X.Y, never from master or another minor's branch, and is on a commit
+# master does not contain: master's prereleases are versioned from its nearest tag (MinVer), so a tag on master's
+# history would restart them. A dry run may run on master or on a release branch itself. Run by release.yml with
+# GITHUB_REF_NAME (the tag, or the branch of a dry run) and GITHUB_SHA, in a checkout with every branch fetched. Usage:
 #
 #   scripts/release-source.sh
 set -euo pipefail
@@ -29,6 +30,18 @@ case "$ref" in
     fi
     ;;
 esac
+
+if [[ "$ref" == v* ]]; then
+  if ! git rev-parse --verify --quiet refs/remotes/origin/master > /dev/null; then
+    echo "::error::origin/master is not fetched, so $ref cannot be checked against master's history" >&2
+    exit 1
+  fi
+  if git merge-base --is-ancestor "$sha" refs/remotes/origin/master; then
+    echo "::error::$ref ($sha) is on master's history. Tag a commit made on $branch, such as the one from the pull" \
+      "request that adds the release's CHANGELOG.md section there (RELEASING.md)" >&2
+    exit 1
+  fi
+fi
 
 if git rev-parse --verify --quiet "refs/remotes/origin/$branch" > /dev/null &&
    git merge-base --is-ancestor "$sha" "refs/remotes/origin/$branch"; then

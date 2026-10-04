@@ -81,8 +81,9 @@ jobs:
 
   # Every push to master publishes its packages to NuGet.org as a prerelease (X.Y.0-alpha.0.N), so Tenantry Pro can
   # build against master's packages from a clean clone. Stable versions come only from tags on release/X.Y
-  # (release.yml). It publishes the packages the Build & Test job of this run built, tested and checked, once that job
-  # and the Windows build have passed; the .NET 11 lane does not block it.
+  # (release.yml), on commits master does not contain, so master's versions only grow. It publishes the packages the
+  # Build & Test job of this run built, tested and checked, once that job and the Windows build have passed; the
+  # .NET 11 lane does not block it.
   prerelease:
     name: Publish the prerelease to NuGet
     runs-on: ubuntu-latest
@@ -107,8 +108,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0   # the release tags, for the check below
-          persist-credentials: false   # only the tags and the script are needed
+          persist-credentials: false   # only Directory.Build.props and the script are needed
 
       - name: Download the tested packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -116,11 +116,13 @@ jobs:
           name: nuget-packages
           path: ./artifacts
 
-      - name: Check the packages carry one prerelease version
-        # A commit with a release tag takes the tag's version, which only release.yml publishes: a rerun of an older
-        # run, after its commit was tagged, stops here.
+      - name: Check the packages carry master's prerelease version
+        # X.Y.0-alpha.0.N, X.Y being MinVerMinimumMajorMinor. Any other version, such as one a release tag on master's
+        # history would give (X.Y.0-rc.1.N, X.Y.1-alpha.0.N), is a release branch's and fails here.
         id: version
         run: |
+          minor="$(sed -n 's:.*<MinVerMinimumMajorMinor>\(.*\)</MinVerMinimumMajorMinor>.*:\1:p' Directory.Build.props)"
+          prefix="$minor.0-alpha.0."
           version=""
           for package in ./artifacts/*.nupkg; do
             actual="$(unzip -p "$package" '*.nuspec' | sed -n 's:.*<version>\(.*\)</version>.*:\1:p' | head -n 1)"
@@ -131,19 +133,16 @@ jobs:
               exit 1
             fi
           done
-          if [[ "$version" != *-* ]]; then
-            echo "::error::$version is not a prerelease: a stable version is released only from a tag on release/X.Y"
-            exit 1
-          fi
-          if [ -n "$(git tag --list "v$version")" ]; then
-            echo "::error::$version is the version of the release tag v$version, which only release.yml publishes"
+          height="${version#"$prefix"}"
+          if [[ -z "$minor" || "$version" != "$prefix"* || ! "$height" =~ ^[0-9]+$ ]]; then
+            echo "::error::$version is not $minor.0-alpha.0.N: master publishes only its own prereleases (RELEASING.md)"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Check the version is unpublished on NuGet.org
-        # A rerun of a commit already published skips the push. A version only some packages have fails: a published
-        # package cannot be replaced, so the next push to master publishes the next version.
+        # A rerun of a commit already published skips the push. A version only some packages have fails, and so does one
+        # published from another commit: a published package cannot be replaced.
         id: unpublished
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -161,7 +160,18 @@ jobs:
             exit 0
           fi
           if [ "$(grep -cF ": $VERSION is already published" <<<"$output")" = "${#ids[@]}" ]; then
-            echo "::notice::$VERSION is already on NuGet.org for every package; nothing to publish"
+            # The same commit's packages, or another commit's with the same version
+            url="https://api.nuget.org/v3-flatcontainer/tenantry.core/$VERSION/tenantry.core.nuspec"
+            nuspec="$(curl --proto '=https' --fail --silent --show-error --max-time 60 --retry 3 "$url")" || {
+              echo "::error::Could not read $url"
+              exit 1
+            }
+            commit="$(sed -n 's:.*<repository [^>]*commit="\([0-9a-f]*\)".*:\1:p' <<<"$nuspec" | head -n 1)"
+            if [ "$commit" != "$GITHUB_SHA" ]; then
+              echo "::error::$VERSION is already published from commit ${commit:-unknown}, not $GITHUB_SHA (RELEASING.md)"
+              exit 1
+            fi
+            echo "::notice::$VERSION is already on NuGet.org for every package, from this commit; nothing to publish"
             echo "publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
