@@ -8,7 +8,9 @@ dotnet new tenantry-worker -n Orders.Worker
 
 - `tenantry-api`: an ASP.NET Core API with EF Core. Callers authenticate with a JWT bearer token, pick a tenant with
   the `X-Tenant-Id` header, and Tenantry checks it against the token's `tenant` claims. Each tenant's rows are kept
-  apart in one SQLite database.
+  apart in one SQLite database. It redirects HTTP to HTTPS: behind a proxy that terminates TLS, configure
+  `UseForwardedHeaders` for that proxy before `UseHsts` and `UseHttpsRedirection`, or every request is redirected
+  again.
 - `tenantry-worker`: a worker service with EF Core that runs each message as the tenant it names, with
   `RunInScopeAsync`, which refuses a tenant the store does not have.
 

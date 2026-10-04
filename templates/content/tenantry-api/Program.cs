@@ -80,6 +80,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     await scope.ServiceProvider.GetRequiredService<NotesDbContext>().Database.EnsureCreatedAsync();
 }
 
+// Behind a proxy that terminates TLS, call app.UseForwardedHeaders() here first, with ForwardedHeadersOptions that
+// trust only that proxy, so these see the original HTTPS scheme.
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
