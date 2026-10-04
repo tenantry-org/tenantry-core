@@ -1,0 +1,6 @@
+# actionlint 1.7.12 does not know the concurrency key queue (GitHub added it in May 2026), which ci.yml's prerelease job
+# sets. Remove this once actionlint accepts it.
+paths:
+  .github/workflows/ci.yml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'

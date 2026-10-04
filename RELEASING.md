@@ -1,9 +1,10 @@
 # Releasing Tenantry
 
 Every release is a `vX.Y.Z` tag, release candidates (`vX.Y.Z-rc.1`) included, on the head of its own branch,
-`release/X.Y`; never on `master` or another minor's branch. Changes land on `master`, and a release branch takes only
-what its releases need, cherry-picked from `master`. The release workflow (`.github/workflows/release.yml`) does the
-rest. Only the maintainer can push `v*` tags.
+`release/X.Y`; never on `master` or another minor's branch. `master` never releases a stable version: each push to it
+publishes a prerelease instead ([Prereleases from master](#prereleases-from-master)). Changes land on `master`, and a
+release branch takes only what its releases need, cherry-picked from `master`. The release workflow
+(`.github/workflows/release.yml`) does the rest. Only the maintainer can push `v*` tags.
 
 ## A new minor
 
@@ -78,6 +79,29 @@ incomplete version's packages on NuGet.org, so no one picks a set that does not 
 at the last complete release, not the incomplete one: pack would look for each package at the baseline version, and
 fail for the packages that were never published at it.
 
+## Prereleases from master
+
+Each push to `master` publishes its packages to NuGet.org as a prerelease once CI has passed on it, with no approval:
+the `prerelease` job in `.github/workflows/ci.yml` pushes the packages, with their symbol packages, that the run's Build
+& Test job built and checked, after that job and the Windows build pass. A version looks like `0.7.0-alpha.0.126`: the
+minor `master` works towards (`MinVerMinimumMajorMinor`), then `alpha.0.` and MinVer's count of the commits since the
+last release tag reachable from `master`. So each push publishes a higher version than the one before, and every one
+sorts below that minor's release candidates and its release. There is no GitHub release, attestation or SBOM for a
+prerelease, and the templates package is not published.
+
+Prereleases exist so Tenantry Pro can build against `master` from a clean clone, and for early testers. They carry no
+support or compatibility promise: the next one can change or remove any API, and security fixes are made only for the
+versions the [security policy](.github/SECURITY.md#supported-versions) supports. NuGet picks a prerelease only when
+asked for one (`dotnet add package Tenantry.Core --prerelease`, or the exact version). Like any version there, a
+prerelease can be unlisted, but never deleted or replaced.
+
+The job refuses a version with no prerelease part, and the version of a release tag, which only the release workflow
+publishes: a rerun of a commit after it was tagged stops there. It checks the version on NuGet.org with
+`scripts/check-unpublished.sh`. A rerun for a commit whose packages are all published already skips the push with a
+notice. A version that only some packages have fails the job, since a published package cannot be replaced: unlist
+those packages, and the next push to `master` publishes the next version. Runs publish one at a time, in the order
+they reach the job, and none is cancelled.
+
 ## The templates package
 
 `templates/Tenantry.Templates.csproj` packs the `dotnet new` templates, and CI checks them
@@ -94,6 +118,11 @@ pushes or deletion. SonarCloud's default long-lived branch pattern, `(branch|rel
 release branch is pushed, since a branch's kind is fixed at its first analysis, and keep a quality gate on it. The
 `release` environment must accept `v*` tags, and NuGet.org's trusted publishing policy names this repository,
 `release.yml` and the `release` environment.
+
+The `prerelease` environment has no required reviewers and accepts only the `master` branch. NuGet.org needs a second
+trusted publishing policy for it, with the same package owner as the release's policy: repository owner `tenantry-org`,
+repository `tenantry-core`, workflow file `ci.yml`, environment `prerelease`. Both workflows log in with the NuGet.org
+user name in the `NUGET_USER` repository secret.
 
 ## After any release
 

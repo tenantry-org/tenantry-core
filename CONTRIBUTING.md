@@ -78,11 +78,12 @@ ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them re
 When you remove or rename a public type, member, namespace or package, add the old name to
 `eng/common/removed-names.txt`, with what replaces it, so the docs cannot keep it.
 
-The release job publishes the packages CI built and checked, not a rebuild. CI also restores and builds on Windows,
-and builds and tests for .NET 11 with its preview SDK (`ci.yml`, `bash scripts/test-net11.sh`, after removing the SDK
-version from `global.json`). Every Monday, `dependency-lanes.yml` runs the tests with every dependency at the newest
-version its range allows (`bash scripts/test-latest-dependencies.sh`), and the integration tests against the newest
-database server releases. A failure there opens an issue, or comments on the one still open.
+The release job, and on `master` the prerelease job, publish the packages CI built and checked, not a rebuild. CI also
+restores and builds on Windows, and builds and tests for .NET 11 with its preview SDK (`ci.yml`,
+`bash scripts/test-net11.sh`, after removing the SDK version from `global.json`). Every Monday, `dependency-lanes.yml`
+runs the tests with every dependency at the newest version its range allows
+(`bash scripts/test-latest-dependencies.sh`), and the integration tests against the newest database server releases.
+A failure there opens an issue, or comments on the one still open.
 
 ## Pull request flow
 
@@ -112,6 +113,11 @@ packages, to NuGet.org via OIDC trusted publishing. The GitHub release's notes a
 each package's build provenance and attaches the packages' checksums (`SHA256SUMS`) and a CycloneDX SBOM per package.
 A tag with a prerelease suffix makes a GitHub prerelease, and only the highest released version is marked as the
 latest GitHub release. [RELEASING.md](RELEASING.md) has the steps.
+
+`master` never releases a stable version. Each push to it publishes the packages to NuGet.org as a prerelease
+(`0.7.0-alpha.0.126`) once CI has passed, with no approval, through the `prerelease` environment (only `master` can
+deploy to it). Prereleases exist to build Tenantry Pro and for early testers, with no support or compatibility
+promise ([Prereleases from master](RELEASING.md#prereleases-from-master)).
 
 To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on `release/X.Y`, or on
 `master`: it runs the same checks and builds the same packages, then lists what a release would publish, without
