@@ -44,4 +44,11 @@ internal static partial class TenantIsolationLog
         "although Database.AutoTransactionBehavior is Never (EfCoreIsolationOptions.OnSaveWithoutTransaction = UseTransaction)",
         EventName = "SaveInTransaction")]
     public static partial void SaveInTransaction(ILogger logger);
+
+    [LoggerMessage(2006, LogLevel.Warning,
+        "'{Context}' has tenant-owned entity types, and these entity types are neither tenant-owned nor marked as " +
+        "shared across tenants, so every tenant reads and writes their rows: {EntityTypes} " +
+        "(EfCoreIsolationOptions.OnUnclassifiedEntityType = Warn). Logged once per model",
+        EventName = "UnclassifiedEntityTypes")]
+    public static partial void UnclassifiedEntityTypes(ILogger logger, string context, string entityTypes);
 }

@@ -179,5 +179,14 @@ public sealed class IdentityContext(DbContextOptions<IdentityContext> options) :
         users.Metadata.RemoveIndex([users.Metadata.FindProperty(nameof(TenantUser.NormalizedUserName))!]);
         users.HasIndex(u => new { u.NormalizedUserName, u.TenantId }).HasDatabaseName("UserNameIndex").IsUnique();
         users.Property(u => u.TenantId).HasMaxLength(64);
+
+        // The guide's classification of Identity's other entity types: roles every tenant shares, and rows Identity
+        // reads through their user.
+        builder.Entity<IdentityRole>().IsSharedAcrossTenants();
+        builder.Entity<IdentityRoleClaim<string>>().IsSharedAcrossTenants();
+        builder.Entity<IdentityUserRole<string>>().IsSharedAcrossTenants();
+        builder.Entity<IdentityUserClaim<string>>().IsSharedAcrossTenants();
+        builder.Entity<IdentityUserLogin<string>>().IsSharedAcrossTenants();
+        builder.Entity<IdentityUserToken<string>>().IsSharedAcrossTenants();
     }
 }

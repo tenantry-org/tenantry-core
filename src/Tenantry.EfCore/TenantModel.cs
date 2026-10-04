@@ -53,8 +53,9 @@ public static class TenantModel
     }
 
     /// <summary>
-    /// Returns whether <paramref name="entityType"/>, or the type that owns it, is marked as shared by every tenant,
-    /// with <see cref="SharedAcrossTenantsAttribute"/> or <c>IsSharedAcrossTenants()</c>.
+    /// Returns whether <paramref name="entityType"/> is marked as shared by every tenant, with
+    /// <see cref="SharedAcrossTenantsAttribute"/> or <c>IsSharedAcrossTenants()</c>, or belongs to a type that is: a
+    /// base type of its hierarchy, or the type that owns it.
     /// </summary>
     /// <param name="entityType">The entity type.</param>
     public static bool IsSharedAcrossTenants(IReadOnlyEntityType entityType)
@@ -63,9 +64,12 @@ public static class TenantModel
 
         for (IReadOnlyEntityType? current = entityType; current is not null; current = current.FindOwnership()?.PrincipalEntityType)
         {
-            if (IsMarked(current))
+            for (IReadOnlyEntityType? type = current; type is not null; type = type.BaseType)
             {
-                return true;
+                if (IsMarked(type))
+                {
+                    return true;
+                }
             }
 
             if (!current.IsOwned())
@@ -82,12 +86,31 @@ public static class TenantModel
     /// every tenant. In a database that tenants share, Tenantry does not keep their rows apart.
     /// </summary>
     /// <param name="model">The model, such as <c>context.Model</c>.</param>
+    /// <remarks>
+    /// It returns the types to mark, which are the roots of inheritance hierarchies. A derived type, an owned type and
+    /// the join entity type of a many-to-many relationship are left out: each follows the type it belongs to, its
+    /// hierarchy's root, its owner or the entity types it joins. <c>UseTenantry()</c> checks a model that has a
+    /// tenant-owned entity type against this list, as <see cref="EfCoreIsolationOptions.OnUnclassifiedEntityType"/>
+    /// says.
+    /// </remarks>
     public static IReadOnlyList<IReadOnlyEntityType> FindUnisolatedEntityTypes(IReadOnlyModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return [.. model.GetEntityTypes().Where(entityType => !IsTenantOwned(entityType) && !IsSharedAcrossTenants(entityType))];
+        return
+        [
+            .. model.GetEntityTypes().Where(entityType =>
+                entityType.BaseType is null &&
+                !entityType.IsOwned() &&
+                !IsJoinEntityType(entityType) &&
+                !IsTenantOwned(entityType) &&
+                !IsSharedAcrossTenants(entityType)),
+        ];
     }
+
+    // The join entity type of a many-to-many relationship: a skip navigation goes through one of its foreign keys.
+    private static bool IsJoinEntityType(IReadOnlyEntityType entityType) =>
+        entityType.GetForeignKeys().Any(foreignKey => foreignKey.GetReferencingSkipNavigations().Any());
 
     internal static bool IsMarked(IReadOnlyEntityType entityType) =>
         entityType.FindAnnotation(SharedAcrossTenantsAnnotation)?.Value is true ||

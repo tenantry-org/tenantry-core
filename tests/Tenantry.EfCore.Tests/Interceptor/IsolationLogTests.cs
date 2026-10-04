@@ -73,6 +73,33 @@ public sealed class IsolationLogTests : IAsyncDisposable
             .Which.Should().BeEquivalentTo(new { Category = "Tenantry.EfCore", Level = LogLevel.Warning });
     }
 
+    [Fact]
+    public async Task UnclassifiedEntityTypes_UnderWarn_AreLoggedAsEvent2006_OncePerModel()
+    {
+        _tenant.As("acme");
+        var services = DbContextFactory.Services<string>(
+            _tenant,
+            new EfCoreIsolationOptions { OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Warn },
+            collection => collection.AddLogging(logging => logging.AddProvider(_logs)));
+        var options = new DbContextOptionsBuilder<UnclassifiedContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(services)
+            .UseTenantry()
+            .Options;
+
+        for (var i = 0; i < 2; i++)
+        {
+            await using UnclassifiedContext db = new(options);
+            await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+            (await db.Invoices.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
+        }
+
+        var entry = _logs.Entries.Should().ContainSingle(e => e.EventId.Id == 2006).Subject;
+        entry.Should().BeEquivalentTo(new { Category = "Tenantry.EfCore", Level = LogLevel.Warning });
+        entry.EventId.Name.Should().Be("UnclassifiedEntityTypes");
+        entry.Message.Should().Contain("Invoice").And.Contain("UnclassifiedContext");
+    }
+
     public async ValueTask DisposeAsync() => await _connection.DisposeAsync();
 
     private async Task<TestDbContext> CreateAsync(EfCoreIsolationOptions? isolation = null)
@@ -88,6 +115,18 @@ public sealed class IsolationLogTests : IAsyncDisposable
             .Options);
         await db.Database.EnsureCreatedAsync();
         return db;
+    }
+
+    public sealed class Invoice
+    {
+        public int Id { get; set; }
+    }
+
+    private sealed class UnclassifiedContext(DbContextOptions<UnclassifiedContext> options) : DbContext(options)
+    {
+        public DbSet<Order> Orders => Set<Order>();
+
+        public DbSet<Invoice> Invoices => Set<Invoice>();
     }
 
     private sealed class Recorder : ILoggerProvider

@@ -21,8 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An `OnRejected` handler or log alert that looked for a suspended tenant under `TenantRejectionReason.AccessDenied`
   or event 1005 looks for `TenantRejectionReason.Inactive` or event 1012.
 
+- Mark every entity type that is not tenant-owned, in a context that has tenant-owned ones, with
+  `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`, or its first query or save throws. ASP.NET Core Identity's
+  types need it too ([ASP.NET Core Identity](docs/aspnetcore-identity.md#the-user-type-and-context)).
+- `TenantModel.FindUnisolatedEntityTypes` returns only the roots of hierarchies, and no owned or many-to-many join
+  entity types, and `TenantModel.IsSharedAcrossTenants` is true for a type whose base type is marked.
+
 ### Added
 
+- `EfCoreIsolationOptions.OnUnclassifiedEntityType` (Tenantry.EfCore). In a model with tenant-owned entity types,
+  the context's first query or save throws `TenantIsolationViolationException` of kind `ModelConfiguration`, naming
+  every other entity type that is not marked `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`. `Warn` logs event
+  2006 instead, and `Allow` accepts the model. A model with no tenant-owned type is not checked. See
+  [Entity types that are not tenant-owned](docs/efcore-integration.md#entity-types-that-are-not-tenant-owned).
 - `TenantRejectionReason.Inactive` and `TenantResolutionOptions<TKey>.InactiveTenantStatusCode` (Tenantry.AspNetCore).
   A request for a tenant `ValidateTenantActivity` refuses is rejected with the reason `Inactive`, event 1012
   (`TenantInactive`) and the resolution result `inactive`, where it was `AccessDenied`. The status stays `403

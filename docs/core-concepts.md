@@ -99,7 +99,9 @@ public interface ITenantEntity<TKey>
 - Leave `TenantId` unset. The EF Core interceptor stamps it from the current tenant on `SaveChanges`, and rejects a
   new entity that already names another tenant. It sets the value through EF Core, so your entity can give
   `TenantId` a private or init-only setter.
-- Entities that do not implement it are shared by all tenants and are never filtered or stamped.
+- Entities that do not implement it are shared by all tenants and are never filtered or stamped. In a context with
+  tenant-owned entities, mark them `[SharedAcrossTenants]`
+  ([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
 
 ## `ITenantContext<TKey>`
 

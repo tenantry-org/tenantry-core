@@ -317,6 +317,7 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         public string City { get; set; } = string.Empty;
     }
 
+    [SharedAcrossTenants]
     public sealed class Catalogue
     {
         public int Id { get; set; }

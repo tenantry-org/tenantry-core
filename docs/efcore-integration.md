@@ -156,7 +156,7 @@ after Tenantry's: they see new entities already stamped, and their changes are n
 | `EntityWrite` | `SaveChanges` would write another tenant's entity | the entity | the entity's and the current tenant |
 | `BulkUpdate` | `ExecuteUpdate` would set `TenantId`, or sets a property the guard cannot identify | the entity | `null` |
 | `TenantDatabaseMismatch` | A context would use another tenant's database ([database per tenant](#database-per-tenant)) | the `DbContext` | the database's and the current tenant (`null` when none) |
-| `ModelConfiguration` | The model does not isolate a tenant-scoped entity type ([list](efcore-advanced.md#models-that-cannot-be-isolated)) | the entity | `null` |
+| `ModelConfiguration` | The model does not isolate a tenant-owned entity type ([list](efcore-advanced.md#models-that-cannot-be-isolated)), or has [entity types that are not tenant-owned](#entity-types-that-are-not-tenant-owned) or shared | the entity, or the `DbContext` | `null` |
 | `SaveWithoutTransaction` | An [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) would run without a transaction, and `OnSaveWithoutTransaction` is `Reject` | the `DbContext` | `null` |
 | `TransactionRolledBack` | A transaction would commit or complete after an [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) in it failed and EF Core could not undo it | the entity whose check failed, or the `DbContext` | `null` |
 | `TenantSchemaMismatch` | A context would use another tenant's schema. Thrown by packages that put tenants in schemas of their own, such as Tenantry.Pro, from a [`TenantContextGuard`](#extending-contributors) | the `DbContext` | as the package sets them |
@@ -177,8 +177,11 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     {
         options.OnMissingTenant = MissingTenantBehavior.Reject; // the default
         options.OnSaveWithoutTransaction = SaveWithoutTransactionBehavior.UseTransaction; // the default
+        options.OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Reject; // the default
     }));
 ```
+
+`OnUnclassifiedEntityType` is described under [Entity types that are not tenant-owned](#entity-types-that-are-not-tenant-owned).
 
 `OnSaveWithoutTransaction` applies to an all-or-nothing save when `Database.AutoTransactionBehavior` is `Never`: run
 it in a transaction EF Core begins (`UseTransaction`, the default), or throw before anything is sent (`Reject`). See
@@ -316,10 +319,9 @@ Two more seams let a package fail closed:
 - `TenantContextGuard` is an interceptor that calls your `Check(DbContext)` before the context opens a connection,
   runs a command or saves. Throw `TenantNotResolvedException` or `TenantIsolationViolationException` from it.
   Tenantry's database-per-tenant guard is one.
-- `TenantModel` says which entity types a model isolates: `HasTenantOwnedEntityTypes`, `IsTenantOwned`, and
-  `FindUnisolatedEntityTypes`, the types neither tenant-owned nor marked as shared by every tenant. Mark such a type
-  with `[SharedAcrossTenants]` or `modelBuilder.Entity<Country>().IsSharedAcrossTenants()`. The marker changes nothing
-  in queries or saves; marking a tenant-owned type fails the model check.
+- `TenantModel` says which entity types a model isolates: `HasTenantOwnedEntityTypes`, `IsTenantOwned`,
+  `IsSharedAcrossTenants`, and `FindUnisolatedEntityTypes`, the types `UseTenantry()` refuses in a model with
+  tenant-owned types ([Entity types that are not tenant-owned](#entity-types-that-are-not-tenant-owned)).
 
 ## What is and isn't isolated
 
@@ -341,6 +343,54 @@ enforce isolation (against direct SQL access, say), add row-level security there
 
 Some models cannot be isolated, and building them throws: see
 [Models that cannot be isolated](efcore-advanced.md#models-that-cannot-be-isolated).
+
+### Entity types that are not tenant-owned
+
+Tenantry isolates only tenant-owned entity types, those that implement `ITenantEntity<TKey>` and the owned types they
+own. Every tenant reads and writes the rows of any other entity type. So in a model with at least one tenant-owned
+type, `UseTenantry()` requires every other entity type to be marked as shared by every tenant, and the context's first
+query or save throws `TenantIsolationViolationException` of kind `ModelConfiguration`, naming each type that is
+neither. A model with no tenant-owned type, such as a database-per-tenant context's, is not checked.
+
+Mark a type every tenant shares, such as a country list or the tenant registry, with the attribute or in
+`OnModelCreating`:
+
+```csharp
+using Tenantry.EfCore;
+
+[SharedAcrossTenants]
+public class Country
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+public class Currency
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = "";
+}
+
+public class CatalogueDbContext(DbContextOptions<CatalogueDbContext> options) : DbContext(options)
+{
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Order>();
+        modelBuilder.Entity<Country>();
+        modelBuilder.Entity<Currency>().IsSharedAcrossTenants();
+    }
+}
+```
+
+The marker changes nothing in queries or saves, and marking a tenant-owned type fails the model check. A type follows
+the type it belongs to: a derived type its hierarchy's root, an owned type its owner, and the join entity of a
+many-to-many relationship the types it joins (when either is tenant-owned, it must be too). Keyless types, types
+mapped to a view and shared-type entity types (`SharedTypeEntity`) need a marker like any other; EF Core's
+migrations history table is not part of the model. For ASP.NET Core Identity's types, see
+[ASP.NET Core Identity](aspnetcore-identity.md#the-user-type-and-context).
+
+`OnUnclassifiedEntityType` decides what happens to such a model: `Reject` (the default) throws, `Warn` logs event 2006
+once per model and uses it, and `Allow` uses it silently. Set it for one context with `UseTenantry(o => …)`.
 
 ## Migrations
 

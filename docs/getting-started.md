@@ -73,7 +73,9 @@ public class Order : TenantEntity<Guid>   // adds a `Guid TenantId { get; set; }
 ```
 
 Entities that do not implement `ITenantEntity<TKey>` are shared by all tenants (product catalogues, reference
-tables) and are never filtered or stamped. Leave `TenantId` unset: Tenantry stamps it on insert
+tables) and are never filtered or stamped. Mark them `[SharedAcrossTenants]` (namespace `Tenantry.EfCore`): a context
+with tenant-owned entities refuses one that is neither
+([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)). Leave `TenantId` unset: Tenantry stamps it on insert
 ([Core concepts](core-concepts.md#itenantentity)).
 
 ## 5. Keep your DbContext as it is

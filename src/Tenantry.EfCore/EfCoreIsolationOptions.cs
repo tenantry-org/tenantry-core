@@ -9,7 +9,8 @@ namespace Tenantry.EfCore;
 /// Reads always fail closed, a new entity that names another tenant is always rejected, and <c>ExecuteUpdate</c>
 /// can never set <c>TenantId</c>. Whenever a tenant is current, <c>Modified</c> and <c>Deleted</c> entities must
 /// belong to it, checked before saving and again in each <c>UPDATE</c> and <c>DELETE</c>. These options decide what
-/// happens to writes without a tenant, and to saves without a transaction. Raw SQL and <c>IgnoreQueryFilters()</c>
+/// happens to writes without a tenant, to saves without a transaction, and to entity types neither tenant-owned nor
+/// shared. Raw SQL and <c>IgnoreQueryFilters()</c>
 /// are outside Tenantry's isolation.
 /// </remarks>
 public sealed class EfCoreIsolationOptions
@@ -26,6 +27,16 @@ public sealed class EfCoreIsolationOptions
     /// <see cref="SaveWithoutTransactionBehavior.UseTransaction"/>.
     /// </summary>
     public SaveWithoutTransactionBehavior OnSaveWithoutTransaction { get; set; } = SaveWithoutTransactionBehavior.UseTransaction;
+
+    /// <summary>
+    /// What a context does when its model has tenant-owned entity types and also entity types that are neither
+    /// tenant-owned nor marked as shared across tenants. Defaults to <see cref="UnclassifiedEntityTypeBehavior.Reject"/>.
+    /// </summary>
+    /// <remarks>
+    /// Mark an entity type whose rows every tenant shares with <see cref="SharedAcrossTenantsAttribute"/> or
+    /// <c>IsSharedAcrossTenants()</c>. <see cref="TenantModel.FindUnisolatedEntityTypes"/> lists the types this checks.
+    /// </remarks>
+    public UnclassifiedEntityTypeBehavior OnUnclassifiedEntityType { get; set; } = UnclassifiedEntityTypeBehavior.Reject;
 
     internal EfCoreIsolationOptions Clone() => (EfCoreIsolationOptions)MemberwiseClone();
 }

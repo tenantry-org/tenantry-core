@@ -43,7 +43,9 @@ With no tenant current, the query filter matches nothing. Check:
 ## Queries return all tenants' rows
 
 - `IgnoreQueryFilters()` was called, directly or in a shared queryable helper.
-- The entity does not implement `ITenantEntity<TKey>` (or derive from `TenantEntity<TKey>`), so it is global.
+- The entity does not implement `ITenantEntity<TKey>` (or derive from `TenantEntity<TKey>`), so it is global. With
+  `OnUnclassifiedEntityType` at its default, that happens only to a type marked `[SharedAcrossTenants]`, or in a
+  context with no tenant-owned types.
 - The context's options do not call `UseTenantry()`. Add it where the context is registered.
 
 ## `TenantId` is not stamped on insert
@@ -94,6 +96,13 @@ transaction, a failed check could leave the other rows written, so nothing was s
 A tenant-scoped entity type lost its tenant filter or concurrency token after `UseTenantry()` added them, for example
 to a model-building convention, or the model is a compiled model (`UseModel`), which Tenantry does not support. The
 check stops the query or save before it runs.
+
+## `TenantIsolationViolationException`: "neither tenant-owned nor marked as shared across tenants"
+
+The context's model has tenant-owned entity types and also the entity types the message names, whose rows Tenantry
+does not isolate. Implement `ITenantEntity<TKey>` on each whose rows belong to a tenant, and mark each that every
+tenant shares with `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`. See
+[Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned).
 
 ## The model fails to build with `TenantIsolationViolationException` or "Tenantry is not registered"
 

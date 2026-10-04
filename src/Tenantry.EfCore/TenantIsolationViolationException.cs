@@ -75,8 +75,9 @@ public enum TenantIsolationViolationKind
     TenantDatabaseMismatch,
 
     /// <summary>
-    /// The model cannot isolate a tenant-owned entity type: for example a missing tenant filter, a base type or owner
-    /// that is not tenant-owned, or a tenant-owned type mapped to JSON. The message names the type and the cause.
+    /// The model cannot isolate a tenant-owned entity type (for example a missing tenant filter, a base type or owner
+    /// that is not tenant-owned, or a tenant-owned type mapped to JSON), or has entity types that are neither
+    /// tenant-owned nor shared. The message names the types and the cause.
     /// </summary>
     ModelConfiguration,
 
