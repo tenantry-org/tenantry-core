@@ -43,20 +43,20 @@ builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = new U
 
 ### Which requests carry it
 
-- **Only while a tenant is current.** The request carries the tenant's id, formatted with the invariant culture
+- While a tenant is current, the request carries the tenant's id, formatted with the invariant culture
   (`TenantIds.Format`). With no tenant, the request goes without the header, and the called service decides what that
   means, for example with `RequireTenant()`.
-- **A header naming another tenant is refused.** A request that already carries the header with another tenant's
-  id, while a tenant is current, throws `InvalidOperationException`. That catches a header forwarded from the incoming
-  request or set in `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.Use`.
-  With no current tenant, a header you set is sent as it is.
-- **Only to the client's own service.** If the client's registration sets `BaseAddress`, only requests to that
-  scheme, host and port get the header. Otherwise every request gets it, which covers gRPC clients and typed clients
-  that set `BaseAddress` in their constructor.
-- **A redirect keeps it.** `HttpClient` follows a redirect inside its primary handler with the request's headers, so
-  a service that redirects to another passes the tenant id on. Turn redirects off for the client
-  (`ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })`) if a service
-  you call may redirect where the id should not go.
+- A request that already carries the header with another tenant's id, while a tenant is current, throws
+  `InvalidOperationException`. That catches a header forwarded from the incoming request or set in
+  `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.Use`. With no current
+  tenant, a header you set is sent as it is.
+- If the client's registration sets `BaseAddress`, only requests to that scheme, host and port get the header.
+  Otherwise every request gets it, which covers gRPC clients and typed clients that set `BaseAddress` in their
+  constructor.
+- `HttpClient` follows a redirect inside its primary handler with the request's headers, so a service that redirects
+  to another passes the tenant id on. Turn redirects off for the client
+  (`ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })`) if a service you
+  call may redirect where the id should not go.
 
 `UseTenantry()` refuses `ConfigureHttpClientDefaults`, which configures every client in the application, third-party
 SDKs' included: tenant ids go only to the services you name.
@@ -89,15 +89,14 @@ The claim's type and shape depend on your identity provider: Microsoft Entra ID 
 client-credentials token may be easier to recognise by its `client_id` or `azp` claim. Mutual TLS works too: check
 `http.Connection.ClientCertificate`.
 
-- **Checked after authentication.** The check reads the authenticated user, so `app.UseTenantResolution()` stops
-  before this resolver and `app.UseTenantry()` runs it after `app.UseAuthentication()`. A tenant from the header is
-  therefore not known while authentication runs, so its schemes use their default settings.
-- **Ignored from other callers.** When the check fails, the header is ignored and the next resolver runs. A caller
-  with no token is not trusted, so placing `app.UseTenantry()` before `app.UseAuthentication()` makes every header
-  ignored rather than accepted.
-- **Read as a tenant id.** The resolver reads the value with `TenantIds.TryParse` and looks the tenant up with the
-  store's `GetTenantAsync`, not `FindByIdentifierAsync`, so a store whose identifiers are slugs still finds the
-  tenant. A value that is not a tenant id, or is an id reserved for "no tenant", finds no tenant.
+- The check reads the authenticated user, so `app.UseTenantResolution()` stops before this resolver and
+  `app.UseTenantry()` runs it after `app.UseAuthentication()`. A tenant from the header is therefore not known while
+  authentication runs, so its schemes use their default settings.
+- When the check fails, the header is ignored and the next resolver runs. A caller with no token is not trusted, so
+  placing `app.UseTenantry()` before `app.UseAuthentication()` makes every header ignored rather than accepted.
+- The resolver reads the value as a tenant id, with `TenantIds.TryParse`, and looks the tenant up with the store's
+  `GetTenantAsync`, not `FindByIdentifierAsync`, so a store whose identifiers are slugs still finds the tenant. A value
+  that is not a tenant id, or is an id reserved for "no tenant", finds no tenant.
 
 Resolvers run in the order they are added, and the first that finds a value wins. A service that serves both users
 and other services resolves its users' requests first and takes the header only when nothing else names a tenant:
@@ -129,6 +128,6 @@ job parameter or message header, so a job that calls a service with `UseTenantry
 
 ## See also
 
-- [Tenant resolution](tenant-resolution.md) — the other resolvers, and their order
-- [Access control](access-control.md) — access validators
-- [Diagnostics](diagnostics.md) — the `tenant.id` tag and the `TenantId` log scope
+- [Tenant resolution](tenant-resolution.md): the other resolvers, and their order
+- [Access control](access-control.md): access validators
+- [Diagnostics](diagnostics.md): the `tenant.id` tag and the `TenantId` log scope
