@@ -2,8 +2,16 @@ name: Dependency lanes
 
 # The latest lane: every version range restored at the newest release in its major, then the full build and
 # test suite on every target framework and database provider (scripts/test-latest-dependencies.sh). It catches
-# a new release inside a range that breaks us before a consumer updates to it. The lowest end of each range is
-# CI's job (scripts/check-dependency-floors.cs). The resolved versions are kept as an artifact.
+# a new release inside a range that breaks us before a consumer updates to it. The integration tests also take the
+# providers' ADO.NET drivers (Npgsql, Microsoft.Data.SqlClient, MySqlConnector, MySql.Data) at their newest there
+# (Directory.Packages.props). The lowest end of each range is CI's job (scripts/check-dependency-floors.cs). The
+# resolved versions are kept as an artifact.
+#
+# The newest-servers lane: the integration tests, with the committed lock files, against the newest database server
+# releases instead of the images CI pins (tests/Tenantry.IntegrationTests/Providers/compose.yml), so a server release
+# that changes what Tenantry relies on shows here before a consumer runs it.
+#
+# A failure opens an issue, or comments on the one still open.
 
 on:
   schedule:
@@ -43,3 +51,68 @@ jobs:
           name: latest-dependencies
           path: artifacts/latest-dependencies
           if-no-files-found: ignore
+
+  newest-servers:
+    name: Newest database servers (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: newest releases
+            sqlserver: mcr.microsoft.com/mssql/server:2025-latest
+            postgres: postgres:latest
+            mysql: mysql:latest
+          # MySQL's long-term support release; SQL Server and PostgreSQL stay on the pinned images
+          - name: MySQL LTS
+            mysql: mysql:lts
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # MinVer needs full history
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore tests/Tenantry.IntegrationTests --locked-mode
+
+      - name: Test against these servers
+        # An empty variable keeps that database's pinned image (ContainerImages.cs)
+        env:
+          TENANTRY_SQLSERVER_IMAGE: ${{ matrix.sqlserver }}
+          TENANTRY_POSTGRES_IMAGE: ${{ matrix.postgres }}
+          TENANTRY_MYSQL_IMAGE: ${{ matrix.mysql }}
+        run: dotnet test --project tests/Tenantry.IntegrationTests -c Release --no-restore
+
+  report:
+    name: Report a failure
+    needs: [latest, newest-servers]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly dependency lane failed"
+          body="The dependency lanes failed in $RUN_URL. A release of a dependency or a database server inside the supported range changed something Tenantry relies on: find which job failed, then fix Tenantry or narrow the range and docs/compatibility.md."
+          number="$(gh issue list --repo "$REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
+          if [[ -n "$number" ]]; then
+            gh issue comment "$number" --repo "$REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$REPOSITORY" --title "$title" --body "$body"
+          fi

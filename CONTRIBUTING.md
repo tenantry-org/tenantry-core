@@ -20,7 +20,8 @@ The tests use xUnit.net v3 on Microsoft Testing Platform: `global.json` opts `do
 solution or a project as `--solution` or `--project`, and passes options it does not know on to the tests.
 `tests/Tenantry.IntegrationTests` needs **Docker**: it runs against SQL Server, PostgreSQL and MySQL containers, one
 per database for each target framework's run, one framework at a time (the image versions are in
-`Providers/ContainerImages.cs`). Without Docker, run the other tests with
+`Providers/compose.yml`, which Dependabot updates within each major; `TENANTRY_SQLSERVER_IMAGE`,
+`TENANTRY_POSTGRES_IMAGE` and `TENANTRY_MYSQL_IMAGE` run another image). Without Docker, run the other tests with
 
 ```bash
 dotnet test --solution Tenantry.slnx -c Release --filter "Category!=Integration" --ignore-exit-code 8
@@ -79,7 +80,8 @@ When you remove or rename a public type, member, namespace or package, add the o
 The release job publishes the packages CI built and checked, not a rebuild. CI also restores and builds on Windows,
 and builds and tests for .NET 11 with its preview SDK (`ci.yml`, `bash scripts/test-net11.sh`, after removing the SDK
 version from `global.json`). Every Monday, `dependency-lanes.yml` runs the tests with every dependency at the newest
-version its range allows (`bash scripts/test-latest-dependencies.sh`).
+version its range allows (`bash scripts/test-latest-dependencies.sh`), and the integration tests against the newest
+database server releases. A failure there opens an issue, or comments on the one still open.
 
 ## Pull request flow
 
