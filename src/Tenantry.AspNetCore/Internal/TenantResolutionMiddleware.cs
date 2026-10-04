@@ -289,6 +289,10 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             return;
         }
 
+        // A cookie scheme signed out on its LogoutPath redirects to the request's ReturnUrl: the rejection replaces the
+        // status, and this the redirect's location.
+        var location = context.Response.Headers.Location;
+
         foreach (var scheme in await schemes.GetAllSchemesAsync().ConfigureAwait(false))
         {
             if (!typeof(IAuthenticationSignOutHandler).IsAssignableFrom(scheme.HandlerType) ||
@@ -308,6 +312,8 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                     _logger, exception, scheme.Name, context.Request.Method, context.Request.Path);
             }
         }
+
+        context.Response.Headers.Location = location;
     }
 
     // Keeps the endpoint's metadata, so authorization and the rest of the pipeline treat the request as before.

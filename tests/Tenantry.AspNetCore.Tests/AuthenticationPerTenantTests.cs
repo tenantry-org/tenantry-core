@@ -578,6 +578,21 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task ARefusedRequestToTheLogoutPath_CarriesNoRedirect()
+    {
+        await using var app = await StartPlanCookieAsync(o => o.LogoutPath = "/logout");
+        using var client = app.GetTestClient();
+
+        using var signIn = await SendAs(client, "acme", "/sign-in", cookie: null);
+
+        // The sign-out on the logout path redirects to the ReturnUrl; the refusal keeps none of it.
+        using var refused = await SendAs(client, "globex", "/logout?ReturnUrl=%2Fsomewhere", AuthCookie(signIn, "auth"));
+        refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        refused.Headers.Location.Should().BeNull();
+        refused.Headers.Contains("Set-Cookie").Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ASignOutThatFails_IsLogged_AndTheOtherSchemesAndTheRejectionStillHappen()
     {
         RecordingLoggerProvider logs = new();

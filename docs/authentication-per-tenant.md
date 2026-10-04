@@ -87,8 +87,10 @@ Between the two, the tenant is current but not yet checked against the user. So:
   the user and a `SessionStore` drops the session. That covers a cookie under a remote default scheme, such as OpenID
   Connect set up by `AddMicrosoftIdentityWebApp`. Remote schemes are not signed out, since that would start a sign-out
   at the identity provider, nor are policy schemes, which forward to the others; JWT bearer has nothing to sign out. A
-  sign-out that fails is logged (event 1015) and the others still run. The response then carries none of the cookies set
-  after `app.UseTenantResolution()`, the sign-outs' deletions included. A caller with no identity and no claims, such as
+  sign-out that fails is logged (event 1015) and the others still run. Every such scheme is signed out each time, even
+  one the user never signed in with, so your `OnSigningOut` handlers run on these refusals too: do not treat them as a
+  logout the user asked for. The response then carries none of the cookies set after `app.UseTenantResolution()`, the
+  sign-outs' deletions included, nor a sign-out's redirect. A caller with no identity and no claims, such as
   an anonymous one, is treated as without early resolution: the tenant is not current, and an endpoint that does not
   require one runs.
 - Middleware before `app.UseTenantResolution()` must not store `HttpContext.User` as the response starts: its
