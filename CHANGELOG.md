@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `access_denied`.
 - A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
   `InvalidateAllLocallyAsync`.
+- A static `EF.CompileQuery` or `EF.CompileAsyncQuery` delegate shared by contexts of one type with different
+  `OnUnclassifiedEntityType` values throws EF Core's "executed with a different model" error, because each value gets
+  a model of its own, so keep a delegate per value.
 - Code that calls `TenantModel.FindUnisolatedEntityTypes` gets the roots of hierarchies only, and no owned types or
   many-to-many join entity types that hold only their two foreign keys, which follow the types they belong to.
   `TenantModel.IsSharedAcrossTenants` is true for a type whose base type is marked.
