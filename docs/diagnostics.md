@@ -6,8 +6,8 @@ were resolved. None of it needs setting up beyond your logging, tracing and metr
 ## Logs
 
 Tenantry logs under three categories: `Tenantry.AspNetCore` (the request middleware), `Tenantry.EfCore` (the isolation
-in your `DbContext`) and `Tenantry.Options` (options per tenant). Each message has an event id that does not change between versions, so you can
-alert on it. Alert on **2001** above all: a save that tried to write another tenant's row.
+in your `DbContext`) and `Tenantry.Options` (options per tenant). Each message has an event id that does not change
+between versions, so you can alert on it. Alert on 2001 above all: a save that tried to write another tenant's row.
 
 | Event id | Name | Level | When |
 |----------|------|-------|------|
@@ -25,7 +25,7 @@ alert on it. Alert on **2001** above all: a save that tried to write another ten
 | 2001 | `TenantIsolationViolation` | Error | `SaveChanges` refused to write an entity of another tenant. |
 | 2002 | `WriteWithoutTenant` | Warning | `SaveChanges` wrote tenant-owned entities without a tenant, under `OnMissingTenant = Warn`. |
 | 2003 | `WriteMatchedNoRow` | Warning | An update or delete of a tenant-owned entity matched no row: it does not exist, belongs to another tenant, or changed concurrently. |
-| 2004 | `TransactionNotCommitted` | Error | A save whose rows rely on another of its statements' tenant check failed, or never ended, after sending some of them, in a transaction EF Core could not roll that save back in (no savepoint, or a `TransactionScope`): the transaction is rolled back instead of committed. |
+| 2004 | `TransactionNotCommitted` | Error | A save whose rows depend on another of its statements' tenant check failed, or never finished, after sending statements. EF Core could not roll back only that save (no savepoint, or a `TransactionScope`), so the transaction is rolled back instead of committed. |
 | 2005 | `SaveInTransaction` | Debug | A save whose rows rely on another of its statements' tenant check runs in a transaction although `AutoTransactionBehavior` is `Never` (`OnSaveWithoutTransaction = UseTransaction`). |
 | 3001 | `OrdinaryOptionsReadAsTenant` | Warning | `IOptions<T>` of a type configured per tenant was read while a tenant is current. It gives the ordinary value, so the code most likely wants `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. Logged once per options type. |
 
