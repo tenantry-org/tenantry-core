@@ -189,8 +189,9 @@ it in a transaction EF Core begins (`UseTransaction`, the default), or throw bef
 
 ### `OnMissingTenant`: writes with no tenant
 
-The policy applies only to saves that write `ITenantEntity<TKey>` entities. Saves of host-level data only (the tenant
-registry, a global catalogue, seeded reference data) never need a tenant.
+The policy applies only to saves that write `ITenantEntity<TKey>` entities, the owned entities of one, or the
+many-to-many join rows of one. Saves of host-level data only (the tenant registry, a global catalogue, seeded
+reference data) never need a tenant. Without a tenant, `Warn` and `Allow` write join rows unchecked.
 
 | Value | Behaviour when tenant-owned entities are saved with no tenant |
 |-------|----------------------------------------|
@@ -333,7 +334,8 @@ enforce isolation (against direct SQL access, say), add row-level security there
 |-----------|-----------|-----------|
 | LINQ queries | Yes | Limited to the current tenant; with no tenant they match nothing. |
 | `SaveChanges` insert, update, delete | Yes | Inserts are stamped; updates and deletes must belong to the current tenant, checked in memory and in the SQL `WHERE` clause. Without a tenant, `OnMissingTenant` applies. |
-| `ExecuteUpdate`, `ExecuteDelete` | Yes | Limited to the current tenant's rows; with no tenant they affect nothing. When the query is compiled, a guard resolves each `ExecuteUpdate` setter as EF Core does (member access or `EF.Property`, through casts and `Select`, `Join` and `SelectMany` projections) and throws if one sets `TenantId`. It also throws on a setter it cannot resolve (through `GroupBy`, or an `EF.Property` name it cannot read) or read at all, as a new EF Core version could bring. It misses a second property mapped to the `TenantId` column. |
+| `ExecuteUpdate`, `ExecuteDelete` | Yes | Limited to the current tenant's rows; with no tenant they affect nothing. When the query is compiled, a guard resolves each `ExecuteUpdate` setter as EF Core does (member access or `EF.Property`, through casts and `Select`, `Join` and `SelectMany` projections) and throws if one sets `TenantId`. It also throws on a setter it cannot resolve (through `GroupBy`, or an `EF.Property` name it cannot read) or read at all, as a new EF Core version could bring. It misses a second property mapped to the `TenantId` column. On a many-to-many join entity's set, which has no tenant filter, they affect every tenant's join rows. |
+| Many-to-many join rows | Yes | Read through both ends' query filters. A save that adds, changes or deletes one confirms each tenant-owned end it names ([Many-to-many relationships](efcore-advanced.md#many-to-many-relationships)). |
 | `IgnoreQueryFilters()` | No, by design | Removes the tenant filter from that query, so `ExecuteUpdate`/`ExecuteDelete` then affect every tenant. |
 | `FromSql`, `FromSqlRaw`, `FromSqlInterpolated` on a tenant-owned entity | Yes | EF Core applies the entity's query filters over your SQL, so it returns only the current tenant's rows; with no tenant, none. SQL that cannot be composed over, such as a stored procedure call, throws `InvalidOperationException`, because EF Core must wrap it to add the filter. |
 | `Database.SqlQuery`, `SqlQueryRaw`, `ExecuteSql`, `ExecuteSqlRaw` | No | They map to no entity type, so no filter applies, and no interceptor sees what they change. Add the tenant predicate yourself. |
@@ -394,8 +396,8 @@ database-per-tenant context is not. Set the option for one context with `UseTena
 
 The marker changes nothing in queries or saves, and marking a tenant-owned type fails the model check. A type follows
 the type it belongs to: a derived type its hierarchy's root, an owned type its owner, and the join entity of a
-many-to-many relationship the types it joins (when either is tenant-owned, it must be too). A join entity with
-properties or foreign keys beyond the two it joins by is checked like any other type. Keyless types, types mapped to a
+many-to-many relationship the types it joins. A join entity with properties or foreign keys beyond the two it joins
+by is checked like any other type. Keyless types, types mapped to a
 view and shared-type entity types (`SharedTypeEntity`) need a marker like any other; EF Core's migrations history
 table is not part of the model.
 

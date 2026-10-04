@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.6
 
-- A many-to-many relationship with a tenant-owned entity at either end is refused until its join entity is configured
-  with `UsingEntity<TJoin>()` and implements `ITenantEntity<TKey>`. Add `TenantId` to an existing join table
-  ([Many-to-many relationships](docs/efcore-advanced.md#many-to-many-relationships)).
+- A many-to-many join entity of your own that is not tenant-owned, joins a tenant-owned type and has a key of its own
+  that leaves out its foreign key to that type is refused, as is one that names a tenant-owned type through an
+  alternate key without its `TenantId`. Key the join entity by its two foreign keys, EF Core's default, or implement
+  `ITenantEntity<TKey>` on it. A save that changes join rows also writes back the `TenantId` of each tenant-owned end
+  it does not otherwise write, and runs in a transaction.
 - An `ITenantConnectionStringProvider<TKey>` of your own registered as scoped or transient makes the first context
   from `AddDbContextPerTenantDatabase` throw. Register it as a singleton, and have it create a scope for any scoped
   service it needs.
@@ -36,12 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   many-to-many join entity types that hold only their two foreign keys, which follow the types they belong to.
   `TenantModel.IsSharedAcrossTenants` is true for a type whose base type is marked.
 - In a transaction without savepoints (SQL Server with multiple active result sets, or a `TransactionScope` on any
-  provider) where a save writes owned rows in their own table or an entity mapped to more than one table, any save that
-  failed after sending a statement now stops the commit with `TenantIsolationViolationException` of kind
-  `TransactionRolledBack`, or aborts the scope, whichever save it was. Code that catches a failed save (a unique key, a
-  foreign key, a concurrency conflict it retries) and goes on in the same transaction must run the unit of work again
-  in a new transaction, or use a transaction with savepoints: turn multiple active result sets off, or begin the
-  transaction with `Database.BeginTransaction` rather than a `TransactionScope`.
+  provider) where a save writes owned rows in their own table, an entity mapped to more than one table or many-to-many
+  join rows, any save that failed after sending a statement now stops the commit with
+  `TenantIsolationViolationException` of kind `TransactionRolledBack`, or aborts the scope, whichever save it was.
+  Code that catches a failed save (a unique key, a foreign key, a concurrency conflict it retries) and goes on in the
+  same transaction must run the unit of work again in a new transaction, or use a transaction with savepoints: turn
+  multiple active result sets off, or begin the transaction with `Database.BeginTransaction` rather than a
+  `TransactionScope`.
 
 ### Added
 
@@ -98,11 +101,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A save that an interceptor runs from another save's `SavingChanges` no longer sets back the transaction (with
   `AutoTransactionBehavior.Never`) or the savepoints (with `AutoSavepointsEnabled = false`) that Tenantry turned on for
   the save around it, which could then leave rows written after their tenant check failed.
-- `UseTenantry()` refuses a many-to-many relationship with a tenant-owned entity at either end whose join entity is not
-  tenant-owned, with `TenantIsolationViolationException` of kind `ModelConfiguration`. Its join rows carried no tenant,
-  so a save through a stub with another tenant's key could delete that tenant's join rows or add to them. Configure the
-  join entity with `UsingEntity<TJoin>()` and implement `ITenantEntity<TKey>` on it, and add `TenantId` to an existing
-  join table. See [Many-to-many relationships](docs/efcore-advanced.md#many-to-many-relationships).
+- A save that adds, changes or deletes a join row of a many-to-many relationship confirms that each tenant-owned row it
+  joins is the current tenant's, as stored. A join row carries no tenant, and EF Core writes join rows for ends that
+  are themselves unchanged, so through stubs that carried another tenant's keys with the current tenant's `TenantId`,
+  a save could add, change or delete that tenant's join rows. An end the save does not otherwise write has its
+  `TenantId` written back with its concurrency token, once per save, and a join row saved without its tenant-owned
+  ends tracked is refused. A join entity with a key of its own that leaves out a foreign key to a tenant-owned end, or
+  one that names a tenant-owned end through an alternate key without its `TenantId`, is refused. See
+  [Many-to-many relationships](docs/efcore-advanced.md#many-to-many-relationships).
 - The first context from `AddDbContextPerTenantDatabase` throws for an `ITenantConnectionStringProvider<TKey>`
   registered as scoped or transient, before or after `AddTenantry`. It was accepted before, and the singleton context
   factory then kept one instance of it, with its scoped dependencies, for the application's lifetime, or failed scope

@@ -1,8 +1,8 @@
 # Owned and multi-table entities
 
-Owned rows in a table of their own, and the rows of an entity mapped to more than one table, have no tenant check of
-their own. Tenantry checks them through another statement and keeps the save all-or-nothing. The join rows of a
-many-to-many relationship have none either, so their join entity must be tenant-owned.
+Owned rows in a table of their own, the rows of an entity mapped to more than one table, and the join rows of a
+many-to-many relationship have no tenant check of their own. Tenantry checks them through another statement and keeps
+the save all-or-nothing.
 
 ## Owned entities
 
@@ -40,13 +40,7 @@ table with `TenantId` rely on that table's statement, so the save must succeed o
 
 ## Many-to-many relationships
 
-The join rows of a many-to-many relationship hold the keys of the two rows they join. EF Core inserts and deletes them
-when a collection changes, while the entities at both ends stay unchanged and are not written, so no statement of the
-save checks a `TenantId`. `UseTenantry()` therefore refuses a many-to-many relationship with a tenant-owned type at
-either end unless its join entity is tenant-owned too. That includes the join entity EF Core creates when you configure
-none, and a relationship whose other end is shared across tenants.
-
-Give the relationship a join entity of your own that implements `ITenantEntity<TKey>`:
+A many-to-many relationship between tenant-owned types needs no join class: EF Core's own join entity works.
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -64,26 +58,42 @@ public class Tag : TenantEntity<Guid>
     public List<Post> Posts { get; } = [];
 }
 
-public class PostTag : TenantEntity<Guid>
-{
-    public int PostId { get; set; }
-    public int TagId { get; set; }
-}
-
 public class BlogDbContext(DbContextOptions<BlogDbContext> options) : DbContext(options)
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-        modelBuilder.Entity<Post>()
-            .HasMany(p => p.Tags)
-            .WithMany(t => t.Posts)
-            .UsingEntity<PostTag>();
+        modelBuilder.Entity<Post>().HasMany(p => p.Tags).WithMany(t => t.Posts);
 }
 ```
 
-The join rows are then tenant-owned rows like any other. `post.Tags.Add(tag)` inserts one stamped with the current
-tenant, queries through `Tags` and `Posts` read only the current tenant's join rows, and a delete checks the stored
-`TenantId`, so it matches no row of another tenant's. An existing join table needs a migration that adds the `TenantId`
-column and fills it from the row at a tenant-owned end.
+A join row holds the keys of the rows it joins and no `TenantId`. Reads through `Tags` and `Posts` return only the
+current tenant's rows, as the query filters of both ends apply. EF Core inserts and deletes join rows for ends that are
+themselves unchanged, so a save that adds, changes or deletes a join row confirms each tenant-owned end it names, as
+it confirms an owned row's owner:
+
+- An end the save writes is checked by its own `UPDATE`, `DELETE` or `INSERT`.
+- An end it does not write must have been loaded or attached as the current tenant, and its stored row is confirmed by
+  writing its `TenantId` back with its concurrency token. Through a stub that carries another tenant's key with the
+  current tenant's `TenantId`, that `UPDATE` matches no row, the save fails with `DbUpdateConcurrencyException`, and
+  nothing is written. A stub that names another tenant fails with `TenantIsolationViolationException` before anything
+  is sent.
+- A join row saved without its tenant-owned ends tracked (added through the join entity's own set, with only key
+  values) is refused with `TenantIsolationViolationException`.
+- An end whose key in the join row includes its `TenantId` needs no confirmation: the join row can only name that
+  tenant's row.
+
+This costs one `UPDATE` for each end the save does not otherwise write, however many join rows name it: adding five
+existing tags to an existing post sends six. New ends cost nothing, as their `INSERT` is the check. The confirmations
+and the join rows succeed or fail together ([Saves that succeed or fail as a whole](#saves-that-succeed-or-fail-as-a-whole)).
+
+An end that is shared across tenants is not confirmed. A tenant's join row from its post to a shared tag is that
+tenant's, and another tenant reading the tag's `Posts` sees none of it, as the posts' query filter applies through
+the shared end. A join class of your own works the same way, payload columns included, and a change to a payload
+column confirms the ends too. A join class that implements `ITenantEntity<TKey>` is checked by its own `TenantId`
+instead, as any tenant-owned entity is. Deleting an end deletes its join rows: EF Core deletes those it tracks, which
+the end's own `DELETE` checks, and the database's cascade deletes the others.
+
+Not covered: `ExecuteUpdate` and `ExecuteDelete` on the join entity's set, and raw SQL against the join table, which
+reach every tenant's join rows (the join entity has no query filter). Change join rows through the navigations.
 
 ## Saves that succeed or fail as a whole
 
@@ -149,8 +159,13 @@ Building these models throws `TenantIsolationViolationException` (or `InvalidOpe
 - an owned type owned by a tenant-owned type through a key that neither includes nor is part of the owner's primary
   key, nor includes its `TenantId` (`WithOwner().HasPrincipalKey(o => o.Code)`): Tenantry checks the owner by its
   primary key, which need not be the row the owned rows name;
-- a many-to-many relationship with a tenant-owned type at either end whose join entity is not tenant-owned (see
-  [Many-to-many relationships](#many-to-many-relationships));
+- a many-to-many relationship whose join entity is not tenant-owned and has a key that does not include its foreign
+  key to a tenant-owned end (`UsingEntity<TJoin>(…, j => j.HasKey(x => x.Id))`): an update or delete of a join row by
+  that key could reach another tenant's row. Keep EF Core's default key, or implement `ITenantEntity<TKey>` on it;
+- a many-to-many relationship whose join entity is not tenant-owned and names a tenant-owned end through a key that
+  neither includes nor is part of the end's primary key, nor includes its `TenantId`
+  (`HasForeignKey(…).HasPrincipalKey(e => e.Code)`): Tenantry confirms the end by its primary key, which need not be
+  the row the join row names;
 - a tenant-owned owned type mapped to JSON (`ToJson()`): it lives in its owner's row, under the owner's `TenantId`,
   and EF Core cannot check a `TenantId` of its own (EF Core 10 rejects the concurrency token itself), so do not
   implement `ITenantEntity<TKey>` on it;
