@@ -1,8 +1,6 @@
 using Tenantry;
 using Tenantry.Options;
 
-// Extensions on the Tenantry builder live in the DI namespace, so registration code needs no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>

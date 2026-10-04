@@ -43,6 +43,12 @@ dotnet_diagnostic.CA1716.severity = none
 [src/**/*.cs]
 dotnet_diagnostic.CA2007.severity = warning
 
+# Extension classes live in the namespace of the type they extend (Microsoft.Extensions.DependencyInjection,
+# Microsoft.EntityFrameworkCore, a message bus's own), so code that uses them needs no using directive. Their files are
+# named Tenantry*Extensions.cs, in Tenantry Core and Tenantry Pro alike; every other file keeps the namespace check.
+[src/**/Tenantry*Extensions.cs]
+resharper_check_namespace_highlighting = none
+
 # EF Core's generated migrations and model snapshots
 [**/Migrations/{20*,*ModelSnapshot}.cs]
 generated_code = true

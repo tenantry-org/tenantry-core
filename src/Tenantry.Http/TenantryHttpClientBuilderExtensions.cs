@@ -3,8 +3,6 @@ using Microsoft.Extensions.Options;
 using Tenantry;
 using Tenantry.Http.Internal;
 
-// Extensions on IHttpClientBuilder live in the DI namespace, beside AddHttpClient, so they need no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>

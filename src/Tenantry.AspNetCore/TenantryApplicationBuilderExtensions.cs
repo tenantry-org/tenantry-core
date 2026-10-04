@@ -1,8 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry.AspNetCore.Internal;
 
-// Extensions on IApplicationBuilder live in its namespace, so they need no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.AspNetCore.Builder;
 
 /// <summary>

@@ -7,8 +7,6 @@ using Tenantry;
 using Tenantry.AspNetCore;
 using Tenantry.AspNetCore.Internal;
 
-// Builder extensions live in the builder's registration namespace, so they need no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>

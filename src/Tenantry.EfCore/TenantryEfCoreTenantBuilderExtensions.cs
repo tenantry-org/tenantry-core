@@ -4,8 +4,6 @@ using Tenantry;
 using Tenantry.EfCore;
 using Tenantry.EfCore.Internal;
 
-// Builder extensions live in the builder's registration namespace, so they need no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>

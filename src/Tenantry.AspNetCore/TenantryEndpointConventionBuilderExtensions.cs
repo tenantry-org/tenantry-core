@@ -1,7 +1,5 @@
 using Tenantry.AspNetCore;
 
-// Extensions on IEndpointConventionBuilder live in its namespace, so they need no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.AspNetCore.Builder;
 
 /// <summary>

@@ -3,8 +3,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Tenantry;
 using Tenantry.Internal;
 
-// Extensions on IServiceCollection live in its namespace, so they need no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>

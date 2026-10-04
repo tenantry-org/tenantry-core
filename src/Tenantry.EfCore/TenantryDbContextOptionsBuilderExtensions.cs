@@ -6,8 +6,6 @@ using Tenantry;
 using Tenantry.EfCore;
 using Tenantry.EfCore.Internal;
 
-// Extensions on DbContextOptionsBuilder live in its namespace, so they need no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.EntityFrameworkCore;
 
 /// <summary>

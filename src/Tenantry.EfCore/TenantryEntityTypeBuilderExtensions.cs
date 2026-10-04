@@ -3,8 +3,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Tenantry.EfCore;
 using Tenantry.EfCore.Internal;
 
-// Extensions on EF Core's builders live in its namespace, so they need no using directive.
-// ReSharper disable once CheckNamespace
 namespace Microsoft.EntityFrameworkCore;
 
 /// <summary>
