@@ -164,7 +164,8 @@ tenant.UseResolver<CookieTenantResolver>();                          // created 
 
 `UseResolver<TResolver>()` and the factory overload create the resolver in each request's scope, so it can depend on
 scoped services such as a `DbContext`. Like `ValidateTenantAccess<T>()`, `UseResolver<TResolver>()` returns the
-builder without its key type ([Registration](core-concepts.md#registration)). An instance is used for every request.
+builder without its key type ([Registration](core-concepts.md#registration)). The request's scope disposes a resolver
+the factory returns, so return a new one. An instance is used for every request.
 
 A custom resolver runs in the order it was added among the built-in ones.
 

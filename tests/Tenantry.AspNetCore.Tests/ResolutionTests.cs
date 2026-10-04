@@ -103,6 +103,22 @@ public sealed class ResolutionTests
     }
 
     [Fact]
+    public async Task AResolverAFactoryReturns_IsOwnedByTheRequestsScope_SoASharedOneIsDisposedWithIt()
+    {
+        DisposableResolver shared = new();
+        await using var app = await StartAsync<string>(
+            tenant => tenant
+                .UseInMemoryStore([Acme])
+                .UseResolver(sp => sp.GetRequiredService<DisposableResolver>()),
+            services => services.AddSingleton(shared));
+        using var client = app.GetTestClient();
+
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("acme");
+
+        shared.Disposed.Should().BeTrue("the scope disposes what a scoped factory returns: pass a shared resolver as an instance");
+    }
+
+    [Fact]
     public async Task AValidatorAddedByType_IsCreatedInEachRequestsScope_AndRunsInOrderWithTheOthers()
     {
         List<string> calls = [];
@@ -712,6 +728,16 @@ public sealed class ResolutionTests
     private sealed class RequestServices
     {
         public Guid Id { get; } = Guid.NewGuid();
+    }
+
+    private sealed class DisposableResolver : ITenantResolver, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<string?>("acme");
+
+        public void Dispose() => Disposed = true;
     }
 
     private sealed class ScopedResolver(RequestServices services) : ITenantResolver

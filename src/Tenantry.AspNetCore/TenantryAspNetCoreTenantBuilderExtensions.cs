@@ -301,7 +301,8 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// <param name="factory">Creates the resolver from the request's services.</param>
     /// <remarks>
     /// The factory runs in each request's scope, so the resolver can depend on scoped services such as a
-    /// <c>DbContext</c>. Pass an instance instead for a resolver created once and used for every request.
+    /// <c>DbContext</c>. The scope owns what it returns, and disposes it when the request ends, so return a new
+    /// resolver: pass an instance instead for a resolver created once and used for every request.
     /// </remarks>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> UseResolver<TKey>(

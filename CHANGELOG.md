@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Give each HTTP client with `UseTenantry()` an absolute `BaseAddress` in its registration, or pass its service's
   address to `UseTenantry(address)`, as a gRPC client must.
 - A resolver from `UseResolver(sp => …)` is created per request. For one resolver for the application's lifetime,
-  pass an instance to `UseResolver(resolver)`.
+  pass an instance to `UseResolver(resolver)`. The request's scope owns what the factory returns and disposes it, so
+  a factory must not return a shared resolver, such as a singleton from the container.
 - Keep one of `UseConnectionStrings(options => …)` and `UseConnectionStrings(sp => …)`, or an
   `ITenantConnectionStringProvider<TKey>` registered before `AddTenantry`. Code that resolved
   `TenantConnectionStringProvider<TKey>` resolves `ITenantConnectionStringProvider<TKey>`.
