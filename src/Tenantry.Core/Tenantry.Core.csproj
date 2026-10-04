@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageDescription>Core of Tenantry, for every host: AddTenantry, the ambient tenant (ITenantContext), tenant stores and their cache, tenant scopes for background work (ITenantScopeFactory), per-tenant connection strings and the ITenantEntity marker.</PackageDescription>
-    <PackageTags>multi-tenancy;aspnetcore;saas;tenantry;tenant-isolation</PackageTags>
+    <PackageDescription>Core of Tenantry, multi-tenancy for .NET, for every host: AddTenantry, the ambient tenant (ITenantContext), tenant stores and their cache, tenant scopes for background work (ITenantScopeFactory), per-tenant connection strings and the ITenantEntity marker.</PackageDescription>
+    <PackageTags>multi-tenancy;multitenancy;multi-tenant;saas;tenant-isolation;aspnetcore;tenantry</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
     <!-- Core's types are in the namespace Tenantry, not Tenantry.Core, so applications need one using for them -->
     <RootNamespace>Tenantry</RootNamespace>

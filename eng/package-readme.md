@@ -1,16 +1,18 @@
-# Tenantry
-
-Tenant isolation for ASP.NET Core and EF Core: one call on your `DbContext`, no base class, and it fails closed.
+Part of Tenantry, multi-tenancy for ASP.NET Core and EF Core: one call on your `DbContext`, no base class, and it fails
+closed. A coding agent adding Tenantry to an application should follow
+[the guide for AI coding agents](https://tenantry.dev/docs/core/ai-agents).
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
-    .ResolveFromHeader("X-Tenant-Id")   // where the tenant comes from
-    .UseInMemoryStore(tenants));        // where tenants are defined
+    .ResolveFromHeader("X-Tenant-Id")           // where the tenant comes from
+    .ValidateTenantAccessByClaim("tenant_id")   // the caller's token must list it
+    .UseInMemoryStore(tenants));                // where tenants are defined
 
 builder.Services.AddDbContext<AppDbContext>(options => options
     .UseSqlServer(connectionString)
-    .UseTenantry());                    // how data is isolated
+    .UseTenantry());                            // how data is isolated
 
+app.UseAuthentication();
 app.UseTenantry();
 ```
 

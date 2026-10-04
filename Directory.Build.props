@@ -8,9 +8,11 @@
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <!-- As in LICENSE -->
     <Copyright>Copyright 2026 Oliver James McNally</Copyright>
-    <!-- The README each package carries: for NuGet.org (eng/package-readme.md, with absolute links), not the
-         repository README -->
-    <TenantryPackageReadme>$(MSBuildThisFileDirectory)eng/package-readme.md</TenantryPackageReadme>
+    <!-- The README each package carries, for NuGet.org rather than the repository: the package's id and description,
+         then eng/package-readme.md, which uses absolute links. Directory.Build.targets writes it when the package is
+         packed. -->
+    <TenantryPackageReadmeBody>$(MSBuildThisFileDirectory)eng/package-readme.md</TenantryPackageReadmeBody>
+    <TenantryPackageReadme>$(MSBuildProjectDirectory)/obj/package-readme.md</TenantryPackageReadme>
     <!-- The last release, which pack checks each package's API against (eng/common/Build.targets). Raise it after each
          release (RELEASING.md). -->
     <TenantryPackageBaseline>0.6.0</TenantryPackageBaseline>

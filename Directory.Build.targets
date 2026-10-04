@@ -2,4 +2,18 @@
 
   <Import Project="eng/common/Build.targets" />
 
+  <!-- Each package's README starts with what that package does (its id and description), then the text every package
+       shares. Escaped so the README's semicolons and wildcards reach the file as they are. -->
+  <Target Name="WriteTenantryPackageReadme"
+          BeforeTargets="_GetPackageFiles"
+          Condition="'$(IsPackable)' != 'false' And '$(TenantryPackageReadmeBody)' != ''">
+    <PropertyGroup>
+      <_TenantryPackageReadme>$([System.IO.File]::ReadAllText('$(TenantryPackageReadmeBody)'))</_TenantryPackageReadme>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(TenantryPackageReadme)"
+                      Lines="$([MSBuild]::Escape('# $(PackageId)%0A%0A$(PackageDescription)%0A%0A$(_TenantryPackageReadme)'))"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+  </Target>
+
 </Project>

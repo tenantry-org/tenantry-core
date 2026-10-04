@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageDescription>Per-tenant options for Tenantry: tenant.ConfigurePerTenant(...) makes IOptionsSnapshot and IOptionsMonitor return the current tenant's values, built from your configuration plus the tenant, cached per tenant, and cleared when the tenant is invalidated.</PackageDescription>
-    <PackageTags>multi-tenancy;options;configuration;saas;tenantry</PackageTags>
+    <PackageTags>multi-tenancy;multitenancy;multi-tenant;options;configuration;saas;tenantry</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageDescription>Tenant-aware caching for Tenantry: tenant.IsolateCaches() keys HybridCache entries by the current tenant, so one tenant's cached data is never served to another, with SharedHybridCache for entries every tenant shares and ITenantDistributedCache for IDistributedCache; invalidating a tenant removes its entries.</PackageDescription>
-    <PackageTags>multi-tenancy;caching;hybridcache;saas;tenantry;tenant-isolation</PackageTags>
+    <PackageTags>multi-tenancy;multitenancy;multi-tenant;caching;hybridcache;tenant-isolation;saas;tenantry</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
