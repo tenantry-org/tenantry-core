@@ -91,7 +91,8 @@ internal sealed class AtomicSave
 
     private AtomicSave(Ledger? ledger) => _ledger = ledger;
 
-    private bool HasSettings => _restoreNever || _restoreSavepointsOff;
+    // Whether it holds settings to set back or entities to check.
+    private bool IsHeld => _restoreNever || _restoreSavepointsOff || _checks.Count > 0;
 
     /// <summary>Notes that a save of <paramref name="context"/> begins, in the transaction it has now.</summary>
     public static void Start(DbContext context)
@@ -226,7 +227,7 @@ internal sealed class AtomicSave
     public static bool IsCheck(DbContext context, IReadOnlyList<EntityEntry> failed)
     {
         if (Find(context) is not { } lease ||
-            failed.FirstOrDefault(entry => lease.Saves.Exists(save => save._checks.Contains(entry.Entity))) is not { } check)
+            failed.FirstOrDefault(entry => lease.Saves.Concat(lease.Unsettled).Any(save => save._checks.Contains(entry.Entity))) is not { } check)
         {
             return false;
         }
@@ -249,7 +250,7 @@ internal sealed class AtomicSave
             return;
         }
 
-        var save = End(context, lease);
+        var save = End(context, lease, own: true);
         lease.Confirmed = save;
 
         if (save is { _sent: true, _ledger: { } ledger } && entitiesSaved > 0)
@@ -260,7 +261,7 @@ internal sealed class AtomicSave
 
     /// <summary>
     /// Notes that the latest save of <paramref name="context"/> ended without succeeding: it failed, was cancelled, or
-    /// Tenantry rejected it. A notice right after a confirmation is that save's and ends nothing more.
+    /// Tenantry rejected it. A notice right after a confirmation also takes that confirmation back.
     /// </summary>
     /// <param name="context">The context whose save ended.</param>
     /// <param name="failure">
@@ -274,7 +275,15 @@ internal sealed class AtomicSave
             return;
         }
 
-        if (lease.Confirmed is null && End(context, lease) is { _sent: true, _ledger: { } ledger })
+        // Right after a confirmation, the notice is either that save's second (an interceptor threw from its
+        // SavedChanges) or another's, which a save in between (one a SaveChangesFailed handler ran) was confirmed
+        // before. Either way the confirmation may be wrong, and the latest save may still be running.
+        if (lease.Confirmed is { _sent: true, _ledger: { } confirmed })
+        {
+            confirmed.Fail(null);
+        }
+
+        if (End(context, lease, own: lease.Confirmed is null) is { _sent: true, _ledger: { } ledger })
         {
             ledger.Fail(null);
         }
@@ -381,9 +390,10 @@ internal sealed class AtomicSave
         return ledger;
     }
 
-    // Takes the latest save of the context off its list, as it ended, and sets back what it changed. Saves left on the
-    // list are set back too once nothing is left to save.
-    private static AtomicSave? End(DbContext context, Lease lease)
+    // Takes the latest save of the context off its list, as it ended. If the notice is surely its own, sets back what
+    // it changed; if not, as it may still be running, keeps that for later. Once nothing is left to save, the saves
+    // still noted, and those kept, are set back and let their entities go: any of them still running sends nothing.
+    private static AtomicSave? End(DbContext context, Lease lease, bool own)
     {
         if (lease.Saves is not [.., var save])
         {
@@ -391,12 +401,26 @@ internal sealed class AtomicSave
         }
 
         lease.Saves.RemoveAt(lease.Saves.Count - 1);
-        save._checks = NoChecks;
-        save.Restore(context);
 
-        if (lease.Saves.Exists(other => other.HasSettings) && !context.ChangeTracker.HasChanges())
+        if (own)
         {
-            lease.Saves.ForEach(other => other.Restore(context));
+            save._checks = NoChecks;
+            save.Restore(context);
+        }
+        else
+        {
+            lease.Unsettled.Add(save);
+        }
+
+        if ((lease.Saves.Exists(other => other.IsHeld) || lease.Unsettled.Count > 0) && !context.ChangeTracker.HasChanges())
+        {
+            foreach (var other in lease.Saves.Concat(lease.Unsettled))
+            {
+                other._checks = NoChecks;
+                other.Restore(context);
+            }
+
+            lease.Unsettled.Clear();
         }
 
         return save;
@@ -446,7 +470,10 @@ internal sealed class AtomicSave
 
         public List<AtomicSave> Saves { get; } = [];
 
-        // The save just confirmed, until another notice or command: a failure notice for it ends nothing more.
+        // Saves a notice that may not have been theirs took off the list, until nothing is left to save.
+        public List<AtomicSave> Unsettled { get; } = [];
+
+        // The save just confirmed, until another notice or command: a failure notice then takes the confirmation back.
         public AtomicSave? Confirmed { get; set; }
 
         // The failure the save interceptor noted last, until the context's event reports it again.
