@@ -258,7 +258,7 @@ public sealed class BulkAndRawWriteBoundaryTests : IDisposable
             .Should().Equal("globex order");
         (await db.Orders.FromSqlRaw("SELECT * FROM Orders").Select(o => o.Description).ToListAsync(ct))
             .Should().Equal("globex order");
-        (await db.Orders.FromSqlInterpolated($"SELECT * FROM Orders WHERE TenantId = {tenant}").ToListAsync(ct))
+        (await db.Orders.FromSql($"SELECT * FROM Orders WHERE TenantId = {tenant}").ToListAsync(ct))
             .Should().BeEmpty("the filter applies to the SQL's own predicate too");
     }
 
