@@ -13,9 +13,8 @@ non-HTTP hosts behave the same.
 
 ## Setup at a glance
 
-> **Introductory setup.** Resolving the tenant from a header without authentication lets any caller
-> select any tenant. Use it to learn the API. For production, authenticate callers and validate that
-> they belong to the tenant they select, as in the [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi).
+> Resolving the tenant from a header without authentication lets any caller select any tenant. In production,
+> authenticate callers and check that they belong to the tenant they select ([Access control](access-control.md)).
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -56,10 +55,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 ```
 
 `UseTenantry()` goes wherever the context's options are built (`AddDbContext`, `AddDbContextPool`,
-`AddDbContextFactory`, `AddPooledDbContextFactory`, `OnConfiguring`). The context reads the tenant, and never sets it,
-through `ITenantContext<TKey>` from its application service provider, which those registrations supply. So call
-`AddTenantry` there with your entities' key type. Otherwise building the model throws, naming the call to add, and so
-does every query and save (EF Core may share a model built for another application in the process).
+`AddDbContextFactory`, `AddPooledDbContextFactory`, `OnConfiguring`). It reads the current tenant from
+`ITenantContext<TKey>` in the context's application service provider, so register Tenantry in that provider with
+`AddTenantry<TKey>`, using your entities' key type. Without it, building the model throws an exception naming the call
+to add, and so does every query and save.
 
 ## Read isolation: the global query filter
 
@@ -130,10 +129,10 @@ it with authorization.
 The `SaveChanges`/`SaveChangesAsync` interceptor runs on every save of a context that uses `UseTenantry()`. For
 entities that implement `ITenantEntity<TKey>`:
 
-- **Added** entities get `TenantId` from the current tenant when it is unset (the key type's default, `null` or
+- Added entities get `TenantId` from the current tenant when it is unset (the key type's default, `null` or
   `string.Empty`). One that already names another tenant is rejected with `TenantIsolationViolationException`, not
   moved. The stamp goes through EF Core, so `TenantId` may have a private or init-only setter.
-- **Modified** and **Deleted** entities must have been loaded or attached as the current tenant and still belong to
+- Modified and deleted entities must have been loaded or attached as the current tenant and still belong to
   it. Otherwise the interceptor throws `TenantIsolationViolationException` before anything is written, and the whole
   save is aborted. With a tenant current, this check always runs. Without one,
   [`OnMissingTenant`](#onmissingtenant-writes-with-no-tenant) decides.
@@ -192,7 +191,7 @@ registry, a global catalogue, seeded reference data) never need a tenant.
 
 | Value | Behaviour when tenant-scoped entities are saved with no tenant |
 |-------|----------------------------------------|
-| `Reject` *(default)* | Throws `TenantNotResolvedException` before anything is persisted. |
+| `Reject` (default) | Throws `TenantNotResolvedException` before anything is persisted. |
 | `Warn` | The save proceeds and a structured warning is logged. |
 | `Allow` | The save proceeds silently. |
 
@@ -245,8 +244,8 @@ builder.Services.AddTenantry<string>(tenant => tenant
 - It registers a scoped `AppDbContext` and an `IDbContextFactory<AppDbContext>`; use it instead of `AddDbContext`,
   `AddDbContextPool` or `AddPooledDbContextFactory`. Call `UseConnectionStrings` first, or it throws. It also throws
   for an `ITenantConnectionStringProvider<TKey>` of your own registered as scoped or transient: the factory is a
-  singleton, so the provider must be one. It returns the builder without its key type, so put it last (see
-  [Registration](core-concepts.md#registration)).
+  singleton, so the provider must be one. Like `UseResolver<T>()`, it returns the builder without its key type
+  ([Registration](core-concepts.md#registration)).
 - It applies `UseTenantry()` before your configuration (see [Write isolation](#write-isolation-the-interceptor)).
 - `pooled: true` pools contexts as `AddDbContextPool` does, so the context needs a constructor that takes only its
   options. Unpooled, it can take other services and has its scope as its application service provider.
