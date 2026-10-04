@@ -43,7 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A request for a tenant `ValidateTenantActivity` refuses is rejected with the reason `Inactive`, event 1012
   (`TenantInactive`) and the resolution result `inactive`, where it was `AccessDenied`. The status stays `403
   Forbidden` with the access-denied response unless you set `InactiveTenantStatusCode`, for example to `402 Payment
-  Required` for a lapsed subscription. `TenantRejectedContext<TKey>.Tenant` is the suspended tenant.
+  Required` for a lapsed subscription. The access validators run before the activity check, so a caller they refuse
+  is denied access whether or not the tenant is suspended. `TenantRejectedContext<TKey>.Tenant` is the suspended
+  tenant.
 - `tenant.TagRequestMetrics()` (Tenantry.AspNetCore) tags ASP.NET Core's request metric, `http.server.request.duration`,
   with the request's tenant as `tenant.id`, or with a value of your own per tenant to keep the series few. It replaces
   Tenantry.Pro's `AddTenantMetrics()`, whose package, Tenantry.Pro.AspNetCore, existed only for it. See

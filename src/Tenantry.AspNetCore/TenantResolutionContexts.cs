@@ -96,6 +96,9 @@ public enum TenantRejectionReason
     /// <summary>An access validator refused the tenant.</summary>
     AccessDenied,
 
-    /// <summary>The tenant is not active: a <c>ValidateTenantActivity</c> check refused it.</summary>
+    /// <summary>
+    /// The tenant is not active: a <c>ValidateTenantActivity</c> check refused it. Only a request the access validators
+    /// allow is rejected for this reason.
+    /// </summary>
     Inactive,
 }

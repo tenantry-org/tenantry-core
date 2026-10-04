@@ -171,7 +171,8 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             return await _resolution.ResolveAsync(context, beforeAuthentication: false);
         }
 
-        if (resolution is { Result: ResolutionResult.Resolved, Tenant: { } tenant } &&
+        // An inactive tenant is checked too, so a caller the validators refuse is denied access whatever its state.
+        if (resolution is { Result: ResolutionResult.Resolved or ResolutionResult.Inactive, Tenant: { } tenant } &&
             !await _resolution.ValidateAsync(context, tenant))
         {
             return resolution with { Result = ResolutionResult.AccessDenied };

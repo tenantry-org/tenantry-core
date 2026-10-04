@@ -53,9 +53,10 @@ For each request, the middleware:
    store's `FindByIdentifierAsync` (by default: parse the identifier as `TKey` and look the id up) and serves it from
    the cache with [`CacheTenants`](tenant-stores.md#caching). If none, a request that requires a tenant is
    rejected (see [Status codes](#status-codes)).
-4. Checks the tenant is [active](tenant-stores.md#suspended-and-inactive-tenants), then runs the
-   [access validators](access-control.md) in the order they were added. If either refuses, a request that requires a
-   tenant is rejected (see [Status codes](#status-codes)).
+4. Runs the [access validators](access-control.md) in the order they were added, then checks the tenant is
+   [active](tenant-stores.md#suspended-and-inactive-tenants). If either refuses, a request that requires a tenant is
+   rejected (see [Status codes](#status-codes)). A caller the validators refuse is denied access whether or not the
+   tenant is active, so only a caller they allow can learn that a tenant is suspended.
 5. Makes the tenant current (`ITenantContextSetter.Use`) for the remainder of the request, tags the request's
    trace span `tenant.id` and opens a log scope with `TenantId`, and raises [`OnResolved`](#events). The tenant is
    restored when the request ends.
@@ -80,7 +81,8 @@ created in the request's service scope, so they can depend on a scoped `DbContex
 
 With access validators, a tenant that does not exist gets exactly the response of one the caller may not use,
 so an authenticated user of one tenant cannot probe for others. A suspended tenant gets that response too, unless you
-give `InactiveTenantStatusCode` another value, such as `402 Payment Required` for a lapsed subscription. Change the
+give `InactiveTenantStatusCode` another value, such as `402 Payment Required` for a lapsed subscription; even then,
+only callers the access validators allow get it. Change the
 codes with `ConfigureResolution`:
 
 ```csharp

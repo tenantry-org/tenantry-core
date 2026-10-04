@@ -54,7 +54,8 @@ public sealed class TenantResolutionOptions<TKey>
     /// </summary>
     /// <remarks>
     /// The response is the access-denied one, so by default a caller cannot tell a suspended tenant from one it may
-    /// not use. Set another status, such as <c>402 Payment Required</c>, to tell it.
+    /// not use. Set another status, such as <c>402 Payment Required</c>, to tell it. The access validators run first,
+    /// so a caller they refuse gets <see cref="AccessDeniedStatusCode"/> whether or not the tenant is active.
     /// </remarks>
     public int InactiveTenantStatusCode { get; set; } = StatusCodes.Status403Forbidden;
 

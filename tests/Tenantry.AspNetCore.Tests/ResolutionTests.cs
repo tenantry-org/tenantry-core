@@ -475,6 +475,61 @@ public sealed class ResolutionTests
         logs.For(1005).Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ACallerTheValidatorsRefuse_IsDeniedAccess_WhetherOrNotTheTenantIsSuspended(bool activityFirst)
+    {
+        List<string> seen = [];
+        await using var app = await StartAsync<string>(tenant =>
+        {
+            tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme, Globex]);
+
+            if (activityFirst)
+            {
+                tenant.ValidateTenantActivity(t => t.TenantId != "globex");
+            }
+
+            tenant.ValidateTenantAccess((http, _) => http.Request.Headers.ContainsKey("X-Member"));
+
+            if (!activityFirst)
+            {
+                tenant.ValidateTenantActivity(t => t.TenantId != "globex");
+            }
+
+            tenant.ConfigureResolution(o =>
+            {
+                o.InactiveTenantStatusCode = StatusCodes.Status402PaymentRequired;
+                o.OnRejected = context =>
+                {
+                    seen.Add($"{context.Reason} {context.StatusCode} {context.Tenant?.TenantId}");
+                    return Task.CompletedTask;
+                };
+            });
+        });
+        using var client = app.GetTestClient();
+
+        (await Send(client, "globex", member: false)).Should().Be(HttpStatusCode.Forbidden, "a stranger learns nothing about the tenant");
+        (await Send(client, "acme", member: false)).Should().Be(HttpStatusCode.Forbidden);
+        (await Send(client, "globex", member: true)).Should().Be(HttpStatusCode.PaymentRequired);
+        (await Send(client, "acme", member: true)).Should().Be(HttpStatusCode.OK);
+        seen.Should().Equal("AccessDenied 403 globex", "AccessDenied 403 acme", "Inactive 402 globex");
+
+        static async Task<HttpStatusCode> Send(HttpClient client, string tenant, bool member)
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, "/required");
+            request.Headers.Add("X-Tenant-Id", tenant);
+
+            if (member)
+            {
+                request.Headers.Add("X-Member", "yes");
+            }
+
+            using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+            return response.StatusCode;
+        }
+    }
+
     [Fact]
     public async Task AnInactiveTenant_GetsInactiveTenantStatusCode()
     {
