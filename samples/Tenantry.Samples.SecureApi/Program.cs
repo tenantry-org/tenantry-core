@@ -37,6 +37,9 @@ if (builder.Environment.IsDevelopment() && string.IsNullOrEmpty(auth.SigningKey)
         SigningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)),
     };
 }
+
+// Read now, so a missing or short Auth:SigningKey stops the application starting rather than failing every request.
+var signingKey = auth.GetSigningKey();
 var tenants = builder.Configuration.GetSection("Tenants").Get<List<TenantDescriptor<string>>>() ?? [];
 
 builder.Services
@@ -49,7 +52,7 @@ builder.Services
         {
             ValidIssuer = auth.Issuer,
             ValidAudience = auth.Audience,
-            IssuerSigningKey = auth.GetSigningKey(),
+            IssuerSigningKey = signingKey,
         };
     });
 

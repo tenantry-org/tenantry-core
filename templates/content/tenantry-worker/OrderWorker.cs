@@ -4,8 +4,8 @@ using Tenantry;
 namespace TenantryWorker;
 
 // Runs each message as its tenant. RunInScopeAsync looks the tenant up in the store and refuses one that does not
-// exist (or that ValidateTenantActivity refuses), so a message cannot write as a tenant it only names; and each
-// message gets a DI scope, and so a DbContext, of its own.
+// exist or that ValidateTenantActivity refuses, so a message cannot write as a tenant it only names; and each message
+// gets a DI scope, and so a DbContext, of its own. A message that fails is logged, and the worker goes on.
 public sealed partial class OrderWorker(WorkQueue queue, ITenantScopeFactory<string> scopes, ILogger<OrderWorker> logger)
     : BackgroundService
 {
@@ -17,6 +17,9 @@ public sealed partial class OrderWorker(WorkQueue queue, ITenantScopeFactory<str
             {
                 await scopes.RunInScopeAsync(message.TenantId, async (scope, ct) =>
                 {
+                    if (string.IsNullOrWhiteSpace(message.Description))
+                        throw new InvalidOperationException("An order needs a description.");
+
                     var db = scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
                     db.Orders.Add(new Order { Description = message.Description });
                     await db.SaveChangesAsync(ct);
@@ -25,9 +28,15 @@ public sealed partial class OrderWorker(WorkQueue queue, ITenantScopeFactory<str
                     Processed(logger, message.Description, message.TenantId, await db.Orders.CountAsync(ct));
                 }, stoppingToken);
             }
-            catch (TenantNotFoundException)
+            catch (TenantNotResolvedException refused)
             {
-                Dropped(logger, message.TenantId);
+                // The tenant does not exist (TenantNotFoundException) or is suspended (TenantInactiveException).
+                Dropped(logger, message.TenantId, refused.Message);
+            }
+            catch (Exception failed) when (failed is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+            {
+                // One message's failure must not stop the worker. Retry or dead-letter it here, as your broker allows.
+                Failed(logger, failed, message.TenantId);
             }
         }
     }
@@ -35,6 +44,9 @@ public sealed partial class OrderWorker(WorkQueue queue, ITenantScopeFactory<str
     [LoggerMessage(Level = LogLevel.Information, Message = "Processed '{Description}' for tenant {TenantId}, which has {Count} order(s)")]
     private static partial void Processed(ILogger logger, string description, string tenantId, int count);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Dropped a message for tenant {TenantId}, which does not exist")]
-    private static partial void Dropped(ILogger logger, string tenantId);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Dropped a message for tenant {TenantId}: {Reason}")]
+    private static partial void Dropped(ILogger logger, string tenantId, string reason);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to process a message for tenant {TenantId}")]
+    private static partial void Failed(ILogger logger, Exception exception, string tenantId);
 }

@@ -2,9 +2,10 @@
 # Packs the dotnet new templates (templates/), installs them into a template hive of their own, creates an application
 # from each, and builds it against the Tenantry packages of the same build, restored from an empty cache with package
 # source mapping, as check-package-consumer.sh restores, and with warnings as errors, so the analyzers the packages
-# carry must find nothing. Then it runs each: the API must answer a request for a tenant, with a token from its
-# development endpoint, and the worker must process its demonstration messages, dropping the one for a tenant the store
-# does not have. Each has a minute. Usage, after dotnet pack of src/:
+# carry must find nothing. Then it runs each, for a minute at most. The API, with tokens from its development endpoint:
+# an anonymous caller gets 401, a token for acme gets 403 for globex, acme's new note is listed for acme and not for
+# globex. The worker: it processes its demonstration messages, drops those for an unknown and a suspended tenant, logs
+# the one that fails, and keeps running. Usage, after dotnet pack of src/:
 #
 #   scripts/smoke-templates.sh <package folder>
 set -euo pipefail
@@ -108,19 +109,35 @@ for template in tenantry-api tenantry-worker; do
   if [[ "$template" == tenantry-api ]]; then
     ASPNETCORE_URLS="http://127.0.0.1:0" dotnet bin/Release/net10.0/Smoke.dll > "$log" 2>&1 &
     pid=$!
-    url="" status=""
+    url="" result=""
     if wait_for "$log" "Now listening on: http:"; then
       url=$(sed -n 's/.*Now listening on: \(http:[^ ]*\).*/\1/p' "$log" | head -n 1)
-      token=$(curl -s --max-time 30 -X POST "$url/dev/token" -H 'Content-Type: application/json' \
-        -d '{"subject":"smoke","tenants":["acme"]}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || true)
-      status=$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' -H "X-Tenant-Id: acme" \
-        -H "Authorization: Bearer $token" "$url/notes" || true)
+      token_for() { # <tenant>
+        curl -s --max-time 30 -X POST "$url/dev/token" -H 'Content-Type: application/json' \
+          -d "{\"subject\":\"smoke\",\"tenants\":[\"$1\"]}" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || true
+      }
+      call() { # <method> <tenant> <token or empty> [body]; prints the status code, and the body to $work/body
+        local auth=()
+        [[ -n "$3" ]] && auth=(-H "Authorization: Bearer $3")
+        curl -s --max-time 30 -o "$work/body" -w '%{http_code}' -X "$1" -H "X-Tenant-Id: $2" \
+          -H 'Content-Type: application/json' ${4:+-d "$4"} ${auth[@]+"${auth[@]}"} "$url/notes" || true
+      }
+      acme=$(token_for acme)
+      globex=$(token_for globex)
+      anonymous=$(call GET acme "")
+      other=$(call GET globex "$acme")
+      created=$(call POST acme "$acme" '{"text":"acme only"}')
+      listed=$(call GET acme "$acme")
+      grep -q "acme only" "$work/body" && acme_sees=yes || acme_sees=no
+      call GET globex "$globex" > /dev/null
+      grep -q "acme only" "$work/body" && globex_sees=yes || globex_sees=no
+      result="anonymous $anonymous, acme's token for globex $other, create $created, list $listed, acme sees its note $acme_sees, globex sees it $globex_sees"
     fi
     stop
-    if [[ "$status" == 200 ]]; then
-      echo "ok   $template (GET /notes for acme: 200)"
+    if [[ "$result" == "anonymous 401, acme's token for globex 403, create 201, list 200, acme sees its note yes, globex sees it no" ]]; then
+      echo "ok   $template ($result)"
     else
-      echo "FAIL $template (${url:-did not start listening}; GET /notes for acme: ${status:-no response})" >&2
+      echo "FAIL $template (${result:-${url:-did not start listening}})" >&2
       sed 's/^/     /' "$log" >&2
       failed=1
     fi
@@ -129,11 +146,15 @@ for template in tenantry-api tenantry-worker; do
     pid=$!
     status=0
     wait_for "$log" "for tenant globex" || status=$?
+    running=no
+    kill -0 "$pid" 2>/dev/null && running=yes
     stop
-    if [[ $status -eq 0 ]] && grep -q "for tenant acme" "$log" && grep -q "message for tenant initech" "$log"; then
-      echo "ok   $template (processed acme's and globex's messages, dropped initech's)"
+    if [[ $status -eq 0 && $running == yes ]] && grep -q "for tenant acme" "$log" &&
+       grep -q "Dropped a message for tenant initech" "$log" && grep -q "Dropped a message for tenant umbrella" "$log" &&
+       grep -q "Failed to process a message for tenant acme" "$log"; then
+      echo "ok   $template (processed acme's and globex's messages; dropped initech's and suspended umbrella's; logged the failing one and kept running)"
     else
-      echo "FAIL $template ($([[ $status -eq 124 ]] && echo "no message processed in ${deadline_seconds}s" || echo "did not process the messages"))" >&2
+      echo "FAIL $template ($([[ $status -eq 124 ]] && echo "no message for globex in ${deadline_seconds}s" || echo "did not process the messages as expected"))" >&2
       sed 's/^/     /' "$log" >&2
       failed=1
     fi

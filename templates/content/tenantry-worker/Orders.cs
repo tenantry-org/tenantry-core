@@ -26,5 +26,11 @@ public sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options) :
         modelBuilder.Entity<Order>().HasIndex(order => new { order.TenantId, order.Id });
 }
 
+// A tenant as the store lists it: TenantDescriptor's id and name, and whether it is active.
+public sealed class AppTenant : TenantDescriptor<string>
+{
+    public bool IsActive { get; set; } = true;
+}
+
 // A message carries only its tenant's id, as one from a queue does.
 public sealed record OrderMessage(string TenantId, string Description);

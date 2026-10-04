@@ -11,9 +11,11 @@ using TenantryWorker;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-var tenants = builder.Configuration.GetSection("Tenants").Get<List<TenantDescriptor<string>>>() ?? [];
+var tenants = builder.Configuration.GetSection("Tenants").Get<List<AppTenant>>() ?? [];
 
-builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore(tenants)); // use a database-backed store in production
+builder.Services.AddTenantry<string>(tenant => tenant
+    .UseInMemoryStore(tenants)                                // use a database-backed store in production
+    .ValidateTenantActivity(t => t is AppTenant { IsActive: true })); // RunInScopeAsync refuses a suspended tenant
 
 builder.Services.AddDbContext<OrdersDbContext>(options => options
     .UseSqlite(builder.Configuration.GetConnectionString("Orders"))
@@ -30,10 +32,13 @@ await using (var scope = host.Services.CreateAsyncScope())
     await scope.ServiceProvider.GetRequiredService<OrdersDbContext>().Database.EnsureCreatedAsync();
 }
 
-// Demonstration messages: one for each tenant, and one for a tenant the store does not have.
+// Demonstration messages: one for each active tenant, one for a tenant the store does not have, one for a suspended
+// tenant, and one that fails. The worker drops or logs the last three and goes on.
 var queue = host.Services.GetRequiredService<WorkQueue>();
 await queue.EnqueueAsync(new OrderMessage("acme", "Acme's first order"));
 await queue.EnqueueAsync(new OrderMessage("initech", "An order for a tenant that does not exist"));
+await queue.EnqueueAsync(new OrderMessage("umbrella", "An order for a suspended tenant"));
+await queue.EnqueueAsync(new OrderMessage("acme", ""));
 await queue.EnqueueAsync(new OrderMessage("globex", "Globex's first order"));
 
 await host.RunAsync();
