@@ -16,19 +16,14 @@ dotnet add package Tenantry.EfCore
 `Tenantry.Core` comes in transitively; reference it directly only if you want the core types in a
 project that has neither of the above.
 
-Tenantry targets **.NET 8, 9, and 10**. EF Core integration requires the matching major version of
-`Microsoft.EntityFrameworkCore` (8.x, 9.x, or 10.x).
+Tenantry is built for .NET 10, and still ships for .NET 8 and 9 ([Compatibility](compatibility.md)). Each build of
+`Tenantry.EfCore` uses the EF Core major of its target framework (8.x, 9.x or 10.x).
 
 ## 2. Choose your tenant key type
 
-Tenantry's tenant types are generic over `TKey`, the type of your tenant identifier. `TKey` must implement
-both `IEquatable<TKey>` (so EF Core can translate equality to SQL) and `IParsable<TKey>` (so Tenantry can
-parse the id a request carries in a header, route, etc.).
-
-`Guid`, `int`, `long`, and `string` all qualify out of the box. Pick one and use it consistently —
-it appears in your entities, your store and your registration.
-
-This guide uses `Guid`.
+`TKey` is the type of your tenant ids. `Guid`, `int`, `long` and `string` all work
+([Core concepts](core-concepts.md#the-tenant-key-tkey) has the constraints). Use the same type in your entities, store
+and registration. This guide uses `Guid`.
 
 ## 3. Register Tenantry
 
@@ -46,10 +41,10 @@ var builder = WebApplication.CreateBuilder(args);
 // authentication and tenant access validation (see access-control.md and the SecureApi sample).
 builder.Services.AddTenantry<Guid>(tenant =>
 {
-    // (a) Resolution — how the tenant is identified on each request.
+    // (a) Resolution: how the tenant is identified on each request.
     tenant.ResolveFromHeader("X-Tenant-Id");
 
-    // (b) Storage — which tenants exist. Replace with a DB-backed store in production.
+    // (b) Storage: which tenants exist. Replace with a DB-backed store in production.
     tenant.UseInMemoryStore(
     [
         new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" },
@@ -77,10 +72,9 @@ public class Order : TenantEntity<Guid>   // adds a `Guid TenantId { get; set; }
 }
 ```
 
-Entities that do **not** implement `ITenantEntity<TKey>` are treated as global/shared data (product
-catalogues, reference tables) and are never filtered or stamped. You never set `TenantId` yourself —
-Tenantry stamps it on insert, and rejects a new entity that already names another tenant. The interface needs
-only a getter, so an entity can implement it with a private or init-only setter.
+Entities that do not implement `ITenantEntity<TKey>` are shared by all tenants (product catalogues, reference
+tables) and are never filtered or stamped. Leave `TenantId` unset: Tenantry stamps it on insert
+([Core concepts](core-concepts.md#itenantentitytkey)).
 
 ## 5. Keep your DbContext as it is
 
@@ -122,15 +116,14 @@ var app = builder.Build();
 app.UseTenantry();   // resolves the tenant; place after UseAuthentication() if resolving from claims
 ```
 
-`UseTenantry()` must run **before** any endpoint that needs a tenant. With `WebApplication`, routing
-is added automatically, so endpoint-level `RequireTenant()`/`AllowMissingTenant()` metadata is
-respected. See [ASP.NET Core integration](aspnetcore-integration.md#pipeline-ordering) for ordering rules.
+`UseTenantry()` must run before any endpoint that needs a tenant. The ordering rules are in
+[ASP.NET Core integration](aspnetcore-integration.md#pipeline-ordering).
 
 ## 8. Use the tenant in your endpoints
 
 ```csharp
 app.MapGet("/orders", async (AppDbContext db) =>
-        // No Where(o => o.TenantId == …) needed — the global filter applies automatically.
+        // No Where(o => o.TenantId == …) needed: the query filter adds it.
         await db.Orders.ToListAsync())
    .RequireTenant();
 
@@ -165,7 +158,7 @@ bodies instead; see [ASP.NET Core integration](aspnetcore-integration.md#status-
 
 ## Next steps
 
-- Replace the in-memory store with a real one — [Tenant stores](tenant-stores.md).
-- Resolve tenants from subdomains, routes, or claims — [Tenant resolution](tenant-resolution.md).
-- Restrict which users may access which tenants — [Access control](access-control.md).
-- Understand the isolation policy, admin queries, and migrations — [EF Core integration](efcore-integration.md).
+- Replace the in-memory store with a real one: [Tenant stores](tenant-stores.md).
+- Resolve tenants from subdomains, routes or claims: [Tenant resolution](tenant-resolution.md).
+- Restrict which users may use which tenants: [Access control](access-control.md).
+- The isolation policy, admin queries and migrations: [EF Core integration](efcore-integration.md).
