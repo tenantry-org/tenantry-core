@@ -276,56 +276,47 @@ the migration makes `TenantId` nullable, your project does not use nullable refe
 `tenant.ConfigurePerTenant(perTenant => perTenant.Configure<TOptions>((options, t) => …))` inside `AddTenantry`. Read
 your tenant type with `t.As<AppTenant>()`. Finbuckle's `Reset()` and `Clear(tenantId)` become
 `ITenantInvalidator<string>.InvalidateAsync(tenantId)`. The named variants become `Configure<TOptions>(name, …)` and
-`ConfigureAll<TOptions>(…)` on the same builder. Code that reads the tenant's value through `IOptions<TOptions>` changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a
-singleton: in Tenantry, `IOptions<TOptions>` keeps the ordinary value. See [Options per tenant](per-tenant-options.md).
+`ConfigureAll<TOptions>(…)` on the same builder. Code that reads the tenant's value through `IOptions<TOptions>`
+changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a singleton: in Tenantry,
+`IOptions<TOptions>` keeps the ordinary value. See [Options per tenant](per-tenant-options.md).
 
 `WithPerTenantAuthentication()` becomes `ConfigurePerTenant` on each scheme's options, such as
 `Configure<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before
 `app.UseAuthentication()`, so the tenant is known when the scheme authenticates. A tenant's own challenge scheme
-becomes a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)). Finbuckle also refused a cookie signed
-in under another tenant. To keep that check, add the tenant id as a claim when the user signs in, and validate it with
+becomes a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)).
+Finbuckle also refused a cookie signed in under another tenant. To keep that check, add the tenant id as a claim when the user signs in, and validate it with
 `ValidateTenantAccessByClaim`. A request for another tenant then gets `403` where a tenant is required; Finbuckle
 treated the same user as signed out. Sessions signed in before the change lack the claim, so their users sign in
 again. See [Authentication per tenant](authentication-per-tenant.md).
 
 ## Behaviour that changes
 
-- **Forged keys.** Finbuckle checks the `TenantId` an entity carries. With `EnforceMultiTenantOnTracking`, an entity
-  attached in tenant B's context with tenant A's key gets B's `TenantId` and passes. Saving it overwrites A's row and
-  moves it to B. Tenantry puts the stored `TenantId` in every `UPDATE` and `DELETE`, so the same save matches no row
-  and throws `DbUpdateConcurrencyException`.
-- **Reading with no tenant.** Finbuckle's query filter throws `NullReferenceException` when the context has no
-  tenant. Tenantry's matches no rows. Code and tests that expected the exception get empty results.
-- **Writing with no tenant.** Both refuse: Finbuckle throws `MultiTenantException`, Tenantry
-  `TenantNotResolvedException`. Tenantry can allow it for one context
-  ([`OnMissingTenant`](efcore-integration.md#onmissingtenant-writes-with-no-tenant)).
-- **Mismatched tenants.** `TenantMismatchMode.Overwrite` and `Ignore` have no equivalent. A write that names another
-  tenant throws `TenantIsolationViolationException`. Maintenance code that writes across tenants uses a context of its
-  own with `OnMissingTenant = Allow` and no tenant current.
-- **Bulk updates.** An `ExecuteUpdate` that sets `TenantId` throws. Finbuckle has no such check.
-- **When the context reads the tenant.** Finbuckle's context takes the tenant in its constructor and keeps it.
-  Tenantry's reads the current tenant on each query and save, so pooled contexts work. Use a context for one tenant:
-  after a switch, `Find` and `Local` can return entities loaded for the previous one.
-- **Models Tenantry refuses.** Building a model that cannot be isolated throws, for example a tenant-owned type
-  whose base type is not tenant-owned ([the list](efcore-advanced.md#models-that-cannot-be-isolated)).
-- **No fallback between resolvers.** Finbuckle tries the next strategy when no store knows an identifier. Tenantry
-  uses the first identifier a resolver returns. If the store does not know it, the request has no tenant.
-- **Identifier case.** Finbuckle's in-memory and configuration stores match identifiers in any case. Tenantry's
-  default lookup compares `string` ids exactly. The subdomain and host resolvers return lower case. Ignore case in
-  your `FindByIdentifierAsync` if clients send mixed case.
+| | Finbuckle | Tenantry |
+|-|-----------|----------|
+| Forged keys | With `EnforceMultiTenantOnTracking`, an entity attached in tenant B's context with tenant A's key gets B's `TenantId` and passes, so saving it overwrites A's row and moves it to B. | The stored `TenantId` is in every `UPDATE` and `DELETE`, so the same save matches no row and throws `DbUpdateConcurrencyException`. |
+| Reading with no tenant | The query filter throws `NullReferenceException`. | Queries match no rows. Code and tests that expected the exception get empty results. |
+| Writing with no tenant | Throws `MultiTenantException`. | Throws `TenantNotResolvedException`. One context can allow it ([`OnMissingTenant`](efcore-integration.md#onmissingtenant-writes-with-no-tenant)). |
+| A write that names another tenant | `TenantMismatchMode` can throw, or with `Overwrite` and `Ignore`, replace or keep the other tenant's id. | Throws `TenantIsolationViolationException`. Maintenance code that writes across tenants uses a context of its own with `OnMissingTenant = Allow` and no tenant current. |
+| An `ExecuteUpdate` that sets `TenantId` | Not checked. | Throws. |
+| When the context reads the tenant | In its constructor, and keeps it. | On each query and save, so pooled contexts work. Use a context for one tenant: after a switch, `Find` and `Local` can return entities loaded for the previous one. |
+| An identifier no store knows | The next strategy is tried. | The first identifier a resolver returns is used. If the store does not know it, the request has no tenant. |
+| Identifier case | The in-memory and configuration stores match identifiers in any case. | The default lookup compares `string` ids exactly, and the subdomain and host resolvers return lower case. Ignore case in your `FindByIdentifierAsync` if clients send mixed case. |
+
+Tenantry also refuses to build a model that cannot be isolated, for example one with a tenant-owned type whose base
+type is not tenant-owned ([the list](efcore-advanced.md#models-that-cannot-be-isolated)).
 
 ## What Tenantry does not have
 
-- **Other stores.** Tenantry builds in only the in-memory store, and an application has one store. Finbuckle's
-  configuration, distributed cache, HTTP remote and echo stores have no equivalent, and neither have its methods that
-  add, update and remove tenants. Write an `ITenantStore<TKey>` as in step 3.
-- **Other strategies.** There is no base path, session, static or remote authentication callback resolver. Write an
-  `ITenantResolver` ([Custom resolvers](tenant-resolution.md#custom-resolvers)). For a tenant in the path, use a
-  route template with `{tenant}` and `ResolveFromRouteValue()`; nothing rewrites `PathBase`.
-- **Bypassing resolution.** `BypassWhen` and `BypassWhenEndpointNotResolved` have no equivalent. `UseTenantry()`
-  resolves every request that reaches it, so put middleware that must skip it, such as static files, before it.
-- **Ignored identifiers.** `IgnoredIdentifiers` has no equivalent. The subdomain resolver ignores the subdomains in
-  `IgnoredSubdomains`, and a store can return `null` for any other identifier.
+- Tenantry builds in only the in-memory store, and an application has one store. Finbuckle's configuration,
+  distributed cache, HTTP remote and echo stores have no equivalent, and neither have its methods that add, update and
+  remove tenants. Write an `ITenantStore<TKey>` as in step 3.
+- There is no base path, session, static or remote authentication callback resolver. Write an `ITenantResolver`
+  ([Custom resolvers](tenant-resolution.md#custom-resolvers)). For a tenant in the path, use a route template with
+  `{tenant}` and `ResolveFromRouteValue()`; nothing rewrites `PathBase`.
+- `BypassWhen` and `BypassWhenEndpointNotResolved` have no equivalent. `UseTenantry()` resolves every request that
+  reaches it, so put middleware that must skip it, such as static files, before it.
+- `IgnoredIdentifiers` has no equivalent. The subdomain resolver ignores the subdomains in `IgnoredSubdomains`, and a
+  store can return `null` for any other identifier.
 
 ## Checklist
 
