@@ -26,6 +26,7 @@ updates:
       - dependency-name: "Microsoft.AspNetCore.TestHost"
       - dependency-name: "Microsoft.CodeAnalysis.CSharp"
       - dependency-name: "Microsoft.CodeAnalysis.CSharp.Workspaces"
+      - dependency-name: "Microsoft.Data.SqlClient"
       - dependency-name: "Microsoft.EntityFrameworkCore.InMemory"
       - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
       - dependency-name: "Microsoft.EntityFrameworkCore.Sqlite"
@@ -38,6 +39,10 @@ updates:
       - dependency-name: "Microsoft.Extensions.Http"
       - dependency-name: "Microsoft.Extensions.Logging.Abstractions"
       - dependency-name: "Microsoft.Extensions.Options"
+      - dependency-name: "MySql.Data"
+      - dependency-name: "MySql.EntityFrameworkCore"
+      - dependency-name: "MySqlConnector"
+      - dependency-name: "Npgsql"
       - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
       - dependency-name: "Pomelo.EntityFrameworkCore.MySql"
       - dependency-name: "Tenantry.AspNetCore"
@@ -66,3 +71,16 @@ updates:
       actions:
         patterns:
           - "*"
+
+  # The database images the integration tests pin (tests/Tenantry.IntegrationTests/Providers/compose.yml, which
+  # ContainerImages.cs reads). A new major (SQL Server 2025, PostgreSQL 17, MySQL 9) changes the tested versions in
+  # docs/compatibility.md, so it is made by hand; the weekly dependency lane runs the newest releases meanwhile.
+  - package-ecosystem: "docker-compose"
+    directory: "/tests/Tenantry.IntegrationTests/Providers"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

@@ -32,6 +32,13 @@ accepts any later release of it:
 These minimums are the versions the tests run against. EF Core 9 on .NET 8 is not supported: use the EF
 Core that matches your target framework, as you would in any EF Core application.
 
+Three things Tenantry reads from EF Core are not documented by EF Core: the expressions of `ExecuteUpdate` setters,
+the query behind `GetDatabaseValues()` and `Reload()`, and the name EF Core gives a failed transaction operation.
+Tests pin each for every EF Core major above, and the weekly run takes the newest release of each major. If a release
+changed one, Tenantry would reject every `ExecuteUpdate`, or refuse the commit after any failed transaction operation
+that follows a save relying on a tenant check, but `GetDatabaseValues()` and `Reload()` would read another tenant's row
+by its key, as they do without Tenantry.
+
 ## Databases
 
 Tenantry uses only standard EF Core features, so it works with any relational EF Core provider that reports the rows
@@ -49,9 +56,31 @@ another tenant's row, pooled contexts, and a database per tenant) against a real
 | MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
 | MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | .NET 10 | Not tested (no EF Core 10 release) |
 
-Each framework runs the suite with its own EF Core version. MariaDB is not tested. Keep MySQL's default of reporting
-matched rows: with an option that reports changed rows (such as `UseAffectedRows=true`), an update that changes no
-values reports zero rows and EF Core raises a false concurrency failure.
+Each framework runs the suite with its own EF Core version. MariaDB is not tested.
+
+Every build runs the suite against the versions in the table: the oldest release of each provider that the tests
+allow, with the ADO.NET driver that provider requires at the least, against pinned server images (SQL Server 2022
+CU27, PostgreSQL 16.15, MySQL 8.4.11). Each week two more runs report what has changed since:
+
+- The newest release of each provider within its major, with the newest ADO.NET driver an application can update to:
+  Npgsql and MySqlConnector in the major their provider supports, `Microsoft.Data.SqlClient` and `MySql.Data` at
+  their newest release, against the pinned images.
+- The pinned packages against the newest server releases: SQL Server 2025, the latest PostgreSQL and MySQL releases,
+  and MySQL's long-term support release.
+
+Those weekly runs find a break soon after a release; only the versions in the table run on every build.
+
+Keep MySQL's default of reporting matched rows: with an option that reports changed rows (such as
+`UseAffectedRows=true`), an update that changes no values reports zero rows and EF Core raises a false concurrency
+failure. A save whose tenant check is another of its statements is kept all or nothing by rolling it back to a
+savepoint, or rolling back its transaction, so on MySQL its tables must use a transactional engine such as InnoDB, the
+default: a MyISAM table keeps the rows a failed save wrote.
+
+With `string` tenant ids, the database compares them under the `TenantId` column's collation. SQL Server's and MySQL's
+defaults ignore case, so the database takes `acme` and `ACME` for one tenant and each one's queries return the other's
+rows. Every tenant's `string` id must be unique under that collation: a store keyed by the id in the same database
+guarantees it, and `UseInMemoryStore` refuses ids that differ only in case, but not ones that differ only in accents.
+See [String tenant ids and the database's collation](efcore-integration.md#string-tenant-ids-and-the-databases-collation).
 
 ## Native AOT and trimming
 

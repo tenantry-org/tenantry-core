@@ -28,6 +28,20 @@
     <PackageReference Include="Testcontainers.MySql" />
   </ItemGroup>
 
+  <!-- The latest dependency lane only: the providers' ADO.NET drivers at their newest (Directory.Packages.props) -->
+  <ItemGroup Condition="'$(LatestDependencies)' == 'true' And '$(TargetFramework)' != 'net11.0'">
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(LatestDependencies)' == 'true' And ('$(TargetFramework)' == 'net8.0' Or '$(TargetFramework)' == 'net9.0')">
+    <PackageReference Include="MySqlConnector" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(LatestDependencies)' == 'true' And '$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="MySql.Data" />
+  </ItemGroup>
+
   <!-- The SecureApi sample targets net10.0 -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
@@ -41,6 +55,11 @@
   <!-- The .NET 11 preview lane: no MySQL provider exists for EF Core 11 yet -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
     <Compile Remove="Providers/MySqlProviderTests.cs" />
+  </ItemGroup>
+
+  <!-- The pinned database images, which ContainerImages.cs reads and Dependabot maintains -->
+  <ItemGroup>
+    <None Update="Providers/compose.yml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

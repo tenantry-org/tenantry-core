@@ -45,11 +45,18 @@ tenant.UseInMemoryStore(
 
 This registers `InMemoryTenantStore<TKey>`, built when you register it. It does not see later
 changes to the collection. Two tenants with the same id, or a tenant with an id Tenantry reserves for "no tenant"
-(`Guid.Empty`, `0`, an empty string), throw `ArgumentException` at registration.
+(`Guid.Empty`, `0`, an empty string), throw `ArgumentException` at registration. So do two `string` ids that differ
+only in case, such as `acme` and `ACME`: a database whose collation ignores case (the default on SQL Server and MySQL)
+takes them for one tenant, and one tenant's query filter would match the other's rows. Ids that differ only in accents
+or trailing spaces are not refused; avoid them too. The store finds a tenant by its id exactly as written.
 
 ## Custom store
 
-For tenants in a database, a cache or a configuration service, implement `ITenantStore<TKey>`.
+For tenants in a database, a cache or a configuration service, implement `ITenantStore<TKey>`. With `string` ids, make
+sure no two tenants have ids the database's collation takes for one, such as `acme` and `ACME` under a collation that
+ignores case: a table keyed by the id in the same database guarantees it, while tenants read from configuration or
+another service do not. See
+[String tenant ids and the database's collation](efcore-integration.md#string-tenant-ids-and-the-databases-collation).
 
 ```csharp
 using Microsoft.EntityFrameworkCore;

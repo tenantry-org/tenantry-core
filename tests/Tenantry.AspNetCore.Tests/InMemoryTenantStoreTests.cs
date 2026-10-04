@@ -72,6 +72,40 @@ public sealed class InMemoryTenantStoreTests
     }
 
     [Fact]
+    public void TwoStringIdsThatDifferOnlyInCase_AreRefused()
+    {
+        // A database whose collation ignores case would take them for one id, and match each tenant's rows to the other.
+        var create = () => new InMemoryTenantStore<string>(
+        [
+            new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
+            new TenantDescriptor<string> { TenantId = "ACME", Name = "Acme Shouting" },
+        ]);
+
+        create.Should().Throw<ArgumentException>().WithMessage("*'Acme Corp'*'Acme Shouting'*'acme'*'ACME'*differ only in case*")
+            .WithParameterName("tenants");
+    }
+
+    [Fact]
+    public async Task AStringId_IsStillFoundOnlyAsWritten()
+    {
+        (await _store.GetTenantAsync("ACME", TestContext.Current.CancellationToken)).Should().BeNull();
+    }
+
+    [Fact]
+    public void UseInMemoryStore_RefusesStringIdsThatDifferOnlyInCase_WhenRegistered()
+    {
+        ServiceCollection services = new();
+
+        var register = () => services.AddTenantry<string>(tenant => tenant.UseInMemoryStore(
+        [
+            new TenantDescriptor<string> { TenantId = "globex", Name = "Globex LLC" },
+            new TenantDescriptor<string> { TenantId = "Globex", Name = "Globex Again" },
+        ]));
+
+        register.Should().Throw<ArgumentException>().WithMessage("*differ only in case*");
+    }
+
+    [Fact]
     public void UseInMemoryStore_ChecksItsTenantsWhenRegistered()
     {
         ServiceCollection services = new();

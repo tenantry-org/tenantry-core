@@ -41,8 +41,9 @@ namespace Tenantry.EfCore.Internal;
 /// it, how many of those were confirmed, whether anything in it failed, and whether any save in it wrote rows whose
 /// check is another of its statements. Once one did, the transaction is unsafe if anything failed or a save that sent
 /// a statement was not confirmed. A save counts as sent at its first command, so one stopped before sending counts for
-/// nothing. A failed or cancelled command, a failed check and a failed rollback to a savepoint each mark the ledger
-/// failed directly, whatever another interceptor does with the save's failure afterwards. Only the save interceptor's
+/// nothing. A failed or cancelled command, a failed check and a failed rollback to a savepoint (or any failed
+/// transaction operation not known to leave nothing of a save) each mark the ledger failed directly, whatever another
+/// interceptor does with the save's failure afterwards. Only the save interceptor's
 /// <c>SavedChanges</c> confirms a save.
 /// </para>
 /// <para>
@@ -340,8 +341,9 @@ internal sealed class AtomicSave
     }
 
     /// <summary>
-    /// After EF Core failed to roll a failed save back to its savepoint in <paramref name="transaction"/>: that save's
-    /// statements are still in it, so its commit is refused if a save of <paramref name="context"/> relied on a check.
+    /// After EF Core failed to roll a failed save back to its savepoint in <paramref name="transaction"/>, or reported
+    /// a failed operation it may have been: that save's statements may still be in it, so its commit is refused if a
+    /// save of <paramref name="context"/> relied on a check.
     /// </summary>
     public static void SavepointNotRolledBack(DbContext? context, DbTransaction transaction)
     {

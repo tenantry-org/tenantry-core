@@ -1362,21 +1362,45 @@ public sealed class AtomicSaveTests : IDisposable
         await shared.RollbackAsync(TestContext.Current.CancellationToken);
     }
 
-    [Fact]
-    public async Task WhenEFCoreFailsToRollBackToItsSavepoint_AfterAFailedCheck_TheTransactionDoesNotCommit()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WhenEFCoreFailsToRollBackToItsSavepoint_AfterAFailedCheck_TheTransactionDoesNotCommit(bool sync)
     {
         await SeedAcmeAsync();
 
         await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { Transactions = new SavepointRollbackFails() }))
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
             Forge(db, Forgery.StubOwnerAddsOwnedRow);
-            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+            await db.Awaiting(d => SaveAsync(d, sync)).Should().ThrowAsync<DbUpdateConcurrencyException>();
 
-            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+            var commit = sync ? (Func<Task>)(() => Task.Run(transaction.Commit)) : () => transaction.CommitAsync();
+            (await commit.Should().ThrowAsync<TenantIsolationViolationException>())
+                .Which.Kind.Should().Be(TenantIsolationViolationKind.TransactionRolledBack);
+            db.Database.CurrentTransaction.Should().BeNull();
         }
 
         (await AcmeStateAsync()).Should().Be(AcmeState);
+    }
+
+    [Fact]
+    public async Task WhenEFCoreFailsToReleaseItsSavepoint_AfterASaveThatSucceeded_TheTransactionCommits()
+    {
+        // A failed release leaves the save's statements, which all succeeded, so it does not stop the commit.
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme"), new Setup { Transactions = new SavepointReleaseFails() }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            var customer = await db.Set<Customer>().SingleAsync(TestContext.Current.CancellationToken);
+            customer.Phones.Add(new Phone { Id = 2, Number = "acme second phone" });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            await transaction.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await AcmeStateAsync()).Should().Be("acme|1:acme phone,2:acme second phone|acme detail");
     }
 
     public static TheoryData<Change, bool> Changes()
@@ -2640,6 +2664,20 @@ public sealed class AtomicSaveTests : IDisposable
             InterceptionResult result,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("rollback failed");
+    }
+
+    // A release of the save's savepoint that fails, which EF Core only logs.
+    private sealed class SavepointReleaseFails : TransactionCounter
+    {
+        public override InterceptionResult ReleasingSavepoint(DbTransaction transaction, TransactionEventData eventData, InterceptionResult result) =>
+            throw new InvalidOperationException("release failed");
+
+        public override ValueTask<InterceptionResult> ReleasingSavepointAsync(
+            DbTransaction transaction,
+            TransactionEventData eventData,
+            InterceptionResult result,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("release failed");
     }
 
     // A SavingChanges interceptor after Tenantry's that stops the first save, so it never begins or ends.

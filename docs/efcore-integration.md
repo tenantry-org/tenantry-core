@@ -85,6 +85,23 @@ models cannot be isolated at all: see [the list](efcore-advanced.md#models-that-
 With no tenant current, the filter matches nothing, so reads return no rows. It checks whether a tenant is current
 rather than comparing the id with a default value, and no tenant can have the default id.
 
+### String tenant ids and the database's collation
+
+The query filter and the `WHERE` clause of updates and deletes compare `TenantId` in the database, under the column's
+collation. SQL Server's and MySQL's default collations ignore case (MySQL's also ignores accents, and SQL Server ignores
+trailing spaces whatever the collation), so with `string` ids the database takes `acme` and `ACME` for the same
+tenant: each one's queries return the other's rows, and its updates and deletes can change them. PostgreSQL compares
+exactly by default, and does the same as the others on a `citext` column or under a nondeterministic collation.
+Tenantry compares ids exactly, so it cannot see this.
+
+Give each tenant a `string` id that the database cannot confuse with another's under its collation. A store that reads
+tenants from a table keyed by the id, under the same collation, guarantees it, since the key refuses a second id the
+collation takes for the first. `UseInMemoryStore` refuses two `string` ids that differ only in case; ids that the
+collation takes for one another in any other way (accents, trailing spaces, `ß` and `ss` under some collations) are
+yours to avoid. A store of your own over configuration or another service guarantees nothing. `Guid` or `int` keys
+avoid the question. So does a binary collation on `TenantId` (`UseCollation`), except that SQL Server still ignores
+trailing spaces.
+
 ### How the query filter stays correct
 
 EF Core compiles a query filter once and caches it for every instance of the model, so a filter that captured a
@@ -270,7 +287,9 @@ The tenant filter and write checks still apply, so a connection string that poin
 and rejects writes. A guard also checks, before a context opens a connection and before every command, that the
 connection was set for this context (and, pooled, this lease) and belongs to the current tenant. A context used after
 a switch to another tenant, or whose connection or connection string your code replaced, throws
-`TenantIsolationViolationException`, even if its connection is already open.
+`TenantIsolationViolationException`, even if its connection is already open. A provider that replaces its connection
+object itself after the connection string is set fails the same way; the [tested providers](compatibility.md#databases)
+keep it.
 
 The guard cannot see SQL you run on `Database.GetDbConnection()`. A streaming or split query that started before the
 tenant changed keeps reading from its database, whose rows belong to the tenant current when it started. Use SQLite

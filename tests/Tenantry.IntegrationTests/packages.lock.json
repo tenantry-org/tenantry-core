@@ -45,7 +45,7 @@
       },
       "MySql.EntityFrameworkCore": {
         "type": "Direct",
-        "requested": "[10.0.9, )",
+        "requested": "[10.0.9, 11.0.0)",
         "resolved": "10.0.9",
         "contentHash": "1WF31dFOi9UzkLsDl3A6QnvxIJGXzVikgVbuYbgESRDsoI5WYr5ygWQJC9kbDJxldrCT6nDgt87LNFTKRgrwpQ==",
         "dependencies": {
@@ -56,7 +56,7 @@
       },
       "Npgsql.EntityFrameworkCore.PostgreSQL": {
         "type": "Direct",
-        "requested": "[10.0.3, )",
+        "requested": "[10.0.3, 11.0.0)",
         "resolved": "10.0.3",
         "contentHash": "IPGrrZnRkuW7OlHDhUESZz4G5DLkW7Nej/O3Cx+0iTsgyU5XJxBgpsvTHLloo3WWuAKKbDHXBvWPVkX1deRh1Q==",
         "dependencies": {

@@ -121,7 +121,8 @@ usually ensures this with a transaction, but not in every setup. For these saves
   savepoints on for the save if you turned them off (`AutoSavepointsEnabled = false`). A transaction without
   savepoints, such as SQL Server with multiple active result sets (MARS), is rolled back instead of committed once such
   a save has run in it, if any save in it failed after sending a statement, or if EF Core could not roll back to its
-  savepoint. `Commit` then throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
+  savepoint (any failed operation on the transaction counts as that, except a commit, a rollback, and creating or
+  releasing a savepoint). `Commit` then throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
   - Any failure counts, of any save in the transaction. EF Core does not say which save a failure is for when one save
     runs inside another, and a save can fail before EF Core reads the check (on a duplicate key, say), so Tenantry
     cannot know whether the check held, and a forged write looks like a real conflict.
