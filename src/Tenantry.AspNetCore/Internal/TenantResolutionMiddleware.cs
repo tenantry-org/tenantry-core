@@ -90,11 +90,15 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         // A user signed in while app.UseTenantResolution() made a tenant current that the validators now refuse was
         // authenticated as that tenant: events and claims transformations may have given it the tenant's claims.
         // Nothing may run with it, so the request is refused, whether or not the endpoint requires a tenant. A caller
-        // with no claims has nothing to carry over, and is treated as before.
-        var required = IsTenantRequired(endpoint) ||
-                       (early is { Resolution.Result: ResolutionResult.Resolved } &&
-                        resolution.Result == ResolutionResult.AccessDenied &&
-                        context.User.Claims.Any());
+        // that is not signed in and has no claims has nothing to carry over, and is treated as before.
+        if (early is { Resolution.Result: ResolutionResult.Resolved } &&
+            resolution.Result == ResolutionResult.AccessDenied &&
+            (context.User.Identities.Any(identity => identity.IsAuthenticated) || context.User.Claims.Any()))
+        {
+            early.RefusedSignedIn = true;
+        }
+
+        var required = IsTenantRequired(endpoint) || early is { RefusedSignedIn: true };
 
         // Before routing, whether the request is rejected is known only once routing has chosen its endpoint.
         if (endpoint is not null || required || resolution.Result == ResolutionResult.Resolved)

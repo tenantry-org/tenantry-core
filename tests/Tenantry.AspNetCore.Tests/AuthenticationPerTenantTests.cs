@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Tenantry.AspNetCore.Internal;
@@ -489,6 +490,124 @@ public sealed class AuthenticationPerTenantTests
     private sealed class PlanTransformation(Func<ClaimsPrincipal, ClaimsPrincipal> transform) : IClaimsTransformation
     {
         public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal) => Task.FromResult(transform(principal));
+    }
+
+    [Fact]
+    public async Task ARefusedRequest_CarriesNoRenewedCookie_SoTheTenantsClaimsNeverLeaveIt()
+    {
+        // The cookie event takes the plan from the current tenant and renews the cookie, as Identity's security stamp
+        // check renews it: the renewal is written as the response starts, after Tenantry refused the request.
+        await using var app = await StartAsync(
+            PremiumTenants,
+            services =>
+            {
+                services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
+                {
+                    o.Cookie.Name = "auth";
+                    o.Events.OnValidatePrincipal = c =>
+                    {
+                        var tenant = c.HttpContext.RequestServices.GetRequiredService<ITenantContext<string>>().CurrentTenantId;
+
+                        if (tenant == "globex")
+                        {
+                            ClaimsIdentity premium = new(c.Principal!.Claims, c.Principal.Identity!.AuthenticationType);
+                            premium.AddClaim(new Claim("plan", "premium"));
+                            c.ReplacePrincipal(new ClaimsPrincipal(premium));
+                        }
+
+                        // Renewed on every request, so an allowed request shows renewal still works.
+                        c.ShouldRenew = tenant is not null;
+                        return Task.CompletedTask;
+                    };
+                });
+                services.AddAuthorizationBuilder().AddPolicy("Premium", policy => policy.RequireClaim("plan", "premium"));
+            },
+            a =>
+            {
+                a.UseTenantResolution();
+                a.UseAuthentication();
+                a.UseTenantry();
+                a.UseAuthorization();
+                a.MapGet("/sign-in", async http =>
+                {
+                    ClaimsIdentity identity = new(
+                        [new Claim("sub", "alice"), new Claim("tenant_id", http.Request.Headers["X-Tenant-Id"].ToString())],
+                        CookieAuthenticationDefaults.AuthenticationScheme);
+                    await http.SignInAsync(new ClaimsPrincipal(identity));
+                }).AllowMissingTenant();
+                a.MapGet("/plan", () => "premium").RequireAuthorization("Premium");
+                a.MapGet("/me", (HttpContext http) => http.User.FindFirst("tenant_id")?.Value ?? "(anonymous)").AllowMissingTenant();
+            });
+        using var client = app.GetTestClient();
+
+        static async Task<HttpResponseMessage> SendAs(HttpClient client, string tenant, string path, string? cookie)
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, $"http://localhost{path}");
+            request.Headers.Add("X-Tenant-Id", tenant);
+
+            if (cookie is not null)
+                request.Headers.Add("Cookie", cookie);
+
+            return await client.SendAsync(request, TestContext.Current.CancellationToken);
+        }
+
+        static string? AuthCookie(HttpResponseMessage response) =>
+            response.Headers.TryGetValues("Set-Cookie", out var cookies)
+                ? cookies.Select(c => c.Split(';')[0]).FirstOrDefault(c => c.StartsWith("auth=", StringComparison.Ordinal))
+                : null;
+
+        using var signIn = await SendAs(client, "acme", "/sign-in", cookie: null);
+        var acmeCookie = AuthCookie(signIn)!;
+
+        using (var plan = await SendAs(client, "acme", "/plan", acmeCookie))
+        {
+            plan.StatusCode.Should().Be(HttpStatusCode.Redirect, "Acme is not premium");
+            AuthCookie(plan).Should().NotBeNull("an allowed request still renews its cookie");
+        }
+
+        using (var refused = await SendAs(client, "globex", "/plan", acmeCookie))
+        {
+            refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            refused.Headers.Contains("Set-Cookie").Should().BeFalse();
+        }
+
+        using (var me = await SendAs(client, "acme", "/me", acmeCookie))
+        {
+            (await me.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("acme");
+        }
+    }
+
+    [Fact]
+    public async Task ASignedInIdentityWithNoClaims_IsRefusedToo()
+    {
+        await using var app = await StartAsync(
+            PremiumTenants,
+            services =>
+            {
+                services.AddAuthentication("guest").AddScheme<AuthenticationSchemeOptions, GuestUnderGlobex>("guest", null);
+                services.AddAuthorization();
+            },
+            a =>
+            {
+                a.UseTenantResolution();
+                a.UseAuthentication();
+                a.UseTenantry();
+                a.UseAuthorization();
+                a.MapGet("/signed-in", () => "signed in").RequireAuthorization();
+            });
+
+        (await GetPremium(app, "globex", claim: "acme", path: "/signed-in")).Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // Signs in, with an identity that has no claims, a request made while Globex is current.
+    private sealed class GuestUnderGlobex(
+        IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, System.Text.Encodings.Web.UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    {
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
+            Task.FromResult(Context.RequestServices.GetRequiredService<ITenantContext<string>>().CurrentTenantId == "globex"
+                ? AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity("Guest")), Scheme.Name))
+                : AuthenticateResult.NoResult());
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 
 namespace Tenantry.AspNetCore.Internal;
 
@@ -47,6 +48,23 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
             AuthorizedBefore = context.Items.ContainsKey(AuthorizationMarkers.MiddlewareRan),
         };
         context.Features.Set(early);
+
+        // Registered before authentication, so it runs after the callbacks authentication handlers register (the last
+        // registered runs first): a cookie handler renews its cookie in one. A request refused for a user signed in
+        // under a tenant it may not use must not take that user away in a cookie, so every cookie set since is removed.
+        context.Response.OnStarting(
+            static state =>
+            {
+                var (http, refused, cookies) = ((HttpContext, EarlyTenantResolution<TKey>, StringValues))state;
+
+                if (refused.RefusedSignedIn)
+                {
+                    http.Response.Headers.SetCookie = cookies;
+                }
+
+                return Task.CompletedTask;
+            },
+            (context, early, context.Response.Headers.SetCookie));
 
         var previous = context.Features.Get<IEndpointFeature>();
         ReplacingEndpointFeature guarded = new(previous, endpoint => Guard(endpoint, early));

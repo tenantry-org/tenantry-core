@@ -77,11 +77,15 @@ Between the two, the tenant is current but not yet checked against the user. So:
 - Put only `app.UseAuthentication()` between them, and `app.UseAuthorization()` after `app.UseTenantry()`.
 - Authentication events (`OnTokenValidated`, `OnValidatePrincipal`) and claims transformations
   (`IClaimsTransformation`) run with the tenant current before it is checked. They must not grant claims, roles or
-  permissions from the current tenant, and must not write as it: the caller may not be allowed to use it.
-- If the validators refuse a tenant that was current during authentication, and the request has a signed-in user (one
-  with any claims), the request is refused with the access-denied response, whether or not its endpoint requires a
-  tenant: the user was authenticated as a tenant it may not use. A caller with no claims, such as an anonymous one,
-  is treated as without early resolution: the tenant is not current, and an endpoint that does not require one runs.
+  permissions from the current tenant, and must not write as it: the caller may not be allowed to use it. Do not
+  renew or reissue a cookie with claims taken from the current tenant either, even one the caller may use: a cookie
+  that is valid on several tenants carries those claims to the others.
+- If the validators refuse a tenant that was current during authentication, and the request has a signed-in user (an
+  authenticated identity, or any claims), the request is refused with the access-denied response, whether or not its
+  endpoint requires a tenant: the user was authenticated as a tenant it may not use. The response carries none of the
+  cookies set after `app.UseTenantResolution()`, so a cookie the authentication handler renewed with that user is
+  not sent. A caller with no identity and no claims, such as an anonymous one, is treated as without early
+  resolution: the tenant is not current, and an endpoint that does not require one runs.
 - An endpoint the request reaches without passing `app.UseTenantry()` (in a branch, say) does not run: it gets `500`
   and log event 1011.
 - An application with `app.UseTenantResolution()` and no `app.UseTenantry()` fails to start.
@@ -110,6 +114,11 @@ refuses. The validator refuses an anonymous caller too, but such a caller carrie
 runs with no tenant current: mark it `AllowMissingTenant()` and take the tenant from the request (its host, say) when
 you issue the cookie. Its authentication handler was created with the tenant current, so it writes the tenant's
 cookie.
+
+So a user signed in to one tenant who visits another tenant's sign-in page, or any other page after
+`app.UseTenantry()`, is refused there with `403`, including `AllowMissingTenant()` pages, as long as the browser sends
+the cookie. With a cookie shared across subdomains, the user must sign out first. Pages that must work for them, such
+as a sign-in page or static files, go before `app.UseTenantResolution()` in the pipeline.
 
 ## Identity provider metadata
 

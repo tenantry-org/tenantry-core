@@ -172,4 +172,11 @@ internal sealed class EarlyTenantResolution<TKey>(TenantResolution<TKey> resolut
 
     /// <summary>Whether the authorization middleware ran for the request before <c>app.UseTenantResolution()</c>.</summary>
     public bool AuthorizedBefore { get; init; }
+
+    /// <summary>
+    /// Whether <c>app.UseTenantry()</c> refused the request because the validators refused the tenant for a user
+    /// signed in while it was current: the response then carries none of the cookies set after
+    /// <c>app.UseTenantResolution()</c>.
+    /// </summary>
+    public bool RefusedSignedIn { get; set; }
 }

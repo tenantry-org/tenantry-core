@@ -111,9 +111,20 @@ app.UseAuthorization();
 ```
 
 During authentication the tenant is current but not yet checked against the user. Cookie events such as
-`OnValidatePrincipal`, and claims transformations, must not grant claims, roles or permissions from the current
-tenant, and must not write as it. If the validator then refuses the tenant for a signed-in user, the whole request is
-refused (`403`), including endpoints that do not require a tenant.
+`OnValidatePrincipal`, `SecurityStampValidatorOptions.OnRefreshingPrincipal`, and claims transformations must not
+grant claims, roles or permissions from the current tenant, and must not write as it. Do not renew or reissue the
+cookie with claims taken from the tenant: a cookie valid on several tenants carries them across.
+
+A user signed in to one tenant who visits another, with a cookie shared across subdomains, gets one of two outcomes:
+
+- When the security stamp is checked on that request (every `ValidationInterval`), the tenant's users do not include
+  them, so Identity rejects the cookie and deletes it: the request runs anonymous, and the user is signed out of
+  their own tenant too.
+- Otherwise the validator refuses the tenant for a signed-in user, so the whole request is refused (`403`), sign-in
+  page and other `AllowMissingTenant()` pages included, and the response sets no cookie.
+
+Either way the user must sign out before signing in to another tenant, or use a cookie per tenant host. Pages that
+must work for them, such as a sign-in page or static files, go before `app.UseTenantResolution()`.
 
 ## See also
 

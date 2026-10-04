@@ -23,7 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`AuthorizationMarkersMissing`) warns at startup if the running version does not set them.
 - With `app.UseTenantResolution()`, a signed-in request whose tenant the access validators refuse is now refused with
   the access-denied response (`403` by default) on every endpoint, including those that do not require a tenant,
-  where it used to run with no tenant. A caller with no claims, such as an anonymous one, is treated as before.
+  where it used to run with no tenant, and its response sets no cookie that authentication set. A caller with no
+  identity and no claims, such as an anonymous one, is treated as before. A user signed in to one tenant, with a
+  cookie shared across subdomains, is therefore refused on every page of another tenant, its sign-in page included:
+  they sign out first, or those pages (and static files) go before `app.UseTenantResolution()`.
 - `ITenantContextSetter<TKey>.Use(tenant)` is now `MakeCurrent(tenant)`, and `UseNoTenant()` is
   `MakeNoTenantCurrent()`. Replace `.Use(` with `.MakeCurrent(` where it is called on the tenant context, and
   `UseNoTenant` with `MakeNoTenantCurrent`. A class of your own that implements the interface renames both methods.
@@ -131,7 +134,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transformation that added claims from the current tenant (its plan, say) gave them to the user, and authorization
   granted on them on any endpoint that does not require a tenant. This shipped in 0.6.0. Such a request is now
   refused, through the usual rejection (`OnRejected`, problem details, metrics, event 1005), and no further
-  middleware runs. Applications without `app.UseTenantResolution()` were not affected: their authentication runs with
+  middleware runs. The refused response carries none of the cookies set after `app.UseTenantResolution()`, so a cookie
+  the handler renewed with that user (as Identity's security stamp check renews it) cannot carry it to a tenant the
+  user may use. Applications without `app.UseTenantResolution()` were not affected: their authentication runs with
   no tenant current. See [Authentication per tenant](docs/authentication-per-tenant.md#how-the-two-steps-work).
 - Tenantry's own reads no longer return to the caller's synchronization context, so a desktop app that waits on a
   store read, an activity check or a connection string on its UI thread no longer deadlocks. The work passed to
