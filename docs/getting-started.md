@@ -74,7 +74,7 @@ public class Order : TenantEntity<Guid>   // adds a `Guid TenantId { get; set; }
 
 Entities that do not implement `ITenantEntity<TKey>` are shared by all tenants (product catalogues, reference
 tables) and are never filtered or stamped. Leave `TenantId` unset: Tenantry stamps it on insert
-([Core concepts](core-concepts.md#itenantentitytkey)).
+([Core concepts](core-concepts.md#itenantentity)).
 
 ## 5. Keep your DbContext as it is
 
