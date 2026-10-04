@@ -113,6 +113,9 @@ check stops the query or save before it runs.
 - "has no mapped public property 'TenantId'": make `TenantId` a public property of the key type (its setter can be
   private or init-only).
 - "has a query filter named 'Tenantry.Tenant'" (EF Core 10): rename your filter.
+- "has the join entity … which is not tenant-owned": configure the many-to-many relationship with
+  `UsingEntity<TJoin>()` and implement `ITenantEntity<TKey>` on the join entity. See
+  [Many-to-many relationships](efcore-advanced.md#many-to-many-relationships).
 - "is tenant-owned and mapped to JSON": remove `ITenantEntity<TKey>` from the owned type; its owner isolates it.
 
 ## Creating the context fails with "replaces EF Core's IModelCustomizer" or "UseInternalServiceProvider"

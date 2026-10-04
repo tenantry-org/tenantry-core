@@ -1,7 +1,8 @@
 # Owned and multi-table entities
 
 Owned rows in a table of their own, and the rows of an entity mapped to more than one table, have no tenant check of
-their own. Tenantry checks them through another statement and keeps the save all-or-nothing.
+their own. Tenantry checks them through another statement and keeps the save all-or-nothing. The join rows of a
+many-to-many relationship have none either, so their join entity must be tenant-scoped.
 
 ## Owned entities
 
@@ -36,6 +37,50 @@ when EF Core does not save `TenantId`, its stored row is read before the save. O
 neither: every table's key names the tenant. A save that deletes such an entity and adds one under the same key, which
 EF Core saves as an `UPDATE` of what differs, table by table, has the deleted one's stored row read. Rows outside the
 table with `TenantId` rely on that table's statement, so the save must succeed or fail as a whole.
+
+## Many-to-many relationships
+
+The join rows of a many-to-many relationship hold the keys of the two rows they join. EF Core inserts and deletes them
+when a collection changes, while the entities at both ends stay unchanged and are not written, so no statement of the
+save checks a `TenantId`. `UseTenantry()` therefore refuses a many-to-many relationship with a tenant-scoped type at
+either end unless its join entity is tenant-scoped too. That includes the join entity EF Core creates when you configure
+none, and a relationship whose other end is shared across tenants.
+
+Give the relationship a join entity of your own that implements `ITenantEntity<TKey>`:
+
+```csharp
+public class Post : TenantEntity<Guid>
+{
+    public int Id { get; set; }
+    public List<Tag> Tags { get; } = [];
+}
+
+public class Tag : TenantEntity<Guid>
+{
+    public int Id { get; set; }
+    public List<Post> Posts { get; } = [];
+}
+
+public class PostTag : TenantEntity<Guid>
+{
+    public int PostId { get; set; }
+    public int TagId { get; set; }
+}
+
+public class BlogDbContext(DbContextOptions<BlogDbContext> options) : DbContext(options)
+{
+    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+        modelBuilder.Entity<Post>()
+            .HasMany(p => p.Tags)
+            .WithMany(t => t.Posts)
+            .UsingEntity<PostTag>();
+}
+```
+
+The join rows are then tenant-scoped rows like any other. `post.Tags.Add(tag)` inserts one stamped with the current
+tenant, queries through `Tags` and `Posts` read only the current tenant's join rows, and a delete checks the stored
+`TenantId`, so it matches no row of another tenant's. An existing join table needs a migration that adds the `TenantId`
+column and fills it from either end's row.
 
 ## Saves that succeed or fail as a whole
 
@@ -88,6 +133,8 @@ Building these models throws `TenantIsolationViolationException` (or `InvalidOpe
 - an owned type owned by a tenant-scoped type through a key that neither includes nor is part of the owner's primary
   key, nor includes its `TenantId` (`WithOwner().HasPrincipalKey(o => o.Code)`): Tenantry checks the owner by its
   primary key, which need not be the row the owned rows name;
+- a many-to-many relationship with a tenant-scoped type at either end whose join entity is not tenant-scoped (see
+  [Many-to-many relationships](#many-to-many-relationships));
 - a tenant-scoped owned type mapped to JSON (`ToJson()`): it lives in its owner's row, under the owner's `TenantId`,
   and EF Core cannot check a `TenantId` of its own (EF Core 10 rejects the concurrency token itself), so do not
   implement `ITenantEntity<TKey>` on it;

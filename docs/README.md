@@ -21,7 +21,7 @@ If you are new, start with **[Getting started](getting-started.md)** and **[Core
 10. **[Authentication per tenant](authentication-per-tenant.md)** — JWT bearer, OpenID Connect and cookie settings per tenant, with `UseTenantResolution()` before authentication, and a scheme per tenant.
 11. **[ASP.NET Core Identity](aspnetcore-identity.md)** — users kept per tenant in a shared database, user names unique within a tenant, and sign-in cookies tied to their tenant.
 12. **[EF Core integration](efcore-integration.md)** — query filters, the `SaveChanges` interceptor, isolation options, pooling, a database per tenant, migrations, and cross-tenant queries.
-13. **[Owned and multi-table entities](efcore-advanced.md)** — how owned entities and entities split across tables are checked, saves that succeed or fail as a whole, and models that cannot be isolated.
+13. **[Owned and multi-table entities](efcore-advanced.md)** — how owned entities, entities split across tables and many-to-many join rows are checked, saves that succeed or fail as a whole, and models that cannot be isolated.
 14. **[Non-HTTP hosts](non-http-hosts.md)** — `AddTenantry` for console apps, worker services, and background jobs.
 15. **[Testing](testing.md)** — tests with Tenantry's real services: tenant scopes, `WebApplicationFactory`, and EF Core isolation.
 16. **[Diagnostics](diagnostics.md)** — log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.
