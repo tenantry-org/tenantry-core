@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Tenantry.EfCore.CodeFixes" />
     <InternalsVisibleTo Include="Tenantry.Analyzers.Tests" />
   </ItemGroup>
 

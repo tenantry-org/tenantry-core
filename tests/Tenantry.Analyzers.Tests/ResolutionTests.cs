@@ -32,6 +32,24 @@ public sealed class ResolutionTests
             """);
 
     [Fact]
+    public Task TheBuildersServicesUsedInTheLambda_AreNotReported() =>
+        Verify.AnalyzerAsync<UnvalidatedResolutionAnalyzer>(Usings + """
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services) =>
+                    services.AddTenantry<string>(tenant =>
+                    {
+                        tenant.ResolveFromSubdomain().UseInMemoryStore([]);
+                        tenant.Services.AddOurValidators();
+                    });
+
+                private static void AddOurValidators(this IServiceCollection services)
+                {
+                }
+            }
+            """);
+
+    [Fact]
     public Task AValidatorInTheSameAddTenantry_ClearsIt() =>
         Verify.AnalyzerAsync<UnvalidatedResolutionAnalyzer>(Usings + """
             public static class Startup
@@ -60,6 +78,39 @@ public sealed class ResolutionTests
             {
                 public ValueTask<bool> ValidateAsync(HttpContext context, ITenantDescriptor<string> tenant, CancellationToken cancellationToken) =>
                     ValueTask.FromResult(true);
+            }
+            """);
+
+    [Fact]
+    public Task AValidatorRegisteredThroughDi_WithoutATypeInThisProject_ClearsIt() =>
+        Verify.AnalyzerAsync<UnvalidatedResolutionAnalyzer>(Usings + """
+            public interface IValidators
+            {
+                ITenantAccessValidator<string> Membership();
+            }
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services, IValidators validators)
+                {
+                    services.AddTenantry<string>(tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([]));
+                    services.AddScoped<ITenantAccessValidator<string>>(_ => validators.Membership());
+                }
+            }
+            """);
+
+    [Fact]
+    public Task AValidatorNamedOnlyByTypeof_ClearsIt() =>
+        Verify.AnalyzerAsync<UnvalidatedResolutionAnalyzer>(Usings + """
+            using System;
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services, Type membership)
+                {
+                    services.AddTenantry<string>(tenant => tenant.ResolveFromRouteValue("tenant").UseInMemoryStore([]));
+                    services.Add(ServiceDescriptor.Scoped(typeof(ITenantAccessValidator<string>), membership));
+                }
             }
             """);
 

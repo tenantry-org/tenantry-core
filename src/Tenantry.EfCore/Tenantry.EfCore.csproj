@@ -18,10 +18,9 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>
 
-  <!-- The analyzers and code fix the package carries (docs/analyzers.md) -->
+  <!-- The analyzers the package carries (docs/analyzers.md) -->
   <ItemGroup>
     <TenantryAnalyzer Include="..\..\analyzers\Tenantry.EfCore.Analyzers\Tenantry.EfCore.Analyzers.csproj" />
-    <TenantryAnalyzer Include="..\..\analyzers\Tenantry.EfCore.CodeFixes\Tenantry.EfCore.CodeFixes.csproj" />
   </ItemGroup>
 
   <!-- The EF Core major each target framework builds against (Directory.Packages.props), and the .NET 11 preview lane's (IncludeNet11) -->

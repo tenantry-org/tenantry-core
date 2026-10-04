@@ -33,7 +33,7 @@ public sealed class TenantScopeTests
             """);
 
     [Fact]
-    public Task BlockingOnRunInScopeAsync_IsReported_AndAwaitingItIsNot() =>
+    public Task BlockingOnRunInScopeAsync_IsNoted_AndAwaitingItIsNot() =>
         Verify.AnalyzerAsync<TenantScopeAnalyzer>(Usings + """
             public static class Work
             {

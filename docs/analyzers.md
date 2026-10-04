@@ -11,7 +11,7 @@ package to install. They add no runtime dependency: the compiler loads them, and
 | [TNY1003](#tny1003) | Tenantry.EfCore | Info | Raw SQL on `Database`, which is not isolated |
 | [TNY2001](#tny2001) | Tenantry.AspNetCore | Warning | The tenant resolved from the request with no access validator |
 | [TNY3001](#tny3001) | Tenantry.EfCore | Info | `MakeCurrent` or `CreateScope` given a descriptor built in the call |
-| [TNY3002](#tny3002) | Tenantry.EfCore | Warning | Blocking on `RunInScopeAsync` |
+| [TNY3002](#tny3002) | Tenantry.EfCore | Info | Blocking on `RunInScopeAsync` |
 
 The first digit of a rule's number is its area: 1 for EF Core isolation, 2 for resolution and access, 3 for tenant
 scopes. Each rule reports only what it can be sure of, so code it cannot see into is left alone. The tenant scope
@@ -45,18 +45,35 @@ var total = await db.Orders.IgnoreQueryFilters().CountAsync();
 
 ## TNY1001
 
-A type a `DbContext` maps (as a `DbSet<T>` property or with `modelBuilder.Entity<T>()`) has a `TenantId` property but
-does not implement `ITenantEntity<TKey>`. Tenantry filters and checks only the types that implement it, so every tenant
-reads and writes all of this type's rows.
+A type a `DbContext` maps has a `TenantId` property but does not implement `ITenantEntity<TKey>`, and the same context
+maps tenant-owned types. Tenantry filters and checks only the types that implement it, so every tenant reads and
+writes all of this type's rows.
 
-Implement `ITenantEntity<TKey>`, or derive from `TenantEntity<TKey>`. In Visual Studio and Rider, the fix "Implement
-ITenantEntity<TKey>" adds the interface, with `TKey` the type of `TenantId`. If every tenant shares the type, mark it
-`[SharedAcrossTenants]`, which also states it in the model
+Implement `ITenantEntity<TKey>`, or derive from `TenantEntity<TKey>`. The message names `TKey`, the type of
+`TenantId`; a `TenantId` that cannot be a tenant key (`Guid?`, say) must first become one (a non-nullable `Guid`,
+`int`, `long` or `string`). If every tenant shares the type, mark it shared, with `[SharedAcrossTenants]` or
+`IsSharedAcrossTenants()`, which also states it in the model
 ([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
 
-It is not reported for a type marked `[SharedAcrossTenants]` (or derived from one), a type without a `TenantId`
-property, a tenant descriptor (a type that implements `ITenantDescriptor<TKey>`, as a tenant store's entity does), or a
-type named `Tenant`, whose `TenantId` is its key by EF Core's convention.
+What it looks at:
+
+- A context's types are those of its `DbSet<T>` properties, its base contexts' included, and of the
+  `modelBuilder.Entity<T>()` calls in its methods. A type mapped only in an `IEntityTypeConfiguration<T>`, or reached
+  only through a navigation, is not seen.
+- A context that maps no tenant-owned type is left alone: a database-per-tenant context, or one Tenantry does not
+  isolate, has nothing to keep apart.
+- A type marked shared is not reported: `[SharedAcrossTenants]` on it or a base type, or `IsSharedAcrossTenants()`
+  anywhere in the project, in `OnModelCreating` or an `IEntityTypeConfiguration<T>`. If the project calls the
+  non-generic `IsSharedAcrossTenants()` on a builder whose type it cannot tell (in a loop over the model's types, say),
+  the rule reports nothing.
+- A tenant descriptor (a type that implements `ITenantDescriptor<TKey>`) is not reported, and neither is a type whose
+  key is, or may be, its `TenantId`, as a tenant registry's is: one with no other key by EF Core's conventions (an `Id`
+  or `<Type>Id` property, a `[Key]`, or a `[PrimaryKey]` without `TenantId`). A registry with a key of its own and a
+  `TenantId` column, in a context with tenant-owned types, is reported: mark it `[SharedAcrossTenants]`.
+
+Each type is reported once, where it is first mapped. The rule decides once the whole project is compiled, so `dotnet
+build` reports it, while an IDE may show it only after a build or with analysis of the whole solution turned on. For
+the same reason it has no code fix: Visual Studio and Rider offer fixes only for diagnostics found file by file.
 
 ## TNY1002
 
@@ -84,10 +101,22 @@ read something the caller chooses, so with no access validator any caller can ac
 
 Add `ValidateTenantAccessByClaim(...)` or `ValidateTenantAccess(...)` in the same `AddTenantry`
 ([Validating tenant access](access-control.md#validating-tenant-access)). The rule reports nothing if the project adds
-an access validator anywhere (with those methods, or a type that implements `ITenantAccessValidator<TKey>`), or if the
-`AddTenantry` lambda passes its builder, or the builder's `Services`, to other code. `ResolveFromClaim` and
+an access validator anywhere with those methods, or names `ITenantAccessValidator<TKey>` at all (a type that implements
+it, a registration such as `services.AddScoped<ITenantAccessValidator<Guid>, MembershipValidator>()`, a `typeof`),
+or if the `AddTenantry` lambda passes its builder, or the builder's `Services`, to other code. A validator registered
+only by a library's own extension method, in another assembly, is not seen. `ResolveFromClaim` and
 `ResolveFromPropagationHeader` are not reported: a claim comes from the authenticated user, and the propagation header
 from callers its predicate trusts.
+
+Where any caller may use any tenant on purpose, turn the rule off for that project or those files: a public site per
+tenant with no signed-in users, where the host names the tenant whose pages are shown, or a test that sends the header
+itself.
+
+```ini
+# A public site: the subdomain picks the tenant, and every visitor may see any tenant's pages.
+[*.cs]
+dotnet_diagnostic.TNY2001.severity = none
+```
 
 It decides once the whole project is compiled, so `dotnet build` reports it, while an IDE may show it only after a
 build, or with analysis of the whole solution turned on.
@@ -108,6 +137,7 @@ is info by default, since tests build descriptors this way.
 
 `.Result`, `.Wait()` or `.GetAwaiter().GetResult()` on the task `RunInScopeAsync` returns, in the same expression.
 `RunInScopeAsync` returns to the caller's synchronization context to start the work and dispose the scope's services, so
-blocking on it there, as on a desktop app's UI thread, can deadlock.
+blocking on it there, as on a desktop app's UI thread, can deadlock. It is info by default: ASP.NET Core, workers and a
+console app's `Main` have no such context, and blocking there cannot deadlock.
 
 Await it ([Desktop apps](non-http-hosts.md#desktop-apps)).

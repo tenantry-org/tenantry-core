@@ -2,7 +2,6 @@
   <Folder Name="/analyzers/">
     <Project Path="analyzers\Tenantry.AspNetCore.Analyzers\Tenantry.AspNetCore.Analyzers.csproj" />
     <Project Path="analyzers\Tenantry.EfCore.Analyzers\Tenantry.EfCore.Analyzers.csproj" />
-    <Project Path="analyzers\Tenantry.EfCore.CodeFixes\Tenantry.EfCore.CodeFixes.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples\Tenantry.Samples.Aot\Tenantry.Samples.Aot.csproj" />

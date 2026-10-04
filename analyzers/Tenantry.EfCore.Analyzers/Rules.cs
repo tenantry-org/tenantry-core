@@ -11,14 +11,15 @@ internal static class Rules
     public static readonly DiagnosticDescriptor TenantIdWithoutTenantEntity = new(
         "TNY1001",
         "An entity with a TenantId is not tenant-owned",
-        "'{0}' has a TenantId property but does not implement ITenantEntity<{1}>, so every tenant reads and writes all " +
-        "its rows; implement ITenantEntity<{1}>, or mark it [SharedAcrossTenants] if every tenant shares it",
+        "'{0}' has a TenantId property but does not implement ITenantEntity<TKey>, so every tenant reads and writes all " +
+        "its rows; {1}",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Only an entity type that implements ITenantEntity<TKey> is filtered and checked by tenant. A " +
                      "TenantId property alone does nothing.",
-        helpLinkUri: HelpBase + "tny1001");
+        helpLinkUri: HelpBase + "tny1001",
+        customTags: WellKnownDiagnosticTags.CompilationEnd);
 
     public static readonly DiagnosticDescriptor IgnoreQueryFilters = new(
         "TNY1002",
@@ -62,7 +63,7 @@ internal static class Rules
         "Await RunInScopeAsync instead of blocking on it: it returns to the caller's synchronization context to start " +
         "the work, so blocking there, as on a desktop app's UI thread, can deadlock",
         Category,
-        DiagnosticSeverity.Warning,
+        DiagnosticSeverity.Info,
         isEnabledByDefault: true,
         description: "RunInScopeAsync starts the work and disposes the scope's services on the caller's " +
                      "synchronization context.",

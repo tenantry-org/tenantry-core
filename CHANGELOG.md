@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.6
 
-- `Tenantry.EfCore` and `Tenantry.AspNetCore` now carry analyzers ([Analyzers](docs/analyzers.md)). A project that
-  treats warnings as errors fails to build where one reports a warning: fix the code, or set the rule's severity in
-  `.editorconfig` where the code is meant (`dotnet_diagnostic.TNY1002.severity = none`).
+- `Tenantry.EfCore` and `Tenantry.AspNetCore` now carry analyzers ([Analyzers](docs/analyzers.md)). Three report
+  warnings, so a project that treats warnings as errors fails to build where they find something: TNY1001 (an entity
+  with a `TenantId` that is not tenant-owned), TNY1002 (`IgnoreQueryFilters()` on a tenant-owned entity) and TNY2001
+  (the tenant resolved from the request with no access validator). Fix the code, or set the rule's severity in
+  `.editorconfig` where the code is meant (`dotnet_diagnostic.TNY1002.severity = none`). TNY1003, TNY3001 and TNY3002
+  are info.
 - `ITenantContextSetter<TKey>.Use(tenant)` is now `MakeCurrent(tenant)`, and `UseNoTenant()` is
   `MakeNoTenantCurrent()`. Replace `.Use(` with `.MakeCurrent(` where it is called on the tenant context, and
   `UseNoTenant` with `MakeNoTenantCurrent`. A class of your own that implements the interface renames both methods.
@@ -92,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Tenantry.Pro's `AddTenantMetrics()`, whose package, Tenantry.Pro.AspNetCore, existed only for it. See
   [Diagnostics](docs/diagnostics.md#request-metrics-per-tenant).
 - Analyzers in `Tenantry.EfCore` and `Tenantry.AspNetCore`, which an application gets with the packages: TNY1001, an
-  entity with a `TenantId` that is not tenant-owned (with a fix that implements `ITenantEntity<TKey>`); TNY1002,
+  entity with a `TenantId` that is not tenant-owned, in a context with tenant-owned types; TNY1002,
   `IgnoreQueryFilters()` on a tenant-owned entity; TNY1003, raw SQL on `Database`; TNY2001, the tenant resolved from
   the request with no access validator; TNY3001, `MakeCurrent` or `CreateScope` given a descriptor built in the call;
   TNY3002, blocking on `RunInScopeAsync`. A build that treats warnings as errors fails on those that are warnings. See

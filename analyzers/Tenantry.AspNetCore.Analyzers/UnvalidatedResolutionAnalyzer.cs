@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -12,8 +14,8 @@ namespace Tenantry.AspNetCore.Analyzers;
 /// </summary>
 /// <remarks>
 /// To keep false reports out, it reports nothing when the compilation adds an access validator anywhere
-/// (<c>ValidateTenantAccess</c>, <c>ValidateTenantAccessByClaim</c>, or a type that implements
-/// <c>ITenantAccessValidator&lt;TKey&gt;</c>), or when the <c>AddTenantry</c> lambda hands its builder, or the builder's
+/// (<c>ValidateTenantAccess</c>, <c>ValidateTenantAccessByClaim</c>) or names <c>ITenantAccessValidator&lt;TKey&gt;</c>
+/// at all, or when the <c>AddTenantry</c> lambda hands its builder, or the builder's
 /// services, to code this analyzer cannot see into. So it reports at the end of the compilation, where it knows.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -33,7 +35,8 @@ public sealed class UnvalidatedResolutionAnalyzer : DiagnosticAnalyzer
         "TNY2001",
         "The tenant is resolved from the request, and nothing validates the caller's access to it",
         "{0} lets any caller name any tenant, and nothing checks the caller may use it; add ValidateTenantAccessByClaim " +
-        "or ValidateTenantAccess in the same AddTenantry",
+        "or ValidateTenantAccess in the same AddTenantry, or, where any caller may use any tenant (a public site per " +
+        "tenant, a test), set dotnet_diagnostic.TNY2001.severity = none in .editorconfig",
         "Tenantry",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
@@ -66,16 +69,15 @@ public sealed class UnvalidatedResolutionAnalyzer : DiagnosticAnalyzer
             start.RegisterOperationAction(
                 operation => AnalyzeInvocation(operation, state, builderExtensions, addTenantry, tenantBuilder),
                 OperationKind.Invocation);
-            start.RegisterSymbolAction(
-                symbol =>
+            // Any mention of ITenantAccessValidator<TKey> is taken for a validator: a type that implements it, one
+            // registered with AddScoped<ITenantAccessValidator<TKey>, ...>(), a typeof, a constructor parameter.
+            start.RegisterSyntaxNodeAction(
+                node =>
                 {
-                    if (((INamedTypeSymbol)symbol.Symbol).AllInterfaces.Any(candidate =>
-                            SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, validator)))
-                    {
+                    if (((GenericNameSyntax)node.Node).Identifier.ValueText == "ITenantAccessValidator")
                         state.FoundValidator();
-                    }
                 },
-                SymbolKind.NamedType);
+                SyntaxKind.GenericName);
             start.RegisterCompilationEndAction(end =>
             {
                 if (state.HasValidator)

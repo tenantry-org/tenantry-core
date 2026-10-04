@@ -18,7 +18,17 @@ internal sealed class KnownTypes
             compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions");
         TenantScopeFactory = compilation.GetTypeByMetadataName("Tenantry.ITenantScopeFactory`1");
         TenantContextSetter = compilation.GetTypeByMetadataName("Tenantry.ITenantContextSetter`1");
+        EntityTypeBuilderExtensions =
+            compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.TenantryEntityTypeBuilderExtensions");
+        PrimaryKeyAttribute = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.PrimaryKeyAttribute");
+        KeyAttribute = compilation.GetTypeByMetadataName("System.ComponentModel.DataAnnotations.KeyAttribute");
     }
+
+    public INamedTypeSymbol? EntityTypeBuilderExtensions { get; }
+
+    public INamedTypeSymbol? PrimaryKeyAttribute { get; }
+
+    public INamedTypeSymbol? KeyAttribute { get; }
 
     public INamedTypeSymbol? TenantEntity { get; }
 
