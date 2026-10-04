@@ -311,6 +311,29 @@ public sealed class AtomicSaveTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task InATransactionWithoutSavepoints_ASaveWhileAFailureIsReported_DoesNotEndTheSaveAroundIt(bool sync)
+    {
+        // An interceptor saves again from SavedChanges, and that save fails. An interceptor after Tenantry's records the
+        // failure with a save of its own before EF Core raises the context's SaveChangesFailed event for it. The outer
+        // save, which succeeded, still confirms itself.
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme"), new Setup { NoSavepoints = true, Before = new FailAgainWhenSaved(), Later = new SaveWhenFailed() }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await ChangeAsync(db, Change.AddOwnedRow);
+            await SaveAsync(db, sync);
+            await transaction.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await AcmeStateAsync()).Should().Be("acme|1:acme phone,2:added|acme detail");
+        await using var check = await CreateAsync(_tenant.As("acme"));
+        (await check.Set<Supplier>().CountAsync(TestContext.Current.CancellationToken)).Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task InAnAmbientTransaction_ALaterSaveWithNoChecks_DoesNotConfirmTheFailedOne(bool sync)
     {
         // SQLite does not enlist in the ambient transaction, so the failed save is undone here whatever the vote. The
@@ -1101,6 +1124,92 @@ public sealed class AtomicSaveTests : IDisposable
             }
 
             return result;
+        }
+    }
+
+    // Once a save of the context's has succeeded, saves through it a row whose key is already taken, and swallows the
+    // failure.
+    private sealed class FailAgainWhenSaved : SaveChangesInterceptor
+    {
+        private bool _saving;
+
+        public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                context.Add(new Animal { Id = 1, Name = "duplicate key" });
+
+                try
+                {
+                    context.SaveChanges();
+                }
+                catch (DbUpdateException)
+                {
+                    // SaveWhenFailed has let the row go.
+                }
+            }
+
+            return result;
+        }
+
+        public override async ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                context.Add(new Animal { Id = 1, Name = "duplicate key" });
+
+                try
+                {
+                    await context.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateException)
+                {
+                    // SaveWhenFailed has let the row go.
+                }
+            }
+
+            return result;
+        }
+    }
+
+    // Records a failed save with a row of its own, saved through the context, once the failed rows are let go.
+    private sealed class SaveWhenFailed : SaveChangesInterceptor
+    {
+        private bool _saving;
+
+        public override void SaveChangesFailed(DbContextErrorEventData eventData)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                Record(context, eventData.Exception);
+                context.SaveChanges();
+            }
+        }
+
+        public override async Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                Record(context, eventData.Exception);
+                await context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        private static void Record(DbContext context, Exception failure)
+        {
+            foreach (var entry in ((DbUpdateException)failure).Entries)
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            context.Add(new Supplier());
         }
     }
 
