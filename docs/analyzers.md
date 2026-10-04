@@ -63,9 +63,15 @@ What it looks at:
 - A context that maps no tenant-owned type is left alone: a database-per-tenant context, or one Tenantry does not
   isolate, has nothing to keep apart.
 - A type marked shared is not reported: `[SharedAcrossTenants]` on it or a base type, or `IsSharedAcrossTenants()`
-  anywhere in the project, in `OnModelCreating` or an `IEntityTypeConfiguration<T>`. If the project calls the
-  non-generic `IsSharedAcrossTenants()` on a builder whose type it cannot tell (in a loop over the model's types, say),
-  the rule reports nothing.
+  anywhere in the project, in `OnModelCreating` or an `IEntityTypeConfiguration<T>`. A generic helper that marks its
+  type parameter (`b.Entity<T>().IsSharedAcrossTenants()`) marks the type each call passes it, such as
+  `Shared<Country>(b)`.
+- A marker whose type the rule cannot tell, such as the non-generic `IsSharedAcrossTenants()` in a loop over the
+  model's types, or a generic helper called with a type parameter of the caller's, silences the contexts that apply
+  it: the context whose `OnModelCreating` (or another of its methods) contains it, the contexts that call the method
+  containing it or create the configuration containing it, or call `ApplyConfigurationsFromAssembly`, and the contexts
+  derived from them. Other contexts are still checked. If no context is seen to apply it (it is called through a
+  delegate, say), the rule reports nothing in the project.
 - A tenant descriptor (a type that implements `ITenantDescriptor<TKey>`) is not reported, and neither is a type whose
   key is, or may be, its `TenantId`, as a tenant registry's is: one with no other key by EF Core's conventions (an `Id`
   or `<Type>Id` property, a `[Key]`, or a `[PrimaryKey]` without `TenantId`). A registry with a key of its own and a

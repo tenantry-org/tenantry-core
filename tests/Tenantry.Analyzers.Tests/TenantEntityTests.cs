@@ -265,6 +265,144 @@ public sealed class TenantEntityTests
             """);
 
     [Fact]
+    public Task AMarkerInAGenericHelper_MarksTheTypeItIsCalledWith() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class Country
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class Order
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Country> Countries => Set<Country>();
+                public DbSet<Order> {|TNY1001:Orders|} => Set<Order>();
+
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => Shared<Country>(modelBuilder);
+
+                private static void Shared<T>(ModelBuilder b) where T : class => b.Entity<T>().IsSharedAcrossTenants();
+            }
+            """);
+
+    [Fact]
+    public Task AGenericHelperCalledWithATypeParameter_IsAnUnknownMarker() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class Order
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public static class Sharing
+            {
+                public static void Mark<T>(ModelBuilder b) where T : class => b.Entity<T>().IsSharedAcrossTenants();
+
+                public static void Forward<T>(ModelBuilder b) where T : class => Mark<T>(b);
+            }
+
+            public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Order> Orders => Set<Order>();
+
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => Sharing.Forward<Order>(modelBuilder);
+            }
+            """);
+
+    [Fact]
+    public Task AnUnknownMarker_SilencesOnlyTheContextsThatApplyIt() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class Order
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class Rate
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class UntypedRateConfiguration : IEntityTypeConfiguration<Rate>
+            {
+                public void Configure(EntityTypeBuilder<Rate> builder)
+                {
+                    EntityTypeBuilder untyped = builder;
+                    untyped.IsSharedAcrossTenants();
+                }
+            }
+
+            // Marks in its own OnModelCreating, so it and the context derived from it report nothing.
+            public class ImportDbContext(DbContextOptions options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Order> Orders => Set<Order>();
+
+                protected override void OnModelCreating(ModelBuilder modelBuilder)
+                {
+                    foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+                        modelBuilder.Entity(entityType.ClrType).IsSharedAcrossTenants();
+                }
+            }
+
+            public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : ImportDbContext(options)
+            {
+                public DbSet<Rate> Rates => Set<Rate>();
+            }
+
+            // Applies the configuration that marks, so it reports nothing.
+            public class RatesDbContext(DbContextOptions<RatesDbContext> options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Rate> Rates => Set<Rate>();
+
+                protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+                    modelBuilder.ApplyConfiguration(new UntypedRateConfiguration());
+            }
+
+            // Applies neither, so it still reports.
+            public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Order> {|TNY1001:Orders|} => Set<Order>();
+            }
+            """);
+
+    [Fact]
+    public Task AnUnknownMarkerNoContextIsSeenToApply_SilencesEveryContext() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class Order
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            // Called through a delegate, or from another assembly: the analyzer cannot tell which context it serves.
+            public static class Sharing
+            {
+                public static void MarkAll(ModelBuilder b)
+                {
+                    foreach (var entityType in b.Model.GetEntityTypes())
+                        b.Entity(entityType.ClrType).IsSharedAcrossTenants();
+                }
+            }
+
+            public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Order> Orders => Set<Order>();
+            }
+            """);
+
+    [Fact]
     public Task TheAdvice_NamesTheKeyType_OrSaysTheTenantIdCannotBeAKey() =>
         Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(
             Usings + """

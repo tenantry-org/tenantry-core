@@ -22,7 +22,10 @@ internal sealed class KnownTypes
             compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.TenantryEntityTypeBuilderExtensions");
         PrimaryKeyAttribute = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.PrimaryKeyAttribute");
         KeyAttribute = compilation.GetTypeByMetadataName("System.ComponentModel.DataAnnotations.KeyAttribute");
+        EntityTypeConfiguration = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.IEntityTypeConfiguration`1");
     }
+
+    public INamedTypeSymbol? EntityTypeConfiguration { get; }
 
     public INamedTypeSymbol? EntityTypeBuilderExtensions { get; }
 

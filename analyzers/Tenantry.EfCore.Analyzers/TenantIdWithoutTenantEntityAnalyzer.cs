@@ -20,8 +20,14 @@ namespace Tenantry.EfCore.Analyzers;
 /// Not reported: a type marked shared, by <c>[SharedAcrossTenants]</c> (on it or a base type) or by
 /// <c>IsSharedAcrossTenants()</c> anywhere in the compilation; a tenant descriptor; and a type whose key is, or may be,
 /// its <c>TenantId</c>, as a tenant registry's is: one with no other key by EF Core's conventions (an <c>Id</c> or
-/// <c>&lt;Type&gt;Id</c> property, a <c>[Key]</c>, or a <c>[PrimaryKey]</c> without <c>TenantId</c>). A compilation that
-/// calls <c>IsSharedAcrossTenants()</c> on a builder whose type the analyzer cannot tell reports nothing.
+/// <c>&lt;Type&gt;Id</c> property, a <c>[Key]</c>, or a <c>[PrimaryKey]</c> without <c>TenantId</c>).
+/// </para>
+/// <para>
+/// A marker in a generic method, on its type parameter, marks the type each call in the compilation passes for it. A
+/// marker whose type the analyzer cannot tell (a builder of a type it cannot see, or a call that passes a type
+/// parameter of its own) silences the contexts that apply it: the context whose methods contain it, the contexts that
+/// call the method containing it or create the configuration containing it, and the contexts derived from them. One
+/// that no context applies, as far as the analyzer can see, silences every context.
 /// </para>
 /// <para>
 /// It reports each type once, where it is first mapped, at the end of the compilation, when every context and marker
@@ -51,6 +57,7 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
             start.RegisterSymbolAction(symbol => CollectDbSets(symbol, types, state), SymbolKind.NamedType);
             start.RegisterOperationAction(operation => CollectCall(operation, types, state), OperationKind.Invocation);
+            start.RegisterOperationAction(operation => CollectConfiguration(operation, types, state), OperationKind.ObjectCreation);
             start.RegisterCompilationEndAction(end => Report(end, types, state));
         });
     }
@@ -79,6 +86,10 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
         var invocation = (IInvocationOperation)context.Operation;
         var method = invocation.TargetMethod;
 
+        // Calls between the application's own methods, to find which contexts apply a marker.
+        if (method.OriginalDefinition.Locations.Any(location => location.IsInSource))
+            state.Calls.Add((context.ContainingSymbol, method));
+
         switch (method.Name)
         {
             case "Entity" when method is { IsGenericMethod: true, TypeArguments.Length: 1 } &&
@@ -89,12 +100,31 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
                 break;
 
             case "IsSharedAcrossTenants" when KnownTypes.IsDeclaredBy(method, types.EntityTypeBuilderExtensions):
-                if (MarkedType(invocation, types) is { } marked)
-                    state.MarkedShared.TryAdd(marked, 0);
-                else
-                    state.FoundUnknownMarker();
+                switch (MarkedType(invocation, types))
+                {
+                    case ITypeParameterSymbol { DeclaringMethod: not null } parameter:
+                        state.GenericMarkers.Add((context.ContainingSymbol, parameter));
+                        break;
+                    case null or ITypeParameterSymbol:
+                        state.UnknownMarkers.Add(context.ContainingSymbol);
+                        break;
+                    case var marked:
+                        state.MarkedShared.TryAdd(marked, 0);
+                        break;
+                }
+
+                break;
+
+            case "ApplyConfigurationsFromAssembly" when KnownTypes.IsDeclaredBy(method, types.ModelBuilder):
+                state.AssemblyConfigurations.Add(context.ContainingSymbol);
                 break;
         }
+    }
+
+    private static void CollectConfiguration(OperationAnalysisContext context, KnownTypes types, State state)
+    {
+        if (context.Operation.Type is { } created && KnownTypes.Implements(created, types.EntityTypeConfiguration))
+            state.Configurations.Add((context.ContainingSymbol, created));
     }
 
     // The entity type IsSharedAcrossTenants() marks: EntityTypeBuilder<T>'s T, or typeof(T) in modelBuilder.Entity(typeof(T)).
@@ -117,7 +147,9 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
     private static void Report(CompilationAnalysisContext context, KnownTypes types, State state)
     {
-        if (state.UnknownMarker)
+        var silenced = SilencedContexts(types, state);
+
+        if (silenced is null)
             return;
 
         var byContext = state.Mapped.ToLookup(mapping => mapping.Context, SymbolEqualityComparer.Default);
@@ -136,6 +168,9 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
         foreach (var contextType in state.Contexts.Keys)
         {
+            if (IsOrDerivesFromAny(contextType, silenced))
+                continue;
+
             var mapped = MappedBy(contextType).ToList();
 
             if (!mapped.Any(mapping => KnownTypes.Implements(mapping.Entity, types.TenantEntity)))
@@ -167,6 +202,91 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
                       "or string and implement ITenantEntity<TKey>, or mark the type [SharedAcrossTenants] if every " +
                       "tenant shares it"));
         }
+    }
+
+    // The contexts the unknown markers silence, after the generic markers are resolved to the types their calls pass;
+    // null when one is applied by no context the analyzer can see, so every context is silenced.
+    private static HashSet<INamedTypeSymbol>? SilencedContexts(KnownTypes types, State state)
+    {
+        var callsTo = state.Calls.ToLookup(call => call.Callee.OriginalDefinition, SymbolEqualityComparer.Default);
+        var unknown = state.UnknownMarkers.ToList();
+
+        foreach (var (containing, parameter) in state.GenericMarkers)
+        {
+            var calls = callsTo[parameter.DeclaringMethod!.OriginalDefinition].ToList();
+
+            if (calls.Count == 0)
+                unknown.Add(containing);
+
+            foreach (var (caller, callee) in calls)
+            {
+                if (callee.TypeArguments[parameter.Ordinal] is ITypeParameterSymbol)
+                    unknown.Add(caller);
+                else
+                    state.MarkedShared.TryAdd(callee.TypeArguments[parameter.Ordinal], 0);
+            }
+        }
+
+        var silenced = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var marker in unknown)
+        {
+            var owners = ContextsApplying(marker, types, state, callsTo, new HashSet<ISymbol>(SymbolEqualityComparer.Default));
+
+            if (owners.Count == 0)
+                return null;
+
+            silenced.UnionWith(owners);
+        }
+
+        return silenced;
+    }
+
+    // The contexts whose model building reaches the code in symbol: its own context, or those that call it, or create
+    // the configuration it belongs to (or apply every configuration in the assembly).
+    private static HashSet<INamedTypeSymbol> ContextsApplying(
+        ISymbol symbol,
+        KnownTypes types,
+        State state,
+        ILookup<ISymbol?, (ISymbol Caller, IMethodSymbol Callee)> callsTo,
+        HashSet<ISymbol> visited)
+    {
+        var contexts = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        if (!visited.Add(symbol.OriginalDefinition))
+            return contexts;
+
+        if (symbol.ContainingType is { } type && KnownTypes.DerivesFrom(type, types.DbContext))
+        {
+            contexts.Add(type);
+            return contexts;
+        }
+
+        var appliers = callsTo[symbol.OriginalDefinition].Select(call => call.Caller).ToList();
+
+        if (symbol.ContainingType is { } configuration && KnownTypes.Implements(configuration, types.EntityTypeConfiguration))
+        {
+            appliers.AddRange(state.Configurations
+                .Where(created => SymbolEqualityComparer.Default.Equals(created.Type.OriginalDefinition, configuration.OriginalDefinition))
+                .Select(created => created.Creator));
+            appliers.AddRange(state.AssemblyConfigurations);
+        }
+
+        foreach (var applier in appliers)
+            contexts.UnionWith(ContextsApplying(applier, types, state, callsTo, visited));
+
+        return contexts;
+    }
+
+    private static bool IsOrDerivesFromAny(INamedTypeSymbol type, HashSet<INamedTypeSymbol> contexts)
+    {
+        for (var current = (INamedTypeSymbol?)type; current is not null; current = current.BaseType)
+        {
+            if (contexts.Contains(current))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool Precedes(Location location, Location other)
@@ -251,16 +371,25 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
     private sealed class State
     {
-        private int _unknownMarker;
-
         public ConcurrentDictionary<INamedTypeSymbol, byte> Contexts { get; } = new(SymbolEqualityComparer.Default);
 
         public ConcurrentBag<(INamedTypeSymbol Context, ITypeSymbol Entity, Location Location)> Mapped { get; } = [];
 
         public ConcurrentDictionary<ITypeSymbol, byte> MarkedShared { get; } = new(SymbolEqualityComparer.Default);
 
-        public bool UnknownMarker => Volatile.Read(ref _unknownMarker) == 1;
+        /// <summary>The members containing a marker whose type the analyzer cannot tell.</summary>
+        public ConcurrentBag<ISymbol> UnknownMarkers { get; } = [];
 
-        public void FoundUnknownMarker() => Volatile.Write(ref _unknownMarker, 1);
+        /// <summary>The markers on a generic method's type parameter, with the member containing each.</summary>
+        public ConcurrentBag<(ISymbol Containing, ITypeParameterSymbol Parameter)> GenericMarkers { get; } = [];
+
+        /// <summary>The calls to the compilation's own methods, with the member making each.</summary>
+        public ConcurrentBag<(ISymbol Caller, IMethodSymbol Callee)> Calls { get; } = [];
+
+        /// <summary>The entity type configurations created, with the member creating each.</summary>
+        public ConcurrentBag<(ISymbol Creator, ITypeSymbol Type)> Configurations { get; } = [];
+
+        /// <summary>The members that apply every configuration in an assembly.</summary>
+        public ConcurrentBag<ISymbol> AssemblyConfigurations { get; } = [];
     }
 }
