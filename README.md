@@ -10,8 +10,8 @@
 Tenant isolation for ASP.NET Core and EF Core: one call on your `DbContext`, no base class, and it fails closed.
 
 Tenantry keeps each tenant's data apart in EF Core, either in a shared database, where tenant-owned entities carry a
-`TenantId` that every query and save is scoped to, or in a database per tenant. Your entities need no base class,
-your `DbContext` stays plain, and you choose the key type, how tenants are resolved and where they are stored.
+`TenantId` that every query and save is scoped to, or in a database per tenant. You choose the key type, how tenants
+are resolved and where they are stored.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -75,9 +75,9 @@ API, with the steps to update in the [changelog](CHANGELOG.md).
 
 ## Quick start (ASP.NET Core)
 
-> **Introductory setup.** Resolving the tenant from a header without authentication lets any caller
-> select any tenant. Use it to learn the API. For production, authenticate callers and validate that
-> they belong to the tenant they select, as in the [`SecureApi` sample](samples/Tenantry.Samples.SecureApi).
+> Resolving the tenant from a header without authentication lets any caller select any tenant. Use this setup to
+> learn the API. In production, authenticate callers and check that they belong to the tenant they select, as the
+> [`SecureApi` sample](samples/Tenantry.Samples.SecureApi) does.
 
 ```csharp
 using Tenantry;
@@ -109,8 +109,7 @@ app.Run();
 ```
 
 Add EF Core isolation where you register your context, with `options.UseTenantry()`: queries are filtered to
-the current tenant, and saves are stamped and checked. The context stays a plain `DbContext`. See the
-[EF Core integration guide](docs/efcore-integration.md) for the full picture.
+the current tenant, and saves are stamped and checked. See the [EF Core integration guide](docs/efcore-integration.md).
 
 ## Quick start (console or worker)
 
