@@ -30,8 +30,54 @@ no store.
 
 ## Running work as a tenant
 
-`ITenantScopeFactory<TKey>` is a singleton, so hosted services can take it in their constructor. Each
-scope it creates is a fresh dependency-injection scope (so a fresh `DbContext`) with the tenant active:
+`ITenantScopeFactory<TKey>` (`scopes` below) and `ITenantContextSetter<TKey>` are singletons, so hosted services can
+take them in their constructor. Choose by what you have:
+
+| Call | When | DI scope | Checks |
+|------|------|----------|--------|
+| `scopes.RunInScopeAsync(tenantId, work)` | You have an id, such as from a queue message or a command-line argument | Opens one | Looks the tenant up and refuses a missing or inactive one |
+| `scopes.CreateScope(tenant)` | You already loaded the tenant: iterating the store, or onboarding one before its store row exists | Opens one | None |
+| `tenantContext.Use(tenant)` | You already loaded the tenant and a scope already exists: custom middleware, or a framework that opened the scope, such as a message consumer | None | None |
+
+`CreateScope` and `Use` trust the descriptor they are given. They do not look it up in the store or check whether
+it is active, so a descriptor the store does not hold becomes current like any other: shared-database queries are
+filtered by its id and new rows are stamped with it. Pass them only a tenant you already hold, and run work that
+starts from an id with `RunInScopeAsync`. It takes the work as a callback because the tenant is held in an
+`AsyncLocal`: a scope opened inside an asynchronous lookup would not be current for the code that awaited it
+([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
+
+`IServiceProvider.CreateScope()` and `CreateAsyncScope()` are .NET's plain DI scopes and set no tenant.
+
+### When you have a tenant id
+
+A queue message or a CLI argument often carries just the id. `RunInScopeAsync` looks the tenant up in the store and
+runs your work inside a fresh DI scope (so a fresh `DbContext`) with the tenant current:
+
+```csharp
+await scopes.RunInScopeAsync(message.TenantId, async (scope, ct) =>
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Orders.Add(new Order { Description = message.Description });
+    await db.SaveChangesAsync(ct);
+}, cancellationToken);
+```
+
+It throws `TenantNotFoundException`, with the id in its `TenantId` property, if the store has no such tenant
+(for example a message for a tenant deleted since it was queued); it derives from `TenantNotResolvedException`.
+There is an overload whose work returns a value. With `ValidateTenantActivity`, it throws `TenantInactiveException`
+for a suspended tenant without running the work.
+
+To hold the scope yourself, look the tenant up first and call `CreateScope`, checking `ITenantActivity<TKey>` too if
+your app suspends tenants:
+
+```csharp
+var tenant = await tenants.GetTenantAsync(tenantId, ct) ?? throw new InvalidOperationException("Unknown tenant");
+await using var scope = scopes.CreateScope(tenant);
+```
+
+### When you already hold the tenant
+
+`CreateScope` makes a tenant you already have current, with a fresh DI scope:
 
 ```csharp
 using Tenantry;
@@ -63,44 +109,17 @@ across tenants. Disposing the scope disposes its services while the tenant is st
 restores whichever tenant was current before it, in the code that disposed it. That holds for `using`
 and `await using`, in loops and when nested.
 
-### When you only have a tenant id
-
-A queue message or a CLI argument often carries just the id. `RunInScopeAsync` looks the tenant up in the
-store and runs your work inside its scope:
-
-```csharp
-await scopes.RunInScopeAsync(message.TenantId, async (scope, ct) =>
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Orders.Add(new Order { Description = message.Description });
-    await db.SaveChangesAsync(ct);
-}, cancellationToken);
-```
-
-It throws `TenantNotFoundException`, with the id in its `TenantId` property, if the store has no such tenant
-(for example a message for a tenant deleted since it was queued); it derives from `TenantNotResolvedException`.
-There is an overload whose work returns a value. With `ValidateTenantActivity`, it throws `TenantInactiveException`
-for a suspended tenant without running the work.
-
-There is no `CreateScopeAsync(tenantId)`: a scope opened inside an asynchronous lookup would not be current for the
-code that awaited it ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)). Use `RunInScopeAsync`, or
-look the tenant up first and call `CreateScope`:
-
-```csharp
-var tenant = await tenants.GetTenantAsync(tenantId, ct) ?? throw new InvalidOperationException("Unknown tenant");
-await using var scope = scopes.CreateScope(tenant);
-```
-
 ### Lower level: `ITenantContextSetter.Use`
 
 `ITenantScopeFactory` is built on `ITenantContextSetter<TKey>.Use(tenant)`, which only changes the ambient
-tenant and creates no DI scope. It is useful when you already have the services you need, such as in a
-console tool with one long-lived scope:
+tenant and creates no DI scope. It is for code that runs in a scope something else opened, such as custom middleware,
+a message consumer whose framework opened the scope, or a console tool with one long-lived scope. Like `CreateScope`,
+it trusts the descriptor:
 
 ```csharp
-var ambient = sp.GetRequiredService<ITenantContextSetter<Guid>>();
+var tenantContext = sp.GetRequiredService<ITenantContextSetter<Guid>>();
 
-using (ambient.Use(tenant))
+using (tenantContext.Use(tenant))
 {
     db.Orders.Add(new Order { Description = "Created by a tool" });
     await db.SaveChangesAsync();

@@ -15,13 +15,15 @@ namespace Tenantry;
 /// </para>
 /// <list type="bullet">
 /// <item><description>
+/// You have the tenant's id (for example from a queue message):
+/// <c>await scopes.RunInScopeAsync(tenantId, async (scope, ct) =&gt; { … }, ct);</c>
+/// It looks the tenant up and refuses a missing or inactive one.
+/// </description></item>
+/// <item><description>
 /// You already hold the tenant (for example while iterating
 /// <see cref="ITenantLookup{TKey}.GetAllTenantsAsync"/>):
 /// <c>await using var scope = scopes.CreateScope(tenant);</c>
-/// </description></item>
-/// <item><description>
-/// You only have its id (for example from a queue message):
-/// <c>await scopes.RunInScopeAsync(tenantId, async (scope, ct) =&gt; { … }, ct);</c>
+/// It trusts the descriptor and checks nothing.
 /// </description></item>
 /// </list>
 /// <para>
@@ -41,8 +43,20 @@ public interface ITenantScopeFactory<TKey>
     /// </summary>
     /// <param name="tenant">The tenant to activate.</param>
     /// <remarks>
-    /// It does not consult <see cref="ITenantActivity{TKey}"/>, so it reaches suspended tenants too, for provisioning
-    /// and migrations. Check <see cref="ITenantActivity{TKey}"/> first for other work.
+    /// <para>
+    /// The tenant is not looked up in the store and not checked with <see cref="ITenantActivity{TKey}"/>: the
+    /// descriptor passed becomes current as it is, even when the store does not hold its id, the tenant is inactive,
+    /// or its other fields differ from the store's. Shared-database queries are then filtered by its id and saves
+    /// stamp new rows with it, so a descriptor the store does not hold leaves rows owned by an id the store does not
+    /// know.
+    /// </para>
+    /// <para>
+    /// Pass a tenant you already hold: one read from <see cref="ITenantLookup{TKey}"/> while iterating the store, or
+    /// one being onboarded before its store row exists. Reaching inactive tenants suits provisioning and migrations;
+    /// for other work, check <see cref="ITenantActivity{TKey}"/> first. For an id from outside the application, such
+    /// as a queue message or a command-line argument, use <see cref="RunInScopeAsync"/>, which looks the tenant up
+    /// and refuses a missing or inactive one.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".</exception>
     /// <returns>

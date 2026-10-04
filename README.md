@@ -129,19 +129,23 @@ using Tenantry;
 builder.Services.AddTenantry<Guid>(tenant => tenant.UseStore<EfCoreTenantStore>());
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString).UseTenantry());
 
-// …later, in a hosted service (inject ITenantScopeFactory<Guid> scopes):
-var acme = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" };
+// …later, in a hosted service (inject ITenantScopeFactory<Guid> scopes and ITenantLookup<Guid> tenants).
+// With an id (e.g. from a queue message), look the tenant up in the store and run as it. A tenant the store does not
+// hold, or one that ValidateTenantActivity refuses, throws.
+await scopes.RunInScopeAsync(message.TenantId, (scope, ct) => HandleAsync(scope, message, ct), cancellationToken);
 
-await using (var scope = scopes.CreateScope(acme))  // a fresh DI scope with Acme active
+// With a tenant already loaded from the store, open a fresh DI scope with it current.
+foreach (var tenant in await tenants.GetAllTenantsAsync(cancellationToken))
 {
+    await using var scope = scopes.CreateScope(tenant);
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     // EF Core reads are filtered to this tenant and writes are stamped with it.
-    await db.SaveChangesAsync();
+    await db.SaveChangesAsync(cancellationToken);
 }
-
-// With only an id (e.g. from a queue message), look the tenant up in the registered store and run as it:
-await scopes.RunInScopeAsync(message.TenantId, (scope, ct) => HandleAsync(scope, message, ct), cancellationToken);
 ```
+
+`CreateScope` trusts the descriptor it is given: it does not look it up or check whether it is active, so pass it only
+a tenant you already hold.
 
 See the runnable [`Tenantry.Samples.EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) project
 and the [non-HTTP hosts guide](docs/non-http-hosts.md).

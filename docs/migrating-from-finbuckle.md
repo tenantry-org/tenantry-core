@@ -265,8 +265,9 @@ the migration makes `TenantId` nullable, your project does not use nullable refe
   ([Migrations](efcore-integration.md#migrations)).
 - Code that ignored Finbuckle's named filter (`Constants.TenantToken`) names `TenantryQueryFilters.Tenant` instead.
 - Code that created a context per tenant with Finbuckle's static `Create` method uses
-  `ITenantScopeFactory<string>.CreateScope(tenant)` and resolves the context from the scope
-  ([Non-HTTP hosts](non-http-hosts.md)).
+  `ITenantScopeFactory<string>.CreateScope(tenant)` and resolves the context from the scope. Like `Create`, it trusts
+  the tenant it is given; code that has only an id uses `RunInScopeAsync`, which looks it up
+  ([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant)).
 - A connection string on the tenant, read in `OnConfiguring`, becomes `UseConnectionStrings` with
   `AddDbContextPerTenantDatabase` ([Database per tenant](efcore-integration.md#database-per-tenant)).
 

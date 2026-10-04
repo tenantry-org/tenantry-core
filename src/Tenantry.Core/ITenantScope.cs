@@ -16,6 +16,9 @@ namespace Tenantry;
 public interface ITenantScope<TKey> : IServiceScope, IAsyncDisposable
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    /// <summary>The tenant this scope runs as.</summary>
+    /// <summary>
+    /// The tenant this scope runs as: the descriptor passed to <see cref="ITenantScopeFactory{TKey}.CreateScope"/>,
+    /// unchecked, or the store's copy for <c>RunInScopeAsync</c>.
+    /// </summary>
     ITenantDescriptor<TKey> Tenant { get; }
 }

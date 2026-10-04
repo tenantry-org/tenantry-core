@@ -144,7 +144,14 @@ using (tenantContext.Use(acme))
 
 In ASP.NET Core the middleware calls `Use` for you once the tenant is resolved. In console and worker apps,
 `ITenantScopeFactory<TKey>` makes a tenant current together with a fresh DI scope, which is what most code
-wants; call `Use` yourself only when you need no new scope. See [Non-HTTP hosts](non-http-hosts.md).
+wants; call `Use` yourself only when you need no new scope.
+
+`Use` trusts the descriptor it is given. It does not look the tenant up in the store or check whether it is active,
+so a descriptor the store does not hold becomes current like any other: shared-database queries are filtered by its
+id and new rows are stamped with it. Pass it a tenant you already hold, and run work that starts from an id with
+`ITenantScopeFactory.RunInScopeAsync`, which refuses a missing or inactive tenant.
+[Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant) has a table for choosing between `RunInScopeAsync`,
+`CreateScope` and `Use`.
 
 `UseNoTenant()` does the opposite: code inside it sees no tenant, and disposing it restores the tenant that was
 current. The middleware uses it for the rest of a request whose tenant the access validators refused.
@@ -188,8 +195,9 @@ that runs the query, from its `ITenantContext<TKey>`, so the same cached plan al
 
 Outside a request, `ITenantScopeFactory<TKey>` creates an `ITenantScope<TKey>`: a dependency-injection scope with a
 tenant current, so the scoped services resolved from it (such as a `DbContext`) are the tenant's. It follows the
-`IServiceScopeFactory` → `IServiceScope` pattern. `RunInScopeAsync(tenantId, …)` looks the tenant up in the store
-and runs your work in such a scope. See [Non-HTTP hosts](non-http-hosts.md).
+`IServiceScopeFactory` → `IServiceScope` pattern. `RunInScopeAsync(tenantId, …)` looks the tenant up in the store,
+refuses a missing or inactive one, and runs your work in such a scope. `CreateScope(tenant)` opens one for a tenant
+you already hold and, like `Use`, checks nothing. See [Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant).
 
 ## Exceptions
 

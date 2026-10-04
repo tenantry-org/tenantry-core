@@ -42,8 +42,9 @@ public class InvoiceNumbersTests
 ```
 
 `validateScopes: true` makes the provider refuse a scoped service resolved from the root, as the host does in
-Development. Code that receives only a tenant id is tested the same way with `RunInScopeAsync(id, …)`, and code
-that already has its services with `ITenantContextSetter<TKey>.Use(tenant)`
+Development. `CreateScope` trusts the descriptor and does not look it up in the store, which suits a test that holds
+its tenants. Code that receives only a tenant id is tested the same way with `RunInScopeAsync(id, …)`, which does
+look it up, and code that already has its services with `ITenantContextSetter<TKey>.Use(tenant)`
 ([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant)). Background work is tested the same way too: run the
 work for one tenant inside that tenant's scope.
 
@@ -187,6 +188,7 @@ public sealed class OrderIsolationTests : IAsyncLifetime
             .AddDbContext<AppDbContext>(options => options.UseSqlite(_connection).UseTenantry())
             .BuildServiceProvider(validateScopes: true);
 
+        // CreateAsyncScope is .NET's plain DI scope and sets no tenant.
         await using var scope = _services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
     }
@@ -229,7 +231,7 @@ public sealed class OrderIsolationTests : IAsyncLifetime
         var ct = TestContext.Current.CancellationToken;
         await AddOrderAsync(Acme, "A-1", ct);
 
-        // A plain scope: no tenant is current.
+        // A plain DI scope: no tenant is current.
         await using var scope = _services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 

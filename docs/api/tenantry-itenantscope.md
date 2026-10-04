@@ -18,7 +18,7 @@ public interface ITenantScope<TKey> : IServiceScope, IDisposable, IAsyncDisposab
 
 ### `Tenant`
 
-The tenant this scope runs as.
+The tenant this scope runs as: the descriptor passed to [`ITenantScopeFactory<TKey>.CreateScope`](tenantry-itenantscopefactory.md), unchecked, or the store's copy for `RunInScopeAsync`.
 
 ```csharp
 ITenantDescriptor<TKey> Tenant { get; }

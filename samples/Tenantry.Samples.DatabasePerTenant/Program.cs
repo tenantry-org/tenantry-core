@@ -43,6 +43,7 @@ using var host = builder.Build();
 var scopes = host.Services.GetRequiredService<ITenantScopeFactory<string>>();
 var tenants = await host.Services.GetRequiredService<ITenantLookup<string>>().GetAllTenantsAsync();
 
+// CreateScope trusts the descriptor and checks nothing, so pass it tenants read from the store.
 foreach (var tenant in tenants)
 {
     await using var scope = scopes.CreateScope(tenant);
@@ -57,7 +58,7 @@ foreach (var tenant in tenants)
                       string.Join(", ", await db.Notes.Select(n => n.Text).ToListAsync()));
 }
 
-// With only an id, look the tenant up and run as it.
+// With only an id, look the tenant up and run as it. A missing or inactive tenant throws.
 var globexNotes = await scopes.RunInScopeAsync("globex", (scope, ct) =>
     scope.ServiceProvider.GetRequiredService<NotesDbContext>().Notes.CountAsync(ct));
 Console.WriteLine($"[Globex] RunInScopeAsync sees {globexNotes} note(s) in its own database");
