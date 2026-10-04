@@ -73,6 +73,10 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// <returns>The same builder, without its key type: call methods that need it (such as <c>UseConnectionStrings</c>) first.</returns>
     /// <remarks>
     /// <para>
+    /// It replaces <c>AddDbContext</c> and <c>AddDbContextPool</c> because it sets each context's connection string
+    /// when the context, or a pooled context's lease, is handed out, which EF Core has no hook for.
+    /// </para>
+    /// <para>
     /// Registers a scoped <typeparamref name="TContext"/> and a singleton <see cref="IDbContextFactory{TContext}"/>.
     /// A context that is not pooled is created with its options and any other services its constructor needs, and
     /// has them as its application service provider, as with <c>AddDbContext</c>: the scoped

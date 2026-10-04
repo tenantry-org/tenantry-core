@@ -245,6 +245,13 @@ builder.Services.AddTenantry<string>(tenant => tenant
     .AddDbContextPerTenantDatabase<AppDbContext>((sp, options) => options.UseSqlServer(), pooled: true));
 ```
 
+It has its own registration, rather than `AddDbContext` or `AddDbContextPool`, because Tenantry sets each context's
+connection string when the context, or a pooled context's lease, is handed out: the connection is the current
+tenant's before anything can use it, including code that calls `Database.GetDbConnection()` directly. EF Core has no
+hook for the start of a pooled lease, so with a stock registration a pooled context would keep the previous tenant's
+connection string until EF Core first opened a connection. (With only `GetConnectionStringAsync`, the previous one is
+cleared at hand-out and the tenant's is read when the context first opens a connection, below.)
+
 - It registers a scoped `AppDbContext` and an `IDbContextFactory<AppDbContext>`; use it instead of `AddDbContext`,
   `AddDbContextPool` or `AddPooledDbContextFactory`. Call `UseConnectionStrings` first, or it throws. The first context
   created throws when an `ITenantConnectionStringProvider<TKey>` of your own is registered as scoped or transient: the
