@@ -242,9 +242,9 @@ builder.Services.AddTenantry<string>(tenant => tenant
 ```
 
 - It registers a scoped `AppDbContext` and an `IDbContextFactory<AppDbContext>`; use it instead of `AddDbContext`,
-  `AddDbContextPool` or `AddPooledDbContextFactory`. Call `UseConnectionStrings` first, or it throws. It also throws
-  for an `ITenantConnectionStringProvider<TKey>` of your own registered as scoped or transient: the factory is a
-  singleton, so the provider must be one. Like `UseResolver<T>()`, it returns the builder without its key type
+  `AddDbContextPool` or `AddPooledDbContextFactory`. Call `UseConnectionStrings` first, or it throws. The first context
+  created throws when an `ITenantConnectionStringProvider<TKey>` of your own is registered as scoped or transient: the
+  factory is a singleton, so the provider must be one. Like `UseResolver<T>()`, it returns the builder without its key type
   ([Registration](core-concepts.md#registration)).
 - It applies `UseTenantry()` before your configuration (see [Write isolation](#write-isolation-the-interceptor)).
 - `pooled: true` pools contexts as `AddDbContextPool` does, so the context needs a constructor that takes only its
