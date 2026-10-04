@@ -9,37 +9,46 @@ Only the maintainer can push `v*` tags.
 
 ## A new minor
 
-1. Cut the minor's branch from `master`'s head and push it:
+1. Get `## [Unreleased]` in `CHANGELOG.md` ready, in a pull request into `master` as usual: it becomes the GitHub
+   release's notes, and starts with the steps to update from the previous minor.
+2. On `master`, up to date with `origin/master` and with nothing uncommitted, cut the branch:
 
    ```sh
-   git branch release/0.7 origin/master
+   scripts/cut-release.sh 0.7
+   ```
+
+   It refuses unless `0.7` is `MinVerMinimumMajorMinor`, `release/0.7` exists neither locally nor on `origin`, and
+   `## [Unreleased]` has entries. It creates `release/0.7` from `master`'s head, with one commit of its own, the one to
+   tag: `## [Unreleased]` becomes `## [0.7.0] - YYYY-MM-DD` (today, UTC) below a new, empty `## [Unreleased]`, and
+   each analyzer rule moves from `analyzers/*/AnalyzerReleases.Unshipped.md` to that folder's
+   `AnalyzerReleases.Shipped.md`, under `## Release 0.7.0`. On `master`, it cherry-picks that commit, then raises
+   `MinVerMinimumMajorMinor` to `0.8` in a second commit, so `master`'s prereleases are versioned above the branch's
+   releases. It pushes and tags nothing, and prints the commands for the steps below and how to undo it.
+
+   By hand: `git switch -c release/0.7`, make the changelog and analyzer changes, commit; `git switch master`,
+   `git cherry-pick -x release/0.7`; raise `MinVerMinimumMajorMinor`, commit. The branch's commit reaches `master`
+   only as a cherry-pick, a new commit with its own hash, never by merging or fast-forwarding the branch into
+   `master`: that would put the tagged commit on `master`'s history, where MinVer would count `master`'s prerelease
+   versions from the tag and restart them. The release workflow refuses a tag on a commit `master` contains.
+3. Push the branch, and wait for CI, SonarCloud included, to pass on that push: the release requires that run.
+
+   ```sh
    git push origin release/0.7
    ```
 
-2. In a pull request into `release/X.Y`, rename `## [Unreleased]` in `CHANGELOG.md` to `## [x.y.0] - YYYY-MM-DD`.
-   That section is the GitHub release's notes, and a tag without one fails before anything is published. It starts
-   with the steps to update from the previous minor. In the same pull request, move each analyzer rule the release
-   ships from `analyzers/*/AnalyzerReleases.Unshipped.md` to that folder's `AnalyzerReleases.Shipped.md`, under
-   `## Release x.y.0`. Merge it and wait for CI, SonarCloud included, to pass on the push to `release/X.Y`: the
-   release requires that run. Its commit is the branch's first of its own, and the one to tag. A release tag is never
-   on a commit `master` contains, and the release workflow refuses one: `master`'s prerelease versions count from its
-   nearest tag, so a tag on its history would restart them.
-3. On `master`, in one pull request, move what the branch's section holds from `## [Unreleased]` into the same
-   section below it, so `## [Unreleased]` keeps only what was merged after the cut; make the same move of analyzer
-   rules; and raise `MinVerMinimumMajorMinor` in `Directory.Build.props` to the next minor (`0.8`), so `master`'s
-   prereleases are versioned above the branch's releases.
 4. Rehearse (optional): Actions → Release → Run workflow on `release/X.Y`, with the tag as the version. It runs the
    release's checks, builds the same packages, and shows what a release would publish and its notes.
-5. Tag the branch's head and push the tag:
+5. Tag the branch's head, push the tag, then push `master`:
 
    ```sh
    git tag -a v0.7.0 -m "Tenantry 0.7.0 (beta)" origin/release/0.7
    git push origin v0.7.0
+   git push origin master
    ```
 
-To start with a release candidate, step 2's section is `## [0.7.0-rc.1] - YYYY-MM-DD` and the tag `v0.7.0-rc.1`.
-Later candidates and `v0.7.0` follow on the same branch, each from a pull request that adds its own section, as a
-patch does.
+To start with a release candidate, cut the branch by hand, with the section `## [0.7.0-rc.1] - YYYY-MM-DD` and the
+tag `v0.7.0-rc.1`. Later candidates and `v0.7.0` follow on the same branch, each from a pull request that adds its
+own section, as a patch does.
 
 ## A patch
 

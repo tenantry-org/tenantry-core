@@ -37,8 +37,8 @@ if [[ "$ref" == v* ]]; then
     exit 1
   fi
   if git merge-base --is-ancestor "$sha" refs/remotes/origin/master; then
-    echo "::error::$ref ($sha) is on master's history. Tag a commit made on $branch, such as the one from the pull" \
-      "request that adds the release's CHANGELOG.md section there (RELEASING.md)" >&2
+    echo "::error::$ref ($sha) is on master's history. Tag a commit made on $branch, such as the one" \
+      "scripts/cut-release.sh makes there (RELEASING.md)" >&2
     exit 1
   fi
 fi
