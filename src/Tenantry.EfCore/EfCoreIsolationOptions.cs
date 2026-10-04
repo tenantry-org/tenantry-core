@@ -10,8 +10,8 @@ namespace Tenantry.EfCore;
 /// can never set <c>TenantId</c>. Whenever a tenant is current, <c>Modified</c> and <c>Deleted</c> entities must
 /// belong to it, checked before saving and again in each <c>UPDATE</c> and <c>DELETE</c>. These options decide what
 /// happens to writes without a tenant, to saves without a transaction, and to entity types neither tenant-owned nor
-/// shared. Raw SQL and <c>IgnoreQueryFilters()</c>
-/// are outside Tenantry's isolation.
+/// shared. <c>Database.SqlQuery</c>, <c>ExecuteSql</c> and <c>IgnoreQueryFilters()</c> are outside Tenantry's
+/// isolation.
 /// </remarks>
 public sealed class EfCoreIsolationOptions
 {

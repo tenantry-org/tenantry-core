@@ -30,7 +30,7 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 - `options.UseTenantry()` isolates any `DbContext`, pooled or not, with your own model configuration in any order.
 - It fails closed. With no tenant, queries return nothing and tenant-owned writes are refused. A write to another
   tenant's row is rejected before saving, and `TenantId` is part of every `UPDATE` and `DELETE`, so a forged key
-  matches no row. Raw SQL and `IgnoreQueryFilters()` are not isolated
+  matches no row. `Database.SqlQuery`, `ExecuteSql` and `IgnoreQueryFilters()` are not isolated
   ([details](docs/efcore-integration.md#what-is-and-isnt-isolated)).
 - One `AddTenantry` serves ASP.NET Core, console apps, workers and desktop apps.
 - Built for .NET 10. .NET 8 and 9 are supported until 10 November 2027 ([compatibility](docs/compatibility.md)).
