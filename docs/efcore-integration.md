@@ -158,7 +158,7 @@ after Tenantry's: they see new entities already stamped, and their changes are n
 | `TenantDatabaseMismatch` | A context would use another tenant's database ([database per tenant](#database-per-tenant)) | the `DbContext` | the database's and the current tenant (`null` when none) |
 | `ModelConfiguration` | The model does not isolate a tenant-scoped entity type ([list](efcore-advanced.md#models-that-cannot-be-isolated)) | the entity | `null` |
 | `SaveWithoutTransaction` | An [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) would run without a transaction, and `OnSaveWithoutTransaction` is `Reject` | the `DbContext` | `null` |
-| `TransactionRolledBack` | A transaction would commit or complete after an [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) in it failed and EF Core could not undo it | the entity whose check failed, or the `DbContext` | `null` |
+| `TransactionRolledBack` | A transaction would commit or complete after a save in it failed that EF Core could not undo, and an [all-or-nothing save](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole) ran in it | the entity whose check failed, or the `DbContext` | `null` |
 | `TenantSchemaMismatch` | A context would use another tenant's schema. Thrown by packages that put tenants in schemas of their own, such as Tenantry.Pro, from a [`TenantContextGuard`](#extending-contributors) | the `DbContext` | as the package sets them |
 
 `OffendingTenantId` and `ExpectedTenantId` are strings for logging. When it is thrown, nothing has been written; a

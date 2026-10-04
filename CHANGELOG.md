@@ -17,9 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A transaction that EF Core cannot undo a failed save in (an ambient `TransactionScope`, or SQL Server with multiple
-  active result sets) is rolled back when a save whose tenant check failed is followed by a save that succeeds. Before,
-  a later save that wrote no owned rows and no entity mapped to more than one table, or ran without a tenant, marked
-  the failed save as succeeded, and the commit kept the rows the failed save had written.
+  active result sets) is rolled back if any save in it failed after sending statements, once a save in it has written
+  owned rows in their own table or an entity mapped to more than one table. Tenantry counts the saves of each such
+  transaction and how many reported success, rather than matching each of EF Core's notices to a save. Before, a later
+  save, or a save run inside another that EF Core reported as saved and then as failed, could mark a failed save as
+  succeeded, and the commit kept the rows the failed save had written. A failed command and a failed tenant check are
+  noted as they happen, so an interceptor that translates the failure, as EntityFramework.Exceptions does, no longer
+  keeps it from Tenantry. A failed save that wrote no such rows itself now also stops the commit when another save in
+  the transaction did.
+- A save that an interceptor runs from another save's `SavingChanges` no longer sets back the transaction (with
+  `AutoTransactionBehavior.Never`) or the savepoints (with `AutoSavepointsEnabled = false`) that Tenantry turned on for
+  the save around it, which could then leave rows written after their tenant check failed.
 - `UseTenantry()` refuses a many-to-many relationship with a tenant-owned entity at either end whose join entity is not
   tenant-owned, with `TenantIsolationViolationException` of kind `ModelConfiguration`. Its join rows carried no tenant,
   so a save through a stub with another tenant's key could delete that tenant's join rows or add to them. Configure the

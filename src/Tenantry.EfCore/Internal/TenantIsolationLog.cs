@@ -33,9 +33,9 @@ internal static partial class TenantIsolationLog
     public static partial void WriteMatchedNoRow(ILogger logger, string state, string entityType, string? tenantId);
 
     [LoggerMessage(2004, LogLevel.Error,
-        "A SaveChanges ({EntityType}) whose rows rely on another of its statements' tenant check failed, or never ended, " +
-        "after sending some of them, in a transaction EF Core could not undo it in (no savepoint, or an ambient " +
-        "transaction): the transaction was rolled back, not committed",
+        "A SaveChanges failed, or never ended, after sending statements in a transaction EF Core could not undo it in " +
+        "(no savepoint, or an ambient transaction), where a save ({EntityType}) wrote rows that rely on another of its " +
+        "statements' tenant check: the transaction was rolled back, not committed",
         EventName = "TransactionNotCommitted")]
     public static partial void TransactionNotCommitted(ILogger logger, string entityType);
 

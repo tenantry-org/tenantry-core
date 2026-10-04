@@ -101,16 +101,18 @@ usually ensures this with a transaction, but not in every setup. For these saves
   - Hand a transaction you began through ADO.NET to EF Core with `Database.UseTransaction`, or EF Core cannot begin
     its own and the save fails.
   - If a `SavingChanges` interceptor registered after Tenantry's stops the save, the setting stays `WhenNeeded` until
-    the context's next save sets it back to `Never`.
+    a later save of the context ends with nothing left to save.
 - In your own transaction, EF Core rolls a failed save back to a savepoint it creates first, and Tenantry turns
   savepoints on for the save if you turned them off (`AutoSavepointsEnabled = false`). A transaction without
-  savepoints, such as SQL Server with multiple active result sets (MARS), is rolled back instead of committed if such a
-  save in it failed after sending any statement, or if EF Core could not roll back to its savepoint. `Commit` then
-  throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
-  - Any failure of such a save counts. A save can fail before EF Core reads the check (on a duplicate key, say), so
-    Tenantry cannot know whether the check held, and a forged write looks like a real conflict.
+  savepoints, such as SQL Server with multiple active result sets (MARS), is rolled back instead of committed once such
+  a save has run in it, if any save in it failed after sending a statement, or if EF Core could not roll back to its
+  savepoint. `Commit` then throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
+  - Any failure counts, of any save in the transaction. EF Core does not say which save a failure is for when one save
+    runs inside another, and a save can fail before EF Core reads the check (on a duplicate key, say), so Tenantry
+    cannot know whether the check held, and a forged write looks like a real conflict.
   - So does a save Tenantry never learns succeeded, as when an interceptor added before `UseTenantry()` throws from
     `SavedChanges`.
+  - A save stopped before it sent anything, by Tenantry or by an interceptor's `SavingChanges`, does not count.
 - In a `TransactionScope`, or a transaction the connection was enlisted in, EF Core creates no savepoint. The same
   failures roll the transaction back when it completes, so disposing the completed scope throws
   `TransactionAbortedException`.
@@ -122,6 +124,9 @@ Not covered:
   `AmbientTransactionWarning` turned off: it then saves with no transaction at all;
 - storage without transactions, such as MySQL's MyISAM tables;
 - an interceptor that suppresses EF Core's savepoint commands;
+- a save an interceptor runs inside another save, when it fails without a failed command or tenant check and an
+  interceptor or `SaveChangesFailed` handler added before Tenantry's throws from its failure notice: the save around
+  it can be taken for it;
 - a transaction handed to EF Core with `UseTransaction` and then committed directly through ADO.NET.
 
 ## Models that cannot be isolated
