@@ -71,8 +71,9 @@ themselves unchanged, so a save that adds, changes or deletes a join row confirm
 it confirms an owned row's owner:
 
 - An end the save writes is checked by its own `UPDATE`, `DELETE` or `INSERT`.
-- An end it does not write must have been loaded or attached as the current tenant, and its stored row is confirmed by
-  writing its `TenantId` back with its concurrency token. Through a stub that carries another tenant's key with the
+- An end it does not write must have been loaded or attached as the current tenant, must still hold the current
+  tenant's `TenantId` in memory, and has its stored row confirmed by writing its `TenantId` back with its concurrency
+  token. Through a stub that carries another tenant's key with the
   current tenant's `TenantId`, that `UPDATE` matches no row, the save fails with `DbUpdateConcurrencyException`, and
   nothing is written. A stub that names another tenant fails with `TenantIsolationViolationException` before anything
   is sent.

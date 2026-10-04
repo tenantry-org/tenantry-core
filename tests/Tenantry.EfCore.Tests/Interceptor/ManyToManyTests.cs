@@ -94,6 +94,48 @@ public sealed class ManyToManyTests : IDisposable
         _statements.Count.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnEndWhoseTenantIdWasChangedUnseen_IsRefused_AndIsNotMovedToTheOtherTenant(bool async)
+    {
+        await SeedAsync();
+
+        _tenant.As("acme");
+        await using (var db = await CreateAsync<ImplicitContext>())
+        {
+            var post = await db.Set<Post>().SingleAsync(TestContext.Current.CancellationToken);
+            await db.Set<Tag>().SingleAsync(t => t.Id == 3, TestContext.Current.CancellationToken);
+            db.ChangeTracker.AutoDetectChangesEnabled = false;
+            post.TenantId = "globex";
+            db.Set<Dictionary<string, object>>("PostTag").Add(new Dictionary<string, object> { ["PostsId"] = 1, ["TagsId"] = 3 });
+
+            Func<Task> save = async ? () => db.SaveChangesAsync() : () => Task.FromResult(db.SaveChanges());
+            (await save.Should().ThrowAsync<TenantIsolationViolationException>()).Which.OffendingTenantId.Should().Be("globex");
+        }
+
+        await using var check = await CreateAsync<ImplicitContext>();
+        (await check.Set<Post>().IgnoreQueryFilters().Select(p => p.TenantId).SingleAsync(TestContext.Current.CancellationToken))
+            .Should().Be("acme");
+        (await LinksAsync()).Should().Equal("1-1", "1-2");
+    }
+
+    [Fact]
+    public async Task AStubOfAnotherTenantsEnd_WhoseOriginalTenantIdIsForged_MatchesNoRow()
+    {
+        await SeedAsync();
+
+        _tenant.As("globex");
+        await using var db = await CreateAsync<ImplicitContext>();
+        var post = db.Attach(new Post { Id = 1, TenantId = "acme" });
+        post.Property(p => p.TenantId).OriginalValue = "globex";
+        post.Property(p => p.TenantId).CurrentValue = "globex";
+        post.Entity.Tags.Add(db.Attach(new Tag { Id = 3, TenantId = "globex" }).Entity);
+
+        await Refused(db, async: true);
+        (await LinksAsync()).Should().Equal("1-1", "1-2");
+    }
+
     [Fact]
     public async Task AJoinRowWhoseEndsAreNotTracked_IsRefused()
     {

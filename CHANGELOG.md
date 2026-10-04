@@ -89,6 +89,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A save that adds, changes or deletes owned rows in their own table through an owner it does not otherwise write
+  refuses the owner when the `TenantId` it holds in memory is not the current tenant's. 0.6.0 confirmed such an owner by
+  writing its `TenantId` back, and wrote the value the owner held: when change detection had not seen that value
+  change (it was set after the last `DetectChanges`, or with `AutoDetectChangesEnabled` off), a tenant could move its
+  own row, with its owned rows, to another tenant. It could not reach another tenant's existing rows, whose stored
+  `TenantId` the write-back's `WHERE` still required. The join rows of a many-to-many relationship, confirmed the same
+  way, are refused the same way.
 - A save that failed after sending statements in a transaction EF Core cannot undo it in is counted as failed even when
   every notice of its failure is stopped by an interceptor registered before `UseTenantry()` that throws from it (as
   EntityFramework.Exceptions does from `SaveChangesFailed`), or by a `SaveChangesFailed` handler subscribed before

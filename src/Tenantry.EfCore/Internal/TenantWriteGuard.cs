@@ -551,9 +551,18 @@ internal sealed class TenantWriteGuard<TKey>
 
     // Makes the save confirm that an entry's stored row is the current tenant's: its TenantId is written back with its
     // token, or, when EF Core does not write TenantId after an insert, the row is read before the save. A write-back
-    // that other statements rely on is a check (AtomicSave).
+    // that other statements rely on is a check (AtomicSave). EF Core writes the property's current value, which change
+    // detection may not have seen (it was set after the last DetectChanges, or with AutoDetectChangesEnabled off), so a
+    // current value that is not the current tenant is refused: the write-back would move the row to that tenant.
     private void ConfirmStoredTenant(EntityEntry entry, bool isCheck)
     {
+        var current = ((ITenantEntity<TKey>)entry.Entity).TenantId;
+
+        if (!TenantOwnership.IsOwnedBy(current, _tenantId))
+        {
+            Violation(entry, Display(current));
+        }
+
         if (entry.Metadata.FindProperty(TenantOwnership.TenantIdProperty)!.GetAfterSaveBehavior() != PropertySaveBehavior.Save)
         {
             _rowsToRead.TryAdd(entry.Entity, entry);

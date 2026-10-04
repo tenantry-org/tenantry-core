@@ -52,6 +52,84 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         (await AcmePhonesAsync()).Should().Equal("1: acme phone");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnOwnerWhoseTenantIdWasChangedUnseen_IsRefused_AndIsNotMovedToTheOtherTenant(bool async)
+    {
+        // Set after the last change detection, the owner's TenantId is not seen to change, so the owner stays
+        // Unchanged: confirming its stored row must not write that value.
+        await SeedAcmeCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme")))
+        {
+            var customer = await db.Customers.SingleAsync(TestContext.Current.CancellationToken);
+            customer.Phones.Add(new Phone { Id = 2, Number = "added" });
+            db.ChangeTracker.DetectChanges();
+            db.ChangeTracker.AutoDetectChangesEnabled = false;
+            customer.TenantId = "globex";
+
+            Func<Task> save = async ? () => db.SaveChangesAsync() : () => Task.FromResult(db.SaveChanges());
+            (await save.Should().ThrowAsync<TenantIsolationViolationException>()).Which.OffendingTenantId.Should().Be("globex");
+        }
+
+        (await AcmePhonesAsync()).Should().Equal("1: acme phone");
+    }
+
+    [Fact]
+    public async Task AnOwnerWhoseChangedTenantIdWasAccepted_IsRefused()
+    {
+        // AcceptAllChanges makes the changed TenantId the original value too, so the owner reads as Unchanged.
+        await SeedAcmeCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme")))
+        {
+            var customer = await db.Customers.SingleAsync(TestContext.Current.CancellationToken);
+            customer.TenantId = "globex";
+            db.ChangeTracker.DetectChanges();
+            db.ChangeTracker.AcceptAllChanges();
+            customer.Phones.Add(new Phone { Id = 2, Number = "added" });
+
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>()
+                .Where(e => e.OffendingTenantId == "globex");
+        }
+
+        (await AcmePhonesAsync()).Should().Equal("1: acme phone");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnEntityMarkedChangedByHand_WithATenantIdChangedUnseen_IsRefusedOrLeftAsStored(bool unmarkTenantId)
+    {
+        // With change detection off, the state is set by hand. Marked modified, the TenantId would be written: refused.
+        // Unmarked, the customer has nothing left to write, and its row stays as stored.
+        await SeedAcmeCustomerAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme")))
+        {
+            var customer = await db.Customers.SingleAsync(TestContext.Current.CancellationToken);
+            db.ChangeTracker.AutoDetectChangesEnabled = false;
+            customer.TenantId = "globex";
+            db.Entry(customer).State = EntityState.Modified;
+
+            if (unmarkTenantId)
+            {
+                db.Entry(customer).Property(c => c.TenantId).IsModified = false;
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+            else
+            {
+                await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>()
+                    .Where(e => e.OffendingTenantId == "globex");
+            }
+        }
+
+        await using var check = await CreateAsync(_tenant.As("acme"));
+        (await check.Customers.IgnoreQueryFilters().Select(c => c.TenantId).SingleAsync(TestContext.Current.CancellationToken))
+            .Should().Be("acme");
+    }
+
     [Fact]
     public async Task ChangingThroughAStub_FailsAndWritesNothing()
     {
