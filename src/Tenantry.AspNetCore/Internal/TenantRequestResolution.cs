@@ -46,7 +46,7 @@ internal sealed class TenantRequestResolution<TKey>
     {
         using var activity = TenantryHttpTelemetry.ActivitySource.StartActivity(TenantryHttpTelemetry.ResolveActivityName);
 
-        var resolution = await FindTenantAsync(context, beforeAuthentication);
+        var resolution = await FindTenantAsync(context, beforeAuthentication).ConfigureAwait(false);
 
         if (activity is not null)
         {
@@ -71,7 +71,7 @@ internal sealed class TenantRequestResolution<TKey>
 
         foreach (var validator in context.RequestServices.GetServices<ITenantAccessValidator<TKey>>())
         {
-            if (!await validator.ValidateAsync(context, tenant, context.RequestAborted))
+            if (!await validator.ValidateAsync(context, tenant, context.RequestAborted).ConfigureAwait(false))
             {
                 return false;
             }
@@ -110,7 +110,7 @@ internal sealed class TenantRequestResolution<TKey>
                 break;
             }
 
-            identifier = await resolver.ResolveAsync(context, cancellationToken);
+            identifier = await resolver.ResolveAsync(context, cancellationToken).ConfigureAwait(false);
 
             // An empty identifier is no identifier: the next resolver may have one.
             if (!string.IsNullOrWhiteSpace(identifier))
@@ -133,7 +133,7 @@ internal sealed class TenantRequestResolution<TKey>
             return new(ResolutionResult.Missing, null, null, claimResolvers);
         }
 
-        var tenant = await LookUpAsync(identifier, isTenantId, cancellationToken);
+        var tenant = await LookUpAsync(identifier, isTenantId, cancellationToken).ConfigureAwait(false);
 
         if (tenant is null)
         {
@@ -142,12 +142,12 @@ internal sealed class TenantRequestResolution<TKey>
 
         // The access validators first, so only a caller they allow can learn that a tenant is suspended. Before
         // authentication they cannot run yet: app.UseTenantry() runs them on an inactive tenant too (CompleteAsync).
-        if (!beforeAuthentication && !await ValidateAsync(context, tenant))
+        if (!beforeAuthentication && !await ValidateAsync(context, tenant).ConfigureAwait(false))
         {
             return new(ResolutionResult.AccessDenied, identifier, tenant, null);
         }
 
-        if (_activity is not null && !await _activity.IsActiveAsync(tenant, cancellationToken))
+        if (_activity is not null && !await _activity.IsActiveAsync(tenant, cancellationToken).ConfigureAwait(false))
         {
             return new(ResolutionResult.Inactive, identifier, tenant, null);
         }

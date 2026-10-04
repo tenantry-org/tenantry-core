@@ -40,7 +40,8 @@ internal sealed class TenantLookup<TKey> : ITenantLookup<TKey>
     {
         if (_cache is null)
         {
-            return await Read((store, ct) => store.GetTenantAsync(tenantId, ct), cancellationToken);
+            return await Read((store, ct) => store.GetTenantAsync(tenantId, ct), cancellationToken)
+                .ConfigureAwait(false);
         }
 
         if (_cache.TryGet(tenantId, out var cached))
@@ -49,7 +50,8 @@ internal sealed class TenantLookup<TKey> : ITenantLookup<TKey>
         }
 
         var generation = _cache.Generation;
-        var tenant = await Read((store, ct) => store.GetTenantAsync(tenantId, ct), cancellationToken);
+        var tenant = await Read((store, ct) => store.GetTenantAsync(tenantId, ct), cancellationToken)
+            .ConfigureAwait(false);
 
         if (tenant is not null)
         {
@@ -68,7 +70,8 @@ internal sealed class TenantLookup<TKey> : ITenantLookup<TKey>
 
         if (_cache is null)
         {
-            return await Read((store, ct) => store.FindByIdentifierAsync(identifier, ct), cancellationToken);
+            return await Read((store, ct) => store.FindByIdentifierAsync(identifier, ct), cancellationToken)
+                .ConfigureAwait(false);
         }
 
         if (_cache.TryGetByIdentifier(identifier, out var cached))
@@ -77,7 +80,8 @@ internal sealed class TenantLookup<TKey> : ITenantLookup<TKey>
         }
 
         var generation = _cache.Generation;
-        var tenant = await Read((store, ct) => store.FindByIdentifierAsync(identifier, ct), cancellationToken);
+        var tenant = await Read((store, ct) => store.FindByIdentifierAsync(identifier, ct), cancellationToken)
+            .ConfigureAwait(false);
 
         if (tenant is not null)
         {
@@ -96,10 +100,14 @@ internal sealed class TenantLookup<TKey> : ITenantLookup<TKey>
         Func<ITenantStore<TKey>, CancellationToken, ValueTask<TResult>> read,
         CancellationToken cancellationToken)
     {
-        await using var scope = _serviceScopes.CreateAsyncScope();
+        var scope = _serviceScopes.CreateAsyncScope();
 
-        var store = scope.ServiceProvider.GetService<ITenantStore<TKey>>() ?? throw new InvalidOperationException(NoStore);
+        await using (scope.ConfigureAwait(false))
+        {
+            var store = scope.ServiceProvider.GetService<ITenantStore<TKey>>()
+                ?? throw new InvalidOperationException(NoStore);
 
-        return await read(store, cancellationToken);
+            return await read(store, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

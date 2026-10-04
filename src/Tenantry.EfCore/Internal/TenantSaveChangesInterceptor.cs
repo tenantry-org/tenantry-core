@@ -50,11 +50,11 @@ internal sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
 
             if (TenantModelCheck.Verify(context) is { } isolation)
             {
-                await isolation.SavingChangesAsync(context, cancellationToken);
+                await isolation.SavingChangesAsync(context, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        return await base.SavingChangesAsync(eventData, result, cancellationToken);
+        return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
     }
 
     private static void ApplyTenantIsolation(DbContext? context)

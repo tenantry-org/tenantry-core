@@ -14,7 +14,7 @@ internal sealed class TenantActivity<TKey>(IEnumerable<ITenantActivityValidator<
 
         foreach (var validator in _validators)
         {
-            if (!await validator.IsActiveAsync(tenant, cancellationToken))
+            if (!await validator.IsActiveAsync(tenant, cancellationToken).ConfigureAwait(false))
             {
                 return false;
             }
@@ -25,7 +25,7 @@ internal sealed class TenantActivity<TKey>(IEnumerable<ITenantActivityValidator<
 
     public async ValueTask ThrowIfInactiveAsync(ITenantDescriptor<TKey> tenant, CancellationToken cancellationToken = default)
     {
-        if (!await IsActiveAsync(tenant, cancellationToken))
+        if (!await IsActiveAsync(tenant, cancellationToken).ConfigureAwait(false))
         {
             throw new TenantInactiveException(TenantIds.Format(tenant.TenantId));
         }

@@ -36,6 +36,12 @@ csharp_preserve_single_line_blocks = true
 # keywords in other .NET languages (Get, in Visual Basic). The packages are for C# and F#, where Get is no keyword.
 dotnet_diagnostic.CA1716.severity = none
 
+# The packages' own awaits do not return to the caller's synchronization context (a desktop app's UI thread), so an
+# app that blocks on them there does not deadlock. An await after which a caller's callback runs says
+# ConfigureAwait(true), with the reason. Tests and samples are applications, and leave it out.
+[src/**/*.cs]
+dotnet_diagnostic.CA2007.severity = warning
+
 # EF Core's generated migrations and model snapshots
 [**/Migrations/{20*,*ModelSnapshot}.cs]
 generated_code = true

@@ -146,6 +146,13 @@ await scopes.RunInScopeAsync(dequeuedId, (scope, ct) => HandleAsync(scope, ct), 
 For the same reason, do not keep `CurrentTenant` in a singleton's field. The rules for `async` code and threads are
 in [the `AsyncLocal` model](core-concepts.md#the-asynclocal-model).
 
+## Desktop apps
+
+A desktop app's UI thread has a synchronization context. The work you pass to `RunInScopeAsync` starts on the context
+you called it from, so it can update the UI. Tenantry's own continuations do not return to it, so a store read, an
+activity check or a connection string that your code waits for on the UI thread does not deadlock, though it still
+blocks the UI while it runs. Your own store and delegates should use `ConfigureAwait(false)` for the same reason.
+
 ## Runnable sample
 
 [`Tenantry.Samples.EfCoreConsole`](../samples/Tenantry.Samples.EfCoreConsole) uses `Host.CreateApplicationBuilder`,

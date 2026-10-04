@@ -34,7 +34,7 @@ internal sealed class DelegateConnectionStringProvider<TKey>(TenantConnectionStr
 
         if (options.GetConnectionStringAsync is { } getConnectionStringAsync)
         {
-            return Checked(await getConnectionStringAsync(tenant, cancellationToken), tenant);
+            return Checked(await getConnectionStringAsync(tenant, cancellationToken).ConfigureAwait(false), tenant);
         }
 
         var getConnectionString = options.GetConnectionString ?? throw new InvalidOperationException(NotConfigured);

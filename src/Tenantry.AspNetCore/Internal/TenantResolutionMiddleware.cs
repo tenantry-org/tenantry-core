@@ -74,8 +74,8 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         var endpoint = context.GetEndpoint();
         var required = IsTenantRequired(endpoint);
         var resolution = context.Features.Get<EarlyTenantResolution<TKey>>() is { } early
-            ? await CompleteAsync(context, early)
-            : await _resolution.ResolveAsync(context, beforeAuthentication: false);
+            ? await CompleteAsync(context, early).ConfigureAwait(false)
+            : await _resolution.ResolveAsync(context, beforeAuthentication: false).ConfigureAwait(false);
 
         // Before routing, whether the request is rejected is known only once routing has chosen its endpoint.
         if (endpoint is not null || required || resolution.Result == ResolutionResult.Resolved)
@@ -100,10 +100,10 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
             if (_options.OnResolved is { } onResolved)
             {
-                await onResolved(new TenantResolvedContext<TKey>(context, tenant));
+                await onResolved(new TenantResolvedContext<TKey>(context, tenant)).ConfigureAwait(false);
             }
 
-            await NextAsync(context, endpoint is null, resolution);
+            await NextAsync(context, endpoint is null, resolution).ConfigureAwait(false);
             return;
         }
 
@@ -128,7 +128,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         if (required)
         {
-            await RejectAsync(context, resolution);
+            await RejectAsync(context, resolution).ConfigureAwait(false);
             return;
         }
 
@@ -156,7 +156,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 break;
         }
 
-        await NextAsync(context, endpoint is null, resolution);
+        await NextAsync(context, endpoint is null, resolution).ConfigureAwait(false);
     }
 
     // Before authentication, app.UseTenantResolution() found what it could: the access validators, and the claim
@@ -168,12 +168,12 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         if (resolution.Result == ResolutionResult.Missing)
         {
-            return await _resolution.ResolveAsync(context, beforeAuthentication: false);
+            return await _resolution.ResolveAsync(context, beforeAuthentication: false).ConfigureAwait(false);
         }
 
         // An inactive tenant is checked too, so a caller the validators refuse is denied access whatever its state.
         if (resolution is { Result: ResolutionResult.Resolved or ResolutionResult.Inactive, Tenant: { } tenant } &&
-            !await _resolution.ValidateAsync(context, tenant))
+            !await _resolution.ValidateAsync(context, tenant).ConfigureAwait(false))
         {
             return resolution with { Result = ResolutionResult.AccessDenied };
         }
@@ -203,7 +203,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         try
         {
-            await _next(context);
+            await _next(context).ConfigureAwait(false);
         }
         finally
         {
@@ -236,8 +236,9 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         {
             foreach (var claimResolver in claimResolvers)
             {
-                if (await claimResolver.ResolveAsync(context, context.RequestAborted) is not null &&
-                    Interlocked.Exchange(ref _warnedBeforeAuthentication, 1) == 0)
+                var claimed = await claimResolver.ResolveAsync(context, context.RequestAborted).ConfigureAwait(false);
+
+                if (claimed is not null && Interlocked.Exchange(ref _warnedBeforeAuthentication, 1) == 0)
                 {
                     TenantResolutionLog.TenantryBeforeAuthentication(_logger, context.Request.Method, context.Request.Path);
                     break;
@@ -339,7 +340,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         if (_options.OnRejected is { } onRejected)
         {
-            await onRejected(rejected);
+            await onRejected(rejected).ConfigureAwait(false);
 
             if (rejected.IsHandled)
             {
@@ -356,7 +357,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             {
                 HttpContext = context,
                 ProblemDetails = new ProblemDetails { Status = rejected.StatusCode, Title = title, Detail = detail },
-            });
+            }).ConfigureAwait(false);
         }
     }
 }

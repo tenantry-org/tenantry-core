@@ -72,8 +72,10 @@ internal sealed class TenantDatabaseContexts<
     public async Task<TContext> CreateAsync(IServiceProvider services, CancellationToken cancellationToken)
     {
         var tenant = CurrentTenant();
-        var connectionString = await _connectionStrings.GetAsync(tenant, cancellationToken);
-        var context = _pool is null ? New(services) : await _pool.CreateDbContextAsync(cancellationToken);
+        var connectionString = await _connectionStrings.GetAsync(tenant, cancellationToken).ConfigureAwait(false);
+        var context = _pool is null
+            ? New(services)
+            : await _pool.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         return Connect(context, tenant, connectionString);
     }
 

@@ -100,6 +100,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Tenantry's own awaits no longer return to the caller's synchronization context, so a desktop app that waits on a
+  store read, an activity check or a connection string on its UI thread no longer deadlocks. The work passed to
+  `RunInScopeAsync` still starts on the caller's context. See [Desktop apps](docs/non-http-hosts.md#desktop-apps).
 - Per-tenant options are built from the store's copy of the tenant whenever the store holds its id. Before, until the
   tenant was first invalidated, the first copy current when a value was built decided it for everyone: a copy made
   current with `MakeCurrent` or `CreateScope` whose fields differed from the store's (an older one, or one built by

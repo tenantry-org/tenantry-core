@@ -32,7 +32,7 @@ internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant curren
         {
             using (tenant.MakeCurrent())
             {
-                return await factory(state, token);
+                return await factory(state, token).ConfigureAwait(false);
             }
         };
 

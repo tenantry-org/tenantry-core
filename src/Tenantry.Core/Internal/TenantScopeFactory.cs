@@ -53,7 +53,7 @@ internal sealed class TenantScopeFactory<TKey>(
             tenantId,
             async (scope, ct) =>
             {
-                await work(scope, ct);
+                await work(scope, ct).ConfigureAwait(false);
                 return null;
             },
             cancellationToken);
@@ -81,14 +81,19 @@ internal sealed class TenantScopeFactory<TKey>(
         ArgumentNullException.ThrowIfNull(work);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var tenant = await Tenants.GetTenantAsync(tenantId, cancellationToken)
+        // The work is the caller's, so these return to the caller's synchronization context (a desktop app's UI
+        // thread) for it to start on, as it would if the caller ran it.
+        var tenant = await Tenants.GetTenantAsync(tenantId, cancellationToken).ConfigureAwait(true)
                      ?? throw new TenantNotFoundException(tenantId);
 
-        await Activity.ThrowIfInactiveAsync(tenant, cancellationToken);
+        await Activity.ThrowIfInactiveAsync(tenant, cancellationToken).ConfigureAwait(true);
 
         // The scope is opened inside this method, so it is active for the work and never for the caller.
-        await using var scope = CreateScope(tenant);
+        var scope = CreateScope(tenant);
 
-        return await work(scope, cancellationToken);
+        await using (scope.ConfigureAwait(false))
+        {
+            return await work(scope, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

@@ -31,7 +31,7 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
         if (context.Features.Get<TenantResolutionFeature>() is not null ||
             context.Features.Get<EarlyTenantResolution<TKey>>() is not null)
         {
-            await next(context);
+            await next(context).ConfigureAwait(false);
             return;
         }
 
@@ -41,7 +41,8 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
             TenantResolutionLog.TenantResolutionAfterAuthentication(_logger, context.Request.Method, context.Request.Path);
         }
 
-        EarlyTenantResolution<TKey> early = new(await resolution.ResolveAsync(context, beforeAuthentication: true));
+        var resolved = await resolution.ResolveAsync(context, beforeAuthentication: true).ConfigureAwait(false);
+        EarlyTenantResolution<TKey> early = new(resolved);
         context.Features.Set(early);
 
         var previous = context.Features.Get<IEndpointFeature>();
@@ -60,7 +61,7 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
 
         try
         {
-            await next(context);
+            await next(context).ConfigureAwait(false);
         }
         finally
         {

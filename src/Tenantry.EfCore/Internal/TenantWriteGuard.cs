@@ -120,7 +120,7 @@ internal sealed class TenantWriteGuard<TKey>
             foreach (var row in guard._rowsToRead.Values)
             {
                 var stored = StoredTenantQuery.For(context, row, guard._tenantId) is { } query
-                    ? await query.FirstOrDefaultAsync(cancellationToken)
+                    ? await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
                     : null;
 
                 guard.CheckStoredTenant(row, stored);

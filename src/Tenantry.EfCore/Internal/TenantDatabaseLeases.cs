@@ -98,7 +98,8 @@ internal sealed class TenantDatabaseGuard<TKey>(
 
         if (context is not null && TenantDatabaseLeases.TryGet(context, out var lease) && lease.PendingTenant is ITenantDescriptor<TKey> tenant)
         {
-            context.Database.SetConnectionString(await connectionStrings.GetAsync(tenant, cancellationToken));
+            var connectionString = await connectionStrings.GetAsync(tenant, cancellationToken).ConfigureAwait(false);
+            context.Database.SetConnectionString(connectionString);
             TenantDatabaseLeases.Connected(context, lease);
         }
 
