@@ -296,10 +296,9 @@ changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a sin
 a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)). Finbuckle
 also refused a cookie signed in under another tenant. To keep that check, add the tenant id as a claim when the user
 signs in, and validate it with `ValidateTenantAccessByClaim`. A request for another tenant then gets `403` on every
-endpoint, and the user is signed out; Finbuckle treated the same user as signed out. Give each tenant its own cookie
-name and the user is anonymous on the other tenant instead, with their own session untouched
-([Cookies](authentication-per-tenant.md#cookies)). Sessions signed in before the
-change lack the claim, so their users sign in again. See [Authentication per tenant](authentication-per-tenant.md).
+endpoint there; Finbuckle treated the same user as signed out. Give each tenant its own cookie name and the user is
+anonymous on the other tenant instead, as under Finbuckle ([Cookies](authentication-per-tenant.md#cookies)). Sessions
+signed in before the change lack the claim, so their users sign in again. See [Authentication per tenant](authentication-per-tenant.md).
 
 ## Behaviour that changes
 
