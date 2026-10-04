@@ -11,8 +11,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Tenantry.EfCore.Internal;
 
 /// <summary>
-/// Keeps a save all-or-nothing when the tenant check of some of its rows is another of its statements, from
-/// <c>SavingChanges</c> to the end of the save, and, in a transaction EF Core cannot undo the save in, to its commit.
+/// Keeps a save all-or-nothing when the tenant check of some of its rows is another of its statements, and refuses the
+/// commit of a transaction EF Core cannot undo such a save in unless every save in it that sent a statement succeeded.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,92 +28,86 @@ namespace Tenantry.EfCore.Internal;
 ///   own (<c>WhenNeeded</c>, set back when the save ends), or it is rejected
 ///   (<see cref="EfCoreIsolationOptions.OnSaveWithoutTransaction"/>).</item>
 ///   <item>In the application's transaction, EF Core rolls a failed save back to a savepoint it sets, so savepoints
-///   are turned on for the save. A transaction that has none (SQL Server with multiple active result sets), or that EF
-///   Core failed to roll back to its savepoint, is rolled back instead of committed.</item>
-///   <item>An ambient transaction (<c>TransactionScope</c>), which EF Core sets no savepoint in, is rolled back instead
-///   of committed, through a volatile enlistment that votes against it before the connection's own (phase 0, so the
-///   connection's single-phase commit is kept).</item>
+///   are turned on for the save.</item>
+///   <item>A transaction EF Core cannot undo a save in, one without savepoints (SQL Server with multiple active result
+///   sets) or an ambient one (<c>TransactionScope</c>), is rolled back instead of committed when it is unsafe. An
+///   ambient transaction is refused through a volatile enlistment that votes against it before the connection's own
+///   (phase 0, so the connection's single-phase commit is kept).</item>
 /// </list>
 /// <para>
-/// A failed save may have stopped before EF Core read the check, so whether it held is unknown: in a transaction EF
-/// Core cannot undo, a save that sent any of its commands and was not confirmed to succeed refuses the commit. Only the
-/// save interceptor's <c>SavedChanges</c> confirms one, so a failure Tenantry does not hear of still refuses it.
+/// EF Core's save notices name the context but not the save, and saves of a context nest (one an interceptor runs from
+/// another's <c>SavingChanges</c> or <c>SavedChanges</c>), so which save a notice is for is not always known. The
+/// refusal therefore does not depend on it. Each such transaction keeps a ledger: how many saves sent a statement in
+/// it, how many of those were confirmed, whether anything in it failed, and whether any save in it wrote rows whose
+/// check is another of its statements. Once one did, the transaction is unsafe if anything failed or a save that sent
+/// a statement was not confirmed. A save counts as sent at its first command, so one stopped before sending counts for
+/// nothing. A failed or cancelled command, a failed check and a failed rollback to a savepoint each mark the ledger
+/// failed directly, whatever another interceptor does with the save's failure afterwards. Only the save interceptor's
+/// <c>SavedChanges</c> confirms a save.
 /// </para>
 /// <para>
-/// A confirmation must be the save's own. A context's saves nest (a save in a <c>SavedChanges</c> interceptor runs
-/// inside another), so each context keeps the saves that have begun and not ended in order, the latest last. Every
-/// save is on that list from <c>SavingChanges</c>, whether or not any of its rows rely on another statement, and
-/// leaves it when it ends: <c>SavedChanges</c> takes the latest off and confirms it, and a failure or cancellation
-/// takes the latest off as failed, which nothing confirms afterwards. A save that ended without Tenantry hearing of
-/// it (another interceptor threw first) stays on the list unconfirmed, beneath the saves that begin after it. A new
-/// lease of a pooled context starts afresh.
+/// A confirmation must not be counted for the wrong save, as that could balance a failed one. Each context keeps the
+/// saves that began and have not ended, the latest last, and a notice is taken for the latest. <c>SavedChanges</c>
+/// confirms the latest only if it sent a statement and EF Core reports that the save wrote entities. A failure notice
+/// that follows a confirmation with nothing in between is the same save's (an interceptor threw from its
+/// <c>SavedChanges</c>) and ends nothing more. Two sequences still confirm a failed save. Both need a nested save that
+/// sent statements and failed with nothing telling Tenantry: no failed or cancelled command, no failed check that
+/// Tenantry's interceptor saw, and its failure notice kept from Tenantry by an interceptor before Tenantry's that
+/// throws from <c>SaveChangesFailed</c> or <c>SaveChangesCanceled</c>, or by a <c>SaveChangesFailed</c> handler added
+/// before Tenantry's that throws. In the first, an interceptor after Tenantry's runs that save from another's
+/// <c>SavingChanges</c> and swallows its failure, and the save around it sends statements and succeeds: its notices
+/// are those of a save stopped before sending followed by one that succeeded, which must commit. In the second, an
+/// interceptor before Tenantry's runs it from the <c>SavedChanges</c> of a save that sent nothing but whose result an
+/// interceptor set to more than zero (<c>SuppressWithResult</c>).
+/// </para>
+/// <para>
+/// A save sets back the settings it changed when it ends. A save that ended without Tenantry hearing of it (another
+/// interceptor stopped or failed it first) is set back by a later save's end once nothing is left to save, as a save
+/// still running around that one would then send nothing. A new lease of a pooled context starts afresh.
 /// </para>
 /// </remarks>
 internal sealed class AtomicSave
 {
     private static readonly IReadOnlySet<object> NoChecks = new HashSet<object>();
 
-    // Each context's saves that began and are not known to have ended, the latest last.
-    private static readonly ConditionalWeakTable<DbContext, Unconfirmed> Saves = [];
+    // Each context's saves, in one lease of it.
+    private static readonly ConditionalWeakTable<DbContext, Lease> Leases = [];
 
-    // The saves of each transaction EF Core cannot undo them in. Weak, and cleared when the transaction begins again
-    // (Npgsql reuses its transaction objects), commits or rolls back.
-    private static readonly ConditionalWeakTable<DbTransaction, List<AtomicSave>> Undoable = [];
+    // The ledger of each transaction EF Core cannot undo a save in: a DbTransaction without savepoints or an ambient
+    // Transaction. Weak, and dropped when a DbTransaction begins again (Npgsql reuses its objects), commits or rolls back.
+    private static readonly ConditionalWeakTable<object, Ledger> Ledgers = [];
 
     // The transaction each context last began through EF Core, which only that context ends.
     private static readonly ConditionalWeakTable<DbContext, DbTransaction> Begun = [];
 
-    private readonly WeakReference<DbContext> _context;
-    private readonly DbContextId _contextId;
-    private readonly string _contextName;
+    private readonly Ledger? _ledger;
 
     private ILogger _logger = NullLogger.Instance;
     private IReadOnlySet<object> _checks = NoChecks;
-    private bool _relied;
     private bool _restoreNever;
     private bool _restoreSavepointsOff;
+    private bool _relies;
     private bool _sent;
-    private bool _saved;
-    private bool _failed;
-    private bool _inItsOwnTransaction;
-    private string? _failedCheck;
 
-    private AtomicSave(DbContext context)
-    {
-        _context = new WeakReference<DbContext>(context);
-        _contextId = context.ContextId;
-        _contextName = context.GetType().Name;
-    }
+    private AtomicSave(Ledger? ledger) => _ledger = ledger;
 
-    // Whether the save leaves its transaction unsafe to commit: it sent a command and failed, or was never confirmed.
-    private bool IsUnsafe => _sent && (_failed || !_saved);
+    private bool HasSettings => _restoreNever || _restoreSavepointsOff;
 
-    /// <summary>
-    /// Notes that a save of <paramref name="context"/> begins, and sets back what earlier saves that were never
-    /// confirmed changed in the context's settings.
-    /// </summary>
-    /// <remarks>
-    /// Every save is noted, so that the confirmation of one whose rows rely on nothing is not taken for an earlier
-    /// save's.
-    /// </remarks>
+    /// <summary>Notes that a save of <paramref name="context"/> begins, in the transaction it has now.</summary>
     public static void Start(DbContext context)
     {
-        if (Find(context) is not { } unconfirmed)
+        if (Find(context) is not { } lease)
         {
-            unconfirmed = new Unconfirmed(context.ContextId);
-            Saves.AddOrUpdate(context, unconfirmed);
+            lease = new Lease(context.ContextId);
+            Leases.AddOrUpdate(context, lease);
 
             // The only notice of a concurrency failure. A pooled context drops its handlers between leases.
             context.SaveChangesFailed -= OnFailed;
             context.SaveChangesFailed += OnFailed;
         }
 
-        foreach (var save in unconfirmed.Saves)
-        {
-            save.Finish(context);
-        }
-
-        unconfirmed.Saves.Add(new AtomicSave(context));
+        lease.Confirmed = null;
+        lease.Saves.Add(new AtomicSave(Undoable(context)));
     }
 
     /// <summary>
@@ -138,100 +132,135 @@ internal sealed class AtomicSave
         SaveWithoutTransactionBehavior behavior,
         ILogger logger)
     {
-        if ((checks.Count == 0 && !insertsAreChecks) || Latest(context) is not { } save)
+        if ((checks.Count == 0 && !insertsAreChecks) || Find(context) is not { Saves: [.., var save] })
         {
             return;
         }
 
         save._checks = checks;
+        save._relies = true;
         save._logger = logger;
-        save._relied = true;
+        save._ledger?.Rely(logger, context);
         var database = context.Database;
 
-        if (database.IsRelational())
+        if (!database.IsRelational() || save._ledger is not null)
         {
-            if (database.CurrentTransaction is { } transaction)
-            {
-                if (!transaction.SupportsSavepoints)
-                {
-                    save.Register(context, transaction.GetDbTransaction());
-                }
-                else if (!database.AutoSavepointsEnabled)
-                {
-                    database.AutoSavepointsEnabled = true;
-                    save._restoreSavepointsOff = true;
-                }
-            }
-            else if ((database.GetEnlistedTransaction() ?? Transaction.Current) is { } ambient)
-            {
-                ambient.EnlistVolatile(new Vote(save), EnlistmentOptions.EnlistDuringPrepareRequired);
-            }
-            else if (database.AutoTransactionBehavior == AutoTransactionBehavior.Never)
-            {
-                if (behavior == SaveWithoutTransactionBehavior.Reject)
-                {
-                    throw new TenantIsolationViolationException(
-                        TenantIsolationViolationKind.SaveWithoutTransaction,
-                        save._contextName,
-                        $"'{save._contextName}' is saving without a transaction (Database.AutoTransactionBehavior is Never) " +
-                        "owned entities in a table of their own, or entities mapped to more than one table, whose tenant " +
-                        "another of the save's statements checks: if that check failed, the rest would stay written. " +
-                        "Nothing was sent, as EfCoreIsolationOptions.OnSaveWithoutTransaction is Reject. Save them in a " +
-                        "transaction, or set OnSaveWithoutTransaction to UseTransaction.");
-                }
+            return;
+        }
 
-                // EF Core reads the setting once the SavingChanges interceptors have run, and then begins, commits or
-                // rolls back the transaction itself, in its execution strategy.
-                database.AutoTransactionBehavior = AutoTransactionBehavior.WhenNeeded;
-                save._restoreNever = true;
-                TenantIsolationLog.SaveInTransaction(logger);
+        if (database.CurrentTransaction is not null)
+        {
+            if (!database.AutoSavepointsEnabled)
+            {
+                database.AutoSavepointsEnabled = true;
+                save._restoreSavepointsOff = true;
             }
+        }
+        else if (database.AutoTransactionBehavior == AutoTransactionBehavior.Never)
+        {
+            var contextName = context.GetType().Name;
+
+            if (behavior == SaveWithoutTransactionBehavior.Reject)
+            {
+                throw new TenantIsolationViolationException(
+                    TenantIsolationViolationKind.SaveWithoutTransaction,
+                    contextName,
+                    $"'{contextName}' is saving without a transaction (Database.AutoTransactionBehavior is Never) " +
+                    "owned entities in a table of their own, or entities mapped to more than one table, whose tenant " +
+                    "another of the save's statements checks: if that check failed, the rest would stay written. " +
+                    "Nothing was sent, as EfCoreIsolationOptions.OnSaveWithoutTransaction is Reject. Save them in a " +
+                    "transaction, or set OnSaveWithoutTransaction to UseTransaction.");
+            }
+
+            // EF Core reads the setting once the SavingChanges interceptors have run, and then begins, commits or
+            // rolls back the transaction itself, in its execution strategy.
+            database.AutoTransactionBehavior = AutoTransactionBehavior.WhenNeeded;
+            save._restoreNever = true;
+            TenantIsolationLog.SaveInTransaction(logger);
         }
     }
 
-    /// <summary>Notes that the latest save of <paramref name="context"/> sent one of its commands.</summary>
-    public static void Sending(DbContext? context)
+    /// <summary>Notes that a save of <paramref name="context"/> is sending a command in <paramref name="transaction"/>.</summary>
+    public static void Sending(DbContext? context, DbTransaction? transaction)
     {
-        if (context is not null && Latest(context) is { } save)
+        if (context is null || Find(context) is not { } lease)
         {
-            save._sent = true;
+            return;
+        }
+
+        lease.Confirmed = null;
+
+        if (Find(context, transaction) is not { } ledger)
+        {
+            return;
+        }
+
+        var latest = lease.Saves.Count > 0 ? lease.Saves[^1] : null;
+
+        if (latest is null || !ReferenceEquals(latest._ledger, ledger))
+        {
+            // Sent by a save the context has no note of, or in another transaction: nothing confirms it.
+            ledger.Sent();
+        }
+        else if (!latest._sent)
+        {
+            latest._sent = true;
+            ledger.Sent();
+        }
+    }
+
+    /// <summary>Notes that a command a save of <paramref name="context"/> sent in <paramref name="transaction"/> failed or was cancelled.</summary>
+    public static void CommandFailed(DbContext? context, DbTransaction? transaction)
+    {
+        if (context is not null && Find(context) is { } lease)
+        {
+            lease.Confirmed = null;
+            Find(context, transaction)?.Fail(null);
         }
     }
 
     /// <summary>
     /// Whether any of <paramref name="failed"/>, whose write matched no row, checks the tenant of rows other statements
-    /// of the save write, so the failure must not be suppressed.
+    /// of a save of <paramref name="context"/> write, so the failure must not be suppressed.
     /// </summary>
     public static bool IsCheck(DbContext context, IReadOnlyList<EntityEntry> failed)
     {
-        if (Latest(context) is not { } save || failed.FirstOrDefault(entry => save._checks.Contains(entry.Entity)) is not { } check)
+        if (Find(context) is not { } lease ||
+            failed.FirstOrDefault(entry => lease.Saves.Exists(save => save._checks.Contains(entry.Entity))) is not { } check)
         {
             return false;
         }
 
-        // The save interceptor throws the failure, so the save fails whatever else hears of it.
-        save._failedCheck ??= check.Entity.GetType().Name;
-        save._failed = true;
+        // Any save of the context's that is still noted: one that relied on the check is among them.
+        lease.Confirmed = null;
+        lease.FailedCheck = check.Entity.GetType().Name;
+        Find(context, context.Database.CurrentTransaction?.GetDbTransaction())?.Fail(lease.FailedCheck);
         return true;
     }
 
-    /// <summary>Confirms the latest save of <paramref name="context"/>, which succeeded.</summary>
-    public static void Saved(DbContext context)
+    /// <summary>
+    /// Confirms the latest save of <paramref name="context"/>, which succeeded, if it sent a command and
+    /// <paramref name="entitiesSaved"/> shows that it wrote entities.
+    /// </summary>
+    public static void Saved(DbContext context, int entitiesSaved)
     {
-        // One known to have failed, which no notice took off, ended inside the save that succeeded.
-        while (End(context) is { } save)
+        if (Find(context) is not { } lease)
         {
-            if (!save._failed)
-            {
-                save._saved = true;
-                return;
-            }
+            return;
+        }
+
+        var save = End(context, lease);
+        lease.Confirmed = save;
+
+        if (save is { _sent: true, _ledger: { } ledger } && entitiesSaved > 0)
+        {
+            ledger.Confirm();
         }
     }
 
     /// <summary>
     /// Notes that the latest save of <paramref name="context"/> ended without succeeding: it failed, was cancelled, or
-    /// Tenantry rejected it. Nothing confirms it afterwards.
+    /// Tenantry rejected it. A notice right after a confirmation is that save's and ends nothing more.
     /// </summary>
     /// <param name="context">The context whose save ended.</param>
     /// <param name="failure">
@@ -240,33 +269,42 @@ internal sealed class AtomicSave
     /// </param>
     public static void Failed(DbContext context, Exception? failure = null)
     {
-        if (End(context) is { } save)
+        if (Find(context) is not { } lease)
         {
-            save._failed = true;
+            return;
         }
 
-        if (failure is not null && Find(context) is { } unconfirmed)
+        if (lease.Confirmed is null && End(context, lease) is { _sent: true, _ledger: { } ledger })
         {
-            unconfirmed.Reported = failure;
+            ledger.Fail(null);
+        }
+
+        lease.Confirmed = null;
+
+        if (failure is not null)
+        {
+            lease.Reported = failure;
         }
     }
 
     /// <summary>
     /// After EF Core failed to roll a failed save back to its savepoint in <paramref name="transaction"/>: that save's
-    /// statements are still in it, so its commit is refused.
+    /// statements are still in it, so its commit is refused if a save of <paramref name="context"/> relied on a check.
     /// </summary>
     public static void SavepointNotRolledBack(DbContext? context, DbTransaction transaction)
     {
-        if (context is not null && Latest(context) is { _relied: true } save)
+        if (context is not null && Find(context) is { } lease && lease.Saves.FindLast(save => save._relies) is { } relied)
         {
-            save.Register(context, transaction);
+            var ledger = Open(context, transaction);
+            ledger.Rely(relied._logger, context);
+            ledger.Fail(lease.FailedCheck);
         }
     }
 
     /// <summary>Notes that <paramref name="context"/> began <paramref name="transaction"/>, a new one.</summary>
     public static void Began(DbContext? context, DbTransaction transaction)
     {
-        Undoable.Remove(transaction);
+        Ledgers.Remove(transaction);
 
         if (context is not null)
         {
@@ -275,49 +313,92 @@ internal sealed class AtomicSave
     }
 
     /// <summary>
-    /// As <paramref name="transaction"/> is handed to a context: drops the saves of a transaction their context began
-    /// and no longer has, which ended, as Npgsql hands out its transaction objects again. Saves of a transaction their
-    /// context did not begin, which may still be live, are kept.
+    /// As <paramref name="transaction"/> is handed to a context: drops its ledger if the context that began it no
+    /// longer has it, as Npgsql hands out its transaction objects again. The ledger of a transaction no context began,
+    /// which may still be live, is kept.
     /// </summary>
     public static void Used(DbTransaction transaction)
     {
-        if (Undoable.TryGetValue(transaction, out var saves))
+        if (Ledgers.TryGetValue(transaction, out var ledger) && ledger.Ended(transaction))
         {
-            saves.RemoveAll(save => save._inItsOwnTransaction && !save.HasTransaction(transaction));
+            Ledgers.Remove(transaction);
         }
     }
 
-    /// <summary>
-    /// The violation that refuses <paramref name="transaction"/>'s commit, if a save in it that EF Core could not undo
-    /// sent a command and did not succeed, or <see langword="null"/>.
-    /// </summary>
+    /// <summary>The violation that refuses <paramref name="transaction"/>'s commit, if it is unsafe, or <see langword="null"/>.</summary>
     public static TenantIsolationViolationException? Refusal(DbTransaction transaction) =>
-        Undoable.TryGetValue(transaction, out var saves) && saves.FirstOrDefault(save => save.IsUnsafe) is { } unsafeSave
-            ? unsafeSave.Refuse("The transaction was rolled back, not committed")
+        Ledgers.TryGetValue(transaction, out var ledger) && ledger.IsUnsafe
+            ? ledger.Refuse("The transaction was rolled back, not committed")
             : null;
 
-    /// <summary>Forgets the saves of <paramref name="transaction"/>, which ended.</summary>
-    public static void Forget(DbTransaction transaction) => Undoable.Remove(transaction);
+    /// <summary>Forgets the ledger of <paramref name="transaction"/>, which ended.</summary>
+    public static void Forget(DbTransaction transaction) => Ledgers.Remove(transaction);
 
-    private static Unconfirmed? Find(DbContext context) =>
-        Saves.TryGetValue(context, out var unconfirmed) && unconfirmed.ContextId.Equals(context.ContextId)
-            ? unconfirmed
-            : null;
+    private static Lease? Find(DbContext context) =>
+        Leases.TryGetValue(context, out var lease) && lease.ContextId.Equals(context.ContextId) ? lease : null;
 
-    private static AtomicSave? Latest(DbContext context) =>
-        Find(context) is { Saves.Count: > 0 } unconfirmed ? unconfirmed.Saves[^1] : null;
+    // The ledger of the transaction a command of the context runs in: its DbTransaction, or else the ambient one.
+    private static Ledger? Find(DbContext context, DbTransaction? transaction) =>
+        ((object?)transaction ?? Ambient(context)) is { } key && Ledgers.TryGetValue(key, out var ledger) ? ledger : null;
 
-    // Takes the latest save of the context off its list, as it ended, and sets back what it changed.
-    private static AtomicSave? End(DbContext context)
+    private static Transaction? Ambient(DbContext context) =>
+        context.Database.IsRelational() ? context.Database.GetEnlistedTransaction() ?? Transaction.Current : null;
+
+    // The ledger of the transaction the context has, if EF Core cannot undo a save in it.
+    private static Ledger? Undoable(DbContext context)
     {
-        if (Find(context) is not { Saves.Count: > 0 } unconfirmed)
+        if (!context.Database.IsRelational())
         {
             return null;
         }
 
-        var save = unconfirmed.Saves[^1];
-        unconfirmed.Saves.RemoveAt(unconfirmed.Saves.Count - 1);
-        save.Finish(context);
+        if (context.Database.CurrentTransaction is { } transaction)
+        {
+            return transaction.SupportsSavepoints ? null : Open(context, transaction.GetDbTransaction());
+        }
+
+        return Ambient(context) is { } ambient ? Open(context, ambient) : null;
+    }
+
+    private static Ledger Open(DbContext context, object transaction)
+    {
+        if (!Ledgers.TryGetValue(transaction, out var ledger))
+        {
+            ledger = new Ledger(context.GetType().Name);
+            Ledgers.AddOrUpdate(transaction, ledger);
+
+            if (transaction is Transaction ambient)
+            {
+                ambient.EnlistVolatile(new Vote(ledger), EnlistmentOptions.EnlistDuringPrepareRequired);
+            }
+        }
+
+        if (transaction is DbTransaction own && Begun.TryGetValue(context, out var begun) && ReferenceEquals(begun, own))
+        {
+            ledger.BegunBy(context);
+        }
+
+        return ledger;
+    }
+
+    // Takes the latest save of the context off its list, as it ended, and sets back what it changed. Saves left on the
+    // list are set back too once nothing is left to save.
+    private static AtomicSave? End(DbContext context, Lease lease)
+    {
+        if (lease.Saves is not [.., var save])
+        {
+            return null;
+        }
+
+        lease.Saves.RemoveAt(lease.Saves.Count - 1);
+        save._checks = NoChecks;
+        save.Restore(context);
+
+        if (lease.Saves.Exists(other => other.HasSettings) && !context.ChangeTracker.HasChanges())
+        {
+            lease.Saves.ForEach(other => other.Restore(context));
+        }
+
         return save;
     }
 
@@ -325,64 +406,25 @@ internal sealed class AtomicSave
     // interceptor for any other, which is then already noted.
     private static void OnFailed(object? sender, SaveChangesFailedEventArgs e)
     {
-        if (sender is not DbContext context || Find(context) is not { } unconfirmed)
+        if (sender is not DbContext context || Find(context) is not { } lease)
         {
             return;
         }
 
-        if (ReferenceEquals(unconfirmed.Reported, e.Exception))
+        if (ReferenceEquals(lease.Reported, e.Exception))
         {
-            unconfirmed.Reported = null;
+            lease.Reported = null;
             return;
         }
 
         Failed(context);
     }
 
-    private void Register(DbContext context, DbTransaction transaction)
+    // Sets back what the save changed in the context's settings, only if nothing has set it since.
+    private void Restore(DbContext context)
     {
-        var saves = Undoable.GetOrCreateValue(transaction);
-
-        if (!saves.Contains(this))
-        {
-            saves.Add(this);
-        }
-
-        _inItsOwnTransaction = Begun.TryGetValue(context, out var begun) && ReferenceEquals(begun, transaction);
-    }
-
-    // Whether the save's context, in the same lease, still has the transaction.
-    private bool HasTransaction(DbTransaction transaction)
-    {
-        if (!_context.TryGetTarget(out var context) || !context.ContextId.Equals(_contextId))
-        {
-            return false;
-        }
-
-        try
-        {
-            return context.Database.CurrentTransaction?.GetDbTransaction() is { } current && ReferenceEquals(current, transaction);
-        }
-        catch (ObjectDisposedException)
-        {
-            return false;
-        }
-    }
-
-    // Sets back what the save changed in the context's settings, once it has ended, and lets its entities go.
-    private void Finish(DbContext context)
-    {
-        _checks = NoChecks;
-
-        // A later lease of a pooled context starts from the pool's settings.
-        if (!_contextId.Equals(context.ContextId))
-        {
-            return;
-        }
-
         var database = context.Database;
 
-        // Only what Tenantry set, and only if nothing has set it since.
         if (_restoreNever && database.AutoTransactionBehavior == AutoTransactionBehavior.WhenNeeded)
         {
             database.AutoTransactionBehavior = AutoTransactionBehavior.Never;
@@ -397,44 +439,114 @@ internal sealed class AtomicSave
         _restoreSavepointsOff = false;
     }
 
-    private TenantIsolationViolationException Refuse(string outcome)
-    {
-        var typeName = _failedCheck ?? _contextName;
-        TenantIsolationLog.TransactionNotCommitted(_logger, typeName);
-
-        var failure = _failedCheck is null
-            ? "a SaveChanges in it failed, or did not end, after sending some of its statements"
-            : $"a SaveChanges in it failed the tenant check of entity '{_failedCheck}'";
-
-        return new TenantIsolationViolationException(
-            TenantIsolationViolationKind.TransactionRolledBack,
-            typeName,
-            $"{outcome}: {failure}, and among them were rows whose tenant another of its statements checks. EF Core " +
-            "could not undo that save in this transaction (it has no savepoint, as with SQL Server's multiple active " +
-            "result sets, or it is an ambient transaction), so those rows could belong to another tenant. Change an " +
-            "entity, or the entities it owns, only while its own tenant is current, and after any other failure run " +
-            "the unit of work again.");
-    }
-
-    // A context's saves that began and are not known to have ended, in one lease of it.
-    private sealed class Unconfirmed(DbContextId contextId)
+    // A context's saves that began and are not known to have ended, the latest last, in one lease of it.
+    private sealed class Lease(DbContextId contextId)
     {
         public DbContextId ContextId { get; } = contextId;
 
         public List<AtomicSave> Saves { get; } = [];
 
+        // The save just confirmed, until another notice or command: a failure notice for it ends nothing more.
+        public AtomicSave? Confirmed { get; set; }
+
         // The failure the save interceptor noted last, until the context's event reports it again.
         public Exception? Reported { get; set; }
+
+        // The entity whose check failed last.
+        public string? FailedCheck { get; set; }
     }
 
-    // Votes against completing an ambient transaction a save failed in, as EF Core sets no savepoint in one.
-    private sealed class Vote(AtomicSave save) : IEnlistmentNotification
+    // What the saves in one transaction EF Core cannot undo them in sent, and whether the transaction may commit.
+    private sealed class Ledger(string contextName)
+    {
+        private int _sent;
+        private int _confirmed;
+        private bool _failed;
+        private bool _relied;
+        private string? _failedCheck;
+        private string _contextName = contextName;
+        private ILogger _logger = NullLogger.Instance;
+        private WeakReference<DbContext>? _owner;
+        private DbContextId _ownerId;
+
+        // Unsafe once a save in it relied on another statement's check and anything failed or went unconfirmed.
+        public bool IsUnsafe => Volatile.Read(ref _relied) &&
+            (Volatile.Read(ref _failed) || Volatile.Read(ref _sent) != Volatile.Read(ref _confirmed));
+
+        public void Sent() => Interlocked.Increment(ref _sent);
+
+        public void Confirm() => Interlocked.Increment(ref _confirmed);
+
+        public void Fail(string? check)
+        {
+            _failedCheck ??= check;
+            Volatile.Write(ref _failed, true);
+        }
+
+        public void Rely(ILogger logger, DbContext context)
+        {
+            _logger = logger;
+            _contextName = context.GetType().Name;
+            Volatile.Write(ref _relied, true);
+        }
+
+        public void BegunBy(DbContext context)
+        {
+            _owner = new WeakReference<DbContext>(context);
+            _ownerId = context.ContextId;
+        }
+
+        // Whether the context that began the transaction, in the same lease, no longer has it.
+        public bool Ended(DbTransaction transaction)
+        {
+            if (_owner is null)
+            {
+                return false;
+            }
+
+            if (!_owner.TryGetTarget(out var context) || !context.ContextId.Equals(_ownerId))
+            {
+                return true;
+            }
+
+            try
+            {
+                return !ReferenceEquals(context.Database.CurrentTransaction?.GetDbTransaction(), transaction);
+            }
+            catch (ObjectDisposedException)
+            {
+                return true;
+            }
+        }
+
+        public TenantIsolationViolationException Refuse(string outcome)
+        {
+            var typeName = _failedCheck ?? _contextName;
+            TenantIsolationLog.TransactionNotCommitted(_logger, typeName);
+
+            var failure = _failedCheck is null
+                ? "a SaveChanges in it sent statements and did not succeed, or did not end"
+                : $"a SaveChanges in it failed the tenant check of entity '{_failedCheck}'";
+
+            return new TenantIsolationViolationException(
+                TenantIsolationViolationKind.TransactionRolledBack,
+                typeName,
+                $"{outcome}: {failure}, and a SaveChanges in it wrote rows whose tenant another of its statements " +
+                "checks. EF Core could not undo a save in this transaction (it has no savepoint, as with SQL Server's " +
+                "multiple active result sets, or it is an ambient transaction), so rows it wrote could belong to " +
+                "another tenant. Change an entity, or the entities it owns, only while its own tenant is current, and " +
+                "after any other failure run the unit of work again.");
+        }
+    }
+
+    // Votes against completing an ambient transaction that is unsafe, as EF Core sets no savepoint in one.
+    private sealed class Vote(Ledger ledger) : IEnlistmentNotification
     {
         public void Prepare(PreparingEnlistment preparingEnlistment)
         {
-            if (save.IsUnsafe)
+            if (ledger.IsUnsafe)
             {
-                preparingEnlistment.ForceRollback(save.Refuse("The ambient transaction was rolled back"));
+                preparingEnlistment.ForceRollback(ledger.Refuse("The ambient transaction was rolled back"));
                 return;
             }
 

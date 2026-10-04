@@ -79,7 +79,7 @@ internal sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
     {
         if (eventData.Context is { } context)
         {
-            AtomicSave.Saved(context);
+            AtomicSave.Saved(context, eventData.EntitiesSavedCount);
         }
 
         return base.SavedChanges(eventData, result);
@@ -93,7 +93,7 @@ internal sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
     {
         if (eventData.Context is { } context)
         {
-            AtomicSave.Saved(context);
+            AtomicSave.Saved(context, eventData.EntitiesSavedCount);
         }
 
         return base.SavedChangesAsync(eventData, result, cancellationToken);

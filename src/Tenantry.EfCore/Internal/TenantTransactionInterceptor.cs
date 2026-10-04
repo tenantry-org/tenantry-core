@@ -6,9 +6,8 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace Tenantry.EfCore.Internal;
 
 /// <summary>
-/// EF Core interceptor that rolls back, rather than commits, a transaction holding a save EF Core could not undo that
-/// failed, or never ended, after sending some of its statements (<see cref="AtomicSave"/>), and notes, for that, which
-/// saves sent a command.
+/// EF Core interceptor that rolls back, rather than commits, a transaction <see cref="AtomicSave"/> finds unsafe, and
+/// tells it which commands saves send in each transaction and which of them fail.
 /// </summary>
 /// <remarks>
 /// A commit through the context's transaction (<c>Database.BeginTransaction</c> or <c>UseTransaction</c>) is refused:
@@ -173,10 +172,11 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
         }
     }
 
-    // A save that sends a command can leave statements behind if it fails (AtomicSave).
+    // A save's commands, counted per transaction, and their failures, which make it unsafe whatever another
+    // interceptor does with the save's failure (AtomicSave).
     public InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
     {
-        Sending(eventData);
+        Sending(command, eventData);
         return result;
     }
 
@@ -186,13 +186,13 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
         InterceptionResult<DbDataReader> result,
         CancellationToken cancellationToken = default)
     {
-        Sending(eventData);
+        Sending(command, eventData);
         return ValueTask.FromResult(result);
     }
 
     public InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
     {
-        Sending(eventData);
+        Sending(command, eventData);
         return result;
     }
 
@@ -202,16 +202,40 @@ internal sealed class TenantTransactionInterceptor : DbTransactionInterceptor, I
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        Sending(eventData);
+        Sending(command, eventData);
         return ValueTask.FromResult(result);
     }
 
+    public void CommandFailed(DbCommand command, CommandErrorEventData eventData) => Failed(command, eventData);
+
+    public Task CommandFailedAsync(DbCommand command, CommandErrorEventData eventData, CancellationToken cancellationToken = default)
+    {
+        Failed(command, eventData);
+        return Task.CompletedTask;
+    }
+
+    public void CommandCanceled(DbCommand command, CommandEndEventData eventData) => Failed(command, eventData);
+
+    public Task CommandCanceledAsync(DbCommand command, CommandEndEventData eventData, CancellationToken cancellationToken = default)
+    {
+        Failed(command, eventData);
+        return Task.CompletedTask;
+    }
+
     // A save's own commands, not a query the context runs meanwhile.
-    private static void Sending(CommandEventData eventData)
+    private static void Sending(DbCommand command, CommandEventData eventData)
     {
         if (eventData.CommandSource == CommandSource.SaveChanges)
         {
-            AtomicSave.Sending(eventData.Context);
+            AtomicSave.Sending(eventData.Context, command.Transaction);
+        }
+    }
+
+    private static void Failed(DbCommand command, CommandEventData eventData)
+    {
+        if (eventData.CommandSource == CommandSource.SaveChanges)
+        {
+            AtomicSave.CommandFailed(eventData.Context, command.Transaction);
         }
     }
 
