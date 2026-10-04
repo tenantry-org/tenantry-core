@@ -184,7 +184,8 @@ jobs:
         run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.*'
 
       - name: Upload packages
-        # The release job publishes exactly these packages: the ones built, tested and checked above
+        # The release job, and on master ci.yml's prerelease job, publish exactly these packages: the ones built, tested
+        # and checked above
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nuget-packages

@@ -78,3 +78,140 @@ jobs:
 
       - name: Build and test for net11.0
         run: bash scripts/test-net11.sh
+
+  # Every push to master publishes its packages to NuGet.org as a prerelease (X.Y.0-alpha.0.N), so Tenantry Pro can
+  # build against master's packages from a clean clone. Stable versions come only from tags on release/X.Y
+  # (release.yml), on commits master does not contain, so master's versions only grow. It publishes the packages the
+  # Build & Test job of this run built, tested and checked, once that job and the Windows build have passed; the
+  # .NET 11 lane does not block it.
+  prerelease:
+    name: Publish the prerelease to NuGet
+    runs-on: ubuntu-latest
+    needs: [build-and-test, windows-build]
+    # Never for a pull request, a release branch, a tag, a run started by hand, or a fork
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+      github.repository == 'tenantry-org/tenantry-core'
+    environment: prerelease   # no reviewers; only master deploys to it, and NuGet.org's policy for it names ci.yml
+    permissions:
+      contents: read
+      id-token: write   # GitHub OIDC tokens, for NuGet.org's trusted publishing
+    concurrency:
+      # One publish at a time, never cancelled. Each commit has its own version, so every waiting run publishes in
+      # turn: queue: max keeps up to 100 waiting instead of only the newest.
+      group: prerelease
+      cancel-in-progress: false
+      queue: max
+
+    steps:
+      # Before the packages: checkout empties the folder it checks out into.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # only Directory.Build.props and the script are needed
+
+      - name: Download the tested packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: ./artifacts
+
+      - name: Check the packages carry master's next prerelease version
+        # X.Y.0-alpha.0.N, X.Y being MinVerMinimumMajorMinor, with N above every N published. Any other version, such as
+        # one a release tag on master's history would give (X.Y.0-rc.1.N, X.Y.1-alpha.0.N, or a smaller N), fails here.
+        id: version
+        run: |
+          minor="$(sed -n 's:.*<MinVerMinimumMajorMinor>\(.*\)</MinVerMinimumMajorMinor>.*:\1:p' Directory.Build.props)"
+          prefix="$minor.0-alpha.0."
+          version=""
+          for package in ./artifacts/*.nupkg; do
+            actual="$(unzip -p "$package" '*.nuspec' | sed -n 's:.*<version>\(.*\)</version>.*:\1:p' | head -n 1)"
+            if [ -z "$version" ]; then
+              version="$actual"
+            elif [ "$actual" != "$version" ]; then
+              echo "::error::$package is version $actual, but the other packages are $version"
+              exit 1
+            fi
+          done
+          height="${version#"$prefix"}"
+          if [[ -z "$minor" || "$version" != "$prefix"* || ! "$height" =~ ^[0-9]+$ ]]; then
+            echo "::error::$version is not $minor.0-alpha.0.N: master publishes only its own prereleases (RELEASING.md)"
+            exit 1
+          fi
+          # A version published already is a rerun's, which the next step checks
+          url="https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json"
+          published="$(curl --proto '=https' --fail --silent --show-error --max-time 60 --retry 3 "$url")" || {
+            echo "::error::Could not read $url"
+            exit 1
+          }
+          if ! jq -e --arg version "$version" '.versions | index($version) != null' <<<"$published" > /dev/null; then
+            highest="$(jq -r --arg prefix "$prefix" '[.versions[] | select(startswith($prefix)) | ltrimstr($prefix)
+              | select(test("^[0-9]+$")) | tonumber] | max // -1' <<<"$published")"
+            if (( height <= highest )); then
+              echo "::error::$prefix$highest is published already, so $version would go backwards. Either a later" \
+                "push's run published first, and nothing needs doing, or a release tag is on master's history" \
+                "(RELEASING.md)"
+              exit 1
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check the version is unpublished on NuGet.org
+        # A rerun of a commit already published skips the push. A version only some packages have fails, and so does one
+        # published from another commit: a published package cannot be replaced.
+        id: unpublished
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ids=()
+          for project in src/*/*.csproj; do
+            ids+=("$(basename "$project" .csproj)")
+          done
+          status=0
+          errors="$RUNNER_TEMP/unpublished.err"
+          output="$(bash scripts/check-unpublished.sh "$VERSION" "${ids[@]}" 2> "$errors")" || status=$?
+          echo "$output"
+          if [ "$status" = "0" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(grep -cF ": $VERSION is already published" <<<"$output")" = "${#ids[@]}" ]; then
+            # The same commit's packages, or another commit's with the same version
+            url="https://api.nuget.org/v3-flatcontainer/tenantry.core/$VERSION/tenantry.core.nuspec"
+            nuspec="$(curl --proto '=https' --fail --silent --show-error --max-time 60 --retry 3 "$url")" || {
+              echo "::error::Could not read $url"
+              exit 1
+            }
+            commit="$(sed -n 's:.*<repository [^>]*commit="\([0-9a-f]*\)".*:\1:p' <<<"$nuspec" | head -n 1)"
+            if [ "$commit" != "$GITHUB_SHA" ]; then
+              echo "::error::$VERSION is published already, from ${commit:-another commit}, not this one (RELEASING.md)"
+              exit 1
+            fi
+            echo "::notice::$VERSION is already on NuGet.org for every package, from this commit; nothing to publish"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cat "$errors" >&2
+          echo "::error::The check could not read NuGet.org (above), or only some packages have $VERSION (RELEASING.md)"
+          exit 1
+
+      - name: Setup .NET
+        if: steps.unpublished.outputs.publish == 'true'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: NuGet login (OIDC → temp API key)
+        if: steps.unpublished.outputs.publish == 'true'
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet
+        if: steps.unpublished.outputs.publish == 'true'
+        # The key reaches the script as an environment variable, never expanded into the script text. No
+        # --skip-duplicate, as in release.yml.
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
