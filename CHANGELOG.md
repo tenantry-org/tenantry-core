@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A resolver registered with `UseResolver(sp => …)` is created in each request's scope. To create one resolver for the
   application's lifetime, create it yourself and pass the instance to `UseResolver(resolver)`.
+- `UseConnectionStrings(options => …)` and `UseConnectionStrings(sp => …)` throw when combined, in either order, and
+  `UseConnectionStrings(options => …)` throws after an `ITenantConnectionStringProvider<TKey>` registered before
+  `AddTenantry`. Keep the one you mean.
+- `TenantConnectionStringProvider<TKey>` is internal. To wrap the registered provider, use `DecorateConnectionStrings`;
+  in a test, build a provider with `UseConnectionStrings(options => …)` and resolve
+  `ITenantConnectionStringProvider<TKey>`.
 
 ### Added
 
@@ -23,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `UseResolver(sp => …)` creates the resolver in each request's scope, as `UseResolver<TResolver>()` does. It was a
   singleton, so a factory that passed it a scoped service such as a `DbContext` shared one instance across requests.
+- `UseConnectionStrings(options => …)` throws when another provider is already set, by `UseConnectionStrings(sp => …)`
+  or by the application before `AddTenantry`, and `UseConnectionStrings(sp => …)` throws after
+  `UseConnectionStrings(options => …)`. The delegates were ignored in the first case, and replaced in the second.
+- `TenantConnectionStringProvider<TKey>` is internal. Resolving it directly bypassed any decorator.
 
 ### Fixed
 

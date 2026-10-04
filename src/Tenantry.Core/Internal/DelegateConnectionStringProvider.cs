@@ -1,21 +1,10 @@
-using System.ComponentModel;
-
-namespace Tenantry;
+namespace Tenantry.Internal;
 
 /// <summary>
-/// The default <see cref="ITenantConnectionStringProvider{TKey}"/>: calls the configured delegates on every
-/// call, without caching.
+/// The provider <c>UseConnectionStrings(options =&gt; …)</c> registers: calls the configured delegates on every call,
+/// without caching.
 /// </summary>
-/// <typeparam name="TKey">
-/// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.
-/// </typeparam>
-/// <param name="options">The delegates that return a tenant's connection string.</param>
-/// <remarks>
-/// Public so that other providers (for example a caching one) can wrap it. <c>UseConnectionStrings</c>
-/// registers it as a singleton, and forwards <see cref="ITenantConnectionStringProvider{TKey}"/> to it.
-/// </remarks>
-[EditorBrowsable(EditorBrowsableState.Advanced)]
-public sealed class TenantConnectionStringProvider<TKey>(TenantConnectionStringOptions<TKey> options)
+internal sealed class DelegateConnectionStringProvider<TKey>(TenantConnectionStringOptions<TKey> options)
     : ITenantConnectionStringProvider<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
@@ -23,11 +12,8 @@ public sealed class TenantConnectionStringProvider<TKey>(TenantConnectionStringO
         "No connection string delegate is configured. Set GetConnectionString or GetConnectionStringAsync with " +
         "UseConnectionStrings, for example: options.GetConnectionString = tenant => $\"...Database=app_{tenant.TenantId}\".";
 
-    /// <inheritdoc />
-    /// <value>Whether <see cref="TenantConnectionStringOptions{TKey}.GetConnectionString"/> is set.</value>
     public bool CanGetSynchronously => options.GetConnectionString is not null;
 
-    /// <inheritdoc />
     public string Get(ITenantDescriptor<TKey> tenant)
     {
         ArgumentNullException.ThrowIfNull(tenant);
@@ -42,7 +28,6 @@ public sealed class TenantConnectionStringProvider<TKey>(TenantConnectionStringO
         return Checked(getConnectionString(tenant), tenant);
     }
 
-    /// <inheritdoc />
     public async ValueTask<string> GetAsync(ITenantDescriptor<TKey> tenant, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(tenant);

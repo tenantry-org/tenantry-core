@@ -168,9 +168,13 @@ public static class TenantryTenantBuilderExtensions
     /// <remarks>
     /// Registers <see cref="ITenantConnectionStringProvider{TKey}"/> and
     /// <see cref="CurrentTenantConnectionString{TKey}"/> as singletons. Calling it again configures the same options
-    /// instance, so a later call can replace a delegate.
+    /// instance, so a later call can replace a delegate. It cannot be combined with
+    /// <c>UseConnectionStrings(sp =&gt; …)</c> or an <see cref="ITenantConnectionStringProvider{TKey}"/> the application
+    /// registered before <c>AddTenantry</c>.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">Neither delegate is set after <paramref name="configure"/> runs.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Neither delegate is set after <paramref name="configure"/> runs, or another provider is already registered.
+    /// </exception>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;string&gt;(tenant =&gt; tenant
@@ -192,6 +196,14 @@ public static class TenantryTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(configure);
 
         var services = builder.Services;
+
+        if (TenantConnectionStrings.BaseIsFromDelegates<TKey>(services) == false)
+        {
+            throw new InvalidOperationException(
+                "UseConnectionStrings(options => …) cannot be combined with UseConnectionStrings(sp => …) or an " +
+                $"ITenantConnectionStringProvider<{typeof(TKey).Name}> registered before AddTenantry: use one.");
+        }
+
         var options = services
             .FirstOrDefault(d => d.ServiceType == typeof(TenantConnectionStringOptions<TKey>) && !d.IsKeyedService)
             ?.ImplementationInstance as TenantConnectionStringOptions<TKey>;
@@ -211,9 +223,10 @@ public static class TenantryTenantBuilderExtensions
                 "options.GetConnectionString = tenant => $\"...Database=app_{tenant.TenantId}\".");
         }
 
-        services.TryAddSingleton<TenantConnectionStringProvider<TKey>>();
         TenantConnectionStrings.SetBase<TKey>(
-            services, sp => sp.GetRequiredService<TenantConnectionStringProvider<TKey>>(), replace: false);
+            services,
+            ServiceDescriptor.KeyedSingleton<ITenantConnectionStringProvider<TKey>, DelegateConnectionStringProvider<TKey>>(
+                TenantConnectionStrings.BaseKey));
         services.TryAddSingleton<CurrentTenantConnectionString<TKey>>();
 
         return builder;
@@ -229,11 +242,14 @@ public static class TenantryTenantBuilderExtensions
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
     /// Registers <see cref="ITenantConnectionStringProvider{TKey}"/> and
-    /// <see cref="CurrentTenantConnectionString{TKey}"/> as singletons. It replaces a provider set before, by this
-    /// method or by <c>UseConnectionStrings(options =&gt; …)</c>. A provider that can only read connection strings
-    /// asynchronously returns <see langword="false"/> from
-    /// <see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>.
+    /// <see cref="CurrentTenantConnectionString{TKey}"/> as singletons. It replaces a provider set before by this
+    /// method or registered by the application before <c>AddTenantry</c>, and cannot be combined with
+    /// <c>UseConnectionStrings(options =&gt; …)</c>. A provider that can only read connection strings asynchronously
+    /// returns <see langword="false"/> from <see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// <c>UseConnectionStrings(options =&gt; …)</c> was called before it.
+    /// </exception>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
@@ -249,7 +265,16 @@ public static class TenantryTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(factory);
 
-        TenantConnectionStrings.SetBase(builder.Services, factory, replace: true);
+        if (TenantConnectionStrings.BaseIsFromDelegates<TKey>(builder.Services) == true)
+        {
+            throw new InvalidOperationException(
+                "UseConnectionStrings(sp => …) cannot be combined with UseConnectionStrings(options => …): use one.");
+        }
+
+        TenantConnectionStrings.SetBase<TKey>(
+            builder.Services,
+            ServiceDescriptor.KeyedSingleton<ITenantConnectionStringProvider<TKey>>(
+                TenantConnectionStrings.BaseKey, (sp, _) => factory(sp)));
         builder.Services.TryAddSingleton<CurrentTenantConnectionString<TKey>>();
 
         return builder;

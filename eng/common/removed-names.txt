@@ -30,3 +30,4 @@ AddTenantDbContextPool => tenant.AddDbContextPerTenantDatabase
 __TenantryFilter__ => TenantryQueryFilters.Tenant
 TenantIds.IsUnset => TenantIds.IsReserved
 ITenantStoreCache => ITenantInvalidator
+TenantConnectionStringProvider => UseConnectionStrings(options => …); resolve ITenantConnectionStringProvider, and wrap it with DecorateConnectionStrings

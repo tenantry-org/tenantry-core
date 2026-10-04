@@ -277,7 +277,8 @@ delegate every time and does not cache.
 
 For a secrets store, set `GetConnectionStringAsync`, which `GetAsync` prefers. To use a client from DI, register your
 own provider, built from the application's services, and return `false` from its `CanGetSynchronously` if it can only
-read asynchronously. To cache or log, wrap whichever provider is registered:
+read asynchronously. Use the delegates or a provider, not both: `UseConnectionStrings` throws when they are combined.
+To cache or log, wrap whichever provider is registered:
 
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant
