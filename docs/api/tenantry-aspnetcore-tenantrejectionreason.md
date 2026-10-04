@@ -15,4 +15,4 @@ public enum TenantRejectionReason
 | `Missing = 0` | No resolver found an identifier in the request. |
 | `NotFound = 1` | The identifier names no tenant. |
 | `AccessDenied = 2` | An access validator refused the tenant. |
-| `Inactive = 3` | The tenant is not active: a `ValidateTenantActivity` check refused it. |
+| `Inactive = 3` | The tenant is not active: a `ValidateTenantActivity` check refused it. Only a request the access validators allow is rejected for this reason. |

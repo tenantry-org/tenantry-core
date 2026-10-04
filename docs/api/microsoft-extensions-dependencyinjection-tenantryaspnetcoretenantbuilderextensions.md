@@ -296,7 +296,7 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-The factory runs in each request's scope, so the resolver can depend on scoped services such as a `DbContext`. Pass an instance instead for a resolver created once and used for every request.
+The factory runs in each request's scope, so the resolver can depend on scoped services such as a `DbContext`. The scope owns what it returns, and disposes it when the request ends, so return a new resolver: pass an instance instead for a resolver created once and used for every request.
 
 ### `UseResolver<TKey>(ITenantBuilder<TKey>, ITenantResolver)`
 

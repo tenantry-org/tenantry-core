@@ -38,7 +38,7 @@ public int InactiveTenantStatusCode { get; set; }
 
 Value: `int`
 
-The response is the access-denied one, so by default a caller cannot tell a suspended tenant from one it may not use. Set another status, such as `402 Payment Required`, to tell it.
+The response is the access-denied one, so by default a caller cannot tell a suspended tenant from one it may not use. Set another status, such as `402 Payment Required`, to tell it. The access validators run first, so a caller they refuse gets [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md) whether or not the tenant is active.
 
 ### `MissingTenantStatusCode`
 
