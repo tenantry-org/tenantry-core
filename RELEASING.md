@@ -65,17 +65,6 @@ NuGet.org.
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
 
-## A line released before release branches (0.6)
-
-A `release/0.6` branch cut from a v0.6.x tag has workflows that run only on `master`, so its CI does not run and its
-tags are refused. In a pull request into the branch, take `master`'s `.github/workflows/release.yml` and
-`scripts/release-source.sh` as they are, and in `ci.yml` keep the branch's lines except two: the `release/*` branches
-in the `push` and `pull_request` triggers, and the concurrency group by commit for a push (`ci-${{ github.ref }}-${{
-github.event_name == 'pull_request' && 'pr' || github.sha }}`), without which a third push can cancel a queued run and
-leave a commit with no CI. Cherry-picking master's changes to `ci.yml` conflicts on v0.6.x, as its concurrency group
-and `run_sonar` changed after 0.6.0. In the same pull request, set `TenantryPackageBaseline` to the line's last release
-and delete each `src/*/CompatibilitySuppressions.xml`, as after any release below.
-
 ## Repository settings
 
 `release/*` branches need a ruleset like `master`'s: changes only through pull requests with CI passing, and no force
