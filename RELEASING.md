@@ -9,8 +9,9 @@ rest. Only the maintainer can push `v*` tags.
 
 1. On `master`, in a pull request as usual, rename `## [Unreleased]` in `CHANGELOG.md` to `## [x.y.0] - YYYY-MM-DD`
    and start a new, empty `## [Unreleased]` above it. That section is the GitHub release's notes, and a tag without one
-   fails before anything is published. It starts with the steps to update from the previous minor. Merge it and wait
-   for CI to pass on `master`.
+   fails before anything is published. It starts with the steps to update from the previous minor. In the same pull
+   request, move each analyzer rule the release ships from `analyzers/*/AnalyzerReleases.Unshipped.md` to that
+   folder's `AnalyzerReleases.Shipped.md`, under `## Release x.y.0`. Merge it and wait for CI to pass on `master`.
 2. Cut the minor's branch from `master`'s head, before the `vX.Y.0` tag or its first release candidate, and push it:
 
    ```sh

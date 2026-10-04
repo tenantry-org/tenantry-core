@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Code fixes for Tenantry.EfCore's analyzers. Apart from them, since only an IDE has the workspace libraries a code
+       fix needs, and the compiler must load the analyzers without them. -->
+  <PropertyGroup>
+    <RootNamespace>Tenantry.EfCore.CodeFixes</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tenantry.EfCore.Analyzers\Tenantry.EfCore.Analyzers.csproj" />
+  </ItemGroup>
+
+</Project>

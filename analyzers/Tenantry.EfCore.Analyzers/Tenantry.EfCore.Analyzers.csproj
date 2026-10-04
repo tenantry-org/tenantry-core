@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The analyzers Tenantry.EfCore carries: tenant-owned entities, queries that leave the tenant filter, and tenant
+       scopes (docs/analyzers.md). -->
+  <PropertyGroup>
+    <RootNamespace>Tenantry.EfCore.Analyzers</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tenantry.EfCore.CodeFixes" />
+    <InternalsVisibleTo Include="Tenantry.Analyzers.Tests" />
+  </ItemGroup>
+
+</Project>

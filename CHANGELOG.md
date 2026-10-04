@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.6
 
+- `Tenantry.EfCore` and `Tenantry.AspNetCore` now carry analyzers ([Analyzers](docs/analyzers.md)). A project that
+  treats warnings as errors fails to build where one reports a warning: fix the code, or set the rule's severity in
+  `.editorconfig` where the code is meant (`dotnet_diagnostic.TNY1002.severity = none`).
 - `ITenantContextSetter<TKey>.Use(tenant)` is now `MakeCurrent(tenant)`, and `UseNoTenant()` is
   `MakeNoTenantCurrent()`. Replace `.Use(` with `.MakeCurrent(` where it is called on the tenant context, and
   `UseNoTenant` with `MakeNoTenantCurrent`. A class of your own that implements the interface renames both methods.
@@ -86,6 +89,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the request's tenant as `tenant.id`, or with a value of your own per tenant to keep the series few. It replaces
   Tenantry.Pro's `AddTenantMetrics()`, whose package, Tenantry.Pro.AspNetCore, existed only for it. See
   [Diagnostics](docs/diagnostics.md#request-metrics-per-tenant).
+- Analyzers in `Tenantry.EfCore` and `Tenantry.AspNetCore`, which an application gets with the packages: TNY1001, an
+  entity with a `TenantId` that is not tenant-owned (with a fix that implements `ITenantEntity<TKey>`); TNY1002,
+  `IgnoreQueryFilters()` on a tenant-owned entity; TNY1003, raw SQL on `Database`; TNY2001, the tenant resolved from
+  the request with no access validator; TNY3001, `MakeCurrent` or `CreateScope` given a descriptor built in the call;
+  TNY3002, blocking on `RunInScopeAsync`. A build that treats warnings as errors fails on those that are warnings. See
+  [Analyzers](docs/analyzers.md) for each rule and how to configure it.
 - Docs: [For AI coding agents](docs/ai-agents.md), the steps a coding agent follows to add Tenantry to an
   application, a test that shows one tenant cannot read or write another's rows, the mistakes agents make and the
   correct form of each, and rules to copy into an application's AGENTS.md or CLAUDE.md.

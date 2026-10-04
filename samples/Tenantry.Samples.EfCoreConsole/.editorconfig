@@ -1,0 +1,4 @@
+# Tenantry's analyzers (docs/analyzers.md), configured for what this sample shows on purpose.
+[Program.cs]
+# Step 8 reads across tenants with IgnoreQueryFilters(), which is what it demonstrates.
+dotnet_diagnostic.TNY1002.severity = none

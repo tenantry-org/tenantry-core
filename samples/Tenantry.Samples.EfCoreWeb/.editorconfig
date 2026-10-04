@@ -1,0 +1,7 @@
+# Tenantry's analyzers (docs/analyzers.md), configured for what this sample shows on purpose.
+[Program.cs]
+# Any caller picks a tenant with the X-Tenant-Id header, to keep the sample to EF Core. An application validates the
+# caller's access to the tenant, as Tenantry.Samples.SecureApi does.
+dotnet_diagnostic.TNY2001.severity = none
+# The /admin/stats endpoint reads across tenants with IgnoreQueryFilters(), which is what it demonstrates.
+dotnet_diagnostic.TNY1002.severity = none

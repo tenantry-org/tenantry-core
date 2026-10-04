@@ -9,6 +9,7 @@ var services = new ServiceCollection();
 services.AddLogging();
 services.AddTenantry<string>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
+    .ValidateTenantAccessByClaim("tenant_id")
     .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }])
     .AddHttpPropagation()
     .IsolateCaches()

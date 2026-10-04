@@ -18,6 +18,12 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>
 
+  <!-- The analyzers and code fix the package carries (docs/analyzers.md) -->
+  <ItemGroup>
+    <TenantryAnalyzer Include="..\..\analyzers\Tenantry.EfCore.Analyzers\Tenantry.EfCore.Analyzers.csproj" />
+    <TenantryAnalyzer Include="..\..\analyzers\Tenantry.EfCore.CodeFixes\Tenantry.EfCore.CodeFixes.csproj" />
+  </ItemGroup>
+
   <!-- The EF Core major each target framework builds against (Directory.Packages.props), and the .NET 11 preview lane's (IncludeNet11) -->
   <PropertyGroup>
     <EfCoreMajor Condition="'$(TargetFramework)' == 'net8.0'">8</EfCoreMajor>

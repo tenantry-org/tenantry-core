@@ -24,6 +24,8 @@ updates:
       - dependency-name: "Microsoft.AspNetCore.Identity.EntityFrameworkCore"
       - dependency-name: "Microsoft.AspNetCore.Mvc.Testing"
       - dependency-name: "Microsoft.AspNetCore.TestHost"
+      - dependency-name: "Microsoft.CodeAnalysis.CSharp"
+      - dependency-name: "Microsoft.CodeAnalysis.CSharp.Workspaces"
       - dependency-name: "Microsoft.EntityFrameworkCore.InMemory"
       - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
       - dependency-name: "Microsoft.EntityFrameworkCore.Sqlite"

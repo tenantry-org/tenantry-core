@@ -2,6 +2,33 @@
 
   <Import Project="eng/common/Build.targets" />
 
+  <!--
+    A package's analyzers (TenantryAnalyzer items, from analyzers/) are built with it and packed in its
+    analyzers/dotnet/cs folder, where the compiler and IDEs of an application that references it find them. They are
+    no dependency of the package.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="@(TenantryAnalyzer)" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="PackTenantryAnalyzers" BeforeTargets="_GetPackageFiles" Condition="'@(TenantryAnalyzer)' != ''">
+    <MSBuild Projects="@(TenantryAnalyzer)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_TenantryAnalyzerAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <None Include="@(_TenantryAnalyzerAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <!-- This repository's samples run the analyzers too, as an application that references the packages does, so they
+       must be clean under them -->
+  <ItemGroup Condition="$(MSBuildProjectDirectory.Replace('\', '/').Contains('/samples/'))">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)analyzers/Tenantry.EfCore.Analyzers/Tenantry.EfCore.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)analyzers/Tenantry.AspNetCore.Analyzers/Tenantry.AspNetCore.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
   <!-- Each package's README starts with what that package does (its id and description), then the text every package
        shares. Escaped so the README's semicolons and wildcards reach the file as they are. -->
   <Target Name="WriteTenantryPackageReadme"

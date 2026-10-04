@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The analyzers Tenantry.AspNetCore carries: tenant resolution and access (docs/analyzers.md). -->
+  <PropertyGroup>
+    <RootNamespace>Tenantry.AspNetCore.Analyzers</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tenantry.Analyzers.Tests" />
+  </ItemGroup>
+
+</Project>

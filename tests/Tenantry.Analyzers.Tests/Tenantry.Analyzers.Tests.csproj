@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The analyzers Tenantry.EfCore and Tenantry.AspNetCore carry, run over code that uses the real Tenantry, EF Core
+       and ASP.NET Core assemblies of each target framework (Verify.cs) -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\analyzers\Tenantry.EfCore.Analyzers\Tenantry.EfCore.Analyzers.csproj" />
+    <ProjectReference Include="..\..\analyzers\Tenantry.EfCore.CodeFixes\Tenantry.EfCore.CodeFixes.csproj" />
+    <ProjectReference Include="..\..\analyzers\Tenantry.AspNetCore.Analyzers\Tenantry.AspNetCore.Analyzers.csproj" />
+    <ProjectReference Include="..\..\src\Tenantry.Core\Tenantry.Core.csproj" />
+    <ProjectReference Include="..\..\src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\Tenantry.EfCore\Tenantry.EfCore.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,31 @@
+<Project>
+
+  <!--
+    Roslyn analyzers and code fixes, which Tenantry.EfCore and Tenantry.AspNetCore carry in analyzers/dotnet/cs so an
+    application gets them with the package. netstandard2.0 against the Roslyn of the oldest supported SDK (.NET 8), so
+    they load in every compiler, Visual Studio and Rider that can build a Tenantry application. Not packed on their own.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <AnalysisLevel>10.0-recommended</AnalysisLevel>
+    <!-- Loaded by the compiler, which has these references already -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" Condition="Exists('AnalyzerReleases.Shipped.md')" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" Condition="Exists('AnalyzerReleases.Unshipped.md')" />
+  </ItemGroup>
+
+</Project>

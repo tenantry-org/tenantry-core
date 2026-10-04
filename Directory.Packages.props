@@ -7,6 +7,16 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[$(MicrosoftExtensionsFloor), )" />
   </ItemGroup>
 
+  <!-- The analyzers (analyzers/): Roslyn as the .NET 8 SDK ships it, the oldest SDK an application builds with, held
+       there (a newer one would not load in that SDK's compiler); and Roslyn's testing libraries for their tests -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="[4.8.0]" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="[4.8.0]" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.2" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" Version="1.1.2" />
+  </ItemGroup>
+
   <!-- A provider that is not relational, for the tests that Tenantry works without one; and ASP.NET Core Identity's EF Core
        stores, released with EF Core, for the integration tests with Identity -->
   <ItemGroup Condition="'$(EfCoreFloor)' != ''">

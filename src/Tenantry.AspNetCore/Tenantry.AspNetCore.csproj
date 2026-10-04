@@ -19,4 +19,9 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- The analyzer the package carries (docs/analyzers.md) -->
+  <ItemGroup>
+    <TenantryAnalyzer Include="..\..\analyzers\Tenantry.AspNetCore.Analyzers\Tenantry.AspNetCore.Analyzers.csproj" />
+  </ItemGroup>
+
 </Project>

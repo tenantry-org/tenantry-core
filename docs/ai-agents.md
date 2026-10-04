@@ -176,6 +176,9 @@ only the types every tenant shares
 
 ## Mistakes and the correct form
 
+`Tenantry.EfCore` and `Tenantry.AspNetCore` carry [analyzers](analyzers.md) that report most of these at build time
+(TNY1001 to TNY3002). Fix what they report rather than suppress it, unless the code is meant to cross tenants.
+
 - An entity with a `TenantId` property that does not implement `ITenantEntity<TKey>` is not tenant-owned: every
   tenant reads and writes all its rows. Implement `ITenantEntity<TKey>` (or derive from `TenantEntity<TKey>`).
 - An entity type that implements nothing is shared by every tenant. That is the design, for reference data. Do not
