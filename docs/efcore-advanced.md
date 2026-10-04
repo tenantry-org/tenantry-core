@@ -49,6 +49,9 @@ none, and a relationship whose other end is shared across tenants.
 Give the relationship a join entity of your own that implements `ITenantEntity<TKey>`:
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+using Tenantry;
+
 public class Post : TenantEntity<Guid>
 {
     public int Id { get; set; }
