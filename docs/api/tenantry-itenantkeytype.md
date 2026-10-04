@@ -4,9 +4,9 @@ Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
 An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.
 
-The tenant key type the application registered Tenantry with, for code that has only a service provider or a service collection, such as a health check registration or a host extension, so its callers never repeat the key type. `AddTenantry` registers it as a singleton; `services.FindTenantKeyType()` reads it while services are being registered.
+The tenant key type the application registered Tenantry with, for code that has only a service provider, such as a health check registration or a host extension, so its callers never repeat the key type.
 
-[`ITenantKeyType.Accept<TResult>`](tenantry-itenantkeytype.md) calls a generic method with the key type known at compile time, so Native AOT compiles it, unlike `MakeGenericType` on [`ITenantKeyType.Type`](tenantry-itenantkeytype.md).
+`AddTenantry` registers it as a singleton. While services are being registered, read it with `services.FindTenantKeyType()`. [`ITenantKeyType.Accept<TResult>`](tenantry-itenantkeytype.md) calls a generic method with the key type known at compile time, so Native AOT compiles it, unlike `MakeGenericType` on [`ITenantKeyType.Type`](tenantry-itenantkeytype.md).
 
 ```csharp
 [EditorBrowsable(EditorBrowsableState.Advanced)]

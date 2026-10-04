@@ -4,9 +4,9 @@ Namespace: `Tenantry.EfCore` · Package: `Tenantry.EfCore` · [API reference](RE
 
 An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.
 
-Adds to the options of every `DbContext` that uses `UseTenantry()`. Register implementations in the application's service collection, as singletons; `UseTenantry()` applies each of them.
+Adds to the options of every `DbContext` that uses `UseTenantry()`.
 
-Packages that build on Tenantry use this to configure contexts without asking the application to add another call to each one, for example to add an interceptor. Contributors run when `UseTenantry()` is called with the application service provider in place, as it is inside `AddDbContext`, `AddDbContextPool`, `AddDbContextFactory`, `AddPooledDbContextFactory` and `AddDbContextPerTenantDatabase`; options built by hand without it run none. Several of these build a context's options only once (pooling, `AddDbContextFactory`, `AddDbContextPerTenantDatabase`), so a contributor must never depend on the current tenant.
+Register implementations in the application's service collection, as singletons. Packages that build on Tenantry use this to configure contexts without asking the application to add another call to each one, for example to add an interceptor. Contributors run when `UseTenantry()` is called with the application service provider in place, as it is inside `AddDbContext`, `AddDbContextPool`, `AddDbContextFactory`, `AddPooledDbContextFactory` and `AddDbContextPerTenantDatabase`; options built by hand without it run none. Several of these build a context's options only once (pooling, `AddDbContextFactory`, `AddDbContextPerTenantDatabase`), so a contributor must never depend on the current tenant.
 
 ```csharp
 [EditorBrowsable(EditorBrowsableState.Advanced)]

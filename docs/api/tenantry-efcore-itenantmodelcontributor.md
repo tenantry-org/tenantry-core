@@ -4,9 +4,9 @@ Namespace: `Tenantry.EfCore` · Package: `Tenantry.EfCore` · [API reference](RE
 
 An extension point: for code that extends the package, such as another package that builds on it. An application rarely needs it.
 
-Adds to the model of every `DbContext` that uses `UseTenantry()`. Register implementations in the application's service collection, as singletons.
+Adds to the model of every `DbContext` that uses `UseTenantry()`.
 
-Contributors run while EF Core builds the model, after the context's `OnModelCreating` and before Tenantry adds its tenant query filters, so an entity type a contributor adds is isolated too. EF Core builds a model once and caches it, by default once per context type. They are resolved from the context's application service provider: a context built without it (a design-time factory that builds its options by hand, say) gets a model without their contributions.
+Register implementations in the application's service collection, as singletons. Contributors run while EF Core builds the model, after the context's `OnModelCreating` and before Tenantry adds its tenant query filters, so an entity type a contributor adds is isolated too. EF Core builds a model once and caches it, by default once per context type. They are resolved from the context's application service provider: a context built without it (a design-time factory that builds its options by hand, say) gets a model without their contributions.
 
 ```csharp
 [EditorBrowsable(EditorBrowsableState.Advanced)]

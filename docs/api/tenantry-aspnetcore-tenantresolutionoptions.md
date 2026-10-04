@@ -70,10 +70,12 @@ Value: `bool`
 
 ### `TenantNotFoundStatusCode`
 
-The status code when the request's identifier names no tenant: the tenant store's [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md) finds none. Default `404 Not Found`. When access validators are configured, [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md) and its response are used instead, so a caller cannot tell a tenant that does not exist from one it may not use.
+The status code when the request's identifier names no tenant: the tenant store's [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md) finds none. Default `404 Not Found`.
 
 ```csharp
 public int TenantNotFoundStatusCode { get; set; }
 ```
 
 Value: `int`
+
+When access validators are configured, [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md) and its response are used instead, so a caller cannot tell a tenant that does not exist from one it may not use.

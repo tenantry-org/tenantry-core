@@ -14,13 +14,15 @@ public static class TenantryQueryFilters
 
 ### `Application`
 
-The name an entity's unnamed query filter gets on EF Core 10 and later. EF Core does not allow a named filter beside an unnamed one, so `UseTenantry()` names yours, to add the tenant filter beside it rather than merge the two. Your filter still applies to every query; pass this name to `IgnoreQueryFilters` to remove it alone, or name your filters yourself.
+The name an entity's unnamed query filter gets on EF Core 10 and later. Your filter still applies to every query; pass this name to `IgnoreQueryFilters` to remove it alone, or name your filters yourself.
 
 ```csharp
 public const string Application = "Tenantry.Application"
 ```
 
 Returns: `string`
+
+EF Core does not allow a named filter beside an unnamed one, so `UseTenantry()` names yours, to add the tenant filter beside it rather than merge the two.
 
 ### `Tenant`
 

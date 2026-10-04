@@ -9,7 +9,7 @@ Registered as a singleton by `AddTenantry`, so hosted services can take it as a 
 - You already hold the tenant (for example while iterating [`ITenantLookup<TKey>.GetAllTenantsAsync`](tenantry-itenantlookup.md)): `await using var scope = scopes.CreateScope(tenant);`
 - You only have its id (for example from a queue message): `await scopes.RunInScopeAsync(tenantId, async (scope, ct) => { … }, ct);`
 
-There is deliberately no `CreateScopeAsync(tenantId)`. The tenant is held in an `AsyncLocal<T>`, and changes an [async](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/async) method makes to one never reach its caller, so a scope opened inside an asynchronous lookup would not be active for the code that awaited it. [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md) does the lookup and then runs your work inside the scope instead.
+There is no `CreateScopeAsync(tenantId)`: a scope opened inside an asynchronous lookup would not be current for the code that awaited it, because the tenant is held in an `AsyncLocal<T>`. [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md) does the lookup and runs your work inside the scope instead.
 
 ```csharp
 public interface ITenantScopeFactory<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>

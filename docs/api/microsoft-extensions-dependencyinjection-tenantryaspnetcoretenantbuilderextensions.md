@@ -143,7 +143,7 @@ tenant
 
 ### `ResolveFromPropagationHeader<TKey>(ITenantBuilder<TKey>, Func<HttpContext, bool>)`
 
-Resolves the tenant another service sent with its request: the tenant id in the [`TenantPropagation.HeaderName`](tenantry-tenantpropagation.md) header, which Tenantry.Http's `UseTenantry()` adds to an HttpClient's or gRPC client's requests. The value is read as a tenant id ([`TenantIds.TryParse<TKey>`](tenantry-tenantids.md)) and looked up with the store's [`ITenantStore<TKey>.GetTenantAsync`](tenantry-itenantstore.md), not its [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md); a value that is not a tenant id finds no tenant.
+Resolves the tenant another service sent with its request: the tenant id in the [`TenantPropagation.HeaderName`](tenantry-tenantpropagation.md) header, which Tenantry.Http's `UseTenantry()` adds to an HttpClient's or gRPC client's requests.
 
 ```csharp
 public static ITenantBuilder<TKey> ResolveFromPropagationHeader<TKey>(this ITenantBuilder<TKey> builder, Func<HttpContext, bool> isTrustedCaller) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -160,7 +160,9 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-A header is a claim, not proof: any caller that reaches the service can set it. So the header is read only when `isTrustedCaller` returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) for the request, typically because the caller authenticated as one of your services. From any other caller it is ignored, and the next resolver runs.
+Any caller that reaches the service can set the header, so it is read only when `isTrustedCaller` returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) for the request, typically because the caller authenticated as one of your services. From any other caller it is ignored, and the next resolver runs.
+
+The value is read as a tenant id ([`TenantIds.TryParse<TKey>`](tenantry-tenantids.md)) and looked up with the store's [`ITenantStore<TKey>.GetTenantAsync`](tenantry-itenantstore.md), not its [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md); a value that is not a tenant id finds no tenant.
 
 `isTrustedCaller` runs after authentication, so it can read `HttpContext.User`: `app.UseTenantResolution()` stops before this resolver, and `app.UseTenantry()` runs it once the user is known. A tenant from the header is therefore not known while authentication runs. Resolvers run in the order they are added, and the first that finds a value wins.
 
@@ -189,7 +191,7 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-**For local development and testing only — do not use in production.** Query string parameters are routinely logged by servers, proxies, and analytics, and are trivially spoofable, so they are not a safe tenant-resolution mechanism for production traffic.
+For local development and tests only. Do not use it in production: query string parameters are logged by servers, proxies and analytics, and any caller can set them.
 
 ### `ResolveFromRouteValue<TKey>(ITenantBuilder<TKey>, string)`
 
@@ -257,7 +259,7 @@ builder.Services.AddTenantry<string>(tenant => tenant
 
 ### `UseResolver<TResolver>(ITenantBuilder)`
 
-Registers a custom [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md) implementation, created through dependency injection in each request's scope, so it can depend on scoped services such as a `DbContext`.
+Registers a custom [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md) implementation, created through dependency injection.
 
 ```csharp
 public static ITenantBuilder UseResolver<TResolver>(this ITenantBuilder builder) where TResolver : class, ITenantResolver
@@ -273,9 +275,11 @@ Parameters:
 
 Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first, or call it as a statement of its own.
 
+The resolver is created in each request's scope, so it can depend on scoped services such as a `DbContext`.
+
 ### `UseResolver<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantResolver>)`
 
-Registers a custom [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md) created by a factory, as a singleton.
+Registers a custom [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md) created by a factory.
 
 ```csharp
 public static ITenantBuilder<TKey> UseResolver<TKey>(this ITenantBuilder<TKey> builder, Func<IServiceProvider, ITenantResolver> factory) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -291,6 +295,8 @@ Parameters:
 - `factory` `Func<IServiceProvider, ITenantResolver>`: Creates the resolver from the application's services.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+The resolver is a singleton, created once and used for every request.
 
 ### `UseResolver<TKey>(ITenantBuilder<TKey>, ITenantResolver)`
 
@@ -332,7 +338,7 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 
 ### `ValidateTenantAccess<TValidator>(ITenantBuilder)`
 
-Adds an access validator of type `TValidator`, created in each request's scope, so it can depend on scoped services such as a `DbContext`. Every validator must allow a request before its tenant is made current.
+Adds an access validator of type `TValidator`. Every validator must allow a request before its tenant is made current.
 
 ```csharp
 public static ITenantBuilder ValidateTenantAccess<TValidator>(this ITenantBuilder builder) where TValidator : class
@@ -351,6 +357,8 @@ Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, wit
 Exceptions:
 
 - `InvalidOperationException`: `TValidator` does not implement [`ITenantAccessValidator<TKey>`](tenantry-aspnetcore-itenantaccessvalidator.md) for the builder's key type.
+
+The validator is created in each request's scope, so it can depend on scoped services such as a `DbContext`.
 
 ### `ValidateTenantAccess<TKey>(ITenantBuilder<TKey>, Func<HttpContext, ITenantDescriptor<TKey>, bool>)`
 

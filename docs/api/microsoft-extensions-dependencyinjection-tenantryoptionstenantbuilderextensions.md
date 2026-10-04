@@ -12,7 +12,7 @@ public static class TenantryOptionsTenantBuilderExtensions
 
 ### `ConfigurePerTenant<TKey>(ITenantBuilder<TKey>, Action<TenantOptionsBuilder<TKey>>)`
 
-Configures options per tenant: in `configure`, each `Configure<TOptions>` or `ConfigureAll<TOptions>` sets what differs for each tenant, and `IOptionsSnapshot<TOptions>` and `IOptionsMonitor<TOptions>` then give the current tenant's value. `IOptions<TOptions>` always gives the ordinary value. See [`TenantOptionsBuilder<TKey>`](tenantry-options-tenantoptionsbuilder.md).
+Configures options per tenant: `IOptionsSnapshot<TOptions>` and `IOptionsMonitor<TOptions>` give the current tenant's value of each options type `configure` names.
 
 ```csharp
 public static ITenantBuilder<TKey> ConfigurePerTenant<TKey>(this ITenantBuilder<TKey> builder, Action<TenantOptionsBuilder<TKey>> configure) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -28,6 +28,8 @@ Parameters:
 - `configure` `Action<TenantOptionsBuilder<TKey>>`: Names the options types and sets their values per tenant.
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+`IOptions<TOptions>` always gives the ordinary value. See [`TenantOptionsBuilder<TKey>`](tenantry-options-tenantoptionsbuilder.md).
 
 ```csharp
 builder.Services.Configure<BrandingOptions>(builder.Configuration.GetSection("Branding"));   // the defaults

@@ -2,7 +2,9 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-The current tenant, for a request or an [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md) scope. A singleton over an `AsyncLocal<T>`: the value belongs to the async flow, not to the instance.
+The current tenant, for a request or an [`ITenantScopeFactory<TKey>`](tenantry-itenantscopefactory.md) scope.
+
+A singleton over an `AsyncLocal<T>`: the value belongs to the async flow, not to the instance.
 
 ```csharp
 public interface ITenantContext<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -26,13 +28,15 @@ Value: [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md)
 
 ### `CurrentTenantId`
 
-The current tenant's identifier, or `default(TKey)` if no tenant is current: [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) for reference-type keys such as [string](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/reference-types), but `Empty` or `0` for value-type keys, because `TKey?` is not nullable for them. Check [`ITenantContext<TKey>.HasTenant`](tenantry-itenantcontext.md) to tell "no tenant" apart; Tenantry never lets a tenant have the default id. Equivalent to `CurrentTenant?.TenantId`.
+The current tenant's id, or `default(TKey)` when no tenant is current. Equivalent to `CurrentTenant?.TenantId`.
 
 ```csharp
 TKey? CurrentTenantId { get; }
 ```
 
 Value: `TKey`
+
+For value-type keys that default is `Empty` or `0`, not [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null), because `TKey?` is not nullable for them, so check [`ITenantContext<TKey>.HasTenant`](tenantry-itenantcontext.md). No tenant can have the default id.
 
 ### `HasTenant`
 

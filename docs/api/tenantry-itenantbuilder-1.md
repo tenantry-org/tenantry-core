@@ -32,4 +32,4 @@ Exceptions:
 
 - `InvalidOperationException`: A tenant store is already registered.
 
-The store is registered with a **scoped** lifetime and is resolved per operation — Tenantry creates a fresh scope for singleton/background callers — so the implementation may safely depend on scoped services such as a `DbContext`.
+The store is scoped and read through [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), which resolves it from a new scope for each lookup, so it may depend on scoped services such as a `DbContext`.

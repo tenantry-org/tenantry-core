@@ -12,7 +12,7 @@ public static class TenantryEfCoreTenantBuilderExtensions
 
 ### `AddDbContextPerTenantDatabase<TContext>(ITenantBuilder, Action<IServiceProvider, DbContextOptionsBuilder>, bool, int)`
 
-Registers `TContext` for a database per tenant: each context is connected to the current tenant's database, through [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md), and uses `UseTenantry()`. Registers a scoped `TContext` and a singleton `IDbContextFactory<TContext>`.
+Registers `TContext` for a database per tenant: each context is connected to the current tenant's database, through [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md), and uses `UseTenantry()`.
 
 ```csharp
 [RequiresUnreferencedCode("EF Core and Tenantry's query filters read entity types through reflection, which trimming can break. See https://aka.ms/efcore-docs-trimming.")]
@@ -37,7 +37,7 @@ Exceptions:
 
 - `InvalidOperationException`: No [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) is registered yet, the one registered is scoped or transient, or `TContext` is already registered this way.
 
-A context that is not pooled is created with its options and any other services its constructor needs, and has them as its application service provider, as with `AddDbContext`: the scoped `TContext` from its scope, and one from the factory from the root provider, as EF Core's `AddDbContextFactory` does. Creating a context without a current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), so `dotnet ef` needs an `IDesignTimeDbContextFactory` for the context.
+Registers a scoped `TContext` and a singleton `IDbContextFactory<TContext>`. A context that is not pooled is created with its options and any other services its constructor needs, and has them as its application service provider, as with `AddDbContext`: the scoped `TContext` from its scope, and one from the factory from the root provider, as EF Core's `AddDbContextFactory` does. Creating a context without a current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), so `dotnet ef` needs an `IDesignTimeDbContextFactory` for the context.
 
 The options get `UseTenantry()` before `configure` runs, so interceptors added there (an audit log, say) see new entities already stamped with their tenant. For the same reason, an interceptor added there that changes what a save writes (a soft delete) runs after Tenantry's checks and is not checked.
 

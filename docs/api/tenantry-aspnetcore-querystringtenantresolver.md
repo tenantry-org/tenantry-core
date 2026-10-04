@@ -4,7 +4,7 @@ Namespace: `Tenantry.AspNetCore` · Package: `Tenantry.AspNetCore` · [API refer
 
 Resolves the tenant from a query string parameter (e.g. `?tenantId=acme`).
 
-A parameter given more than once names no tenant. Intended for local development and testing convenience only. Do not enable in production — query string parameters are logged and may appear in analytics, CDN caches, and browser history.
+A parameter given more than once names no tenant. For local development and tests only. Do not use it in production: query string parameters are logged, and appear in analytics, CDN caches and browser history.
 
 ```csharp
 public sealed class QueryStringTenantResolver : ITenantResolver
@@ -26,7 +26,7 @@ Parameters:
 
 - `parameterName` `string`: The name of the query string parameter that carries the tenant identifier.
 
-A parameter given more than once names no tenant. Intended for local development and testing convenience only. Do not enable in production — query string parameters are logged and may appear in analytics, CDN caches, and browser history.
+A parameter given more than once names no tenant. For local development and tests only. Do not use it in production: query string parameters are logged, and appear in analytics, CDN caches and browser history.
 
 ## Methods
 

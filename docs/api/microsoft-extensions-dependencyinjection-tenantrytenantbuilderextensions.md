@@ -65,7 +65,7 @@ A decorator should forward [`ITenantConnectionStringProvider<TKey>.CanGetSynchro
 
 ### `UseConnectionStrings<TKey>(ITenantBuilder<TKey>, Action<TenantConnectionStringOptions<TKey>>)`
 
-Configures how each tenant's connection string is found, and registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons.
+Configures how each tenant's connection string is found.
 
 ```csharp
 public static ITenantBuilder<TKey> UseConnectionStrings<TKey>(this ITenantBuilder<TKey> builder, Action<TenantConnectionStringOptions<TKey>> configure) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -86,7 +86,7 @@ Exceptions:
 
 - `InvalidOperationException`: Neither delegate is set after `configure` runs.
 
-Calling it again configures the same options instance, so a later call can replace a delegate.
+Registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons. Calling it again configures the same options instance, so a later call can replace a delegate.
 
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant
@@ -99,7 +99,7 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>     options.UseSqlS
 
 ### `UseConnectionStrings<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantConnectionStringProvider<TKey>>)`
 
-Registers the provider that returns each tenant's connection string, built from the application's services, so it can use a secrets client or other services registered in DI. Registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons.
+Registers the provider that returns each tenant's connection string, built from the application's services, so it can use a secrets client or other services registered in DI.
 
 ```csharp
 public static ITenantBuilder<TKey> UseConnectionStrings<TKey>(this ITenantBuilder<TKey> builder, Func<IServiceProvider, ITenantConnectionStringProvider<TKey>> factory) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -116,7 +116,7 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-It replaces a provider set before, by this method or by `UseConnectionStrings(options => …)`. A provider that can only read connection strings asynchronously returns [false](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) from [`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md).
+Registers [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) and [`CurrentTenantConnectionString<TKey>`](tenantry-currenttenantconnectionstring.md) as singletons. It replaces a provider set before, by this method or by `UseConnectionStrings(options => …)`. A provider that can only read connection strings asynchronously returns [false](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) from [`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md).
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -126,7 +126,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 
 ### `UseInMemoryStore<TKey>(ITenantBuilder<TKey>, IEnumerable<ITenantDescriptor<TKey>>)`
 
-Registers a pre-populated in-memory tenant store. Suitable for testing and simple single-instance deployments.
+Registers an in-memory tenant store that holds `tenants`, for tests and single-instance deployments whose tenants do not change.
 
 ```csharp
 public static ITenantBuilder<TKey> UseInMemoryStore<TKey>(this ITenantBuilder<TKey> builder, IEnumerable<ITenantDescriptor<TKey>> tenants) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -147,6 +147,8 @@ Exceptions:
 
 - `InvalidOperationException`: A tenant store is already registered.
 - `ArgumentException`: A tenant has an id Tenantry reserves for "no tenant" ([`TenantIds.IsReserved<TKey>`](tenantry-tenantids.md)), or two tenants have the same id.
+
+The store is a singleton, built when this is called.
 
 ### `UseStore<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantStore<TKey>>)`
 
@@ -171,7 +173,7 @@ Exceptions:
 
 - `InvalidOperationException`: A tenant store is already registered.
 
-The store is registered with a **scoped** lifetime and is resolved per operation, so the factory may return an instance that depends on scoped services such as a `DbContext`.
+The store is scoped and read through [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), which resolves it from a new scope for each lookup, so the factory may use scoped services such as a `DbContext`.
 
 ### `ValidateTenantActivity<TKey>(ITenantBuilder<TKey>, Func<ITenantDescriptor<TKey>, bool>)`
 

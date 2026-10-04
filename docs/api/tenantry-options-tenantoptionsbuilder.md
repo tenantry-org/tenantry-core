@@ -2,7 +2,9 @@
 
 Namespace: `Tenantry.Options` · Package: `Tenantry.Options` · [API reference](README.md)
 
-Sets options per tenant, in `tenant.ConfigurePerTenant(...)`: each `Configure` or `ConfigureAll` names an options type and what differs for each tenant. `IOptionsSnapshot<TOptions>` and `IOptionsMonitor<TOptions>` then give the current tenant's value, built from the ordinary configuration (every `Configure`), then these steps with the tenant. Without a tenant they give the ordinary value. `IOptions<TOptions>` always gives the ordinary value.
+Sets options per tenant, in `tenant.ConfigurePerTenant(...)`: each `Configure` or `ConfigureAll` names an options type and what differs for each tenant.
+
+`IOptionsSnapshot<TOptions>` and `IOptionsMonitor<TOptions>` then give the current tenant's value, built from the ordinary configuration, then these steps with the tenant. Without a tenant they give the ordinary value. `IOptions<TOptions>` always gives the ordinary value.
 
 `IOptions<TOptions>` is not per tenant because its value is read once and kept: a singleton that reads `options.Value` in its constructor would keep the first tenant's settings and use them for every tenant. Read `IOptionsSnapshot<TOptions>`, which is scoped, in request code, and hold `IOptionsMonitor<TOptions>` in a singleton and read `CurrentValue` each time. Reading `CurrentValue` once in a constructor keeps one tenant's value, as reading `Value` would. The first read of `IOptions<TOptions>` while a tenant is current logs a warning, event 3001 in the category `Tenantry.Options`.
 
