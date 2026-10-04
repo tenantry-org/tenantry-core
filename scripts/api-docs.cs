@@ -70,8 +70,21 @@ if (Directory.Exists(output))
 }
 Directory.CreateDirectory(output);
 
-foreach (var type in types) File.WriteAllText(Path.Combine(output, slugs[type.Uid] + ".md"), TypePage(type));
-File.WriteAllText(Path.Combine(output, "README.md"), IndexPage());
+var pages = types.Select(type => (Name: slugs[type.Uid] + ".md", Text: TypePage(type)))
+    .Append((Name: "README.md", Text: IndexPage()))
+    .ToList();
+
+// A fence that does not open or close on a line of its own, or one left open, takes the rest of the page into the
+// code block on the site.
+var badFences = pages.SelectMany(page => FenceProblems(page.Text).Select(problem => $"{page.Name}: {problem}")).ToList();
+if (badFences.Count > 0)
+{
+    foreach (var line in badFences) Console.Error.WriteLine(line);
+    Console.Error.WriteLine($"api-docs: {badFences.Count} code fences are broken.");
+    return 1;
+}
+
+foreach (var (name, text) in pages) File.WriteAllText(Path.Combine(output, name), text);
 
 Console.WriteLine($"api-docs: {types.Count} types from {types.Select(Package).Distinct().Count()} packages → {output}");
 return 0;
@@ -346,8 +359,13 @@ string Markdown(string? html)
         return $"\u0001{blocks.Count - 1}\u0002";
     }
 
+    // Code blocks keep their lines, blank ones included, so they go back in after the prose is joined into paragraphs.
+    var codeBlocks = new List<string>();
     text = Regex.Replace(text, @"<pre><code[^>]*>(.*?)</code></pre>", match =>
-        Keep($"\n\n```csharp\n{WebUtility.HtmlDecode(match.Groups[1].Value).Trim('\n')}\n```\n\n"), RegexOptions.Singleline);
+    {
+        codeBlocks.Add($"```csharp\n{WebUtility.HtmlDecode(match.Groups[1].Value).Trim('\n')}\n```");
+        return $"\n\n\u0003{codeBlocks.Count - 1}\u0004\n\n";
+    }, RegexOptions.Singleline);
     text = Regex.Replace(text, @"<xref href=""([^""]+)""[^>]*>(.*?)</xref>", match =>
     {
         var uid = Uri.UnescapeDataString(match.Groups[1].Value).Split('?')[0];
@@ -369,9 +387,32 @@ string Markdown(string? html)
 
     // One line per paragraph or list item; the comments wrap at the source's line length.
     var paragraphs = Regex.Split(text.Trim(), @"\n{2,}");
-    return string.Join("\n\n", paragraphs.Select(paragraph => paragraph.StartsWith("```", StringComparison.Ordinal)
-        ? paragraph
-        : Regex.Replace(paragraph, @"\n(?!- )", " "))).Trim();
+    var prose = string.Join("\n\n", paragraphs.Select(paragraph => Regex.Replace(paragraph, @"\n(?!- )", " "))).Trim();
+    return Regex.Replace(prose, "\u0003(\\d+)\u0004", match => codeBlocks[int.Parse(match.Groups[1].Value)]);
+}
+
+// Each fence on a line of its own, and every block closed.
+static IEnumerable<string> FenceProblems(string page)
+{
+    var open = false;
+    var lines = page.Split('\n');
+
+    for (var i = 0; i < lines.Length; i++)
+    {
+        var line = lines[i];
+        var fence = line.TrimStart().StartsWith("```", StringComparison.Ordinal);
+
+        if (!fence && line.Contains("```", StringComparison.Ordinal))
+            yield return $"line {i + 1} has a fence after other text";
+        else if (fence && open && line.Trim() != "```")
+            yield return $"line {i + 1} closes a code block with text after the fence";
+
+        if (fence)
+            open = !open;
+    }
+
+    if (open)
+        yield return "a code block is never closed";
 }
 
 static string Escape(string prose) =>

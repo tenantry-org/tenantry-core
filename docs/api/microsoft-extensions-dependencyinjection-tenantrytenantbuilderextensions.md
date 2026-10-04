@@ -118,7 +118,9 @@ builder.Services.AddTenantry<string>(tenant => tenant
     .UseConnectionStrings(options =>
         options.GetConnectionString = t => $"Server=db;Database=app_{t.TenantId};Integrated Security=true"));
 
-builder.Services.AddDbContext<AppDbContext>((sp, options) =>     options.UseSqlServer(sp.GetRequiredService<CurrentTenantConnectionString<string>>().Get())); ```
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
+    options.UseSqlServer(sp.GetRequiredService<CurrentTenantConnectionString<string>>().Get()));
+```
 
 ### `UseConnectionStrings<TKey>(ITenantBuilder<TKey>, Func<IServiceProvider, ITenantConnectionStringProvider<TKey>>)`
 

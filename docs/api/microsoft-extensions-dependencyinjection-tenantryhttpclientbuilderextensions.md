@@ -40,4 +40,7 @@ The id must be printable ASCII with no space at either end, as a header carries 
 builder.Services.AddHttpClient<BillingClient>(c => c.BaseAddress = new Uri("https://billing.internal"))
     .UseTenantry();
 
-var inventory = new Uri("https://inventory.internal"); builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = inventory)     .UseTenantry(inventory); ```
+var inventory = new Uri("https://inventory.internal");
+builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = inventory)
+    .UseTenantry(inventory);
+```

@@ -33,4 +33,6 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .UseStore<AppTenantStore>()
     .AddHttpPropagation());
 
-builder.Services.AddHttpClient<BillingClient>(c => c.BaseAddress = new Uri("https://billing.internal"))     .UseTenantry(); ```
+builder.Services.AddHttpClient<BillingClient>(c => c.BaseAddress = new Uri("https://billing.internal"))
+    .UseTenantry();
+```

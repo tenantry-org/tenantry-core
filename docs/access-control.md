@@ -1,7 +1,7 @@
 # Access control
 
-Access control answers two separate questions: does this request need a tenant, and may this caller use the tenant
-it named? The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does both with JWT authentication, and its
+Access control answers two separate questions: whether a request needs a tenant, and whether the caller may use the
+tenant it named. The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does both with JWT authentication, and its
 tests check the 401, 403 and 400 responses.
 
 ## Requiring a tenant

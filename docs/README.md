@@ -1,7 +1,8 @@
 # Tenantry documentation
 
-Tenantry keeps each tenant's data apart in EF Core, either in a shared database, where tenant-owned entities carry a
-`TenantId` that every query and save is scoped to, or in a [database per tenant](efcore-integration.md#database-per-tenant).
+Tenantry keeps each tenant's data apart in EF Core applications, in a shared database or a database per tenant. In a
+shared database, tenant-owned entities carry a `TenantId` that every query and save is scoped to; with a
+[database per tenant](efcore-integration.md#database-per-tenant), each tenant's contexts connect to its own database.
 Your entities need no base class, and Tenantry does not take over your request pipeline. Schema per tenant,
 provisioning and migrations across tenant databases are in [Tenantry.Pro](https://tenantry.dev/docs/pro).
 

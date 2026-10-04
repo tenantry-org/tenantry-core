@@ -56,7 +56,9 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .UseStore<AppTenantStore>()
     .IsolateOutputCache());
 
-app.UseTenantry(); app.UseOutputCache(); ```
+app.UseTenantry();
+app.UseOutputCache();
+```
 
 ### `RequireTenantByDefault<TKey>(ITenantBuilder<TKey>)`
 
