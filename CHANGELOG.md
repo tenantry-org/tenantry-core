@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tenantry now throws a failed tenant check that other statements rely on before every `ThrowingConcurrencyException`
   hook of yours, wherever it is registered, and refuses an unsafe commit before every `TransactionCommitting` hook of
   yours. A hook that expected to see either first no longer does.
+- A many-to-many join row saved without the tenant-owned rows it joins tracked throws
+  `TenantIsolationViolationException`: one added through the join entity's set with key values only, or a join entity
+  of your own attached on its own. Load or attach the ends and change the relationship through their navigations.
+- A save that writes many-to-many join rows with a tenant-owned end and no current tenant throws
+  `TenantNotResolvedException` under the default `OnMissingTenant = Reject`, as for tenant-owned entities. 0.6 wrote
+  such rows.
 - A many-to-many join entity of your own that is not tenant-owned, joins a tenant-owned type and has a key of its own
   that leaves out its foreign key to that type is refused, as is one that names a tenant-owned type through an
   alternate key without its `TenantId`. Key the join entity by its two foreign keys, EF Core's default, or implement
