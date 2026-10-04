@@ -116,9 +116,9 @@ jobs:
           name: nuget-packages
           path: ./artifacts
 
-      - name: Check the packages carry master's prerelease version
-        # X.Y.0-alpha.0.N, X.Y being MinVerMinimumMajorMinor. Any other version, such as one a release tag on master's
-        # history would give (X.Y.0-rc.1.N, X.Y.1-alpha.0.N), is a release branch's and fails here.
+      - name: Check the packages carry master's next prerelease version
+        # X.Y.0-alpha.0.N, X.Y being MinVerMinimumMajorMinor, with N above every N published. Any other version, such as
+        # one a release tag on master's history would give (X.Y.0-rc.1.N, X.Y.1-alpha.0.N, or a smaller N), fails here.
         id: version
         run: |
           minor="$(sed -n 's:.*<MinVerMinimumMajorMinor>\(.*\)</MinVerMinimumMajorMinor>.*:\1:p' Directory.Build.props)"
@@ -137,6 +137,21 @@ jobs:
           if [[ -z "$minor" || "$version" != "$prefix"* || ! "$height" =~ ^[0-9]+$ ]]; then
             echo "::error::$version is not $minor.0-alpha.0.N: master publishes only its own prereleases (RELEASING.md)"
             exit 1
+          fi
+          # A version published already is a rerun's, which the next step checks
+          url="https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json"
+          published="$(curl --proto '=https' --fail --silent --show-error --max-time 60 --retry 3 "$url")" || {
+            echo "::error::Could not read $url"
+            exit 1
+          }
+          if ! jq -e --arg version "$version" '.versions | index($version) != null' <<<"$published" > /dev/null; then
+            highest="$(jq -r --arg prefix "$prefix" '[.versions[] | select(startswith($prefix)) | ltrimstr($prefix)
+              | select(test("^[0-9]+$")) | tonumber] | max // -1' <<<"$published")"
+            if (( height <= highest )); then
+              echo "::error::$prefix$highest is published already, so $version would go backwards: a release tag is" \
+                "likely on master's history (RELEASING.md)"
+              exit 1
+            fi
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -168,7 +183,7 @@ jobs:
             }
             commit="$(sed -n 's:.*<repository [^>]*commit="\([0-9a-f]*\)".*:\1:p' <<<"$nuspec" | head -n 1)"
             if [ "$commit" != "$GITHUB_SHA" ]; then
-              echo "::error::$VERSION is already published from commit ${commit:-unknown}, not $GITHUB_SHA (RELEASING.md)"
+              echo "::error::$VERSION is published already, from ${commit:-another commit}, not this one (RELEASING.md)"
               exit 1
             fi
             echo "::notice::$VERSION is already on NuGet.org for every package, from this commit; nothing to publish"

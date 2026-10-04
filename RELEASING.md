@@ -11,44 +11,63 @@ Only the maintainer can push `v*` tags.
 
 1. Get `## [Unreleased]` in `CHANGELOG.md` ready, in a pull request into `master` as usual: it becomes the GitHub
    release's notes, and starts with the steps to update from the previous minor.
-2. On `master`, up to date with `origin/master` and with nothing uncommitted, cut the branch:
+2. In the checkout where `master` is checked out, up to date with `origin/master` and with nothing uncommitted, cut
+   the branch:
 
    ```sh
    scripts/cut-release.sh 0.7
    ```
 
-   It refuses unless `0.7` is `MinVerMinimumMajorMinor`, `release/0.7` exists neither locally nor on `origin`, and
-   `## [Unreleased]` has entries. It creates `release/0.7` from `master`'s head, with one commit of its own, the one to
-   tag: `## [Unreleased]` becomes `## [0.7.0] - YYYY-MM-DD` (today, UTC) below a new, empty `## [Unreleased]`, and
-   each analyzer rule moves from `analyzers/*/AnalyzerReleases.Unshipped.md` to that folder's
-   `AnalyzerReleases.Shipped.md`, under `## Release 0.7.0`. On `master`, it cherry-picks that commit, then raises
-   `MinVerMinimumMajorMinor` to `0.8` in a second commit, so `master`'s prereleases are versioned above the branch's
-   releases. It pushes and tags nothing, and prints the commands for the steps below and how to undo it.
+   It refuses unless `0.7` is `MinVerMinimumMajorMinor`, `release/0.7` and `v0.7.0` exist neither locally nor on
+   `origin`, `## [Unreleased]` has entries, and no `## [0.7.0]` or `## Release 0.7.0` section exists yet. It creates
+   `release/0.7` from `master`'s head, with one commit of its own, the one to tag: `## [Unreleased]` becomes
+   `## [0.7.0] - YYYY-MM-DD` (today, UTC) below a new, empty `## [Unreleased]`, and each analyzer rule moves from
+   `analyzers/*/AnalyzerReleases.Unshipped.md` to that folder's `AnalyzerReleases.Shipped.md`, under
+   `## Release 0.7.0`. On `master`, it cherry-picks that commit, then raises `MinVerMinimumMajorMinor` to `0.8` in a
+   second commit, so `master`'s prereleases are versioned above the branch's releases. It always raises the minor:
+   when the next release is a major, edit `MinVerMinimumMajorMinor` in that second commit by hand before pushing. It
+   pushes and tags nothing, and prints the commands for the steps below and how to undo it.
 
-   By hand: `git switch -c release/0.7`, make the changelog and analyzer changes, commit; `git switch master`,
-   `git cherry-pick -x release/0.7`; raise `MinVerMinimumMajorMinor`, commit. The branch's commit reaches `master`
-   only as a cherry-pick, a new commit with its own hash, never by merging or fast-forwarding the branch into
-   `master`: that would put the tagged commit on `master`'s history, where MinVer would count `master`'s prerelease
-   versions from the tag and restart them. The release workflow refuses a tag on a commit `master` contains.
+   The branch's commit reaches `master` only as a cherry-pick, a new commit with its own hash, never by merging or
+   fast-forwarding the branch into `master`: that would put the tagged commit on `master`'s history, where MinVer
+   would count `master`'s prerelease versions from the tag and restart them. The release workflow refuses a tag on a
+   commit `master` contains, and the prerelease job refuses a version below one already published.
 3. Push the branch, and wait for CI, SonarCloud included, to pass on that push: the release requires that run.
 
    ```sh
    git push origin release/0.7
    ```
 
-4. Rehearse (optional): Actions → Release → Run workflow on `release/X.Y`, with the tag as the version. It runs the
-   release's checks, builds the same packages, and shows what a release would publish and its notes.
-5. Tag the branch's head, push the tag, then push `master`:
+4. Push `master`, before the tag, so the release workflow checks the tag against `master` with the cherry-pick on it:
 
    ```sh
-   git tag -a v0.7.0 -m "Tenantry 0.7.0 (beta)" origin/release/0.7
-   git push origin v0.7.0
    git push origin master
    ```
 
-To start with a release candidate, cut the branch by hand, with the section `## [0.7.0-rc.1] - YYYY-MM-DD` and the
-tag `v0.7.0-rc.1`. Later candidates and `v0.7.0` follow on the same branch, each from a pull request that adds its
-own section, as a patch does.
+5. Rehearse (optional): Actions → Release → Run workflow on `release/X.Y`, with the tag as the version. It runs the
+   release's checks, builds the same packages, and shows what a release would publish and its notes.
+6. Tag the branch's head, signed, and push the tag:
+
+   ```sh
+   git -c gpg.format=ssh -c user.signingkey=~/.ssh/id_ed25519.pub \
+     tag -s v0.7.0 -m "Tenantry 0.7.0 (beta)" origin/release/0.7
+   git push origin v0.7.0
+   ```
+
+The script makes only a minor's `X.Y.0`. To start with a release candidate, do step 2 by hand:
+
+1. From `master`, up to date: `git switch -c release/0.7`.
+2. In `CHANGELOG.md`, add `## [0.7.0-rc.1] - YYYY-MM-DD`, dated today in UTC, below `## [Unreleased]`, so the
+   section holds the entries, and leave `## [Unreleased]` empty above it.
+3. Move the analyzer rules to `AnalyzerReleases.Shipped.md` under `## Release 0.7.0`, not `## Release 0.7.0-rc.1`:
+   the release-tracking analyzer takes only a numeric version, and fails the build (RS2007) on a prerelease one.
+4. Commit, then `git switch master` and `git cherry-pick -x release/0.7`, and raise `MinVerMinimumMajorMinor` in a
+   second commit.
+
+Later candidates and `v0.7.0` follow on the same branch, each from a pull request into it that adds its own
+`CHANGELOG.md` section (`## [0.7.0-rc.2]`, `## [0.7.0]`), as a patch does. A rule added after the first candidate
+joins the `## Release 0.7.0` table, which the analyzer accepts, rather than a second section. Every section added to
+`release/X.Y` is also added to `master`'s `CHANGELOG.md`, placed by version.
 
 ## A patch
 
@@ -112,12 +131,13 @@ asked for one (`dotnet add package Tenantry.Core --prerelease`, or the exact ver
 prerelease can be unlisted, but never deleted or replaced.
 
 The job refuses any version but `X.Y.0-alpha.0.N` for the `MinVerMinimumMajorMinor` in `Directory.Build.props`, so a
-version in a release branch's range fails rather than publishing. It checks the version on NuGet.org with
-`scripts/check-unpublished.sh`. When every package has it already, the job checks that the published `Tenantry.Core` was
-built from the same commit: if so, the run is a rerun and skips the push with a notice; if not, it fails. A version only
-some packages have fails the job, since a published package cannot be replaced: unlist those packages, and the next push
-to `master` publishes the next version. Runs publish one at a time, in the order they reach the job, and none is
-cancelled.
+version in a release branch's range fails rather than publishing. It also refuses an N at or below the highest N
+NuGet.org has for that `X.Y`, unless the version is published already: a smaller N means a release tag is on `master`'s
+history. It checks the version on NuGet.org with `scripts/check-unpublished.sh`. When every package has it already, the
+job checks that the published `Tenantry.Core` was built from the same commit: if so, the run is a rerun and skips the
+push with a notice; if not, it fails. A version only some packages have fails the job, since a published package cannot
+be replaced: unlist those packages, and the next push to `master` publishes the next version. Runs publish one at a
+time, in the order they reach the job, and none is cancelled.
 
 NuGet.org takes a few minutes to index a push, so a rerun in those minutes finds the version unpublished and its push
 fails as a duplicate. Nothing needs doing; a rerun after that skips. A run that fails part way through the push can
@@ -135,8 +155,11 @@ reserve the `Tenantry.Templates` id on NuGet.org. The release workflow then publ
 
 ## Repository settings
 
-`release/*` branches need a ruleset like `master`'s: changes only through pull requests with CI passing, and no force
-pushes or deletion. SonarCloud's default long-lived branch pattern, `(branch|release)-.*`, does not match
+The `master` ruleset covers `release/*` too: changes only through pull requests with CI passing, linear history, and no
+force pushes or deletion. Pushing a new `release/X.Y` with its commit, and `master`'s two commits from
+`scripts/cut-release.sh`, rely on the maintainer's bypass of that ruleset. The `release` tag ruleset lets only the
+maintainer create `v*` tags, and requires them signed, so tag with `git tag -s` as above; the release workflow does not
+check the signature. SonarCloud's default long-lived branch pattern, `(branch|release)-.*`, does not match
 `release/0.7`: set it to `release/.*` (the project's Administration → Branches and Pull Requests) before the first
 release branch is pushed, since a branch's kind is fixed at its first analysis, and keep a quality gate on it. The
 `release` environment must accept `v*` tags, and NuGet.org's trusted publishing policy names this repository,
