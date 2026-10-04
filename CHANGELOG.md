@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in a test, build a provider with `UseConnectionStrings(options => …)` and resolve
   `ITenantConnectionStringProvider<TKey>`.
 
+- A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
+  `InvalidateAllLocallyAsync`.
 - An `OnRejected` handler or log alert that looked for a suspended tenant under `TenantRejectionReason.AccessDenied`
   or event 1005 looks for `TenantRejectionReason.Inactive` or event 1012.
 
@@ -29,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tenant.BroadcastInvalidations(sp => …)`, `ITenantInvalidator<TKey>.InvalidateLocallyAsync` and
+  `InvalidateAllLocallyAsync` (Tenantry.Core), to clear a tenant on every instance of the application. The handler
+  `BroadcastInvalidations` registers publishes each invalidation to the other instances, after this instance is
+  cleared; each instance applies what it receives with the local methods, which do not run it, so nothing is published
+  twice. See [Several instances](docs/tenant-stores.md#several-instances).
 - `EfCoreIsolationOptions.OnUnclassifiedEntityType` (Tenantry.EfCore). In a model with tenant-owned entity types,
   the context's first query or save throws `TenantIsolationViolationException` of kind `ModelConfiguration`, naming
   every other entity type that is not marked `[SharedAcrossTenants]` or `IsSharedAcrossTenants()`. `Warn` logs event

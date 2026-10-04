@@ -172,8 +172,9 @@ app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, IT
 
 `AddTenantry` always registers `ITenantInvalidator<TKey>`, so this code runs with caching off too, when there is no
 cached copy to remove. Each instance of the application has its own cache, so `InvalidateAsync` clears this instance's
-copy; other instances serve theirs until it expires. Keep the duration as short as that staleness allows. The cache
-reads the time from a registered `TimeProvider`, so tests can control expiry.
+copy, and other instances serve theirs until it expires unless you
+[publish the invalidation to them](#several-instances). The cache reads the time from a registered `TimeProvider`, so
+tests can control expiry.
 
 ### Everything kept for a tenant
 
@@ -212,3 +213,70 @@ public sealed class PriceListCache : ITenantInvalidationHandler<Guid>
 
 Each handler runs even when another throws; the exception is thrown once they have all run. Invalidating an id
 Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty string) throws, since no tenant has it.
+
+### Several instances
+
+Each instance of the application keeps its own copies. To clear them everywhere, publish each invalidation through a
+channel the instances share (Redis pub/sub, or a message broker), and apply what each instance receives with
+`InvalidateLocallyAsync` or `InvalidateAllLocallyAsync`. Those run every handler except the publishing one, so a
+received invalidation is not published again.
+
+Register the publisher with `BroadcastInvalidations`. `InvalidateAsync` and `InvalidateAllAsync` run it after the other
+handlers, so this instance is cleared first. Tag each message with the instance that sent it, since a subscriber can
+receive its own:
+
+```csharp
+using Microsoft.Extensions.Hosting;
+
+builder.Services.AddSingleton<InstanceId>();
+builder.Services.AddHostedService<InvalidationSubscriber>();
+builder.Services.AddTenantry<string>(tenant => tenant
+    .UseStore<EfCoreTenantStore>()
+    .CacheTenants()
+    .BroadcastInvalidations(sp => new InvalidationPublisher(
+        sp.GetRequiredService<IInvalidationChannel>(), sp.GetRequiredService<InstanceId>())));
+
+// The channel's interface is yours: wrap Redis pub/sub or your broker's client in it.
+public interface IInvalidationChannel
+{
+    Task PublishAsync(InvalidationMessage message, CancellationToken cancellationToken);
+    Task SubscribeAsync(Func<InvalidationMessage, Task> handler, CancellationToken cancellationToken);
+}
+
+// TenantId is null to invalidate every tenant.
+public sealed record InvalidationMessage(string? TenantId, Guid Sender);
+
+public sealed class InstanceId
+{
+    public Guid Value { get; } = Guid.NewGuid();
+}
+
+public sealed class InvalidationPublisher(IInvalidationChannel channel, InstanceId instance) : ITenantInvalidationHandler<string>
+{
+    public ValueTask InvalidateAsync(string tenantId, CancellationToken cancellationToken) =>
+        new(channel.PublishAsync(new InvalidationMessage(tenantId, instance.Value), cancellationToken));
+
+    public ValueTask InvalidateAllAsync(CancellationToken cancellationToken) =>
+        new(channel.PublishAsync(new InvalidationMessage(null, instance.Value), cancellationToken));
+}
+
+public sealed class InvalidationSubscriber(IInvalidationChannel channel, InstanceId instance, ITenantInvalidator<string> tenants)
+    : BackgroundService
+{
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        channel.SubscribeAsync(async message =>
+        {
+            if (message.Sender == instance.Value) return;
+
+            if (message.TenantId is { } tenantId)
+                await tenants.InvalidateLocallyAsync(tenantId, stoppingToken);
+            else
+                await tenants.InvalidateAllLocallyAsync(stoppingToken);
+        }, stoppingToken);
+}
+```
+
+When the publisher throws, `InvalidateAsync` throws its exception after every other handler has run: this instance is
+cleared, and the others keep their copies until those expire. Retry the call to reach them; clearing this instance
+again does no harm. An instance that misses a message, because it was starting or lost its connection, also keeps its
+copies until they expire, so keep cache durations no longer than you can serve a stale tenant for.

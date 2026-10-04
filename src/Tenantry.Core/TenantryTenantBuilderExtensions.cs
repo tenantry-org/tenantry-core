@@ -7,8 +7,8 @@ using Tenantry.Internal;
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
-/// Tenantry's core features on <see cref="ITenantBuilder{TKey}"/>: the tenant store, its cache and per-tenant
-/// connection strings.
+/// Tenantry's core features on <see cref="ITenantBuilder{TKey}"/>: the tenant store, its cache, invalidation across
+/// instances, and per-tenant connection strings.
 /// </summary>
 public static class TenantryTenantBuilderExtensions
 {
@@ -155,6 +155,40 @@ public static class TenantryTenantBuilderExtensions
             sp.GetRequiredService<TenantStoreCacheOptions>(),
             sp.GetService<TimeProvider>() ?? TimeProvider.System));
 
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a handler that publishes each invalidation to the application's other instances, through a message bus or
+    /// a pub/sub channel of your own.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="factory">Creates the handler, once, from the application's services.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// The handler is a singleton. <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> and
+    /// <see cref="ITenantInvalidator{TKey}.InvalidateAllAsync"/> run it after every other handler, and
+    /// <see cref="ITenantInvalidator{TKey}.InvalidateLocallyAsync"/> and
+    /// <see cref="ITenantInvalidator{TKey}.InvalidateAllLocallyAsync"/> do not run it. Each instance applies an
+    /// invalidation it receives with the local methods, so it does not publish it again.
+    /// </para>
+    /// <para>
+    /// The handler is called after this instance is invalidated. When it throws, the invalidator throws its exception
+    /// once every handler has run: this instance is invalidated, and the others keep their copies until those expire
+    /// or a retry reaches them.
+    /// </para>
+    /// </remarks>
+    public static ITenantBuilder<TKey> BroadcastInvalidations<TKey>(
+        this ITenantBuilder<TKey> builder,
+        Func<IServiceProvider, ITenantInvalidationHandler<TKey>> factory)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(factory);
+
+        builder.Services.AddKeyedSingleton(TenantInvalidationHandlers<TKey>.BroadcastKey, (sp, _) => factory(sp));
         return builder;
     }
 
