@@ -14,8 +14,7 @@ the lookup throws it as the host starts.
 ## Startup fails with "app.UseTenantry() is not in the request pipeline"
 
 You registered request resolution (a `ResolveFrom…` or `UseResolver` method) but never called `app.UseTenantry()`, so
-no request would have a tenant. Add it after `app.UseAuthentication()` and before your endpoints. See
-[Pipeline ordering](aspnetcore-integration.md#pipeline-ordering).
+no request would have a tenant. Add it where [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering) says.
 
 ## Startup fails with "app.UseTenantResolution() is in the request pipeline but app.UseTenantry() is not"
 
@@ -163,7 +162,8 @@ context, or leave it to `UseTenantry()`. See
 ## An endpoint returns `500` after `UseTenantResolution()` (event 1011)
 
 The request reached its endpoint without passing `app.UseTenantry()`, so its tenant was never checked, and the
-endpoint did not run. Call `app.UseTenantry()` after `app.UseAuthentication()` in every branch of the pipeline.
+endpoint did not run. Call `app.UseTenantry()` in every branch of the pipeline, where
+[Pipeline ordering](aspnetcore-integration.md#pipeline-ordering) says.
 
 ## Authentication ignores the tenant's settings (event 1010)
 
@@ -186,8 +186,9 @@ Use the asynchronous EF Core methods, or also set `GetConnectionString`. See
 
 ## Claim-based resolution or validation never matches
 
-- `UseTenantry()` runs before `UseAuthentication()`, so `HttpContext.User` is empty. Move it after. For
-  `ResolveFromClaim`, the middleware logs this once (event 1008, see [Diagnostics](diagnostics.md#logs)).
+- `UseTenantry()` runs before `UseAuthentication()`, so `HttpContext.User` is empty (see
+  [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). For `ResolveFromClaim`, the middleware logs this
+  once (event 1008, see [Diagnostics](diagnostics.md#logs)).
 - The endpoint uses a non-default scheme (`[Authorize(AuthenticationSchemes = …)]`), whose user is signed in by
   authorization, after `UseTenantry()`. Make that scheme the default.
 - The claim type does not match (`ResolveFromClaim("tenant_id")` vs. the actual claim name).
@@ -197,13 +198,12 @@ Use the asynchronous EF Core methods, or also set `GetConnectionString`. See
 ## `AllowMissingTenant()` has no effect
 
 The middleware ran before routing chose the endpoint, so `RequireTenantByDefault()` applied. It logs this once (event
-1007). Call `app.UseRouting()` before `app.UseTenantry()`. An endpoint that requires a tenant still rejects a request
-without one.
+1007). See [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering).
 
 ## Route-value resolution returns null
 
-Routing must run before the middleware so the route value exists. `WebApplication` does this for you; in a custom
-pipeline, call `UseRouting()` before `UseTenantry()`.
+Routing ran after the middleware, so the route value did not exist yet. See
+[Pipeline ordering](aspnetcore-integration.md#pipeline-ordering).
 
 ## Subdomain resolution returns null on localhost
 
