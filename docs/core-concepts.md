@@ -29,9 +29,9 @@ The key type's default value (`Guid.Empty`, `0`, and for `string` keys `null` or
 tenant" to Tenantry, so no tenant may have it: making such a tenant current throws `ArgumentException`, and an
 identifier that parses to it names no tenant.
 
-## `ITenantDescriptor<TKey>` — a resolved tenant
+## `ITenantDescriptor<TKey>`
 
-A descriptor is the minimal description of a tenant:
+A descriptor is what Tenantry knows about a tenant:
 
 ```csharp no-compile
 public interface ITenantDescriptor<out TKey> : ITenantDescriptor
@@ -84,9 +84,9 @@ app.MapGet("/plan", (ITenantContext<Guid> tenants) => tenants.GetCurrentTenant<A
 Both throw `InvalidOperationException`, naming both types, if the tenant is not of the type you ask for: the store
 returns another one.
 
-## `ITenantEntity<TKey>` — a tenant-owned entity
+## `ITenantEntity<TKey>`
 
-Implementing this marker interface is what opts an entity into isolation:
+An entity that implements this interface is tenant-owned and isolated:
 
 ```csharp no-compile
 public interface ITenantEntity<TKey>
@@ -95,17 +95,15 @@ public interface ITenantEntity<TKey>
 }
 ```
 
-- Implement it directly, or derive from the convenience base class `TenantEntity<TKey>` which provides
-  the `TenantId` property with a public setter.
-- **Do not set `TenantId` yourself.** The EF Core interceptor stamps it from the current tenant on
-  `SaveChanges`, and rejects a new entity that already names another tenant. It sets the value through EF Core,
-  so your entity can give `TenantId` a private or init-only setter.
-- Entities that do not implement this interface are global/shared and are never filtered or stamped.
+- Implement it directly, or derive from `TenantEntity<TKey>`, which has a `TenantId` with a public setter.
+- Leave `TenantId` unset. The EF Core interceptor stamps it from the current tenant on `SaveChanges`, and rejects a
+  new entity that already names another tenant. It sets the value through EF Core, so your entity can give
+  `TenantId` a private or init-only setter.
+- Entities that do not implement it are shared by all tenants and are never filtered or stamped.
 
-## `ITenantContext<TKey>` — reading the current tenant
+## `ITenantContext<TKey>`
 
-This is the read-only view of "who is the tenant right now", and the type you inject into endpoints and
-services:
+The current tenant, read-only. Inject it into endpoints and services:
 
 ```csharp no-compile
 public interface ITenantContext<TKey>
@@ -118,14 +116,13 @@ public interface ITenantContext<TKey>
 }
 ```
 
-`CurrentTenantId` is the current tenant's id, the same as `CurrentTenant?.TenantId` (see
-[below](#how-ef-core-queries-see-the-current-tenant) for how EF Core reads it). Without a tenant it is `default(TKey)`: `null` for
-`string` keys, but `Guid.Empty` or `0` for value-type keys, because `TKey?` on an unconstrained generic is not
-nullable for them. Check `HasTenant` to tell "no tenant" apart.
+Without a tenant, `CurrentTenantId` is `default(TKey)`: `null` for `string` keys, but `Guid.Empty` or `0` for
+value-type keys, because `TKey?` on an unconstrained generic is not nullable for them. Check `HasTenant` to tell "no
+tenant" apart. [Below](#how-ef-core-queries-see-the-current-tenant) is how EF Core reads it.
 
-## `ITenantContextSetter<TKey>` — making a tenant current
+## `ITenantContextSetter<TKey>`
 
-`ITenantContextSetter<TKey>` extends `ITenantContext<TKey>` with the ability to *set* the current tenant:
+`ITenantContextSetter<TKey>` adds to `ITenantContext<TKey>` the methods that set the current tenant:
 
 ```csharp no-compile
 public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
@@ -145,15 +142,12 @@ using (tenantContext.Use(acme))
 // previous tenant (or "none") restored here
 ```
 
-In ASP.NET Core the **middleware** calls `Use` for you once the tenant is resolved. In console and worker apps,
+In ASP.NET Core the middleware calls `Use` for you once the tenant is resolved. In console and worker apps,
 `ITenantScopeFactory<TKey>` makes a tenant current together with a fresh DI scope, which is what most code
 wants; call `Use` yourself only when you need no new scope. See [Non-HTTP hosts](non-http-hosts.md).
 
 `UseNoTenant()` does the opposite: code inside it sees no tenant, and disposing it restores the tenant that was
 current. The middleware uses it for the rest of a request whose tenant the access validators refused.
-
-Call `Use` (or `ITenantScopeFactory.CreateScope`) in the method that does the work. Because of the
-`AsyncLocal` model below, a tenant made current inside an `async` helper is not current for the helper's caller.
 
 ### Uses nest
 
@@ -176,6 +170,8 @@ Use it in maintenance code that acts as another tenant for a moment.
 belongs to the async flow, not to an object. It flows into code you call and await, never back to your caller, and
 concurrent requests never see each other's tenant.
 
+- Make a tenant current (`Use`, or `ITenantScopeFactory.CreateScope`) in the method that does the work. A tenant
+  made current inside an `async` helper is not current for the helper's caller.
 - A `Task.Run(...)` started inside a scope inherits the tenant it had then. For work that runs after the scope is
   disposed, capture the tenant id and run the work by id (see [Non-HTTP hosts](non-http-hosts.md)).
 - Disposing the innermost scope restores the nearest one still open. Disposing any other, out of order or from
@@ -183,12 +179,12 @@ concurrent requests never see each other's tenant.
 
 ### How EF Core queries see the current tenant
 
-EF Core compiles a global query filter **once** and caches the plan, but it evaluates the parts of a filter that
+EF Core compiles a global query filter once and caches the plan, but it evaluates the parts of a filter that
 read from the `DbContext` again every time a query runs. Tenantry's filter reads the tenant through the context
-that runs the query, from its `ITenantContext<TKey>`, so the same cached plan always uses the *current* tenant.
-This is covered in depth in [EF Core integration](efcore-integration.md#how-the-query-filter-stays-correct).
+that runs the query, from its `ITenantContext<TKey>`, so the same cached plan always uses the current tenant
+([EF Core integration](efcore-integration.md#how-the-query-filter-stays-correct) has the detail).
 
-## `ITenantScopeFactory<TKey>` and `ITenantScope<TKey>` — work as a tenant
+## `ITenantScopeFactory<TKey>` and `ITenantScope<TKey>`
 
 Outside a request, `ITenantScopeFactory<TKey>` creates an `ITenantScope<TKey>`: a dependency-injection scope with a
 tenant current, so the scoped services resolved from it (such as a `DbContext`) are the tenant's. It follows the
@@ -212,7 +208,7 @@ the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITen
 `ITenantKeyType`. Inside the `configure` lambda you add a store, connection strings, EF Core options and, with
 `Tenantry.AspNetCore`, resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`.
 
-The rules, stated here once:
+The registration rules:
 
 - Every builder method returns the builder, so calls chain. Three return it without its key type:
   `UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()` and `AddDbContextPerTenantDatabase<TContext>()`.
