@@ -7,8 +7,9 @@ namespace Tenantry.EfCore;
 /// </summary>
 /// <remarks>
 /// Tenantry isolates only tenant-owned entity types, so the rows of an unclassified one are read and written for every
-/// tenant. The check runs once per model, on the context's first query or save. A model with no tenant-owned entity
-/// type, such as a database-per-tenant context's, is never checked.
+/// tenant. A context applies its behaviour whenever EF Core compiles one of its queries, and on every save, before
+/// anything is read or written. Contexts with different values of it never share a compiled query. A model with
+/// no tenant-owned entity type, such as a database-per-tenant context's, is never checked.
 /// </remarks>
 public enum UnclassifiedEntityTypeBehavior
 {

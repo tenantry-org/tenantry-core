@@ -69,22 +69,55 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     [Fact]
     public async Task ContextsSharingAModel_EachFollowTheirOwnOptions()
     {
+        // One application, one context type: a maintenance context allows the model, the application's does not.
         var services = DbContextFactory.Services<string>(_tenant);
-        DbContextOptionsBuilder<UnclassifiedContext> Options(Action<EfCoreIsolationOptions> configure) =>
-            new DbContextOptionsBuilder<UnclassifiedContext>()
-                .UseSqlite(_connection)
-                .UseApplicationServiceProvider(services)
-                .UseTenantry(configure);
+        await using UnclassifiedContext allowed = new(new DbContextOptionsBuilder<UnclassifiedContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(services)
+            .UseTenantry(o => o.OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Allow)
+            .Options);
+        await using UnclassifiedContext rejected = new(new DbContextOptionsBuilder<UnclassifiedContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(services)
+            .UseTenantry()
+            .Options);
 
-        await using UnclassifiedContext allowed = new(Options(o => o.OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Allow).Options);
-        await allowed.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
-        (await allowed.Orders.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
+        await RunEachAsync(allowed, rejected);
+    }
 
-        // EF Core may build a model per set of options, so the second context is given the first one's.
-        await using UnclassifiedContext rejected = new(Options(_ => { }).UseModel(allowed.Model).Options);
-        rejected.Orders.Add(new Order { Description = "Acme order" });
+    [Fact]
+    public async Task ContextsOfApplicationsWithDifferentOptions_EachFollowTheirOwn()
+    {
+        // Two hosts in one process, as in tests, whose contexts use the options of their own application.
+        await using UnclassifiedContext allowed = new(DbContextFactory.Options<UnclassifiedContext>(
+            _tenant, _connection, new EfCoreIsolationOptions { OnUnclassifiedEntityType = UnclassifiedEntityTypeBehavior.Allow }));
+        await using UnclassifiedContext rejected = new(DbContextFactory.Options<UnclassifiedContext>(_tenant, _connection));
 
-        rejected.Model.Should().BeSameAs(allowed.Model);
+        await RunEachAsync(allowed, rejected);
+    }
+
+    // The allowed context runs a query, a compiled query and a save first, so a cache shared with it would let the
+    // rejected context's run them unchecked.
+    private static async Task RunEachAsync(UnclassifiedContext allowed, UnclassifiedContext rejected)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var countInvoices = EF.CompileAsyncQuery((UnclassifiedContext context) => context.Set<Invoice>().Count());
+        await allowed.Database.EnsureCreatedAsync(ct);
+        allowed.Set<Invoice>().Add(new Invoice());
+        await allowed.SaveChangesAsync(ct);
+        (await allowed.Set<Invoice>().CountAsync(ct)).Should().Be(1);
+        (await countInvoices(allowed)).Should().Be(1);
+
+        await rejected.Awaiting(context => context.Set<Invoice>().CountAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>();
+
+        // The rejected context has a model of its own, so EF Core refuses the allowed context's compiled query, and
+        // compiling it again for the rejected context's model runs the check.
+        await rejected.Awaiting(context => countInvoices(context))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await rejected.Awaiting(context => EF.CompileAsyncQuery((UnclassifiedContext c) => c.Set<Invoice>().Count())(context))
+            .Should().ThrowAsync<TenantIsolationViolationException>();
+        rejected.Set<Invoice>().Add(new Invoice());
         await rejected.Awaiting(context => context.SaveChangesAsync())
             .Should().ThrowAsync<TenantIsolationViolationException>();
     }
