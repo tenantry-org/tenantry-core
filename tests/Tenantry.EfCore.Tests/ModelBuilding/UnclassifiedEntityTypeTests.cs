@@ -53,6 +53,19 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
         TenantModel.IsSharedAcrossTenants(db.Model.FindEntityType(typeof(Engine))!).Should().BeTrue("its owner is marked");
     }
 
+    [Fact]
+    public async Task AValueOutsideTheEnum_IsTreatedAsReject()
+    {
+        await using var db = await CreateAsync<UnclassifiedContext>(
+            new EfCoreIsolationOptions { OnUnclassifiedEntityType = (UnclassifiedEntityTypeBehavior)7 });
+
+        await db.Awaiting(context => context.Set<Invoice>().CountAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>();
+        db.Set<Invoice>().Add(new Invoice());
+        await db.Awaiting(context => context.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>();
+    }
+
     [Theory]
     [InlineData(UnclassifiedEntityTypeBehavior.Warn)]
     [InlineData(UnclassifiedEntityTypeBehavior.Allow)]

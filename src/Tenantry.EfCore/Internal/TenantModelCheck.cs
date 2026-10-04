@@ -80,7 +80,19 @@ internal static class TenantModelCheck
 
         switch (ApplicationServices.Isolation(context, services).OnUnclassifiedEntityType)
         {
-            case UnclassifiedEntityTypeBehavior.Reject:
+            case UnclassifiedEntityTypeBehavior.Warn:
+                if (Interlocked.Exchange(ref passed.Warned, 1) == 0 && TenantIsolationLog.Find(services) is { } logger)
+                {
+                    TenantIsolationLog.UnclassifiedEntityTypes(logger, context.GetType().Name, names);
+                }
+
+                break;
+
+            case UnclassifiedEntityTypeBehavior.Allow:
+                break;
+
+            // Reject, and any value outside the enum, as OnMissingTenant treats one.
+            default:
                 throw new TenantIsolationViolationException(
                     TenantIsolationViolationKind.ModelConfiguration,
                     context.GetType().Name,
@@ -90,10 +102,6 @@ internal static class TenantModelCheck
                     "tenant, and mark each that every tenant shares with [SharedAcrossTenants] or, in OnModelCreating, " +
                     "IsSharedAcrossTenants(). EfCoreIsolationOptions.OnUnclassifiedEntityType decides what happens to " +
                     "such a model.");
-            case UnclassifiedEntityTypeBehavior.Warn when Interlocked.Exchange(ref passed.Warned, 1) == 0 &&
-                                                          TenantIsolationLog.Find(services) is { } logger:
-                TenantIsolationLog.UnclassifiedEntityTypes(logger, context.GetType().Name, names);
-                break;
         }
     }
 

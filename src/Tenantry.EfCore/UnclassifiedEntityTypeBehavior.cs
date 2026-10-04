@@ -16,7 +16,7 @@ public enum UnclassifiedEntityTypeBehavior
     /// <summary>
     /// Throw <see cref="TenantIsolationViolationException"/> of kind
     /// <see cref="TenantIsolationViolationKind.ModelConfiguration"/>, naming every unclassified entity type, before the
-    /// first query or save. The default.
+    /// first query or save. The default, and what a value outside the enum does.
     /// </summary>
     Reject,
 
