@@ -74,7 +74,9 @@ packages. A dry run given a version checks it too.
 If a release stops part way, after some packages were pushed, do not rerun it: the check refuses the version, since
 it is partly published, and a published package cannot be replaced. Release the next patch instead, from the same
 branch: add its `CHANGELOG.md` section, which says it replaces the incomplete release, and tag it. Unlist the
-incomplete version's packages on NuGet.org, so no one picks a set that does not match.
+incomplete version's packages on NuGet.org, so no one picks a set that does not match. Leave `TenantryPackageBaseline`
+at the last complete release, not the incomplete one: pack would look for each package at the baseline version, and
+fail for the packages that were never published at it.
 
 ## The templates package
 
@@ -93,12 +95,13 @@ publishing policy names this repository, `release.yml` and the `release` environ
 
 ## After any release
 
-- On the release branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, and
-  remove the `<TenantryPackageBaseline />` of a package released for the first time. Pack then checks each package
-  against that release, so a patch cannot break code compiled against it (Tenantry.Pro accepts any release in the
-  minor). After an `X.Y.0`, do the same on `master`, and delete each `src/*/CompatibilitySuppressions.xml` on both: the
-  release branch's patches break nothing, and the next minor's intended breaks are recorded afresh on `master`
-  (`dotnet pack -p:ApiCompatGenerateSuppressionFile=true`), and in the changelog.
+- On the release branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, once
+  every package of it is on NuGet.org, and remove the `<TenantryPackageBaseline />` of a package released for the
+  first time. Pack then checks each package against that release, so a patch cannot break code compiled against it
+  (Tenantry.Pro accepts any release in the minor). After an `X.Y.0`, do the same on `master`, and delete each
+  `src/*/CompatibilitySuppressions.xml` on both: the release branch's patches break nothing, and the next minor's
+  intended breaks are recorded afresh on `master` (`dotnet pack -p:ApiCompatGenerateSuppressionFile=true`), and in
+  the changelog.
 
 ## After a minor release
 
