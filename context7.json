@@ -1,0 +1,33 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Tenantry",
+  "description": "Multi-tenancy for ASP.NET Core and EF Core: tenant resolution, access validation, and tenant isolation in a shared database or a database per tenant.",
+  "excludeFolders": [
+    "./src",
+    "./tests",
+    "./eng",
+    "./scripts",
+    "./.github",
+    "./artifacts",
+    "bin",
+    "obj"
+  ],
+  "excludeFiles": [
+    "CONTRIBUTING.md",
+    "RELEASING.md",
+    "SECURITY.md"
+  ],
+  "rules": [
+    "Tenant-owned entities implement ITenantEntity<TKey> or derive from TenantEntity<TKey>; a TenantId property alone does nothing.",
+    "Entity types that implement neither are shared by every tenant by design; do not filter them by tenant yourself.",
+    "Register every DbContext that holds tenant-owned entities with options.UseTenantry().",
+    "Never set TenantId on new rows and never add Where(x => x.TenantId == ...) to queries: UseTenantry() stamps and filters.",
+    "Database.SqlQuery, SqlQueryRaw, ExecuteSql, ExecuteSqlRaw, ExecuteSqlInterpolated and IgnoreQueryFilters() are not tenant-isolated.",
+    "Pair ResolveFromHeader, ResolveFromRouteValue, ResolveFromQueryString, ResolveFromHost and ResolveFromSubdomain with ValidateTenantAccessByClaim or ValidateTenantAccess in the same AddTenantry.",
+    "Call app.UseTenantry() after app.UseAuthentication() and app.UseAuthorization(), before the endpoints.",
+    "Run background work from a tenant id with ITenantScopeFactory<TKey>.RunInScopeAsync(id, work), and await it; never block on it.",
+    "Pass CreateScope and MakeCurrent only a tenant read from the store, never a TenantDescriptor built from outside input.",
+    "Resolve a DbContext inside the tenant's scope; a database-per-tenant context throws if used after the current tenant changes.",
+    "Test isolation with Tenantry's real services and two tenants: one tenant must not read or write the other's rows."
+  ]
+}
