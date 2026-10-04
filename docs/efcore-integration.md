@@ -392,7 +392,10 @@ migrations history table is not part of the model. For ASP.NET Core Identity's t
 [ASP.NET Core Identity](aspnetcore-identity.md#the-user-type-and-context).
 
 `OnUnclassifiedEntityType` decides what happens to such a model: `Reject` (the default) throws, `Warn` logs event 2006
-once per model and uses it, and `Allow` uses it silently. Set it for one context with `UseTenantry(o => …)`.
+and uses it, and `Allow` uses it silently. `Warn` logs once for each model EF Core builds, which is usually once per
+context type; it logs again if EF Core drops the model from its cache and builds it again. Set the option for one
+context with `UseTenantry(o => …)`. Contexts with different values of it never share a query EF Core has compiled, so
+each is checked under its own.
 
 ## Migrations
 

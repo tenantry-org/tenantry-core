@@ -48,7 +48,7 @@ internal static partial class TenantIsolationLog
     [LoggerMessage(2006, LogLevel.Warning,
         "'{Context}' has tenant-owned entity types, and these entity types are neither tenant-owned nor marked as " +
         "shared across tenants, so every tenant reads and writes their rows: {EntityTypes} " +
-        "(EfCoreIsolationOptions.OnUnclassifiedEntityType = Warn). Logged once per model",
+        "(EfCoreIsolationOptions.OnUnclassifiedEntityType = Warn). Logged once for each model EF Core builds",
         EventName = "UnclassifiedEntityTypes")]
     public static partial void UnclassifiedEntityTypes(ILogger logger, string context, string entityTypes);
 }

@@ -20,7 +20,13 @@ public enum UnclassifiedEntityTypeBehavior
     /// </summary>
     Reject,
 
-    /// <summary>As <see cref="Allow"/>, but log a structured warning naming them, once per model.</summary>
+    /// <summary>
+    /// As <see cref="Allow"/>, but log a structured warning naming them, once for each model EF Core builds.
+    /// </summary>
+    /// <remarks>
+    /// That is usually once per context type and set of options. EF Core builds a model again when it drops one from
+    /// its cache, and the warning is then logged again.
+    /// </remarks>
     Warn,
 
     /// <summary>Use the model as it is, silently.</summary>
