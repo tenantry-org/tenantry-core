@@ -98,9 +98,8 @@ If you have signing configured, signed commits are appreciated. See GitHub's gui
 
 Releases are cut by pushing a `v*` tag on a commit that is on `master`, or for a patch to an older minor on its
 `release/X.Y` branch; a ruleset lets only the maintainer create, move or delete `v*` tags. The release workflow checks
-that the tag is on `master` or `release/X.Y` (a tag below the newest release only on `release/X.Y`), checks that CI,
-SonarCloud included, passed on the push that put the tagged commit there, reruns the CI gate on it (without
-SonarCloud),
+that the tag is on `release/X.Y`, or on `master` while no tag names a higher minor, checks that CI, SonarCloud
+included, passed on a push that put the tagged commit there, reruns the CI gate on it (without SonarCloud),
 including both package checks, then **pauses for approval** in the `release` environment (only `v*`
 tags can deploy to it) and publishes those same packages, with their symbol packages, to NuGet.org via
 OIDC trusted publishing. The GitHub release's notes are the version's section of `CHANGELOG.md`
@@ -110,6 +109,6 @@ A tag whose commit has no passing CI run on that branch fails before anything is
 suffix makes a GitHub prerelease, and only the highest released version is marked as the latest GitHub release.
 [RELEASING.md](RELEASING.md) has the steps.
 
-To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on
-`master`, or on `release/X.Y` for a patch to an older minor: it runs the same checks and builds the same packages, then lists what a release would
-publish, without publishing anything. Give it the tag to also see that release's notes.
+To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on `master`, or on
+`release/X.Y` for a patch to an older minor: it runs the same checks and builds the same packages, then lists what a
+release would publish, without publishing anything. Give it the tag to also see that release's notes.

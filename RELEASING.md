@@ -32,10 +32,13 @@ rest. Only the maintainer can push `v*` tags.
 
 ## Patching an older minor
 
-Until the next minor is released, a patch is released from `master` as above. Once it is, a security fix for an older
-minor in the supported window ([security policy](.github/SECURITY.md#supported-versions)) is released from a
-`release/X.Y` branch, and only security fixes go there. The release workflow accepts a `vX.Y.Z` tag on `master` or on
-`release/X.Y`, and a tag below the newest release only on `release/X.Y` (`scripts/release-source.sh`).
+Until the next minor's first tag, release candidate included, a patch can be released from `master` as above. From
+then on, a security fix for an older minor in the supported window
+([security policy](.github/SECURITY.md#supported-versions)) is released from a `release/X.Y` branch, and only security
+fixes go there. The release workflow accepts a `vX.Y.Z` tag on `release/X.Y`, and on `master` only while no tag names
+a higher minor (`scripts/release-source.sh`). It goes by tags, not releases: a `v*` tag that was pushed but never
+published still keeps patches below it off `master`. It also cannot tell when `master` takes breaking changes for the
+next minor before that minor has a tag, so from that point release patches through `release/X.Y` too.
 
 1. Cut the branch once, when the first such fix is needed, from the minor's last release tag, and push it:
 
@@ -45,8 +48,13 @@ minor in the supported window ([security policy](.github/SECURITY.md#supported-v
    ```
 
    A tag made before release branches were supported has workflows that run only on `master`. On a branch cut from
-   one, cherry-pick the commit "CI and the release workflow accept patches from release branches" first, in a pull
-   request into the branch, so CI runs on the branch and its tags can be released.
+   one, bring in the commit "CI and the release workflow accept patches from release branches" first, in a pull
+   request into the branch, so CI runs on the branch and its tags can be released. On a branch cut from v0.6.x the
+   cherry-pick conflicts in both of `ci.yml`'s changes, as the concurrency group and `run_sonar` changed after 0.6.0.
+   Keep the branch's lines except two: the `release/*` branches in the `push` and `pull_request` triggers, and the
+   concurrency group by commit for a push (`ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' ||
+   github.sha }}`), without which a third push can cancel a queued run and leave a commit with no CI. Take
+   `release.yml` and `scripts/release-source.sh` as they are.
 2. In a pull request into the branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the minor's last
    release (`0.6.1`), and delete each `src/*/CompatibilitySuppressions.xml`: they record the minor's breaks against
    the one before it, and a patch has none against its own minor.
