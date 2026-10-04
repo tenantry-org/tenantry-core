@@ -1,5 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
+  "url": "https://context7.com/tenantry-org/tenantry-core",
+  "public_key": "pk_GWCLE9WResujGDhixZoAa",
   "projectTitle": "Tenantry",
   "description": "Multi-tenancy for ASP.NET Core and EF Core: tenant resolution, access validation, and tenant isolation in a shared database or a database per tenant.",
   "excludeFolders": [
