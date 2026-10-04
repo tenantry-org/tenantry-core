@@ -69,6 +69,7 @@ ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them re
 | The packages' dependency ranges | `dotnet run scripts/check-package-ranges.cs -- artifacts` | Each dependency has its intended range (see the script) |
 | The API reference is up to date | `bash scripts/generate-api-docs.sh --check` | `bash scripts/generate-api-docs.sh`, then commit `docs/api`: a change to the public API or its XML documentation changes it |
 | An application can restore and run the packages | `bash scripts/check-package-consumer.sh artifacts 'Tenantry.*'` | From an empty cache, with package source mapping, on every target framework |
+| The templates work | `bash scripts/smoke-templates.sh artifacts` | Each `dotnet new` template in `templates/` is created from the packed templates, builds against the packages with warnings as errors, and runs |
 | The docs' code blocks build | `bash scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.*'` | Every `csharp` code block in the README and `docs/` builds against the packages |
 | Native AOT publish | `dotnet publish samples/Tenantry.Samples.Aot -c Release` | No trim or AOT warnings |
 | Native AOT smoke test | `dotnet publish eng/aot-smoke -c Release -o artifacts/aot-smoke`, then `artifacts/aot-smoke/AotSmoke` | Tenantry.Http and Tenantry.Caching compile whole for Native AOT, and the binary runs them |

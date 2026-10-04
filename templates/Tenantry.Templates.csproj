@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    dotnet new templates for applications that use Tenantry (content/): tenantry-api and tenantry-worker. Packed as
+    Tenantry.Templates; each template references the Tenantry packages of the version this package is, which pack
+    writes into its template.json. scripts/smoke-templates.sh installs the package, creates each template, and builds
+    and runs it against the packages of the same build. Not yet part of a release (see RELEASING.md).
+  -->
+  <PropertyGroup>
+    <PackageId>Tenantry.Templates</PackageId>
+    <PackageType>Template</PackageType>
+    <PackageDescription>dotnet new templates for Tenantry: tenantry-api, an ASP.NET Core API with EF Core that resolves the tenant from a header and checks it against the caller's JWT claims, and tenantry-worker, a worker service that runs each message as its tenant with RunInScopeAsync.</PackageDescription>
+    <PackageTags>multi-tenancy;multitenancy;multi-tenant;dotnet-new;templates;aspnetcore;efcore;saas;tenantry</PackageTags>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <!-- .template.config is a dot folder, which pack leaves out by default -->
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageProjectUrl>https://tenantry.dev</PackageProjectUrl>
+    <TenantryPackageReadmeBody>$(MSBuildThisFileDirectory)package-readme.md</TenantryPackageReadmeBody>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="All" />
+    <Content Include="content/**/*" Exclude="content/**/bin/**;content/**/obj/**;content/**/template.json"
+             Pack="true" PackagePath="content/" />
+    <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="" />
+    <None Include="$(TenantryPackageReadme)" Pack="true" PackagePath="README.md" />
+    <None Include="$(MSBuildThisFileDirectory)../eng/common/package-icon.png" Pack="true" PackagePath="icon.png" />
+  </ItemGroup>
+
+  <!-- Each template's template.json, with the version of the Tenantry packages it references: this package's -->
+  <Target Name="WriteTemplateVersions" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <_TemplateJson Include="content/**/.template.config/template.json" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)%(_TemplateJson.RecursiveDir)template.json"
+                      Lines="$([MSBuild]::Escape($([System.IO.File]::ReadAllText('%(_TemplateJson.FullPath)').Replace('TENANTRY_PACKAGE_VERSION', '$(PackageVersion)'))))"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <None Include="$(IntermediateOutputPath)%(_TemplateJson.RecursiveDir)template.json"
+            Pack="true"
+            PackagePath="content/%(_TemplateJson.RecursiveDir)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

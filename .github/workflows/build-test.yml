@@ -172,6 +172,12 @@ jobs:
         # builds for every target framework and runs, as an application would (see the script)
         run: bash scripts/check-package-consumer.sh ./artifacts 'Tenantry.*'
 
+      - name: Smoke-test the templates
+        # The dotnet new templates (templates/): each is created from the packed templates, built against these packages
+        # with warnings as errors, and run (see the script). The templates package is not uploaded or released yet.
+        run: bash scripts/smoke-templates.sh ./artifacts
+        timeout-minutes: 10
+
       - name: Check the documentation's code blocks
         # Every ```csharp block in the README and docs builds against these packages (see the script). The first
         # pattern names the package whose version the snippets reference.

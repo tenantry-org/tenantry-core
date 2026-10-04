@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Tenantry Contributors",
+  "classifications": ["Worker", "Multi-tenancy"],
+  "identity": "Tenantry.Templates.Worker",
+  "name": "Tenantry multi-tenant worker",
+  "description": "A worker service with EF Core that runs each message as the tenant it names, with RunInScopeAsync, and keeps each tenant's rows apart.",
+  "shortName": "tenantry-worker",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "TenantryWorker",
+  "preferNameDirectory": true,
+  "symbols": {
+    "TenantryVersion": {
+      "type": "parameter",
+      "datatype": "string",
+      "description": "The version of the Tenantry packages to reference.",
+      "defaultValue": "TENANTRY_PACKAGE_VERSION",
+      "replaces": "TENANTRY_VERSION"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Tenantry Contributors",
+  "classifications": ["Web", "WebAPI", "Multi-tenancy"],
+  "identity": "Tenantry.Templates.Api",
+  "name": "Tenantry multi-tenant API",
+  "description": "An ASP.NET Core API with EF Core that resolves the tenant from a header, checks it against the caller's JWT claims, and keeps each tenant's rows apart.",
+  "shortName": "tenantry-api",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "TenantryApi",
+  "preferNameDirectory": true,
+  "symbols": {
+    "TenantryVersion": {
+      "type": "parameter",
+      "datatype": "string",
+      "description": "The version of the Tenantry packages to reference.",
+      "defaultValue": "TENANTRY_PACKAGE_VERSION",
+      "replaces": "TENANTRY_VERSION"
+    }
+  }
+}

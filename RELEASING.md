@@ -66,6 +66,14 @@ NuGet.org.
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
 
+## The templates package
+
+`templates/Tenantry.Templates.csproj` packs the `dotnet new` templates, and CI checks them
+(`scripts/smoke-templates.sh`), but no release publishes the package yet. To ship it with a release: pack it into
+`./artifacts` in `build-test.yml`'s Pack step; give it an SBOM in the step after; leave it out of the consumer check
+(`check-package-consumer.sh`, shared with Tenantry Pro), whose application cannot reference a template package; and
+reserve the `Tenantry.Templates` id on NuGet.org. The release workflow then publishes it with the rest.
+
 ## Repository settings
 
 `release/*` branches need a ruleset like `master`'s: changes only through pull requests with CI passing, and no force
