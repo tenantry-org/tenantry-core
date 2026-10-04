@@ -77,5 +77,6 @@ every dependency at the newest version it allows.
 ## Supported versions
 
 Security fixes go into the latest minor version, and, until 1.0, into the Tenantry Core minors that the latest two
-Tenantry.Pro minors run on. Other fixes go only into the latest minor. See the
+Tenantry.Pro minors run on. Minor versions released before Tenantry.Pro goes on sale are not patched once a newer one
+is out. Other fixes go only into the latest minor. See the
 [security policy](../.github/SECURITY.md#supported-versions).
