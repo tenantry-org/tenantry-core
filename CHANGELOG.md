@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in a test, build a provider with `UseConnectionStrings(options => …)` and resolve
   `ITenantConnectionStringProvider<TKey>`.
 
+- An HTTP client with `UseTenantry()` sets an absolute `BaseAddress` in its registration, or passes its service's
+  address to `UseTenantry(address)`, as a gRPC client or a typed client that sets `BaseAddress` in its constructor
+  must.
 - A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
   `InvalidateAllLocallyAsync`.
 - An `OnRejected` handler or log alert that looked for a suspended tenant under `TenantRejectionReason.AccessDenied`
@@ -61,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TenantConnectionStringProvider<TKey>` is internal. Resolving it directly bypassed any decorator.
 
 ### Fixed
+
+- `UseTenantry()` on an HTTP or gRPC client with no base address in its registration fails when the client is created.
+  It sent the tenant's id to any host the client called. `UseTenantry(address)` names the service for a client that
+  sets its address elsewhere.
 
 - A transaction that EF Core cannot undo a failed save in (an ambient `TransactionScope`, or SQL Server with multiple
   active result sets) is rolled back when a save whose tenant check failed is followed by a save that succeeds. Before,

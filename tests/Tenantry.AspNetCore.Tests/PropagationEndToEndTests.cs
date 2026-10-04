@@ -72,7 +72,7 @@ public sealed class PropagationEndToEndTests
             .ResolveFromPropagationHeader(_ => true)   // the test's callers are all its own services
             .UseStore<SlugStore>()
             .AddHttpPropagation());
-        builder.Services.AddHttpClient("next").UseTenantry();
+        builder.Services.AddHttpClient("next", client => client.BaseAddress = new Uri("https://next.internal")).UseTenantry();
 
         await using var app = builder.Build();
         app.UseTenantry();

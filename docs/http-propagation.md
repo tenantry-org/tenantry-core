@@ -32,14 +32,17 @@ public sealed class BillingClient(HttpClient http)
 }
 ```
 
-A gRPC client from `Grpc.Net.ClientFactory` runs on an `HttpClient`, so it takes the same call:
+The tenant goes only to the service at the client's `BaseAddress`, so the registration must set one. A gRPC client
+from `Grpc.Net.ClientFactory` keeps its address in its own options, which Tenantry cannot read, and a typed client may
+set `BaseAddress` in its constructor, after the handlers are built. Pass such a client's address to `UseTenantry`:
 
 ```csharp no-compile
-builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = new Uri("https://inventory.internal"))
-    .UseTenantry();
+var inventory = new Uri("https://inventory.internal");
+builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = inventory)
+    .UseTenantry(inventory);
 ```
 
-`UseTenantry()` without `AddHttpPropagation()` fails when the client is created, naming the call to add.
+A client created with neither, or without `AddHttpPropagation()`, fails when it is created, saying what to add.
 
 ### Which requests carry it
 
@@ -50,9 +53,8 @@ builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = new U
   `InvalidOperationException`. That catches a header forwarded from the incoming request or set in
   `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.Use`. With no current
   tenant, a header you set is sent as it is.
-- If the client's registration sets `BaseAddress`, only requests to that scheme, host and port get the header.
-  Otherwise every request gets it, which covers gRPC clients and typed clients that set `BaseAddress` in their
-  constructor.
+- Only requests to the scheme, host and port of the address passed to `UseTenantry`, or else of the registration's
+  `BaseAddress`, get the header. A request with an absolute address elsewhere goes without it.
 - `HttpClient` follows a redirect inside its primary handler with the request's headers, so a service that redirects
   to another passes the tenant id on. Turn redirects off for the client
   (`ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })`) if a service you
