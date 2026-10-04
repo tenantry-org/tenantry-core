@@ -74,44 +74,63 @@ internal sealed class TenantWriteGuard<TKey>
     /// <exception cref="TenantNotResolvedException">No tenant is current and <see cref="EfCoreIsolationOptions.OnMissingTenant"/> rejects the write, or a new entity has no tenant.</exception>
     public static void Check(DbContext context)
     {
-        if (Begin(context) is not { } guard)
-        {
-            return;
-        }
+        AtomicSave.Start(context);
 
-        foreach (var row in guard._rowsToRead.Values)
+        try
         {
-            guard.CheckStoredTenant(row, StoredTenantQuery.For(context, row, guard._tenantId)?.FirstOrDefault());
-        }
+            if (Begin(context) is not { } guard)
+            {
+                return;
+            }
 
-        guard.End(context);
+            foreach (var row in guard._rowsToRead.Values)
+            {
+                guard.CheckStoredTenant(row, StoredTenantQuery.For(context, row, guard._tenantId)?.FirstOrDefault());
+            }
+
+            guard.End(context);
+        }
+        catch
+        {
+            // EF Core raises no failure for a save that a SavingChanges interceptor stops.
+            AtomicSave.Failed(context);
+            throw;
+        }
     }
 
     /// <inheritdoc cref="Check"/>
     public static async Task CheckAsync(DbContext context, CancellationToken cancellationToken)
     {
-        if (Begin(context) is not { } guard)
+        AtomicSave.Start(context);
+
+        try
         {
-            return;
-        }
+            if (Begin(context) is not { } guard)
+            {
+                return;
+            }
 
-        foreach (var row in guard._rowsToRead.Values)
+            foreach (var row in guard._rowsToRead.Values)
+            {
+                var stored = StoredTenantQuery.For(context, row, guard._tenantId) is { } query
+                    ? await query.FirstOrDefaultAsync(cancellationToken)
+                    : null;
+
+                guard.CheckStoredTenant(row, stored);
+            }
+
+            guard.End(context);
+        }
+        catch
         {
-            var stored = StoredTenantQuery.For(context, row, guard._tenantId) is { } query
-                ? await query.FirstOrDefaultAsync(cancellationToken)
-                : null;
-
-            guard.CheckStoredTenant(row, stored);
+            AtomicSave.Failed(context);
+            throw;
         }
-
-        guard.End(context);
     }
 
     // Checks the change tracker, and returns the guard when a tenant is current, with the rows left to read.
     private static TenantWriteGuard<TKey>? Begin(DbContext context)
     {
-        AtomicSave.Reset(context);
-
         var services = ApplicationServices.Find(context);
         var tenantContext = ApplicationServices.TenantContext<TKey>(context);
         var logger = TenantIsolationLog.Find(services) ?? NullLogger.Instance;
@@ -140,7 +159,7 @@ internal sealed class TenantWriteGuard<TKey>
 
     // Once every check has passed, so a rejected save leaves the context's settings as they were.
     private void End(DbContext context) =>
-        AtomicSave.Begin(context, _checks, _insertsAreChecks, _withoutTransaction, _logger);
+        AtomicSave.Guard(context, _checks, _insertsAreChecks, _withoutTransaction, _logger);
 
     // A tenant-owned UPDATE or DELETE that affects no row is either an ordinary concurrency conflict or an attempt to
     // write another tenant's row with a forged TenantId. The two cannot be told apart without another query, so EF

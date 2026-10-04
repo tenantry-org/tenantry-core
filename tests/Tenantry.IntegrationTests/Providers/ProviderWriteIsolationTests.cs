@@ -253,6 +253,36 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task InATransactionScope_ALaterSaveWithNoChecks_DoesNotConfirmTheFailedOne()
+    {
+        // The application catches the failed save and saves an order, a row no other statement checks, through the
+        // same context. That save succeeds, and the scope is still rolled back.
+        var id = await AddDogAsync(_acme, "acme detail");
+
+        var act = async () =>
+        {
+            using TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled);
+
+            await AsTenantAsync(_globex, async db =>
+            {
+                ProviderDog stub = new() { Id = id, TenantId = _globex, Detail = "acme detail" };
+                db.Animals.Attach(stub);
+                stub.Detail = "overwritten";
+                await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+                db.ChangeTracker.Clear();
+                db.Orders.Add(new ProviderOrder { Description = "after the failed save" });
+                return await db.SaveChangesAsync();
+            });
+
+            scope.Complete();
+        };
+
+        await act.Should().ThrowAsync<TransactionAbortedException>();
+        (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+
+    [Fact]
     public async Task InATransactionScope_TheTenantsOwnSaveOfADerivedTable_Commits()
     {
         // Tenantry's vote must not turn the connection's single-phase commit into a two-phase one, which PostgreSQL

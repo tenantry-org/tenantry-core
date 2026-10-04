@@ -100,16 +100,30 @@ internal sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
     }
 
     /// <inheritdoc />
+    public override void SaveChangesFailed(DbContextErrorEventData eventData)
+    {
+        EndFailedSave(eventData.Context, eventData.Exception);
+        base.SaveChangesFailed(eventData);
+    }
+
+    /// <inheritdoc />
+    public override Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+    {
+        EndFailedSave(eventData.Context, eventData.Exception);
+        return base.SaveChangesFailedAsync(eventData, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public override void SaveChangesCanceled(DbContextEventData eventData)
     {
-        EndCancelledSave(eventData.Context);
+        EndFailedSave(eventData.Context);
         base.SaveChangesCanceled(eventData);
     }
 
     /// <inheritdoc />
     public override Task SaveChangesCanceledAsync(DbContextEventData eventData, CancellationToken cancellationToken = default)
     {
-        EndCancelledSave(eventData.Context);
+        EndFailedSave(eventData.Context);
         return base.SaveChangesCanceledAsync(eventData, cancellationToken);
     }
 
@@ -140,11 +154,13 @@ internal sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
         }
     }
 
-    private static void EndCancelledSave(DbContext? context)
+    // EF Core tells interceptors of a cancelled save, and of a failed one unless it is a concurrency failure, which
+    // only the context's SaveChangesFailed event reports (AtomicSave listens to it).
+    private static void EndFailedSave(DbContext? context, Exception? failure = null)
     {
         if (context is not null)
         {
-            AtomicSave.Cancelled(context);
+            AtomicSave.Failed(context, failure);
         }
     }
 }

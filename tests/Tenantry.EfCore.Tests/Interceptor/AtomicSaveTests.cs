@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Data.Common;
+using System.Transactions;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -173,6 +174,189 @@ public sealed class AtomicSaveTests : IDisposable
         }
 
         (await AcmeStateAsync()).Should().Be(AcmeState);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InATransactionWithoutSavepoints_ALaterSaveWithNoChecks_DoesNotConfirmTheFailedOne(bool sync)
+    {
+        // The application catches the failed save, clears the tracker and saves a row no other statement checks.
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { NoSavepoints = true }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            Forge(db, Forgery.StubOwnerAddsOwnedRow);
+            await db.Awaiting(d => SaveAsync(d, sync)).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+            db.ChangeTracker.Clear();
+            db.Add(new Supplier());
+            await SaveAsync(db, sync);
+
+            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        }
+
+        (await AcmeStateAsync()).Should().Be(AcmeState);
+    }
+
+    [Fact]
+    public async Task InATransactionWithoutSavepoints_ALaterSaveWithoutATenant_DoesNotConfirmTheFailedOne()
+    {
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { NoSavepoints = true }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            Forge(db, Forgery.StubOwnerAddsOwnedRow);
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+            db.ChangeTracker.Clear();
+            _tenant.AsNone();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        }
+
+        (await AcmeStateAsync()).Should().Be(AcmeState);
+    }
+
+    [Fact]
+    public async Task InATransactionWithoutSavepoints_ASaveThatFailsBeforeItsCheckIsRead_IsNotConfirmedByALaterSave()
+    {
+        // No concurrency failure is raised for the first save, and an interceptor that translates the failure keeps
+        // EF Core from telling Tenantry that it failed.
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { NoSavepoints = true, Before = new TranslateSaveFailures() }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            Customer stub = new() { Id = 1, TenantId = "globex", Name = "acme" };
+            db.Attach(stub);
+            stub.Phones.Add(new Phone { Id = 0, Number = "from globex" });
+            stub.Phones.Add(new Phone { Id = 1, Number = "duplicate" });
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<InvalidOperationException>().WithMessage("translated");
+
+            db.ChangeTracker.Clear();
+            db.Add(new Supplier());
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        }
+
+        (await AcmeStateAsync()).Should().Be(AcmeState);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InATransactionWithoutSavepoints_AFailedSaveNestedInASaveWithNoChecks_IsNotConfirmedByIt(bool sync)
+    {
+        // An interceptor saves again from SavedChanges and swallows that save's failure. The outer save, which
+        // succeeds, confirms itself only.
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { NoSavepoints = true, Before = new ForgeWhenSaved() }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            db.Add(new Supplier());
+            await SaveAsync(db, sync);
+
+            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        }
+
+        (await AcmeStateAsync()).Should().Be(AcmeState);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InATransactionWithoutSavepoints_ASaveTenantryRejectsInsideAnother_EndsOnlyItself(bool sync)
+    {
+        // The nested save is rejected before it sends anything, and the interceptor swallows the rejection. The outer
+        // save is still the one its own SavedChanges confirms.
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme"), new Setup { NoSavepoints = true, Before = new SaveForAnotherTenantWhenSaved() }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await ChangeAsync(db, Change.AddOwnedRow);
+            await SaveAsync(db, sync);
+            await transaction.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await AcmeStateAsync()).Should().Be("acme|1:acme phone,2:added|acme detail");
+    }
+
+    [Fact]
+    public async Task InATransactionWithoutSavepoints_ASaveWithNoChecksThatFails_DoesNotStopTheCommitOfALaterCheckedSave()
+    {
+        await SeedAcmeAsync();
+
+        await using (var db = await CreateAsync(_tenant.As("acme"), new Setup { NoSavepoints = true }))
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            db.Add(new Animal { Id = 1, Name = "duplicate key" });
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateException>();
+
+            db.ChangeTracker.Clear();
+            await ChangeAsync(db, Change.AddOwnedRow);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await transaction.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        (await AcmeStateAsync()).Should().Be("acme|1:acme phone,2:added|acme detail");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InAnAmbientTransaction_ALaterSaveWithNoChecks_DoesNotConfirmTheFailedOne(bool sync)
+    {
+        // SQLite does not enlist in the ambient transaction, so the failed save is undone here whatever the vote. The
+        // vote is what a provider that does enlist relies on.
+        await SeedAcmeAsync();
+
+        var act = async () =>
+        {
+            using TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled);
+
+            await using (var db = await CreateAsync(_tenant.As("globex"), new Setup { Ambient = true }))
+            {
+                Forge(db, Forgery.StubOwnerAddsOwnedRow);
+                await db.Awaiting(d => SaveAsync(d, sync)).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+                db.ChangeTracker.Clear();
+                db.Add(new Supplier());
+                await SaveAsync(db, sync);
+            }
+
+            scope.Complete();
+        };
+
+        (await act.Should().ThrowAsync<TransactionAbortedException>())
+            .WithInnerException<TenantIsolationViolationException>();
+    }
+
+    [Fact]
+    public async Task InAnAmbientTransaction_TheTenantsOwnSaves_Complete()
+    {
+        await SeedAcmeAsync();
+
+        using (TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled))
+        {
+            await using (var db = await CreateAsync(_tenant.As("acme"), new Setup { Ambient = true }))
+            {
+                await ChangeAsync(db, Change.AddOwnedRow);
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+                db.Add(new Supplier());
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+
+            scope.Complete();
+        }
+
+        (await AcmeStateAsync()).Should().Be("acme|1:acme phone,2:added|acme detail");
     }
 
     [Fact]
@@ -724,6 +908,11 @@ public sealed class AtomicSaveTests : IDisposable
             }
         }
 
+        if (setup.Ambient)
+        {
+            builder.ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.AmbientTransactionWarning));
+        }
+
         if (setup.NoSavepoints)
         {
             builder.ReplaceService<IRelationalTransactionFactory, NoSavepointTransactionFactory>();
@@ -741,6 +930,8 @@ public sealed class AtomicSaveTests : IDisposable
         public bool Reject { get; init; }
 
         public bool NoSavepoints { get; init; }
+
+        public bool Ambient { get; init; }
 
         public bool Retrying { get; init; }
 
@@ -808,6 +999,105 @@ public sealed class AtomicSaveTests : IDisposable
                 context.Add(new Supplier());
                 await context.SaveChangesAsync(cancellationToken);
                 _saving = false;
+            }
+
+            return result;
+        }
+    }
+
+    // Once a save of the context's has succeeded, saves a forged owned row through it and swallows the failure.
+    private sealed class ForgeWhenSaved : SaveChangesInterceptor
+    {
+        private bool _saving;
+
+        public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                Forge(context, Forgery.StubOwnerAddsOwnedRow);
+
+                try
+                {
+                    context.SaveChanges();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    context.ChangeTracker.Clear();
+                }
+            }
+
+            return result;
+        }
+
+        public override async ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                Forge(context, Forgery.StubOwnerAddsOwnedRow);
+
+                try
+                {
+                    await context.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    context.ChangeTracker.Clear();
+                }
+            }
+
+            return result;
+        }
+    }
+
+    // Once a save of the context's has succeeded, saves a row that names another tenant through it, which Tenantry
+    // rejects, and swallows the rejection.
+    private sealed class SaveForAnotherTenantWhenSaved : SaveChangesInterceptor
+    {
+        private bool _saving;
+
+        public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                var entry = context.Add(new Supplier { TenantId = "globex" });
+
+                try
+                {
+                    context.SaveChanges();
+                }
+                catch (TenantIsolationViolationException)
+                {
+                    entry.State = EntityState.Detached;
+                }
+            }
+
+            return result;
+        }
+
+        public override async ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_saving && eventData.Context is { } context)
+            {
+                _saving = true;
+                var entry = context.Add(new Supplier { TenantId = "globex" });
+
+                try
+                {
+                    await context.SaveChangesAsync(cancellationToken);
+                }
+                catch (TenantIsolationViolationException)
+                {
+                    entry.State = EntityState.Detached;
+                }
             }
 
             return result;

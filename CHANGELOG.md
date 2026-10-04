@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A transaction that EF Core cannot undo a failed save in (an ambient `TransactionScope`, or SQL Server with multiple
+  active result sets) is rolled back when a save whose tenant check failed is followed by a save that succeeds. Before,
+  a later save that wrote no owned rows and no entity mapped to more than one table, or ran without a tenant, marked
+  the failed save as succeeded, and the commit kept the rows the failed save had written.
 - `IsolateCaches()` throws for a `HybridCache` registered as scoped or transient. It accepted one before, and
   invalidating a tenant then failed, because invalidation clears the cache outside any scope.
 
