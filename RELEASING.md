@@ -19,7 +19,9 @@ rest. Only the maintainer can push `v*` tags.
    ```
 
    Pushing the new branch runs CI, SonarCloud included, on its head. Wait for it to pass: the release requires that
-   run, on a push to `release/X.Y`.
+   run, on a push to `release/X.Y`. Then, in a pull request into `master`, raise `MinVerMinimumMajorMinor` in
+   `Directory.Build.props` to the next minor (`0.8`), so `master`'s own packages are versioned above the branch's
+   releases.
 3. Rehearse (optional): Actions → Release → Run workflow on `release/X.Y`, with the tag as the version. It runs the
    release's checks, builds the same packages, and shows what a release would publish and its notes.
 4. Tag the branch's head and push the tag:

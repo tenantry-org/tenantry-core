@@ -14,6 +14,10 @@
     <!-- The last release, which pack checks each package's API against (eng/common/Build.targets). Raise it after each
          release (RELEASING.md). -->
     <TenantryPackageBaseline>0.6.0</TenantryPackageBaseline>
+    <!-- The minor master works towards. Releases are tagged on release branches, so master's last reachable tag can be
+         a minor behind, or a patch behind on its branch; this keeps master's packages versioned X.Y.0-alpha above both.
+         Raise it on master when release/X.Y is cut (RELEASING.md). A tagged commit takes its tag's version. -->
+    <MinVerMinimumMajorMinor>0.7</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
 </Project>
