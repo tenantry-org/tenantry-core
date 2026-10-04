@@ -102,8 +102,11 @@ usually ensures this with a transaction, but not in every setup. For these saves
 
 - The failed check cannot be suppressed. An interceptor of yours that suppresses concurrency failures
   (`ThrowingConcurrencyException`), such as "last write wins" or EF Core's sample that ignores rows already deleted,
-  still works for other entities, but Tenantry throws a failed check that other rows depend on, wherever yours is
-  registered. Interceptors added after `UseTenantry()`, including those packages add through it, do not see it.
+  still works for other entities, but Tenantry throws a failed check that other rows depend on before any interceptor
+  added with `AddInterceptors` sees it, wherever yours is registered. Tenantry hears of every save's end, and of every
+  command and transaction, through interceptors of EF Core's internal service provider, which EF Core runs before
+  every interceptor added with `AddInterceptors`; its refusal of a commit (below) also comes before your
+  `TransactionCommitting` hooks.
 - With `Database.AutoTransactionBehavior` set to `Never`, EF Core still runs the save in a transaction of its own, and
   the setting goes back to `Never` when the save ends (event 2005, at `Debug`). Other saves still run without one. If
   your database or connection pooler cannot run transactions, set `OnSaveWithoutTransaction` to `Reject`: such a save
@@ -121,8 +124,9 @@ usually ensures this with a transaction, but not in every setup. For these saves
   - Any failure counts, of any save in the transaction. EF Core does not say which save a failure is for when one save
     runs inside another, and a save can fail before EF Core reads the check (on a duplicate key, say), so Tenantry
     cannot know whether the check held, and a forged write looks like a real conflict.
-  - So does a save Tenantry never learns succeeded, as when an interceptor added before `UseTenantry()` throws from
-    `SavedChanges`.
+  - So does a save that an interceptor fails after it succeeded, by throwing from `SavedChanges`.
+  - So does a concurrency conflict on any row, once the save sent statements, even one an interceptor of yours
+    suppresses: Tenantry hears of it before your interceptor decides.
   - A save stopped before it sent anything, by Tenantry or by an interceptor's `SavingChanges`, does not count.
   - So code that catches a failed save and goes on in the same transaction (after a unique key or foreign key
     violation, or to retry a concurrency conflict) is refused at the commit. A transaction with savepoints avoids it:
@@ -138,13 +142,9 @@ Not covered:
   `AmbientTransactionWarning` turned off: it then saves with no transaction at all;
 - storage without transactions, such as MySQL's MyISAM tables;
 - an interceptor that suppresses EF Core's savepoint commands;
-- a save an interceptor runs inside another save that fails after sending statements with no failed command, no
-  failed tenant check that Tenantry's interceptor sees, and no failure notice reaching Tenantry at all, because an
-  interceptor added before Tenantry's throws from `SaveChangesFailed` or `SaveChangesCanceled`, or a
-  `SaveChangesFailed` handler added before Tenantry's throws. The save around it can then be taken for it if it ran
-  from that save's `SavingChanges`, after Tenantry's interceptor, or from the `SavedChanges` of a save that sent
-  nothing but reported entities saved (`SuppressWithResult`). Any notice of the failure that does reach Tenantry stops
-  the commit, whichever save it is taken for;
+- another EF Core options extension that inserts an interceptor at the start of the internal service provider's list
+  after Tenantry's: it then runs before Tenantry's, and one that throws from a save's notices keeps them from
+  Tenantry;
 - a transaction handed to EF Core with `UseTransaction` and then committed directly through ADO.NET.
 
 ## Models that cannot be isolated

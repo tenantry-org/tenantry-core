@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.6
 
+- In a transaction without savepoints, or a `TransactionScope`, where a save relied on a tenant check, a concurrency
+  conflict of any save that sent statements now stops the commit, even when an interceptor of yours suppresses it
+  (a "last write wins" policy, say). Tenantry hears of the conflict before your interceptor decides, so it cannot tell
+  a suppressed conflict from one that left rows written. Use a transaction with savepoints for such a unit of work.
+- Tenantry now throws a failed tenant check that other statements rely on before every `ThrowingConcurrencyException`
+  hook of yours, wherever it is registered, and refuses an unsafe commit before every `TransactionCommitting` hook of
+  yours. A hook that expected to see either first no longer does.
 - A many-to-many join entity of your own that is not tenant-owned, joins a tenant-owned type and has a key of its own
   that leaves out its foreign key to that type is refused, as is one that names a tenant-owned type through an
   alternate key without its `TenantId`. Key the join entity by its two foreign keys, EF Core's default, or implement
@@ -82,6 +89,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A save that failed after sending statements in a transaction EF Core cannot undo it in is counted as failed even when
+  every notice of its failure is stopped by an interceptor registered before `UseTenantry()` that throws from it (as
+  EntityFramework.Exceptions does from `SaveChangesFailed`), or by a `SaveChangesFailed` handler subscribed before
+  Tenantry's that throws. Tenantry's save notices, command and transaction hooks are now interceptors of EF Core's
+  internal service provider, which EF Core runs before every interceptor added with `AddInterceptors`. Before, a
+  failed save nested in another, or run from the `SavedChanges` of a save that sent nothing (`SuppressWithResult`),
+  could be confirmed and its rows committed. See
+  [Saves that succeed or fail as a whole](docs/efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole).
 - With `CacheTenants`, a store read that began before a tenant was invalidated and ended after it is no longer cached,
   even for an instant. Before, its answer was written to the cache and then removed, and a lookup in between, such as
   one that builds the tenant's options, could read the copy the invalidation had replaced and keep what it built from
