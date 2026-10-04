@@ -762,7 +762,6 @@ public sealed class ManyToManyTests : IDisposable
         public List<Label> Labels { get; } = [];
     }
 
-    [SharedAcrossTenants]
     public sealed class Label
     {
         public int Id { get; set; }

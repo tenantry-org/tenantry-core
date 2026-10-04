@@ -321,8 +321,8 @@ Two more seams let a package fail closed:
   runs a command or saves. Throw `TenantNotResolvedException` or `TenantIsolationViolationException` from it.
   Tenantry's database-per-tenant guard is one.
 - `TenantModel` says which entity types a model isolates: `HasTenantOwnedEntityTypes`, `IsTenantOwned`,
-  `IsSharedAcrossTenants`, and `FindUnisolatedEntityTypes`, the types `UseTenantry()` refuses in a model with
-  tenant-owned types ([Entity types that are not tenant-owned](#entity-types-that-are-not-tenant-owned)).
+  `IsSharedAcrossTenants`, and `FindUnisolatedEntityTypes`, the types `OnUnmarkedEntityType = Reject` refuses in a
+  model with tenant-owned types ([Entity types that are not tenant-owned](#entity-types-that-are-not-tenant-owned)).
 
 ## What is and isn't isolated
 
