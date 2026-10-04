@@ -105,7 +105,7 @@ public sealed class UseTenantryRegistrationTests : IDisposable
 
         options.FindExtension<TenantryOptionsExtension>().Should().NotBeNull();
         options.FindExtension<CoreOptionsExtension>()!.Interceptors
-            .Should().BeEquivalentTo(new IInterceptor[] { TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance, TenantTransactionInterceptor.Instance });
+            .Should().BeEquivalentTo(new IInterceptor[] { TenantSaveChangesInterceptor.Instance, TenantQueryInterceptor.Instance }, "the save notices and the transaction hooks are services of EF Core's internal provider");
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class UseTenantryRegistrationTests : IDisposable
             .UseTenantry()
             .Options;
 
-        options.FindExtension<CoreOptionsExtension>()!.Interceptors.Should().HaveCount(3);
+        options.FindExtension<CoreOptionsExtension>()!.Interceptors.Should().HaveCount(2);
         contributor.Calls.Should().Be(1);
     }
 

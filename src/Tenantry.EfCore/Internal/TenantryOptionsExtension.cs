@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -28,8 +29,15 @@ internal sealed class TenantryOptionsExtension(EfCoreIsolationOptions? isolation
     public DbContextOptionsExtensionInfo Info => _info ??= new ExtensionInfo(this);
 
     // Replace rather than TryAdd: this may run before or after the database provider registers its own customizer.
-    public void ApplyServices(IServiceCollection services) =>
+    // The save's notices and the transaction and command hooks are interceptors of the internal service provider, first
+    // in its list: EF Core runs those before every interceptor added with AddInterceptors, so an application
+    // interceptor that throws from one of them cannot keep it from Tenantry (AtomicSave).
+    public void ApplyServices(IServiceCollection services)
+    {
         services.Replace(ServiceDescriptor.Singleton<IModelCustomizer, TenantModelCustomizer>());
+        services.Insert(0, ServiceDescriptor.Singleton<IInterceptor>(TenantTransactionInterceptor.Instance));
+        services.Insert(0, ServiceDescriptor.Singleton<IInterceptor>(TenantSaveNoticeInterceptor.Instance));
+    }
 
     // ReplaceService<IModelCustomizer, …>() is applied before the extensions, so this extension's customizer would
     // silently drop it (or, if it came last, the tenant filters would be lost). Refuse the combination instead.

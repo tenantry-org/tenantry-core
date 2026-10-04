@@ -58,16 +58,17 @@ namespace Tenantry.EfCore.Internal;
 /// <c>SaveChangesFailed</c> handler ran).
 /// </para>
 /// <para>
-/// A failed save is therefore counted as failed whenever any notice of its failure reaches Tenantry. Two sequences
-/// still confirm a failed save. Both need a nested save that sent statements and failed without any failure notice
-/// reaching Tenantry: no failed or cancelled command, no failed check seen by Tenantry's
-/// <c>ThrowingConcurrencyException</c>, and its <c>SaveChangesFailed</c> or <c>SaveChangesCanceled</c> notice stopped
-/// by an interceptor before Tenantry's that throws from it, or by a <c>SaveChangesFailed</c> handler added before
-/// Tenantry's that throws. In the first, an interceptor after Tenantry's runs that save from another's
-/// <c>SavingChanges</c> and swallows its failure, and the save around it sends statements and succeeds: its notices
-/// are those of a save stopped before sending followed by one that succeeded, which must commit. In the second, an
-/// interceptor before Tenantry's runs it from the <c>SavedChanges</c> of a save that sent nothing but whose result an
-/// interceptor set to more than zero (<c>SuppressWithResult</c>).
+/// A failed save is therefore counted as failed whenever any notice of its failure reaches Tenantry, and every notice
+/// does: Tenantry's save notices, command and transaction hooks are interceptors of EF Core's internal service
+/// provider (<see cref="TenantSaveNoticeInterceptor"/>, <see cref="TenantTransactionInterceptor"/>), which EF Core runs
+/// before every interceptor added with <c>AddInterceptors</c>, and any concurrency failure of a save that sent
+/// statements marks the ledger failed when it is raised, before an interceptor can suppress or replace it or a
+/// <c>SaveChangesFailed</c> handler subscribed before Tenantry's can throw. What still gets through: another options
+/// extension that inserts an interceptor ahead of Tenantry's in the internal service provider, which can throw from a
+/// notice before Tenantry's sees it; and a <see cref="DbUpdateConcurrencyException"/> thrown by application code from
+/// a <c>SavedChanges</c> hook or handler, which EF Core reports only through the <c>SaveChangesFailed</c> event, after
+/// every statement of the save ran and Tenantry confirmed it. That one is safe: the save's checks all held, and a
+/// handler that keeps the notice from Tenantry only keeps the confirmation standing, which is then right.
 /// </para>
 /// <para>
 /// A save sets back the settings it changed when it ends. A save that ended without Tenantry hearing of it (another
@@ -228,6 +229,22 @@ internal sealed class AtomicSave
             lease.Confirmed = null;
             Find(context, transaction)?.Fail(null);
         }
+    }
+
+    /// <summary>
+    /// Notes that a save of <paramref name="context"/> failed on a write that matched no row. That write was sent in the
+    /// transaction the context has now, so the transaction's ledger is marked failed, whether or not the write was a
+    /// check and whatever an interceptor then makes of the failure.
+    /// </summary>
+    public static void ConcurrencyFailed(DbContext context)
+    {
+        if (Find(context) is not { } lease)
+        {
+            return;
+        }
+
+        lease.Confirmed = null;
+        Find(context, context.Database.CurrentTransaction?.GetDbTransaction())?.Fail(null);
     }
 
     /// <summary>

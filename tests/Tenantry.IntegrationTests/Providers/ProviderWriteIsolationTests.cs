@@ -469,7 +469,8 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
         ProviderDog stub = new() { Id = id, TenantId = _globex, Detail = "acme detail" };
         db.Animals.Attach(stub);
         stub.Detail = "overwritten";
-        await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<InvalidOperationException>().WithMessage("translated");
+        // Tenantry throws the failed check before the application's interceptor can translate it.
+        await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
 
         db.ChangeTracker.Clear();
         db.Orders.Add(new ProviderOrder { Description = "after the hidden failure" });
