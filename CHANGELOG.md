@@ -23,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or event 1005 looks for `TenantRejectionReason.Inactive` or event 1012.
 - A class of your own that implements `ITenantInvalidator<TKey>` adds `InvalidateLocallyAsync` and
   `InvalidateAllLocallyAsync`.
-- Code that calls `TenantModel.FindUnisolatedEntityTypes` gets the roots of hierarchies only, and no owned or
-  many-to-many join entity types, which follow the types they belong to. `TenantModel.IsSharedAcrossTenants` is true
+- Code that calls `TenantModel.FindUnisolatedEntityTypes` gets the roots of hierarchies only, and no owned types or
+  many-to-many join entity types that hold only their two foreign keys, which follow the types they belong to. `TenantModel.IsSharedAcrossTenants` is true
   for a type whose base type is marked.
 
 ### Added

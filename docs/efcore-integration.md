@@ -386,7 +386,8 @@ public class CatalogueDbContext(DbContextOptions<CatalogueDbContext> options) : 
 
 The marker changes nothing in queries or saves, and marking a tenant-owned type fails the model check. A type follows
 the type it belongs to: a derived type its hierarchy's root, an owned type its owner, and the join entity of a
-many-to-many relationship the types it joins (when either is tenant-owned, it must be too). Keyless types, types
+many-to-many relationship the types it joins (when either is tenant-owned, it must be too). A join entity with
+properties or foreign keys beyond the two it joins by is classified like any other type. Keyless types, types
 mapped to a view and shared-type entity types (`SharedTypeEntity`) need a marker like any other; EF Core's
 migrations history table is not part of the model. For ASP.NET Core Identity's types, see
 [ASP.NET Core Identity](aspnetcore-identity.md#the-user-type-and-context).

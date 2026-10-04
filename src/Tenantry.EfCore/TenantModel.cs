@@ -88,8 +88,9 @@ public static class TenantModel
     /// <param name="model">The model, such as <c>context.Model</c>.</param>
     /// <remarks>
     /// It returns the types to mark, which are the roots of inheritance hierarchies. A derived type, an owned type and
-    /// the join entity type of a many-to-many relationship are left out: each follows the type it belongs to, its
-    /// hierarchy's root, its owner or the entity types it joins. <c>UseTenantry()</c> checks a model that has a
+    /// the join entity type of a many-to-many relationship that holds only the two foreign keys are left out: each
+    /// follows the type it belongs to, its hierarchy's root, its owner or the entity types it joins. A join entity type
+    /// with other properties or foreign keys is returned like any other. <c>UseTenantry()</c> checks a model that has a
     /// tenant-owned entity type against this list, as <see cref="EfCoreIsolationOptions.OnUnclassifiedEntityType"/>
     /// says.
     /// </remarks>
@@ -108,9 +109,17 @@ public static class TenantModel
         ];
     }
 
-    // The join entity type of a many-to-many relationship: a skip navigation goes through one of its foreign keys.
-    private static bool IsJoinEntityType(IReadOnlyEntityType entityType) =>
-        entityType.GetForeignKeys().Any(foreignKey => foreignKey.GetReferencingSkipNavigations().Any());
+    // The join entity type of a many-to-many relationship that holds nothing but the join: its foreign keys are the two
+    // its skip navigations go through, and every property is part of one of them. A join with data of its own, or
+    // with another foreign key, is an entity type like any other.
+    private static bool IsJoinEntityType(IReadOnlyEntityType entityType)
+    {
+        var foreignKeys = entityType.GetForeignKeys().ToList();
+
+        return foreignKeys.Count == 2 &&
+               foreignKeys.All(foreignKey => foreignKey.GetReferencingSkipNavigations().Any()) &&
+               entityType.GetProperties().All(property => foreignKeys.Any(foreignKey => foreignKey.Properties.Contains(property)));
+    }
 
     internal static bool IsMarked(IReadOnlyEntityType entityType) =>
         entityType.FindAnnotation(SharedAcrossTenantsAnnotation)?.Value is true ||

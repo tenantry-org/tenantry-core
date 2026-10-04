@@ -54,6 +54,16 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     }
 
     [Fact]
+    public async Task AJoinEntityWithDataOfItsOwn_IsClassifiedLikeAnyOther_AndAPureOneFollowsTheTypesItJoins()
+    {
+        await using var db = await CreateAsync<JoinsContext>();
+
+        TenantModel.FindUnisolatedEntityTypes(db.Model).Select(type => type.ClrType).Should().Equal(typeof(GroupRole));
+        await db.Awaiting(context => context.Set<GroupRole>().CountAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>().Where(e => e.Message.Contains("GroupRole"));
+    }
+
+    [Fact]
     public async Task AValueOutsideTheEnum_IsTreatedAsReject()
     {
         await using var db = await CreateAsync<UnclassifiedContext>(
@@ -233,6 +243,62 @@ public sealed class UnclassifiedEntityTypeTests : IDisposable
     {
         [MaxLength(64)]
         public string Name { get; set; } = string.Empty;
+    }
+
+    [SharedAcrossTenants]
+    public sealed class Group
+    {
+        public int Id { get; set; }
+
+        public List<Role> Roles { get; } = [];
+
+        public List<Role> Members { get; } = [];
+    }
+
+    [SharedAcrossTenants]
+    public sealed class Role
+    {
+        public int Id { get; set; }
+
+        public List<Group> Groups { get; } = [];
+
+        public List<Group> MemberOf { get; } = [];
+    }
+
+    // A join with data of its own, and a foreign key to a tenant-owned entity.
+    public sealed class GroupRole
+    {
+        public int GroupId { get; set; }
+
+        public int RoleId { get; set; }
+
+        [MaxLength(64)]
+        public string Note { get; set; } = string.Empty;
+
+        public int? OrderId { get; set; }
+    }
+
+    // A pure join: the two foreign keys and nothing else.
+    public sealed class GroupMember
+    {
+        public int GroupId { get; set; }
+
+        public int RoleId { get; set; }
+    }
+
+    private sealed class JoinsContext(DbContextOptions<JoinsContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Order>();
+            modelBuilder.Entity<Group>().HasMany(group => group.Roles).WithMany(role => role.Groups).UsingEntity<GroupRole>(
+                right => right.HasOne<Role>().WithMany().HasForeignKey(join => join.RoleId),
+                left => left.HasOne<Group>().WithMany().HasForeignKey(join => join.GroupId),
+                join => join.HasOne<Order>().WithMany().HasForeignKey(row => row.OrderId));
+            modelBuilder.Entity<Group>().HasMany(group => group.Members).WithMany(role => role.MemberOf).UsingEntity<GroupMember>(
+                right => right.HasOne<Role>().WithMany().HasForeignKey(join => join.RoleId),
+                left => left.HasOne<Group>().WithMany().HasForeignKey(join => join.GroupId));
+        }
     }
 
     private sealed class UnclassifiedContext(DbContextOptions<UnclassifiedContext> options) : DbContext(options)
