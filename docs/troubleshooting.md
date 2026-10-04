@@ -21,6 +21,12 @@ no request would have a tenant. Add it where [Pipeline ordering](aspnetcore-inte
 The access validators run in `app.UseTenantry()`, so without it no tenant would be checked. Add `app.UseTenantry()`
 after `app.UseAuthentication()`. See [Authentication per tenant](authentication-per-tenant.md).
 
+## Startup fails with "app.UseAuthorization() is between app.UseTenantResolution() and app.UseTenantry()"
+
+Authorization there would run on the tenant the request names, before the access validators check it, so a policy
+that reads the tenant could let in a caller who may not use it. Call `app.UseAuthorization()` after
+`app.UseTenantry()`. See [Authentication per tenant](authentication-per-tenant.md).
+
 ## Registration fails with "A tenant store is already registered" or "already registered with tenant key type"
 
 An application has one store and one tenant key type. Remove the second `UseStore`/`UseInMemoryStore` (or the
@@ -182,6 +188,12 @@ context, or leave it to `UseTenantry()`. See
 The request reached its endpoint without passing `app.UseTenantry()`, so its tenant was never checked, and the
 endpoint did not run. Call `app.UseTenantry()` in every branch of the pipeline, where
 [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering) says.
+
+## Every request returns `500` after `UseTenantResolution()` (event 1013)
+
+The authorization middleware runs between `app.UseTenantResolution()` and `app.UseTenantry()`, so it would authorize
+on a tenant the access validators have not checked, and the request is refused. It was added some other way than
+`app.UseAuthorization()`, which would have failed the start. Move it after `app.UseTenantry()`.
 
 ## Authentication ignores the tenant's settings (event 1010)
 

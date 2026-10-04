@@ -23,6 +23,7 @@ between versions, so you can alert on it. Alert on 2001 above all: a save that t
 | 1010 | `TenantResolutionAfterAuthentication` | Warning | `app.UseTenantResolution()` ran after the authentication middleware, so authentication used no tenant's settings. Logged once. |
 | 1011 | `TenantryDidNotRun` | Error | `app.UseTenantResolution()` resolved a request, but `app.UseTenantry()` did not run before its endpoint, which was not run (500). |
 | 1012 | `TenantInactive` | Warning | A request's tenant is not active (`ValidateTenantActivity`). |
+| 1013 | `AuthorizationBeforeTenantry` | Error | The authorization middleware ran after `app.UseTenantResolution()` and before `app.UseTenantry()`, so it saw a tenant the access validators had not checked. The request was refused (500). |
 | 2001 | `TenantIsolationViolation` | Error | `SaveChanges` refused to write an entity of another tenant. |
 | 2002 | `WriteWithoutTenant` | Warning | `SaveChanges` wrote tenant-owned entities without a tenant, under `OnMissingTenant = Warn`. |
 | 2003 | `WriteMatchedNoRow` | Warning | An update or delete of a tenant-owned entity matched no row: it does not exist, belongs to another tenant, or changed concurrently. |

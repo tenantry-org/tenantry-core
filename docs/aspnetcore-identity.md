@@ -95,6 +95,21 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 The validator lets an anonymous caller through, so the sign-in page has its tenant current and finds the tenant's
 users. Resolve the tenant from the request (its host or route), not from a claim, since nobody is signed in yet.
 
+## Pipeline order
+
+The cookie handler checks a signed-in user's security stamp against the store during authentication, every
+`SecurityStampValidatorOptions.ValidationInterval` (30 minutes by default), so the tenant must be current before
+authentication: with no tenant, the tenant-owned user is not found and the user is signed out. Resolve it with
+`app.UseTenantResolution()`, and authorize after `app.UseTenantry()`, so no policy sees a tenant the validator has not
+checked ([Authentication per tenant](authentication-per-tenant.md)):
+
+```csharp
+app.UseTenantResolution();
+app.UseAuthentication();
+app.UseTenantry();
+app.UseAuthorization();
+```
+
 ## See also
 
 - [Authentication per tenant](authentication-per-tenant.md)

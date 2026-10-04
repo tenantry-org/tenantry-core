@@ -6,6 +6,7 @@ using AwesomeAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -229,6 +230,79 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task APolicyThatReadsTheTenant_SeesOnlyATenantTheValidatorsAllow_WithAuthorizationAfterUseTenantry()
+    {
+        await using var app = await StartPremiumAsync(a =>
+        {
+            a.UseTenantResolution();
+            a.UseAuthentication();
+            a.UseTenantry();
+            a.UseAuthorization();
+        });
+
+        // Globex is premium, but this caller's token names Acme: the validator refuses Globex, so the policy sees none.
+        (await GetPremium(app, "globex", claim: "acme")).Should().Be(HttpStatusCode.Forbidden);
+        (await GetPremium(app, "globex", claim: "globex")).Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task UseAuthorization_BetweenUseTenantResolutionAndUseTenantry_FailsTheApplicationsStart()
+    {
+        // In this order the policy would see Globex before the validator refused it, and let the Acme caller in.
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddTenantry<string>(PremiumTenants);
+        AddPremiumPolicy(builder.Services);
+        await using var app = builder.Build();
+        app.UseTenantResolution();
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        var useTenantry = () => app.UseTenantry();
+
+        useTenantry.Should().Throw<InvalidOperationException>().WithMessage("*UseAuthorization()*after app.UseTenantry()*");
+    }
+
+    [Fact]
+    public async Task AuthorizationTheStartupCheckCannotSee_BeforeUseTenantry_RefusesTheRequest()
+    {
+        RecordingLoggerProvider logs = new();
+        await using var app = await StartPremiumAsync(
+            a =>
+            {
+                a.UseTenantResolution();
+                a.UseAuthentication();
+                // Authorization added another way (a library's middleware, say), which the startup check does not see.
+                a.UseMiddleware<AuthorizationMiddleware>();
+                a.UseTenantry();
+                a.UseAuthorization();
+            },
+            logs);
+
+        (await GetPremium(app, "globex", claim: "acme")).Should().Be(HttpStatusCode.InternalServerError);
+        (await GetPremium(app, "globex", claim: "globex")).Should().Be(HttpStatusCode.InternalServerError);
+        logs.For(1013).Should().HaveCount(2).And.AllSatisfy(e => e.Message.Should().Contain("/premium"));
+    }
+
+    [Fact]
+    public async Task AspNetCoresAuthorizationMarkers_AreTheOnesTheOrderChecksRead()
+    {
+        // Both keys are ASP.NET Core's own, undocumented: WebApplication reads the first, the endpoint middleware the
+        // second. If either changes, the order checks above stop working, and this test says why.
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddAuthorization();
+        await using var app = builder.Build();
+        app.UseAuthorization();
+        app.MapGet("/marker", (HttpContext http) => http.Items["__AuthorizationMiddlewareWithEndpointInvoked"] is not null);
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        ((IApplicationBuilder)app).Properties.Should().ContainKey("__AuthorizationMiddlewareSet");
+        using var client = app.GetTestClient();
+        (await client.GetStringAsync("/marker", TestContext.Current.CancellationToken)).Should().Be("true");
+    }
+
+    [Fact]
     public async Task UseTenantResolution_AfterAuthentication_IsLoggedOnce()
     {
         RecordingLoggerProvider logs = new();
@@ -343,6 +417,40 @@ public sealed class AuthenticationPerTenantTests
             IssuerSigningKey = Keys[issuer],
             NameClaimType = "sub",
         };
+    }
+
+    // A header names the tenant, the token's claim must list it, and a policy that reads the current tenant lets in only
+    // Globex's requests: /premium requires the policy, and no tenant.
+    private static void PremiumTenants(ITenantBuilder<string> tenant) =>
+        tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme, Globex]).ValidateTenantAccessByClaim("tenant_id");
+
+    private static void AddPremiumPolicy(IServiceCollection services)
+    {
+        AddJwt(services);
+        services.AddAuthorizationBuilder().AddPolicy("PremiumTenant", policy => policy.RequireAssertion(context =>
+            context.Resource is HttpContext http &&
+            http.RequestServices.GetRequiredService<ITenantContext<string>>().CurrentTenantId == "globex"));
+    }
+
+    private static Task<WebApplication> StartPremiumAsync(Action<WebApplication> pipeline, RecordingLoggerProvider? logs = null) =>
+        StartAsync(
+            PremiumTenants,
+            AddPremiumPolicy,
+            a =>
+            {
+                pipeline(a);
+                a.MapGet("/premium", () => "premium").RequireAuthorization("PremiumTenant");
+            },
+            logs);
+
+    private static async Task<HttpStatusCode> GetPremium(WebApplication app, string tenant, string claim)
+    {
+        using var client = app.GetTestClient();
+        using HttpRequestMessage request = new(HttpMethod.Get, "http://localhost/premium");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token("default", "alice", tenantClaim: claim));
+        request.Headers.Add("X-Tenant-Id", tenant);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        return response.StatusCode;
     }
 
     private static Task<WebApplication> StartJwtAsync(Action<ITenantBuilder<string>>? more = null) =>

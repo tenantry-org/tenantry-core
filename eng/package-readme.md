@@ -13,7 +13,7 @@ builder.Services.AddDbContext<AppDbContext>(options => options
     .UseTenantry());                            // how data is isolated
 
 app.UseAuthentication();
-app.UseAuthorization();
+app.UseAuthorization();                         // first, for 401s; after UseTenantry() with UseTenantResolution()
 app.UseTenantry();
 ```
 

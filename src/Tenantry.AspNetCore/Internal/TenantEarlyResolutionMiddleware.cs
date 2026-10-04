@@ -42,7 +42,10 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
         }
 
         var resolved = await resolution.ResolveAsync(context, beforeAuthentication: true).ConfigureAwait(false);
-        EarlyTenantResolution<TKey> early = new(resolved);
+        EarlyTenantResolution<TKey> early = new(resolved)
+        {
+            AuthorizedBefore = context.Items.ContainsKey(AuthorizationMarkers.MiddlewareRan),
+        };
         context.Features.Set(early);
 
         var previous = context.Features.Get<IEndpointFeature>();

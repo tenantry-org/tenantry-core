@@ -67,6 +67,16 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
+        // Authorization that ran after app.UseTenantResolution() made the tenant current, and before the access
+        // validators checked it, ran on a tenant the caller may not use, and may have let the request through.
+        if (context.Features.Get<EarlyTenantResolution<TKey>>() is { Completed: false, AuthorizedBefore: false } &&
+            context.Items.ContainsKey(AuthorizationMarkers.MiddlewareRan))
+        {
+            TenantResolutionLog.AuthorizationBeforeTenantry(_logger, context.Request.Method, context.Request.Path);
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            return;
+        }
+
         context.Features.Set(TenantResolutionFeature.Instance);
 
         // Captured first: the resolution's own activity is the current one while it runs.

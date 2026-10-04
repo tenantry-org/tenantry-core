@@ -88,6 +88,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthentication();
 // Authorization before Tenantry, so an anonymous caller gets 401 rather than 403: no policy here needs the tenant.
+// With UseTenantResolution() (authentication settings per tenant), authorization goes after UseTenantry() instead.
 app.UseAuthorization();
 app.UseTenantry();
 

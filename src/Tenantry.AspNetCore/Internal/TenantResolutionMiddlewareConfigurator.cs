@@ -34,10 +34,24 @@ internal sealed class TenantResolutionMiddlewareConfigurator<TKey> : ITenantReso
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupFilter, TenantryPipelineCheck>());
     }
 
+    // Whether app.UseAuthorization() was in the pipeline when app.UseTenantResolution() was added.
+    private const string AuthorizationBeforeEarlyResolutionKey = "Tenantry.AuthorizationBeforeEarlyResolution";
+
     // Checks the registration when the pipeline is built, so a web application fails as it starts.
     public IApplicationBuilder Use(IApplicationBuilder app)
     {
         CheckRegistration(app);
+
+        // Authorization between the two steps would run on a tenant the access validators have not checked.
+        if (app.Properties.TryGetValue(AuthorizationBeforeEarlyResolutionKey, out var before) && before is false &&
+            app.Properties.ContainsKey(AuthorizationMarkers.MiddlewareAdded))
+        {
+            throw new InvalidOperationException(
+                "app.UseAuthorization() is between app.UseTenantResolution() and app.UseTenantry(), so authorization " +
+                "would run on a tenant the access validators have not checked. Call app.UseAuthorization() after " +
+                "app.UseTenantry().");
+        }
+
         app.ApplicationServices.GetRequiredService<TenantryPipeline>().HasMiddleware = true;
 
         return app.UseMiddleware<TenantResolutionMiddleware<TKey>>();
@@ -47,6 +61,8 @@ internal sealed class TenantResolutionMiddlewareConfigurator<TKey> : ITenantReso
     {
         CheckRegistration(app);
         app.ApplicationServices.GetRequiredService<TenantryPipeline>().HasEarlyResolution = true;
+        var authorizationBefore = app.Properties.ContainsKey(AuthorizationMarkers.MiddlewareAdded);
+        app.Properties[AuthorizationBeforeEarlyResolutionKey] = authorizationBefore;
 
         return app.UseMiddleware<TenantEarlyResolutionMiddleware<TKey>>();
     }

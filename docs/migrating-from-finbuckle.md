@@ -135,11 +135,19 @@ app.UseAuthorization();
 app.UseTenantry();
 ```
 
-`UseTenantry()` goes after `UseAuthentication()`, and after `UseAuthorization()` unless a policy needs the tenant.
-Finbuckle's claim strategy authenticated the request itself; `ResolveFromClaim` reads `HttpContext.User`, which the
-authentication middleware sets ([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). If your authentication settings differ per tenant
+`UseTenantry()` goes after `UseAuthentication()`, and, without `UseTenantResolution()`, after `UseAuthorization()`
+unless a policy needs the tenant. Finbuckle's claim strategy authenticated the request itself; `ResolveFromClaim` reads
+`HttpContext.User`, which the authentication middleware sets
+([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). If your authentication settings differ per tenant
 (Finbuckle's `WithPerTenantAuthentication()`), also call `UseTenantResolution()` before `UseAuthentication()`, where
-`UseMultiTenant()` was (step 6).
+`UseMultiTenant()` was (step 6), and move `UseAuthorization()` after `UseTenantry()`:
+
+```csharp
+app.UseTenantResolution();
+app.UseAuthentication();
+app.UseTenantry();
+app.UseAuthorization();
+```
 
 `ShortCircuitWhenTenantNotResolved()` ended the request without an error status. `RequireTenantByDefault()` answers
 `400` when the request names no tenant, `404` when it names an unknown one and `403` when the tenant is refused
@@ -283,7 +291,8 @@ changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a sin
 
 `WithPerTenantAuthentication()` becomes `ConfigurePerTenant` on each scheme's options, such as
 `Configure<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before
-`app.UseAuthentication()`, so the tenant is known when the scheme authenticates. A tenant's own challenge scheme becomes
+`app.UseAuthentication()`, so the tenant is known when the scheme authenticates, with `app.UseAuthorization()` after
+`app.UseTenantry()`. A tenant's own challenge scheme becomes
 a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)). Finbuckle
 also refused a cookie signed in under another tenant. To keep that check, add the tenant id as a claim when the user
 signs in, and validate it with `ValidateTenantAccessByClaim`. A request for another tenant then gets `403` where a
@@ -326,7 +335,7 @@ type is not tenant-owned ([the list](efcore-advanced.md#models-that-cannot-be-is
 3. Your tenant type implements `ITenantDescriptor<string>`, and the store maps identifiers in `FindByIdentifierAsync`.
 4. The resolvers read the header, claim or route value your clients already send.
 5. `UseTenantry()` runs after `UseAuthentication()`, and, with per-tenant authentication, `UseTenantResolution()`
-   before it.
+   before it and `UseAuthorization()` after `UseTenantry()`.
 6. Tenant-owned entities implement `ITenantEntity<string>`, and each context is a plain `DbContext` registered with
    `UseTenantry()`.
 7. Keys and indexes that Finbuckle adjusted are declared, and the new migration has no operations.

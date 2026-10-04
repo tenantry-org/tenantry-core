@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the tenant resolved from the request with no access validator). Fix the code, or set the rule's severity in
   `.editorconfig` where the code is meant (`dotnet_diagnostic.TNY1002.severity = none`). TNY1003, TNY3001 and TNY3002
   are info.
+- With `app.UseTenantResolution()`, an application whose `app.UseAuthorization()` is between it and `app.UseTenantry()`
+  now fails to start: authorization there ran on the tenant the request names, before the access validators checked
+  it, so a policy that reads the tenant could let in a caller who may not use it. Move `app.UseAuthorization()` after
+  `app.UseTenantry()`. The authorization middleware added there some other way refuses each request with `500` and
+  event 1013 (`AuthorizationBeforeTenantry`).
 - `ITenantContextSetter<TKey>.Use(tenant)` is now `MakeCurrent(tenant)`, and `UseNoTenant()` is
   `MakeNoTenantCurrent()`. Replace `.Use(` with `.MakeCurrent(` where it is called on the tenant context, and
   `UseNoTenant` with `MakeNoTenantCurrent`. A class of your own that implements the interface renames both methods.

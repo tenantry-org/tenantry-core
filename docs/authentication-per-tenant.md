@@ -32,19 +32,26 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 `Configure` and before the handler's own post-configuration, which builds the scheme's metadata manager and data
 protector from them.
 
-Then resolve the tenant before authentication, and check it after:
+Then resolve the tenant before authentication, check it after, and authorize last:
 
 ```csharp
 var app = builder.Build();
 
 app.UseTenantResolution();   // finds the tenant and makes it current
 app.UseAuthentication();     // authenticates with the tenant's settings
-app.UseAuthorization();      // so an anonymous caller gets 401
 app.UseTenantry();           // runs the access validators, then rejects or continues
+app.UseAuthorization();      // sees only a tenant the validators allowed
 ```
 
-Call `app.UseAuthentication()` yourself: the one `WebApplication` adds on its own runs before your middleware, so it
-would authenticate with no tenant's settings (event 1010 warns of this).
+Call `app.UseAuthentication()` and `app.UseAuthorization()` yourself: the ones `WebApplication` adds on its own run
+before your middleware, so authentication would use no tenant's settings (event 1010 warns of this).
+
+Authorization comes after `app.UseTenantry()` in this order, so an anonymous caller to an endpoint that requires a
+tenant gets the tenant's rejection (`403` when an access validator refuses it) rather than `401`. Before
+`app.UseTenantry()`, an authorization policy that reads the tenant would see the one the request names before the
+validators refuse it, and could let the caller in. The application fails to start if `app.UseAuthorization()` is
+between `app.UseTenantResolution()` and `app.UseTenantry()`. If the authorization middleware is added there some
+other way, each request it runs for gets `500` and log event 1013.
 
 ## How the two steps work
 
@@ -59,7 +66,7 @@ require a tenant are rejected as usual.
 
 Between the two, the tenant is current but not yet checked against the user. So:
 
-- Put only `app.UseAuthentication()` between them.
+- Put only `app.UseAuthentication()` between them, and `app.UseAuthorization()` after `app.UseTenantry()`.
 - A tenant the validators refuse is not current for the rest of the request.
 - An endpoint the request reaches without passing `app.UseTenantry()` (in a branch, say) does not run: it gets `500`
   and log event 1011.

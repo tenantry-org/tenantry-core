@@ -78,4 +78,11 @@ internal static partial class TenantResolutionLog
         "app.UseTenantry() after app.UseAuthentication(), in every branch",
         EventName = "TenantryDidNotRun")]
     public static partial void TenantryDidNotRun(ILogger logger, string method, string path);
+
+    [LoggerMessage(1013, LogLevel.Error,
+        "The authorization middleware ran for request {Method} {Path} after app.UseTenantResolution() and before " +
+        "app.UseTenantry(), so it saw a tenant the access validators had not checked. The request was refused (500). " +
+        "Call app.UseAuthorization() after app.UseTenantry()",
+        EventName = "AuthorizationBeforeTenantry")]
+    public static partial void AuthorizationBeforeTenantry(ILogger logger, string method, string path);
 }

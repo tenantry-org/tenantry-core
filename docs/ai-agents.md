@@ -27,9 +27,11 @@ the tenant and keeps caches and options per tenant, but nothing keeps your data 
 5. Register Tenantry with a resolver, a store, and an access validator. A resolver that reads the request (a header,
    a route value, the query string, the host or subdomain) lets any caller name any tenant, so check the tenant
    against the authenticated user.
-6. Add `app.UseTenantry()` after `app.UseAuthentication()`, and before the endpoints. Put it after
-   `app.UseAuthorization()` too, so an anonymous caller gets 401 rather than 403, unless an authorization policy needs
-   the tenant: then put it before `app.UseAuthorization()`.
+6. Add `app.UseTenantry()` after `app.UseAuthentication()`, and before the endpoints. Without
+   `app.UseTenantResolution()`, put it after `app.UseAuthorization()` too, so an anonymous caller gets 401 rather than
+   403, unless an authorization policy needs the tenant: then put it before `app.UseAuthorization()`. With
+   `app.UseTenantResolution()` (authentication settings per tenant), `app.UseAuthorization()` always comes after
+   `app.UseTenantry()`.
 
 ```csharp
 using Microsoft.EntityFrameworkCore;

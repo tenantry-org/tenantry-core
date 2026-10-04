@@ -169,4 +169,7 @@ internal sealed class EarlyTenantResolution<TKey>(TenantResolution<TKey> resolut
 
     /// <summary>Whether <c>app.UseTenantry()</c> has run its access validators on it.</summary>
     public bool Completed { get; set; }
+
+    /// <summary>Whether the authorization middleware ran for the request before <c>app.UseTenantResolution()</c>.</summary>
+    public bool AuthorizedBefore { get; init; }
 }

@@ -145,12 +145,15 @@ it.
 ## Pipeline ordering
 
 Call `UseTenantry()` after `UseAuthentication()`, so the access validators and `ResolveFromClaim` see the user, and
-before anything that needs the tenant: your endpoints and EF Core work driven by the request. Put it after
-`UseAuthorization()` too, so an anonymous caller gets 401 rather than 403, unless an authorization policy needs the
-tenant: then put it before `UseAuthorization()`. Either way it comes after routing, so it sees endpoint metadata
-(`WebApplication` adds routing first; a custom pipeline must call `UseRouting()` before `UseTenantry()`). For
-authentication settings that differ per tenant, also call `UseTenantResolution()` before `UseAuthentication()`: see
-[Authentication per tenant](authentication-per-tenant.md).
+before anything that needs the tenant: your endpoints and EF Core work driven by the request. Without
+`UseTenantResolution()`, put it after `UseAuthorization()` too, so an anonymous caller gets 401 rather than 403, unless
+an authorization policy needs the tenant: then put it before `UseAuthorization()`. Either way it comes after routing,
+so it sees endpoint metadata (`WebApplication` adds routing first; a custom pipeline must call `UseRouting()` before
+`UseTenantry()`).
+
+For authentication settings that differ per tenant, call `UseTenantResolution()` before `UseAuthentication()`, and
+then `UseAuthorization()` always comes after `UseTenantry()`, so no policy sees a tenant the access validators have not
+checked: see [Authentication per tenant](authentication-per-tenant.md).
 
 If the middleware runs before routing, a request without a tenant to an endpoint that requires one is still
 rejected, but `RequireTenantByDefault()` then applies to `AllowMissingTenant()` endpoints too, and route values are
@@ -159,11 +162,11 @@ middleware logs each mistake once ([event ids](diagnostics.md#logs) 1007 and 100
 after the middleware, such as authorization with a scheme that is not the default, is not seen by `ResolveFromClaim`
 either, and is not warned about: make that scheme the default.
 
-A typical order:
+A typical order, without `UseTenantResolution()`:
 
 ```csharp
 app.UseAuthentication();
-app.UseAuthorization();   // first, so an anonymous caller gets 401
+app.UseAuthorization();   // first, so an anonymous caller gets 401 (not with UseTenantResolution())
 app.UseTenantry();        // resolves the tenant (reads User if using claims; reads endpoint metadata)
 app.MapControllers();     // or minimal API endpoints
 ```

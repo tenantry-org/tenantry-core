@@ -19,11 +19,12 @@ public static class TenantryApplicationBuilderExtensions
     /// Call it after routing, because it reads <c>RequireTenant()</c> and <c>AllowMissingTenant()</c>
     /// (<see cref="WebApplication"/> adds routing first). Call it before anything that needs the tenant. After
     /// <see cref="UseTenantResolution"/>, it runs the access validators on the tenant found before authentication, and
-    /// the claim resolvers if nothing else named a tenant.
+    /// the claim resolvers if nothing else named a tenant; <c>app.UseAuthorization()</c> then comes after it.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// Tenantry is not registered with a way to resolve requests (a <c>ResolveFrom…</c> or <c>UseResolver</c>
-    /// method in <c>AddTenantry</c>), or no tenant store is registered.
+    /// method in <c>AddTenantry</c>), or no tenant store is registered, or <c>app.UseAuthorization()</c> is between
+    /// <see cref="UseTenantResolution"/> and this call.
     /// </exception>
     public static IApplicationBuilder UseTenantry(this IApplicationBuilder app)
     {
@@ -43,8 +44,10 @@ public static class TenantryApplicationBuilderExtensions
     /// Call it before <c>app.UseAuthentication()</c>, and <see cref="UseTenantry"/> after it, which runs the access
     /// validators, and the claim resolvers if nothing else named a tenant, then rejects or continues as it does alone.
     /// Between the two, the tenant is current but not yet checked against the user, so put only
-    /// <c>app.UseAuthentication()</c> between them. An endpoint whose request did not pass through
-    /// <see cref="UseTenantry"/> after this does not run: it gets <c>500</c> and log event 1011.
+    /// <c>app.UseAuthentication()</c> between them, and <c>app.UseAuthorization()</c> after <see cref="UseTenantry"/>,
+    /// so no authorization policy sees a tenant the access validators have not checked. An endpoint whose request did
+    /// not pass through <see cref="UseTenantry"/> after this does not run: it gets <c>500</c> and log event 1011. A
+    /// request the authorization middleware ran for between the two gets <c>500</c> and log event 1013.
     /// </para>
     /// <para>
     /// Only the resolvers added before the first that needs the user (a claim resolver, or
@@ -55,7 +58,8 @@ public static class TenantryApplicationBuilderExtensions
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// Tenantry is not registered with a way to resolve requests, or no tenant store is registered. The application
-    /// also fails to start if <see cref="UseTenantry"/> is not in the pipeline.
+    /// also fails to start if <see cref="UseTenantry"/> is not in the pipeline, or if <c>app.UseAuthorization()</c> is
+    /// between the two.
     /// </exception>
     /// <example>
     /// <code>
