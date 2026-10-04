@@ -40,6 +40,25 @@ public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : Pro
 
         (await DogDetailAsync(id)).Should().Be("acme detail");
     }
+
+    [Fact]
+    public async Task InATransactionWithMultipleActiveResultSets_AFailedSaveTenantryIsNotToldOf_IsNotConfirmedByALaterSaveThatSavesAgain()
+    {
+        var id = await AddDogAsync(Acme, "acme detail");
+        var options = WithHiddenFailureAndNestedSave(new DbContextOptionsBuilder<ProviderOrdersContext>()
+            .UseSqlServer(new SqlConnectionStringBuilder(fixture.ConnectionString) { MultipleActiveResultSets = true }.ConnectionString));
+
+        using (Tenants.Use(Tenant(Globex)))
+        {
+            await using ProviderOrdersContext db = new(options);
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await SaveHiddenFailureThenSaveAgainAsync(db, id);
+
+            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        }
+
+        (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
 }
 
 public sealed class PostgreSqlWriteIsolationTests(PostgreSqlFixture fixture) : ProviderWriteIsolationTests(fixture)
@@ -283,6 +302,90 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task InATransactionScope_AFailedSaveTenantryIsNotToldOf_IsNotConfirmedByALaterSaveThatSavesAgain()
+    {
+        // An interceptor before Tenantry's hides the forged save's failure. The next save saves again from SavedChanges,
+        // and an interceptor after Tenantry's throws from that nested save's SavedChanges, so EF Core reports it as
+        // saved and then as failed. The scope is still rolled back.
+        var id = await AddDogAsync(_acme, "acme detail");
+        DbContextOptionsBuilder<ProviderOrdersContext> provider = new();
+        _fixture.UseProvider(provider);
+        var options = WithHiddenFailureAndNestedSave(provider);
+
+        var act = async () =>
+        {
+            using TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled);
+
+            using (_tenants.Use(Tenant(_globex)))
+            {
+                await using ProviderOrdersContext db = new(options);
+                await SaveHiddenFailureThenSaveAgainAsync(db, id);
+            }
+
+            scope.Complete();
+        };
+
+        (await act.Should().ThrowAsync<TransactionAbortedException>()).WithInnerException<TenantIsolationViolationException>();
+        (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+
+    [Fact]
+    public async Task InATransactionScope_ASaveStoppedBeforeItSentAnything_DoesNotStopTheScope()
+    {
+        var id = await AddDogAsync(_acme, "acme detail");
+        DbContextOptionsBuilder<ProviderOrdersContext> provider = new();
+        _fixture.UseProvider(provider);
+        var options = provider
+            .UseApplicationServiceProvider(_services)
+            .UseTenantry()
+            .AddInterceptors(new StopFirstSave())
+            .Options;
+
+        using (TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled))
+        {
+            using (_tenants.Use(Tenant(_acme)))
+            {
+                await using ProviderOrdersContext db = new(options);
+                (await db.Animals.OfType<ProviderDog>().SingleAsync(d => d.Id == id, TestContext.Current.CancellationToken)).Detail = "changed";
+                await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<InvalidOperationException>().WithMessage("stopped");
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+
+            scope.Complete();
+        }
+
+        (await DogDetailAsync(id)).Should().Be("changed");
+    }
+
+    // Options with interceptors around Tenantry's: one before that hides the first failed save, one before that saves
+    // an order again once a save succeeds, and one after that throws from that nested save's SavedChanges.
+    protected DbContextOptions<ProviderOrdersContext> WithHiddenFailureAndNestedSave(DbContextOptionsBuilder<ProviderOrdersContext> provider)
+    {
+        SaveAgainWhenSaved again = new();
+
+        return provider
+            .UseApplicationServiceProvider(_services)
+            .AddInterceptors(new HideFirstFailure(), again)
+            .UseTenantry()
+            .AddInterceptors(new ThrowWhenSaved(() => again.Saving))
+            .Options;
+    }
+
+    // A forged update of another tenant's dog in its derived table, whose failure HideFirstFailure keeps from Tenantry,
+    // then the tenant's own order, saved through the same context.
+    protected async Task SaveHiddenFailureThenSaveAgainAsync(ProviderOrdersContext db, int id)
+    {
+        ProviderDog stub = new() { Id = id, TenantId = _globex, Detail = "acme detail" };
+        db.Animals.Attach(stub);
+        stub.Detail = "overwritten";
+        await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<InvalidOperationException>().WithMessage("translated");
+
+        db.ChangeTracker.Clear();
+        db.Orders.Add(new ProviderOrder { Description = "after the hidden failure" });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
     public async Task InATransactionScope_TheTenantsOwnSaveOfADerivedTable_Commits()
     {
         // Tenantry's vote must not turn the connection's single-phase commit into a two-phase one, which PostgreSQL
@@ -499,4 +602,95 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
     }
 
     protected static TenantDescriptor<string> Tenant(string id) => new() { TenantId = id, Name = id };
+
+    // Keeps the first failed save from the interceptors after it: a concurrency failure becomes an exception of its own,
+    // and the failure is then translated, as EntityFramework.Exceptions does.
+    private sealed class HideFirstFailure : SaveChangesInterceptor
+    {
+        private bool _hidden;
+
+        public override ValueTask<InterceptionResult> ThrowingConcurrencyExceptionAsync(
+            ConcurrencyExceptionEventData eventData,
+            InterceptionResult result,
+            CancellationToken cancellationToken = default) =>
+            _hidden ? ValueTask.FromResult(result) : throw new InvalidOperationException("the application's own");
+
+        public override Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (!_hidden)
+            {
+                _hidden = true;
+                throw new InvalidOperationException("translated");
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    // Saves an order of its own through the context once the first save of the context's has succeeded, and swallows
+    // an exception another interceptor throws from that save's SavedChanges.
+    private sealed class SaveAgainWhenSaved : SaveChangesInterceptor
+    {
+        private bool _done;
+
+        public bool Saving { get; private set; }
+
+        public override async ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_done && eventData.Context is ProviderOrdersContext context)
+            {
+                _done = true;
+                Saving = true;
+                context.Orders.Add(new ProviderOrder { Description = "saved again" });
+
+                try
+                {
+                    await context.SaveChangesAsync(cancellationToken);
+                }
+                catch (InvalidOperationException)
+                {
+                    // ThrowWhenSaved threw once the order was saved.
+                }
+                finally
+                {
+                    Saving = false;
+                }
+            }
+
+            return result;
+        }
+    }
+
+    // Throws from SavedChanges while the condition holds, so EF Core reports that save as failed after it succeeded.
+    private sealed class ThrowWhenSaved(Func<bool> condition) : SaveChangesInterceptor
+    {
+        public override ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default) =>
+            condition() ? throw new InvalidOperationException("thrown when saved") : ValueTask.FromResult(result);
+    }
+
+    // A SavingChanges interceptor after Tenantry's that stops the first save before it sends anything.
+    private sealed class StopFirstSave : SaveChangesInterceptor
+    {
+        private bool _stopped;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (_stopped)
+            {
+                return ValueTask.FromResult(result);
+            }
+
+            _stopped = true;
+            throw new InvalidOperationException("stopped");
+        }
+    }
 }
