@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
@@ -734,6 +735,43 @@ public sealed class AtomicSaveTests : IDisposable
     }
 
     [Fact]
+    public void ContextsOpeningOneAmbientTransactionAtOnce_ShareOneLedger()
+    {
+        // The first context's save relies on a check and sends a statement that is never confirmed, so each scope must
+        // be rolled back, whichever context opened the transaction's ledger.
+        var options = Options<AtomicContext>(_tenant.As("acme"), new Setup { Ambient = true });
+        var completed = 0;
+
+        for (var i = 0; i < 1000; i++)
+        {
+            using AtomicContext first = new(options);
+            using AtomicContext second = new(options);
+            using Barrier barrier = new(2);
+
+            try
+            {
+                using TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled);
+                Thread other = new(() => StartAt(barrier, second));
+                other.Start();
+                StartAt(barrier, first);
+                other.Join();
+
+                AtomicSave.Guard(first, new HashSet<object>(), insertsAreChecks: true, SaveWithoutTransactionBehavior.UseTransaction, NullLogger.Instance);
+                AtomicSave.Sending(first, null);
+                scope.Complete();
+            }
+            catch (TransactionAbortedException)
+            {
+                continue;
+            }
+
+            completed++;
+        }
+
+        completed.Should().Be(0);
+    }
+
+    [Fact]
     public async Task ASaveStoppedBeforeItSentAnything_LetsItsEntitiesGo_OnceALaterSaveLeavesNothingToSave()
     {
         await SeedAcmeAsync();
@@ -1457,6 +1495,12 @@ public sealed class AtomicSaveTests : IDisposable
         {
             return false;
         }
+    }
+
+    private static void StartAt(Barrier barrier, DbContext context)
+    {
+        barrier.SignalAndWait();
+        AtomicSave.Start(context);
     }
 
     // A forged save that StopFirstSave stops after Tenantry's interceptor noted it: a weak reference to its stub.

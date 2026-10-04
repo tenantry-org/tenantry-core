@@ -371,15 +371,12 @@ internal sealed class AtomicSave
 
     private static Ledger Open(DbContext context, object transaction)
     {
-        if (!Ledgers.TryGetValue(transaction, out var ledger))
-        {
-            ledger = new Ledger(context.GetType().Name);
-            Ledgers.AddOrUpdate(transaction, ledger);
+        // Contexts on other threads may open the same transaction's ledger at once: one ledger, and one vote.
+        var ledger = Ledgers.GetValue(transaction, _ => new Ledger(context.GetType().Name));
 
-            if (transaction is Transaction ambient)
-            {
-                ambient.EnlistVolatile(new Vote(ledger), EnlistmentOptions.EnlistDuringPrepareRequired);
-            }
+        if (transaction is Transaction ambient && ledger.ClaimVote())
+        {
+            ambient.EnlistVolatile(new Vote(ledger), EnlistmentOptions.EnlistDuringPrepareRequired);
         }
 
         if (transaction is DbTransaction own && Begun.TryGetValue(context, out var begun) && ReferenceEquals(begun, own))
@@ -495,12 +492,16 @@ internal sealed class AtomicSave
         private ILogger _logger = NullLogger.Instance;
         private WeakReference<DbContext>? _owner;
         private DbContextId _ownerId;
+        private int _voted;
 
         // Unsafe once a save in it relied on another statement's check and anything failed or went unconfirmed.
         public bool IsUnsafe => Volatile.Read(ref _relied) &&
             (Volatile.Read(ref _failed) || Volatile.Read(ref _sent) != Volatile.Read(ref _confirmed));
 
         public void Sent() => Interlocked.Increment(ref _sent);
+
+        // Whether the caller is the first to ask, and so enlists the transaction's vote.
+        public bool ClaimVote() => Interlocked.Exchange(ref _voted, 1) == 0;
 
         public void Confirm() => Interlocked.Increment(ref _confirmed);
 
