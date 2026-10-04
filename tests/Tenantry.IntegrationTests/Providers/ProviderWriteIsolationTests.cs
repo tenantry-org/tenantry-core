@@ -42,6 +42,31 @@ public sealed class SqlServerWriteIsolationTests(SqlServerFixture fixture) : Pro
     }
 
     [Fact]
+    public async Task InATransactionWithMultipleActiveResultSets_AJoinRowThroughAStub_StopsTheCommit()
+    {
+        var (post, tag, _) = await AddPostAsync(Acme);
+        var options = new DbContextOptionsBuilder<ProviderOrdersContext>()
+            .UseSqlServer(new SqlConnectionStringBuilder(fixture.ConnectionString) { MultipleActiveResultSets = true }.ConnectionString)
+            .UseApplicationServiceProvider(Services)
+            .UseTenantry()
+            .Options;
+
+        using (Tenants.Use(Tenant(Globex)))
+        {
+            await using ProviderOrdersContext db = new(options);
+            await using var transaction = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            ProviderPost stub = new() { Id = post, TenantId = Globex, Tags = { new ProviderTag { Id = tag, TenantId = Globex } } };
+            db.Posts.Attach(stub);
+            stub.Tags.Clear();
+            await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+            await transaction.Awaiting(t => t.CommitAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
+        }
+
+        (await TagsOfAsync(post)).Should().Equal(tag);
+    }
+
+    [Fact]
     public async Task InATransactionWithMultipleActiveResultSets_AFailedSaveTenantryIsNotToldOf_IsNotConfirmedByALaterSaveThatSavesAgain()
     {
         var id = await AddDogAsync(Acme, "acme detail");
@@ -242,6 +267,72 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
 
         await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
         (await DogDetailAsync(id)).Should().Be("acme detail");
+    }
+
+    [Fact]
+    public async Task ThroughStubsOfAnotherTenantsRows_ItsJoinRowsAreNeitherDeletedNorAdded()
+    {
+        var (post, tag, other) = await AddPostAsync(_acme);
+
+        var delete = () => AsTenantAsync(_globex, db =>
+        {
+            ProviderPost stub = new() { Id = post, TenantId = _globex, Tags = { new ProviderTag { Id = tag, TenantId = _globex } } };
+            db.Posts.Attach(stub);
+            stub.Tags.Clear();
+            return db.SaveChangesAsync();
+        });
+        var add = () => AsTenantAsync(_globex, db =>
+        {
+            ProviderPost stub = new() { Id = post, TenantId = _globex };
+            db.Posts.Attach(stub);
+            stub.Tags.Add(db.Attach(new ProviderTag { Id = other, TenantId = _globex }).Entity);
+            return db.SaveChangesAsync();
+        });
+
+        await delete.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        await add.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        (await TagsOfAsync(post)).Should().Equal(tag);
+    }
+
+    [Fact]
+    public async Task TheTenantsOwnJoinRows_AreAddedAndRemoved()
+    {
+        var (post, tag, other) = await AddPostAsync(_acme);
+
+        await AsTenantAsync(_acme, async db =>
+        {
+            var loaded = await db.Posts.Include(p => p.Tags).SingleAsync(p => p.Id == post);
+            loaded.Tags.Clear();
+            loaded.Tags.Add(await db.Set<ProviderTag>().SingleAsync(t => t.Id == other));
+            return await db.SaveChangesAsync();
+        });
+
+        (await TagsOfAsync(post)).Should().Equal(other);
+    }
+
+    [Fact]
+    public async Task InATransactionScope_AJoinRowThroughAStub_RollsTheScopeBack()
+    {
+        var (post, tag, _) = await AddPostAsync(_acme);
+
+        var act = async () =>
+        {
+            using TransactionScope scope = new(TransactionScopeAsyncFlowOption.Enabled);
+
+            await AsTenantAsync(_globex, async db =>
+            {
+                ProviderPost stub = new() { Id = post, TenantId = _globex, Tags = { new ProviderTag { Id = tag, TenantId = _globex } } };
+                db.Posts.Attach(stub);
+                stub.Tags.Clear();
+                await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<DbUpdateConcurrencyException>();
+                return 0;
+            });
+
+            scope.Complete();
+        };
+
+        await act.Should().ThrowAsync<TransactionAbortedException>();
+        (await TagsOfAsync(post)).Should().Equal(tag);
     }
 
     [Fact]
@@ -570,6 +661,27 @@ public abstract class ProviderWriteIsolationTests : IAsyncDisposable
             await db.SaveChangesAsync();
             return dog.Id;
         });
+
+    // A post of the tenant's with one tag, and another tag of the tenant's that it does not have.
+    protected async Task<(int Post, int Tag, int Other)> AddPostAsync(string tenantId) =>
+        await AsTenantAsync(tenantId, async db =>
+        {
+            ProviderPost post = new() { Tags = { new ProviderTag() } };
+            ProviderTag other = new();
+            db.Posts.Add(post);
+            db.Add(other);
+            await db.SaveChangesAsync();
+            return (post.Id, post.Tags[0].Id, other.Id);
+        });
+
+    // The ids of a post's tags as stored.
+    protected async Task<List<int>> TagsOfAsync(int post)
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ProviderOrdersContext>();
+        return await db.Posts.IgnoreQueryFilters().Where(p => p.Id == post)
+            .SelectMany(p => p.Tags.Select(t => t.Id)).ToListAsync();
+    }
 
     protected async Task<string?> DogDetailAsync(int id)
     {

@@ -144,7 +144,7 @@ internal static class TenantModelCheck
         var clrType = entityType.ClrType;
 
         // The finished model has every join entity type, also one a convention added after UseTenantry()'s customizer.
-        TenantEntityTypes.ThrowIfJoinEntityIsNotTenantEntity(entityType, keyType);
+        TenantEntityTypes.ThrowIfJoinIsUnchecked(entityType, keyType);
 
         if (!TenantEntityTypes.IsTenantEntity(clrType))
         {
@@ -383,34 +383,57 @@ internal static class TenantEntityTypes
     }
 
     /// <summary>
-    /// Throws when a many-to-many relationship of <paramref name="entityType"/> has a tenant-owned type at either end
-    /// and a join entity type that is not tenant-owned. Its rows would hold the keys of the two rows they join and no
-    /// tenant, and EF Core inserts and deletes them for entities that are themselves unchanged, so no statement of the
-    /// save would check a tenant: through a stub with another tenant's key, a save could delete that tenant's join rows
-    /// or add to them. That holds when the other end is shared across tenants too.
+    /// The foreign keys by which the rows of <paramref name="entityType"/>, when it is the join entity type of a
+    /// many-to-many relationship and not tenant-owned itself, name a tenant-owned end. The write guard confirms each end
+    /// they name (<c>TenantWriteGuard</c>); empty for any other entity type.
     /// </summary>
-    public static void ThrowIfJoinEntityIsNotTenantEntity(IReadOnlyEntityType entityType, Type keyType)
+    public static IEnumerable<IReadOnlyForeignKey> TenantOwnedJoinEnds(IReadOnlyEntityType entityType, Type keyType)
     {
-        foreach (var navigation in entityType.GetDeclaredSkipNavigations())
+        if (KeyTypes(entityType.ClrType).Contains(keyType))
         {
-            var target = navigation.TargetEntityType;
+            return [];
+        }
 
-            // EF Core may not have created the join entity type yet while the model is being built.
-            if (navigation.JoinEntityType is not { } join ||
-                KeyTypes(join.ClrType).Contains(keyType) ||
-                (!KeyTypes(entityType.ClrType).Contains(keyType) && !KeyTypes(target.ClrType).Contains(keyType)))
+        return entityType.GetForeignKeys().Where(foreignKey =>
+            foreignKey.GetReferencingSkipNavigations().Any() &&
+            KeyTypes(foreignKey.PrincipalEntityType.ClrType).Contains(keyType));
+    }
+
+    /// <summary>
+    /// Throws when the write guard cannot confirm the tenant of a join row through the tenant-owned end it names: the
+    /// join entity's primary key does not include its foreign key to that end (an <c>UPDATE</c> or <c>DELETE</c> by
+    /// its own key would match the row whichever rows it joins), or the foreign key names a key of the end that
+    /// neither includes nor is part of its primary key, nor includes its <c>TenantId</c> (the end Tenantry confirms by
+    /// its primary key need not be the row the join row names).
+    /// </summary>
+    public static void ThrowIfJoinIsUnchecked(IReadOnlyEntityType entityType, Type keyType)
+    {
+        foreach (var end in TenantOwnedJoinEnds(entityType, keyType))
+        {
+            var principal = end.PrincipalEntityType;
+
+            if (entityType.FindPrimaryKey() is not { } key || !end.Properties.All(key.Properties.Contains))
             {
-                continue;
+                throw new TenantIsolationViolationException(
+                    TenantIsolationViolationKind.ModelConfiguration,
+                    entityType.ClrType.Name,
+                    $"The join entity '{entityType.ShortName()}' of a many-to-many relationship with tenant-owned " +
+                    $"'{principal.ClrType.Name}' has a key that does not include its foreign key to it, so an update or " +
+                    "delete of one of its rows by that key would match the row whichever tenant's rows it joins. Keep " +
+                    "the foreign keys to both ends in its key (EF Core's default), or implement " +
+                    $"ITenantEntity<{keyType.Name}> on it.");
             }
 
-            throw new TenantIsolationViolationException(
-                TenantIsolationViolationKind.ModelConfiguration,
-                entityType.ClrType.Name,
-                $"The many-to-many relationship between '{entityType.ClrType.Name}' and '{target.ClrType.Name}' " +
-                $"('{entityType.ClrType.Name}.{navigation.Name}') has the join entity '{join.ShortName()}', which is not " +
-                "tenant-owned, so its rows carry no tenant and a save could add or delete the join rows of another " +
-                "tenant's entities. Configure the join entity explicitly with UsingEntity<TJoin>() and implement " +
-                $"ITenantEntity<{keyType.Name}> on it.");
+            if (!NamesTheCheckedRow(end.PrincipalKey, principal.FindPrimaryKey()))
+            {
+                throw new TenantIsolationViolationException(
+                    TenantIsolationViolationKind.ModelConfiguration,
+                    entityType.ClrType.Name,
+                    $"The join entity '{entityType.ShortName()}' names '{principal.ClrType.Name}' through a key that " +
+                    "neither includes nor is part of its primary key, nor includes its TenantId, so Tenantry cannot " +
+                    "check that the row a join row names is the current tenant's. Join it through the primary key of " +
+                    $"'{principal.ClrType.Name}', or through a key that includes its TenantId.");
+            }
         }
     }
 

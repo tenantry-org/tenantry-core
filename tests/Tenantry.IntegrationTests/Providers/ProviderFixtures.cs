@@ -102,6 +102,27 @@ public sealed class ProviderDog : ProviderAnimal
     public string Detail { get; set; } = string.Empty;
 }
 
+// A many-to-many relationship with EF Core's own join entity, which carries no TenantId.
+public sealed class ProviderPost : ITenantEntity<string>
+{
+    public int Id { get; set; }
+
+    [MaxLength(64)]
+    public string TenantId { get; set; } = string.Empty;
+
+    public List<ProviderTag> Tags { get; } = [];
+}
+
+public sealed class ProviderTag : ITenantEntity<string>
+{
+    public int Id { get; set; }
+
+    [MaxLength(64)]
+    public string TenantId { get; set; } = string.Empty;
+
+    public List<ProviderPost> Posts { get; } = [];
+}
+
 public sealed class ProviderOrdersContext(DbContextOptions<ProviderOrdersContext> options)
     : DbContext(options)
 {
@@ -109,9 +130,12 @@ public sealed class ProviderOrdersContext(DbContextOptions<ProviderOrdersContext
 
     public DbSet<ProviderAnimal> Animals => Set<ProviderAnimal>();
 
+    public DbSet<ProviderPost> Posts => Set<ProviderPost>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ProviderAnimal>().UseTptMappingStrategy().ToTable("ProviderAnimals");
         modelBuilder.Entity<ProviderDog>().ToTable("ProviderDogs");
+        modelBuilder.Entity<ProviderPost>().HasMany(p => p.Tags).WithMany(t => t.Posts);
     }
 }

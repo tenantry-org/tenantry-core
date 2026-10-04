@@ -23,8 +23,8 @@ public sealed class EfCoreIsolationOptions
 
     /// <summary>
     /// What a save does when <c>AutoTransactionBehavior</c> is <c>Never</c> and some of its rows depend on another
-    /// statement's tenant check (owned rows in their own table, or an entity split across tables). Defaults to
-    /// <see cref="SaveWithoutTransactionBehavior.UseTransaction"/>.
+    /// statement's tenant check (owned rows in their own table, an entity split across tables, or many-to-many join
+    /// rows). Defaults to <see cref="SaveWithoutTransactionBehavior.UseTransaction"/>.
     /// </summary>
     public SaveWithoutTransactionBehavior OnSaveWithoutTransaction { get; set; } = SaveWithoutTransactionBehavior.UseTransaction;
 

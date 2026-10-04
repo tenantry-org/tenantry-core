@@ -19,7 +19,8 @@ namespace Tenantry.EfCore.Internal;
 /// Owned rows in a table of their own carry no tenant: their owner's <c>UPDATE</c> or <c>DELETE</c>, or its
 /// <c>TenantId</c> written back with its concurrency token, checks it. So does the table with <c>TenantId</c> for an
 /// entity mapped to more than one table, and a new owner's or such entity's <c>INSERT</c>, which fails on a key another
-/// tenant's row has. Those other statements are safe only if the save fails as a whole when the check does:
+/// tenant's row has. A many-to-many join row is checked the same way through each tenant-owned row it joins. Those
+/// other statements are safe only if the save fails as a whole when the check does:
 /// </para>
 /// <list type="bullet">
 ///   <item>The check's failure cannot be suppressed: EF Core lets an interceptor suppress a concurrency failure

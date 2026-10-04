@@ -45,6 +45,13 @@ internal sealed class TenantWriteGuard<TKey>
     // TenantId, which its owned entities' foreign keys take when it is stamped.
     private readonly List<EntityEntry> _ownedWrites = [];
 
+    // Join rows of many-to-many relationships with a tenant-owned end, whose join entity is not tenant-owned: their ends
+    // are checked once every new entity is stamped, as an owned entity's owner is.
+    private readonly List<EntityEntry> _joinWrites = [];
+
+    // The foreign keys to tenant-owned ends of each join entity type the save writes, found on first use.
+    private readonly Dictionary<IEntityType, IForeignKey[]> _joinEnds = [];
+
     // Deleted entities, and new ones over more than one table, not keyed by their TenantId: checked once every new
     // entity is stamped, for whether the save deletes and adds one under the same key.
     private readonly List<EntityEntry> _deletesAndInserts = [];
@@ -192,7 +199,7 @@ internal sealed class TenantWriteGuard<TKey>
             return;
         }
 
-        var entityTypes = string.Join(", ", writes.Select(entry => entry.Metadata.ClrType.Name).Distinct());
+        var entityTypes = string.Join(", ", writes.Select(entry => Name(entry)).Distinct());
 
         switch (behavior)
         {
@@ -239,6 +246,11 @@ internal sealed class TenantWriteGuard<TKey>
                 // An owned type without a TenantId of its own: its rows carry no tenant, only their owner's key.
                 _ownedWrites.Add(entry);
             }
+            else if (IsWrite(entry) && JoinEnds(entry.Metadata).Length > 0)
+            {
+                // A join row without a TenantId of its own: it carries only the keys of the rows it joins.
+                _joinWrites.Add(entry);
+            }
         }
 
         foreach (var entry in _deletesAndInserts)
@@ -250,6 +262,53 @@ internal sealed class TenantWriteGuard<TKey>
         {
             CheckOwner(owned);
         }
+
+        foreach (var join in _joinWrites)
+        {
+            CheckJoinEnds(join);
+        }
+    }
+
+    // A join row of a many-to-many relationship names the rows it joins and nothing else, and EF Core adds and deletes
+    // join rows for ends that are themselves unchanged, so neither end's TenantId concurrency token is checked: through
+    // stubs of another tenant's rows with the current tenant's TenantId, a save could add, change or delete that
+    // tenant's join rows. So each tenant-owned end a join row names is checked as an owned entity's owner is
+    // (CheckOwnerTenant): an end the save writes is checked by its own statement, and one it does not write must have
+    // been loaded or attached as the current tenant and has its stored row confirmed, by writing back its TenantId
+    // with its token. Each end is confirmed once, however many join rows name it. The join entity's key includes its
+    // foreign key to each tenant-owned end, and that foreign key names the end's primary key or its TenantId
+    // (TenantEntityTypes.ThrowIfJoinIsUnchecked), so a join row's UPDATE or DELETE matches only rows that join the
+    // confirmed ends. A join row saved without a tenant-owned end tracked is rejected.
+    private void CheckJoinEnds(EntityEntry join)
+    {
+        foreach (var end in JoinEnds(join.Metadata))
+        {
+            var principal = Principal(join, end);
+
+            if (principal is null)
+            {
+                Violation(
+                    join,
+                    offendingTenantId: null,
+                    $"A '{join.Metadata.ShortName()}' row is being saved without '{end.PrincipalEntityType.ClrType.Name}', " +
+                    "the tenant-owned row it joins. Tenantry checks a join row's tenant through the tenant-owned rows " +
+                    "it joins, so load or attach both in the same context and change the relationship through their " +
+                    "navigations.");
+            }
+
+            CheckOwnerTenant(principal, end, join);
+        }
+    }
+
+    private IForeignKey[] JoinEnds(IEntityType entityType)
+    {
+        if (!_joinEnds.TryGetValue(entityType, out var ends))
+        {
+            ends = [.. TenantEntityTypes.TenantOwnedJoinEnds(entityType, typeof(TKey)).Cast<IForeignKey>()];
+            _joinEnds.Add(entityType, ends);
+        }
+
+        return ends;
     }
 
     private void CheckDeleteOrInsert(EntityEntry entry)
@@ -639,11 +698,13 @@ internal sealed class TenantWriteGuard<TKey>
             : null;
     }
 
-    // A write of a tenant-owned entity, or of an owned entity whose owner is tenant-owned: its rows are that tenant's
-    // even when its type has no TenantId of its own.
+    // A write of a tenant-owned entity, of an owned entity whose owner is tenant-owned, or of a join row with a
+    // tenant-owned end: its rows are that tenant's even when its type has no TenantId of its own.
     private static bool IsTenantWrite(EntityEntry entry) =>
         IsWrite(entry) &&
-        (entry.Entity is ITenantEntity<TKey> || (entry.Metadata.IsOwned() && IsTenantEntity(RootOwnerType(entry.Metadata))));
+        (entry.Entity is ITenantEntity<TKey> ||
+         (entry.Metadata.IsOwned() && IsTenantEntity(RootOwnerType(entry.Metadata))) ||
+         TenantEntityTypes.TenantOwnedJoinEnds(entry.Metadata, typeof(TKey)).Any());
 
     private static bool IsWrite(EntityEntry entry) =>
         entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted;
@@ -664,10 +725,15 @@ internal sealed class TenantWriteGuard<TKey>
 
     private static string Display(TKey? tenantId) => tenantId?.ToString() ?? "<null>";
 
+    // An entry's type name: its entity type's for a shared-type entity, such as a join entity EF Core creates, whose
+    // CLR type is a dictionary.
+    private static string Name(EntityEntry entry) =>
+        entry.Metadata.HasSharedClrType ? entry.Metadata.ShortName() : entry.Metadata.ClrType.Name;
+
     [DoesNotReturn]
     private void Violation(EntityEntry entry, string? offendingTenantId, string? message = null)
     {
-        var typeName = entry.Entity.GetType().Name;
+        var typeName = Name(entry);
         var expected = _tenantId.ToString();
 
         TenantIsolationLog.IsolationViolation(_logger, typeName, offendingTenantId, expected);

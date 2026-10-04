@@ -101,9 +101,6 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
             // An owned type's writes are checked through its owner.
             TenantEntityTypes.ThrowIfOwnershipIsUnchecked(entityType, typeof(TKey));
 
-            // A join entity's rows are checked only as a tenant-owned entity's.
-            TenantEntityTypes.ThrowIfJoinEntityIsNotTenantEntity(entityType, typeof(TKey));
-
             if (!TenantEntityTypes.IsTenantEntity(entityType.ClrType))
             {
                 continue;
