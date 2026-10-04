@@ -34,8 +34,10 @@ internal static partial class TenantIsolationLog
 
     [LoggerMessage(2004, LogLevel.Error,
         "A SaveChanges failed, or never ended, after sending statements in a transaction EF Core could not undo it in " +
-        "(no savepoint, or an ambient transaction), where a save ({EntityType}) wrote rows that rely on another of its " +
-        "statements' tenant check: the transaction was rolled back, not committed",
+        "(no savepoint, or an ambient transaction), and a save in it wrote rows that rely on another of its statements' " +
+        "tenant check: the transaction was rolled back, not committed. {EntityType} is the entity whose check failed, " +
+        "or the context's type when the failure was not a check. Catching a failed SaveChanges and going on in the " +
+        "same transaction causes this; a transaction with savepoints avoids it",
         EventName = "TransactionNotCommitted")]
     public static partial void TransactionNotCommitted(ILogger logger, string entityType);
 

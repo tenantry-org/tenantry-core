@@ -49,12 +49,16 @@ namespace Tenantry.EfCore.Internal;
 /// A confirmation must not be counted for the wrong save, as that could balance a failed one. Each context keeps the
 /// saves that began and have not ended, the latest last, and a notice is taken for the latest. <c>SavedChanges</c>
 /// confirms the latest only if it sent a statement and EF Core reports that the save wrote entities. A failure notice
-/// that follows a confirmation with nothing in between is the same save's (an interceptor threw from its
-/// <c>SavedChanges</c>) and ends nothing more. Two sequences still confirm a failed save. Both need a nested save that
-/// sent statements and failed with nothing telling Tenantry: no failed or cancelled command, no failed check that
-/// Tenantry's interceptor saw, and its failure notice kept from Tenantry by an interceptor before Tenantry's that
-/// throws from <c>SaveChangesFailed</c> or <c>SaveChangesCanceled</c>, or by a <c>SaveChangesFailed</c> handler added
-/// before Tenantry's that throws. In the first, an interceptor after Tenantry's runs that save from another's
+/// that follows a confirmation with nothing in between takes that confirmation back, and ends the latest save too: it
+/// is that save's second notice (an interceptor threw from its <c>SavedChanges</c>), or another save's that a save in
+/// between was confirmed before (one a <c>SaveChangesFailed</c> handler ran).
+/// </para>
+/// <para>
+/// Two sequences still confirm a failed save. Both need a nested save that sent statements and failed without any
+/// failure notice reaching Tenantry: no failed or cancelled command, no failed check seen by Tenantry's
+/// <c>ThrowingConcurrencyException</c>, and its <c>SaveChangesFailed</c> or <c>SaveChangesCanceled</c> notice stopped
+/// by an interceptor before Tenantry's that throws from it, or by a <c>SaveChangesFailed</c> handler added before
+/// Tenantry's that throws. In the first, an interceptor after Tenantry's runs that save from another's
 /// <c>SavingChanges</c> and swallows its failure, and the save around it sends statements and succeeds: its notices
 /// are those of a save stopped before sending followed by one that succeeded, which must commit. In the second, an
 /// interceptor before Tenantry's runs it from the <c>SavedChanges</c> of a save that sent nothing but whose result an
@@ -62,8 +66,9 @@ namespace Tenantry.EfCore.Internal;
 /// </para>
 /// <para>
 /// A save sets back the settings it changed when it ends. A save that ended without Tenantry hearing of it (another
-/// interceptor stopped or failed it first) is set back by a later save's end once nothing is left to save, as a save
-/// still running around that one would then send nothing. A new lease of a pooled context starts afresh.
+/// interceptor stopped or failed it first), or that a notice which may not have been its own took off the list, is set
+/// back by a later save's end once nothing is left to save, as a save still running would then send nothing. Until
+/// then its setting stays. A new lease of a pooled context starts afresh.
 /// </para>
 /// </remarks>
 internal sealed class AtomicSave
@@ -562,10 +567,12 @@ internal sealed class AtomicSave
                 TenantIsolationViolationKind.TransactionRolledBack,
                 typeName,
                 $"{outcome}: {failure}, and a SaveChanges in it wrote rows whose tenant another of its statements " +
-                "checks. EF Core could not undo a save in this transaction (it has no savepoint, as with SQL Server's " +
-                "multiple active result sets, or it is an ambient transaction), so rows it wrote could belong to " +
-                "another tenant. Change an entity, or the entities it owns, only while its own tenant is current, and " +
-                "after any other failure run the unit of work again.");
+                "checks. EF Core could not undo the failed save in this transaction (it has no savepoint, as with SQL " +
+                "Server's multiple active result sets, or it is an ambient transaction), so rows it wrote could belong " +
+                "to another tenant. Catching a failed SaveChanges (a unique key, a foreign key, a concurrency conflict) " +
+                "and going on in the same transaction causes this too. Run the unit of work again in a new " +
+                "transaction, or use a transaction with savepoints, where EF Core undoes the failed save itself: turn " +
+                "off multiple active result sets, or use Database.BeginTransaction rather than a TransactionScope.");
         }
     }
 

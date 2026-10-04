@@ -76,9 +76,14 @@ filters, so a soft-deleted row of the current tenant still passes. See
 `Kind` is `TransactionRolledBack`. A save in this transaction failed partway, and a save in it wrote rows (owned rows in
 their own table, or an entity split across tables) that depend on another statement's tenant check. EF Core had no
 savepoint to undo just the failed save (for example SQL Server with MARS), or could not roll back to it, so Tenantry
-rolled back the whole transaction. This happens whatever the failure was and whichever save it was, a duplicate key
-included, and also when a save never reported success. Run the unit of work again. In a `TransactionScope`, disposing the scope throws `TransactionAbortedException`
-instead. See
+rolled back the whole transaction. In a `TransactionScope`, disposing the scope throws `TransactionAbortedException`
+instead.
+
+It happens whatever the failure was and whichever save it was, and also when a save never reported success. So code
+that catches a failed save (a unique key, a foreign key, a concurrency conflict it retries) and goes on in the same
+transaction is refused at the commit. Run the unit of work again in a new transaction, or use a transaction with
+savepoints, where EF Core undoes the failed save itself and the commit goes ahead: turn MARS off, or begin the
+transaction with `Database.BeginTransaction` rather than a `TransactionScope`. See
 [Saves that succeed or fail as a whole](efcore-advanced.md#saves-that-succeed-or-fail-as-a-whole).
 
 ## `TenantIsolationViolationException` of kind `SaveWithoutTransaction`

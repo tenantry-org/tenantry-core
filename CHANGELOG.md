@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading from 0.6
+
+- In a transaction without savepoints (SQL Server with multiple active result sets, or a `TransactionScope` on any
+  provider) where a save writes owned rows in their own table or an entity mapped to more than one table, any save that
+  failed after sending a statement now stops the commit with `TenantIsolationViolationException` of kind
+  `TransactionRolledBack`, or aborts the scope, whichever save it was. Code that catches a failed save (a unique key, a
+  foreign key, a concurrency conflict it retries) and goes on in the same transaction must run the unit of work again
+  in a new transaction, or use a transaction with savepoints: turn multiple active result sets off, or begin the
+  transaction with `Database.BeginTransaction` rather than a `TransactionScope`.
+
 ### Added
 
 - `tenant.TagRequestMetrics()` (Tenantry.AspNetCore) tags ASP.NET Core's request metric, `http.server.request.duration`,
@@ -24,7 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   succeeded, and the commit kept the rows the failed save had written. A failed command and a failed tenant check are
   noted as they happen, so an interceptor that translates the failure, as EntityFramework.Exceptions does, no longer
   keeps it from Tenantry. A failed save that wrote no such rows itself now also stops the commit when another save in
-  the transaction did.
+  the transaction did, and so does a save EF Core reported as saved and then as failed.
+- A transaction handed from one context to another after a failed save in it is still refused at the commit. Before,
+  the context that let it go was taken to have ended it.
 - A save that an interceptor runs from another save's `SavingChanges` no longer sets back the transaction (with
   `AutoTransactionBehavior.Never`) or the savepoints (with `AutoSavepointsEnabled = false`) that Tenantry turned on for
   the save around it, which could then leave rows written after their tenant check failed.
