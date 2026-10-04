@@ -282,12 +282,12 @@ changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a sin
 
 `WithPerTenantAuthentication()` becomes `ConfigurePerTenant` on each scheme's options, such as
 `Configure<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before
-`app.UseAuthentication()`, so the tenant is known when the scheme authenticates. A tenant's own challenge scheme
-becomes a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)).
-Finbuckle also refused a cookie signed in under another tenant. To keep that check, add the tenant id as a claim when the user signs in, and validate it with
-`ValidateTenantAccessByClaim`. A request for another tenant then gets `403` where a tenant is required; Finbuckle
-treated the same user as signed out. Sessions signed in before the change lack the claim, so their users sign in
-again. See [Authentication per tenant](authentication-per-tenant.md).
+`app.UseAuthentication()`, so the tenant is known when the scheme authenticates. A tenant's own challenge scheme becomes
+a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)). Finbuckle
+also refused a cookie signed in under another tenant. To keep that check, add the tenant id as a claim when the user
+signs in, and validate it with `ValidateTenantAccessByClaim`. A request for another tenant then gets `403` where a
+tenant is required; Finbuckle treated the same user as signed out. Sessions signed in before the change lack the claim,
+so their users sign in again. See [Authentication per tenant](authentication-per-tenant.md).
 
 ## Behaviour that changes
 

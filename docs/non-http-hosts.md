@@ -127,9 +127,9 @@ in [the `AsyncLocal` model](core-concepts.md#the-asynclocal-model).
 
 ## Runnable sample
 
-[`Tenantry.Samples.EfCoreConsole`](../samples/Tenantry.Samples.EfCoreConsole) uses
-`Host.CreateApplicationBuilder`, SQLite and a plain `DbContext` with `UseTenantry()`. It shows stamping, read isolation, nested tenants, a cross-tenant write rejected,
-fail-closed reads with no tenant, `IgnoreQueryFilters()` for admin access, and a sweep over every tenant
+[`Tenantry.Samples.EfCoreConsole`](../samples/Tenantry.Samples.EfCoreConsole) uses `Host.CreateApplicationBuilder`,
+SQLite and a plain `DbContext` with `UseTenantry()`. It shows stamping, read isolation, nested tenants, a cross-tenant
+write rejected, fail-closed reads with no tenant, `IgnoreQueryFilters()` for admin access, and a sweep over every tenant
 with `ITenantScopeFactory`:
 
 ```bash

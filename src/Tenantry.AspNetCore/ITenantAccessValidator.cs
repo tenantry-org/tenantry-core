@@ -8,9 +8,9 @@ namespace Tenantry.AspNetCore;
 /// <typeparam name="TKey">The tenant identifier type.</typeparam>
 /// <remarks>
 /// Register one with <c>tenant.ValidateTenantAccess&lt;TValidator&gt;()</c>. It is created in each request's scope, so
-/// it can depend on scoped services such as a <c>DbContext</c>. Every validator must allow a request before its tenant is made current. A request refused by one gets
-/// <see cref="TenantResolutionOptions{TKey}.AccessDeniedStatusCode"/> on an endpoint that needs a tenant, and
-/// continues without a tenant on any other.
+/// it can depend on scoped services such as a <c>DbContext</c>. Every validator must allow a request before its tenant
+/// is made current. A request refused by one gets <see cref="TenantResolutionOptions{TKey}.AccessDeniedStatusCode"/> on
+/// an endpoint that needs a tenant, and continues without a tenant on any other.
 /// </remarks>
 /// <example>
 /// <code>

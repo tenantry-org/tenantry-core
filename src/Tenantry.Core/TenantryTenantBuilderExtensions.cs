@@ -166,8 +166,9 @@ public static class TenantryTenantBuilderExtensions
     /// <param name="configure">Sets the delegates that return a tenant's connection string.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// Registers <see cref="ITenantConnectionStringProvider{TKey}"/> and <see cref="CurrentTenantConnectionString{TKey}"/>
-    /// as singletons. Calling it again configures the same options instance, so a later call can replace a delegate.
+    /// Registers <see cref="ITenantConnectionStringProvider{TKey}"/> and
+    /// <see cref="CurrentTenantConnectionString{TKey}"/> as singletons. Calling it again configures the same options
+    /// instance, so a later call can replace a delegate.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Neither delegate is set after <paramref name="configure"/> runs.</exception>
     /// <example>
@@ -227,9 +228,10 @@ public static class TenantryTenantBuilderExtensions
     /// <param name="factory">Creates the provider, once, from the application's services.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// Registers <see cref="ITenantConnectionStringProvider{TKey}"/> and <see cref="CurrentTenantConnectionString{TKey}"/>
-    /// as singletons. It replaces a provider set before, by this method or by <c>UseConnectionStrings(options =&gt; …)</c>. A provider
-    /// that can only read connection strings asynchronously returns <see langword="false"/> from
+    /// Registers <see cref="ITenantConnectionStringProvider{TKey}"/> and
+    /// <see cref="CurrentTenantConnectionString{TKey}"/> as singletons. It replaces a provider set before, by this
+    /// method or by <c>UseConnectionStrings(options =&gt; …)</c>. A provider that can only read connection strings
+    /// asynchronously returns <see langword="false"/> from
     /// <see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>.
     /// </remarks>
     /// <example>
