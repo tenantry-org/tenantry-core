@@ -113,7 +113,6 @@ internal sealed class AtomicSave
             save.Finish(context);
         }
 
-        unconfirmed.Reported = null;
         unconfirmed.Saves.Add(new AtomicSave(context));
     }
 
