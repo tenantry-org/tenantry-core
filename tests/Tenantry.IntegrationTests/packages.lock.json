@@ -622,6 +622,12 @@
           "Tenantry.Core": "[1.0.0, )"
         }
       },
+      "tenantry.options": {
+        "type": "Project",
+        "dependencies": {
+          "Tenantry.Core": "[1.0.0, )"
+        }
+      },
       "tenantry.samples.secureapi": {
         "type": "Project",
         "dependencies": {
@@ -1188,6 +1194,12 @@
           "Tenantry.Core": "[1.0.0, )"
         }
       },
+      "tenantry.options": {
+        "type": "Project",
+        "dependencies": {
+          "Tenantry.Core": "[1.0.0, )"
+        }
+      },
       "Microsoft.EntityFrameworkCore.Relational": {
         "type": "CentralTransitive",
         "requested": "[8.0.31, 9.0.0)",
@@ -1719,6 +1731,12 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.EntityFrameworkCore.Relational": "[9.0.20, 10.0.0)",
+          "Tenantry.Core": "[1.0.0, )"
+        }
+      },
+      "tenantry.options": {
+        "type": "Project",
+        "dependencies": {
           "Tenantry.Core": "[1.0.0, )"
         }
       },

@@ -151,6 +151,11 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         if (required)
         {
+            if (early is { RefusedSignedIn: true })
+            {
+                await SignOutAuthenticatedSchemeAsync(context).ConfigureAwait(false);
+            }
+
             await RejectAsync(context, resolution).ConfigureAwait(false);
             return;
         }
@@ -268,6 +273,29 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 }
             }
         }
+    }
+
+    // The scheme that signed the refused user in may keep it on the server (a cookie's SessionStore) and renew it as
+    // the response starts, which the cookies restored then cannot undo. Signing it out stops the renewal and ends the
+    // stored session. Only a scheme that signs out locally: a remote one (OpenID Connect, say) would start a sign-out
+    // at the identity provider. The cookie it deletes is dropped with the others the response would have set.
+    private static async Task SignOutAuthenticatedSchemeAsync(HttpContext context)
+    {
+        var scheme = context.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult?.Ticket?.AuthenticationScheme;
+
+        if (scheme is null || context.RequestServices.GetService<IAuthenticationHandlerProvider>() is not { } handlers)
+        {
+            return;
+        }
+
+        var handler = await handlers.GetHandlerAsync(context, scheme).ConfigureAwait(false);
+
+        if (handler is IAuthenticationRequestHandler || handler is not IAuthenticationSignOutHandler)
+        {
+            return;
+        }
+
+        await context.SignOutAsync(scheme).ConfigureAwait(false);
     }
 
     // Keeps the endpoint's metadata, so authorization and the rest of the pipeline treat the request as before.

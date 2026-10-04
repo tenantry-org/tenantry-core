@@ -66,6 +66,7 @@
     <ProjectReference Include="..\..\src\Tenantry.Core\Tenantry.Core.csproj" />
     <ProjectReference Include="..\..\src\Tenantry.AspNetCore\Tenantry.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\Tenantry.EfCore\Tenantry.EfCore.csproj" />
+    <ProjectReference Include="..\..\src\Tenantry.Options\Tenantry.Options.csproj" />
   </ItemGroup>
 
 </Project>

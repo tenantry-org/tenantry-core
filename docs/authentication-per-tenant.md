@@ -82,10 +82,14 @@ Between the two, the tenant is current but not yet checked against the user. So:
   that is valid on several tenants carries those claims to the others.
 - If the validators refuse a tenant that was current during authentication, and the request has a signed-in user (an
   authenticated identity, or any claims), the request is refused with the access-denied response, whether or not its
-  endpoint requires a tenant: the user was authenticated as a tenant it may not use. The response carries none of the
-  cookies set after `app.UseTenantResolution()`, so a cookie the authentication handler renewed with that user is
-  not sent. A caller with no identity and no claims, such as an anonymous one, is treated as without early
+  endpoint requires a tenant: the user was authenticated as a tenant it may not use. Tenantry signs out the scheme
+  that authenticated the user, if it signs out locally (a cookie scheme does; JWT bearer has nothing to sign out, and
+  a remote scheme such as OpenID Connect is left alone), so its handler renews nothing and a `SessionStore` drops the
+  session. The response then carries none of the cookies set after `app.UseTenantResolution()`, the sign-out's
+  deletion included. A caller with no identity and no claims, such as an anonymous one, is treated as without early
   resolution: the tenant is not current, and an endpoint that does not require one runs.
+- Middleware before `app.UseTenantResolution()` must not store `HttpContext.User` as the response starts: its
+  `OnStarting` callbacks run after Tenantry's, so they see the refused user.
 - An endpoint the request reaches without passing `app.UseTenantry()` (in a branch, say) does not run: it gets `500`
   and log event 1011.
 - An application with `app.UseTenantResolution()` and no `app.UseTenantry()` fails to start.
@@ -109,16 +113,42 @@ the tenant in the ticket and check it:
 - add a `tenant_id` claim when you sign the user in, and
 - add `tenant.ValidateTenantAccessByClaim("tenant_id")`, or a validator of your own that compares them.
 
-A cookie replayed on another tenant is refused there, on every endpoint, since its user names a tenant the validator
-refuses. The validator refuses an anonymous caller too, but such a caller carries no claims, so a sign-in endpoint
-runs with no tenant current: mark it `AllowMissingTenant()` and take the tenant from the request (its host, say) when
-you issue the cookie. Its authentication handler was created with the tenant current, so it writes the tenant's
-cookie.
+Name the cookie per tenant whenever your tenants' hosts share cookies (a cookie domain such as `.example.com`). Each
+tenant's handler then reads, renews and deletes only its own cookie, so on another tenant a signed-in user is simply
+anonymous: that tenant's sign-in page works, nothing is refused, and their own session is untouched. The identifier
+must be valid in a cookie name.
 
-So a user signed in to one tenant who visits another tenant's sign-in page, or any other page after
-`app.UseTenantry()`, is refused there with `403`, including `AllowMissingTenant()` pages, as long as the browser sends
-the cookie. With a cookie shared across subdomains, the user must sign out first. Pages that must work for them, such
-as a sign-in page or static files, go before `app.UseTenantResolution()` in the pipeline.
+```csharp
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Tenantry;
+
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
+    .UseStore<EfCoreTenantStore>()
+    .ValidateTenantAccessByClaim("tenant_id")
+    .ConfigurePerTenant(perTenant => perTenant
+        .Configure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, (o, t) =>
+            o.Cookie.Name = $".App.{t.TenantId}")));
+```
+
+Without it, what follows is the safety net. A cookie replayed on another tenant is refused there, on every endpoint,
+since its user names a tenant the validator refuses. Tenantry signs the cookie scheme out on that request:
+
+| Cookie set-up | On the other tenant | Back on their own tenant |
+|---|---|---|
+| A name per tenant | anonymous; nothing is refused, renewed or deleted | signed in |
+| One name, ticket in the cookie | `403`; the response sets no cookie | signed in: the browser keeps its cookie, whose ticket was never changed |
+| One name, `SessionStore` | `403`; the session is removed from the store | signed out: the cookie names a session that no longer exists |
+
+The validator refuses an anonymous caller too, but such a caller carries no claims, so a sign-in endpoint runs with
+no tenant current: mark it `AllowMissingTenant()` and take the tenant from the request (its host, say) when you issue
+the cookie. Its authentication handler was created with the tenant current, so it writes the tenant's cookie, and it
+must stay after `app.UseTenantResolution()` for that.
+
+So, with one cookie name shared across subdomains, a user signed in to one tenant is refused with `403` on every page
+of another after `app.UseTenantry()`, its sign-in page and other `AllowMissingTenant()` pages included, until they
+sign out. Static files can go before `app.UseTenantResolution()`; a sign-in page cannot, which is why the cookie name
+per tenant is the recommended set-up.
 
 ## Identity provider metadata
 

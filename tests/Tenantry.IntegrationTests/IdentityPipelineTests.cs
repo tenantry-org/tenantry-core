@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.TestHost;
@@ -72,7 +73,33 @@ public sealed class IdentityPipelineTests(SqlServerFixture fixture)
         AuthCookie(other).Should().Be(".AspNetCore.Identity.Application=", "the cookie is deleted");
     }
 
-    private async Task<WebApplication> StartAsync<TUser, TContext>(Action<SecurityStampValidatorOptions, ITenantContext<string>> stamp)
+    [Fact]
+    public async Task IdentitysCookiesNamedPerTenant_LeaveAUserOfOneTenantAnonymousOnAnother()
+    {
+        // The refresh keeps the tenant the user signed in to, as the guide's claims factory would add it.
+        await using var app = await StartAsync<TenantUser, IdentityContext>(
+            (identity, _) => identity.OnRefreshingPrincipal = c =>
+            {
+                ((ClaimsIdentity)c.NewPrincipal!.Identity!).AddClaim(c.CurrentPrincipal!.FindFirst("tenant_id")!);
+                return Task.CompletedTask;
+            },
+            cookiePerTenant: true);
+        using var client = app.GetTestClient();
+        var cookie = await SignInAsync(app, client, new TenantUser { UserName = "alice" }, ".App.acme.Identity.Application=");
+
+        // Globex's handlers read Globex's cookies only: Alice is anonymous there, and her Acme cookie is not deleted.
+        using (var other = await SendAsync(client, "globex", "/me", cookie))
+        {
+            (await other.Content.ReadAsStringAsync(Ct)).Should().Be("(anonymous)");
+            other.Headers.Contains("Set-Cookie").Should().BeFalse();
+        }
+
+        using var me = await SendAsync(client, "acme", "/me", cookie);
+        (await me.Content.ReadAsStringAsync(Ct)).Should().Be("alice");
+    }
+
+    private async Task<WebApplication> StartAsync<TUser, TContext>(
+        Action<SecurityStampValidatorOptions, ITenantContext<string>> stamp, bool cookiePerTenant = false)
         where TUser : IdentityUser
         where TContext : IdentityDbContext<TUser>
     {
@@ -83,7 +110,20 @@ public sealed class IdentityPipelineTests(SqlServerFixture fixture)
             .ResolveFromHeader("X-Tenant-Id")
             .UseInMemoryStore([Acme, Globex])
             .ValidateTenantAccess((http, t) =>
-                http.User.Identity?.IsAuthenticated != true || http.User.FindFirst("tenant_id")?.Value == t.TenantId));
+                http.User.Identity?.IsAuthenticated != true || http.User.FindFirst("tenant_id")?.Value == t.TenantId)
+            .ConfigurePerTenant(perTenant =>
+            {
+                // The guide's names, for each of Identity's cookies.
+                foreach (var scheme in (string[])[IdentityConstants.ApplicationScheme, IdentityConstants.ExternalScheme,
+                             IdentityConstants.TwoFactorRememberMeScheme, IdentityConstants.TwoFactorUserIdScheme])
+                {
+                    perTenant.Configure<CookieAuthenticationOptions>(scheme, (o, t) =>
+                    {
+                        if (cookiePerTenant)
+                            o.Cookie.Name = $".App.{t.TenantId}.{scheme}";
+                    });
+                }
+            }));
         var connectionString = fixture.WithDatabase($"identity_{Guid.NewGuid():N}");
         builder.Services.AddDbContext<TContext>(options => options.UseSqlServer(connectionString).UseTenantry());
         builder.Services.AddIdentity<TUser, IdentityRole>().AddEntityFrameworkStores<TContext>();
@@ -117,7 +157,8 @@ public sealed class IdentityPipelineTests(SqlServerFixture fixture)
     }
 
     // Creates Alice as Acme's, and signs her in on Acme; the sign-in is anonymous, so the validator lets it have Acme.
-    private static async Task<string> SignInAsync<TUser>(WebApplication app, HttpClient client, TUser alice)
+    private static async Task<string> SignInAsync<TUser>(
+        WebApplication app, HttpClient client, TUser alice, string cookie = ".AspNetCore.Identity.Application=")
         where TUser : IdentityUser
     {
         await using (var scope = app.Services.GetRequiredService<ITenantScopeFactory<string>>().CreateScope(Acme))
@@ -130,7 +171,7 @@ public sealed class IdentityPipelineTests(SqlServerFixture fixture)
         request.Headers.Add("X-Tenant-Id", "acme");
         using var response = await client.SendAsync(request, Ct);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        return AuthCookie(response)!;
+        return response.Headers.GetValues("Set-Cookie").Select(c => c.Split(';')[0]).Single(c => c.StartsWith(cookie, StringComparison.Ordinal));
     }
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, string tenant, string path, string cookie)

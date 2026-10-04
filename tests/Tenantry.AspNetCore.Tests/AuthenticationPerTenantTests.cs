@@ -495,10 +495,100 @@ public sealed class AuthenticationPerTenantTests
     [Fact]
     public async Task ARefusedRequest_CarriesNoRenewedCookie_SoTheTenantsClaimsNeverLeaveIt()
     {
-        // The cookie event takes the plan from the current tenant and renews the cookie, as Identity's security stamp
-        // check renews it: the renewal is written as the response starts, after Tenantry refused the request.
-        await using var app = await StartAsync(
-            PremiumTenants,
+        await using var app = await StartPlanCookieAsync();
+        using var client = app.GetTestClient();
+
+        using var signIn = await SendAs(client, "acme", "/sign-in", cookie: null);
+        var acmeCookie = AuthCookie(signIn, "auth")!;
+
+        using (var plan = await SendAs(client, "acme", "/plan", acmeCookie))
+        {
+            plan.StatusCode.Should().Be(HttpStatusCode.Redirect, "Acme is not premium");
+            AuthCookie(plan, "auth").Should().NotBeNull("an allowed request still renews its cookie");
+        }
+
+        // Refused, and signed out, but the deletion is dropped with the renewal: the browser keeps its own cookie,
+        // whose ticket was never changed, and stays signed in to Acme.
+        using (var refused = await SendAs(client, "globex", "/plan", acmeCookie))
+        {
+            refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            refused.Headers.Contains("Set-Cookie").Should().BeFalse();
+        }
+
+        (await ReadAsync(await SendAs(client, "acme", "/me", acmeCookie))).Should().Be("acme");
+    }
+
+    [Fact]
+    public async Task ARefusedRequest_WithASessionStore_EndsTheSession_RatherThanStoreTheTenantsClaims()
+    {
+        RecordingTicketStore store = new();
+        await using var app = await StartPlanCookieAsync(o => o.SessionStore = store);
+        using var client = app.GetTestClient();
+
+        using var signIn = await SendAs(client, "acme", "/sign-in", cookie: null);
+        var acmeCookie = AuthCookie(signIn, "auth")!;
+
+        using (var refused = await SendAs(client, "globex", "/plan", acmeCookie))
+        {
+            refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            refused.Headers.Contains("Set-Cookie").Should().BeFalse();
+        }
+
+        store.Renewed.Should().NotContain(ticket => ticket.Principal.HasClaim("plan", "premium"));
+        store.Removed.Should().ContainSingle();
+
+        // The session is gone, so the cookie the browser kept names none: Alice is signed out of Acme too.
+        using (var plan = await SendAs(client, "acme", "/plan", acmeCookie))
+        {
+            plan.StatusCode.Should().NotBe(HttpStatusCode.OK);
+        }
+
+        (await ReadAsync(await SendAs(client, "acme", "/me", acmeCookie))).Should().Be("(anonymous)");
+    }
+
+    [Fact]
+    public async Task ACookieNamePerTenant_LeavesAnotherTenantsCookieUnread()
+    {
+        await using var app = await StartPlanCookieAsync(tenants: tenant => tenant.ConfigurePerTenant(perTenant => perTenant
+            .Configure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, (o, t) =>
+                o.Cookie.Name = $".App.{t.TenantId}")));
+        using var client = app.GetTestClient();
+
+        using var signIn = await SendAs(client, "acme", "/sign-in", cookie: null);
+        var acmeCookie = AuthCookie(signIn, ".App.acme")!;
+
+        // On Globex the browser's Acme cookie is not Globex's: the caller is anonymous, and nothing is refused,
+        // renewed or deleted.
+        using (var plan = await SendAs(client, "globex", "/plan", acmeCookie))
+        {
+            plan.StatusCode.Should().Be(HttpStatusCode.Redirect, "an anonymous caller is sent to sign in");
+            plan.Headers.Contains("Set-Cookie").Should().BeFalse();
+        }
+
+        using (var me = await SendAs(client, "globex", "/me", acmeCookie))
+        {
+            me.StatusCode.Should().Be(HttpStatusCode.OK);
+            (await ReadAsync(me)).Should().Be("(anonymous)");
+        }
+
+        using (var globexSignIn = await SendAs(client, "globex", "/sign-in", acmeCookie))
+        {
+            AuthCookie(globexSignIn, ".App.globex").Should().NotBeNull("Globex's sign-in page works for Acme's user");
+        }
+
+        (await ReadAsync(await SendAs(client, "acme", "/me", acmeCookie))).Should().Be("acme");
+    }
+
+    // Cookie authentication whose event takes the plan from the current tenant and renews the cookie, as Identity's
+    // security stamp check renews it: the renewal is written as the response starts, after Tenantry refused the request.
+    private static Task<WebApplication> StartPlanCookieAsync(
+        Action<CookieAuthenticationOptions>? cookie = null, Action<ITenantBuilder<string>>? tenants = null) =>
+        StartAsync(
+            tenant =>
+            {
+                PremiumTenants(tenant);
+                tenants?.Invoke(tenant);
+            },
             services =>
             {
                 services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
@@ -519,6 +609,7 @@ public sealed class AuthenticationPerTenantTests
                         c.ShouldRenew = tenant is not null;
                         return Task.CompletedTask;
                     };
+                    cookie?.Invoke(o);
                 });
                 services.AddAuthorizationBuilder().AddPolicy("Premium", policy => policy.RequireClaim("plan", "premium"));
             },
@@ -538,42 +629,60 @@ public sealed class AuthenticationPerTenantTests
                 a.MapGet("/plan", () => "premium").RequireAuthorization("Premium");
                 a.MapGet("/me", (HttpContext http) => http.User.FindFirst("tenant_id")?.Value ?? "(anonymous)").AllowMissingTenant();
             });
-        using var client = app.GetTestClient();
 
-        static async Task<HttpResponseMessage> SendAs(HttpClient client, string tenant, string path, string? cookie)
+    private static async Task<HttpResponseMessage> SendAs(HttpClient client, string tenant, string path, string? cookie)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, $"http://localhost{path}");
+        request.Headers.Add("X-Tenant-Id", tenant);
+
+        if (cookie is not null)
+            request.Headers.Add("Cookie", cookie);
+
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<string> ReadAsync(HttpResponseMessage response)
+    {
+        using (response)
+            return await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static string? AuthCookie(HttpResponseMessage response, string name) =>
+        response.Headers.TryGetValues("Set-Cookie", out var cookies)
+            ? cookies.Select(c => c.Split(';')[0]).FirstOrDefault(c => c.StartsWith($"{name}=", StringComparison.Ordinal))
+            : null;
+
+    // Keeps tickets in memory, and records what the cookie handler renews and removes.
+    private sealed class RecordingTicketStore : ITicketStore
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AuthenticationTicket> _tickets = new();
+
+        public System.Collections.Concurrent.ConcurrentQueue<AuthenticationTicket> Renewed { get; } = new();
+
+        public System.Collections.Concurrent.ConcurrentQueue<string> Removed { get; } = new();
+
+        public Task<string> StoreAsync(AuthenticationTicket ticket)
         {
-            using HttpRequestMessage request = new(HttpMethod.Get, $"http://localhost{path}");
-            request.Headers.Add("X-Tenant-Id", tenant);
-
-            if (cookie is not null)
-                request.Headers.Add("Cookie", cookie);
-
-            return await client.SendAsync(request, TestContext.Current.CancellationToken);
+            var key = Guid.NewGuid().ToString("N");
+            _tickets[key] = ticket;
+            return Task.FromResult(key);
         }
 
-        static string? AuthCookie(HttpResponseMessage response) =>
-            response.Headers.TryGetValues("Set-Cookie", out var cookies)
-                ? cookies.Select(c => c.Split(';')[0]).FirstOrDefault(c => c.StartsWith("auth=", StringComparison.Ordinal))
-                : null;
-
-        using var signIn = await SendAs(client, "acme", "/sign-in", cookie: null);
-        var acmeCookie = AuthCookie(signIn)!;
-
-        using (var plan = await SendAs(client, "acme", "/plan", acmeCookie))
+        public Task RenewAsync(string key, AuthenticationTicket ticket)
         {
-            plan.StatusCode.Should().Be(HttpStatusCode.Redirect, "Acme is not premium");
-            AuthCookie(plan).Should().NotBeNull("an allowed request still renews its cookie");
+            Renewed.Enqueue(ticket);
+            _tickets[key] = ticket;
+            return Task.CompletedTask;
         }
 
-        using (var refused = await SendAs(client, "globex", "/plan", acmeCookie))
-        {
-            refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-            refused.Headers.Contains("Set-Cookie").Should().BeFalse();
-        }
+        public Task<AuthenticationTicket?> RetrieveAsync(string key) =>
+            Task.FromResult(_tickets.GetValueOrDefault(key));
 
-        using (var me = await SendAs(client, "acme", "/me", acmeCookie))
+        public Task RemoveAsync(string key)
         {
-            (await me.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("acme");
+            Removed.Enqueue(key);
+            _tickets.TryRemove(key, out _);
+            return Task.CompletedTask;
         }
     }
 

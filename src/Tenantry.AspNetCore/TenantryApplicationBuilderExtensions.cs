@@ -48,9 +48,10 @@ public static class TenantryApplicationBuilderExtensions
     /// so no authorization policy sees a tenant the access validators have not checked. An endpoint whose request did
     /// not pass through <see cref="UseTenantry"/> after this does not run: it gets <c>500</c> and log event 1011. A
     /// request the authorization middleware ran for between the two gets <c>500</c> and log event 1013. If the access
-    /// validators refuse the tenant for a signed-in user, the request is refused whatever its endpoint requires, and
-    /// its response sets none of the cookies set after this call, since the user was authenticated with that tenant
-    /// current: authentication events and claims transformations must not grant anything from the current tenant.
+    /// validators refuse the tenant for a signed-in user, the request is refused whatever its endpoint requires, the
+    /// scheme that signed the user in is signed out if it signs out locally (a cookie scheme), and the response sets
+    /// none of the cookies set after this call, since the user was authenticated with that tenant current:
+    /// authentication events and claims transformations must not grant anything from the current tenant.
     /// </para>
     /// <para>
     /// Only the resolvers added before the first that needs the user (a claim resolver, or

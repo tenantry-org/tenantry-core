@@ -115,16 +115,49 @@ During authentication the tenant is current but not yet checked against the user
 grant claims, roles or permissions from the current tenant, and must not write as it. Do not renew or reissue the
 cookie with claims taken from the tenant: a cookie valid on several tenants carries them across.
 
-A user signed in to one tenant who visits another, with a cookie shared across subdomains, gets one of two outcomes:
+Name Identity's cookies per tenant whenever your tenants' hosts share cookies. Each tenant's handlers then read,
+check, renew and delete only that tenant's cookies, so a user of one tenant is anonymous on another: its sign-in page
+works, and their own session is untouched. Identity has four cookie schemes; name each:
+
+```csharp
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Identity;
+using Tenantry;
+
+string[] identityCookies =
+[
+    IdentityConstants.ApplicationScheme,
+    IdentityConstants.ExternalScheme,
+    IdentityConstants.TwoFactorRememberMeScheme,
+    IdentityConstants.TwoFactorUserIdScheme,
+];
+
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
+    .UseStore<EfCoreTenantStore>()
+    .ConfigurePerTenant(perTenant =>
+    {
+        foreach (var scheme in identityCookies)
+        {
+            perTenant.Configure<CookieAuthenticationOptions>(scheme, (o, t) =>
+                o.Cookie.Name = $".App.{t.TenantId}.{scheme}");
+        }
+    }));
+```
+
+Without it, a user signed in to one tenant who visits another, with a cookie shared across subdomains, gets one of two
+outcomes:
 
 - When the security stamp is checked on that request (every `ValidationInterval`), the tenant's users do not include
   them, so Identity rejects the cookie and deletes it: the request runs anonymous, and the user is signed out of
   their own tenant too.
 - Otherwise the validator refuses the tenant for a signed-in user, so the whole request is refused (`403`), sign-in
-  page and other `AllowMissingTenant()` pages included, and the response sets no cookie.
+  page and other `AllowMissingTenant()` pages included. Tenantry signs the application cookie out on that request and
+  the response sets no cookie, so the browser keeps its cookie and the user stays signed in to their own tenant,
+  unless the cookie's ticket is kept in a `SessionStore`: that session is removed, and the user is signed out.
 
-Either way the user must sign out before signing in to another tenant, or use a cookie per tenant host. Pages that
-must work for them, such as a sign-in page or static files, go before `app.UseTenantResolution()`.
+Either way the user must sign out before using another tenant. Static files can go before
+`app.UseTenantResolution()`; a sign-in page cannot, since it needs the tenant's cookie settings.
 
 ## See also
 
