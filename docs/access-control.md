@@ -1,18 +1,13 @@
 # Access control
 
-Resolution answers *who is the tenant*. Access control answers two further questions:
-
-1. **Is a tenant required** for this request? (Should a request with no resolved tenant be rejected?)
-2. **Is this caller allowed** to act as the resolved tenant? (Can user X access tenant Y?)
-
-These are independent and can be used together. The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi)
-combines both with JWT authentication, and its integration tests check the 401, 403 and 400 responses.
+Access control answers two separate questions: does this request need a tenant, and may this caller use the tenant
+it named? The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does both with JWT authentication, and its
+tests check the 401, 403 and 400 responses.
 
 ## Requiring a tenant
 
-By default a request with no resolved tenant simply proceeds with no tenant context — useful for
-health checks, sign-up, and other anonymous endpoints. To reject such requests you can require a
-tenant globally or per-endpoint.
+By default, a request with no tenant continues without one, which suits health checks and sign-up. To reject it,
+require a tenant for every endpoint or for one.
 
 ### Globally
 
@@ -54,16 +49,14 @@ public class OrdersController : ControllerBase
 }
 ```
 
-**Precedence.** Endpoint metadata overrides the global default. If both `RequireTenant` and
-`AllowMissingTenant` are present on the same endpoint, the metadata added **last** wins (the middleware
-scans metadata from last to first and takes the first match). Keep it to one per endpoint to avoid
-confusion. When no metadata is present, `RequireTenantByDefault()` decides.
+Endpoint metadata overrides `RequireTenantByDefault()`. If an endpoint has both `RequireTenant` and
+`AllowMissingTenant`, the one added last wins. Use one per endpoint.
 
 ## Validating tenant access
 
-Resolving and finding a tenant does not mean the *caller* is allowed to use it. A user authenticated as
-Acme should not be able to send `X-Tenant-Id: globex`. Access validators run **after** the tenant is
-found in the store but **before** it is made current. If validation fails, an endpoint that requires a tenant
+A tenant that resolves and is in the store is not necessarily one the caller may use: a user of Acme should not be
+able to send `X-Tenant-Id: globex`. Access validators run after the tenant is found in the store and before it is
+made current. If validation fails, an endpoint that requires a tenant
 responds `403 Forbidden`, and any other endpoint runs without a tenant; either way the refused tenant is never
 current.
 
@@ -72,7 +65,7 @@ tenant the caller may not use, so an authenticated user of one tenant cannot dis
 
 ### Claim-based validation
 
-The common case — the caller's token carries the tenant(s) they may access:
+When the caller's token lists the tenants it may use:
 
 ```csharp
 tenant.ValidateTenantAccessByClaim("tenant_id");
@@ -80,9 +73,8 @@ tenant.ValidateTenantAccessByClaim("tenant_id");
 
 This passes when any `tenant_id` claim on `HttpContext.User` matches the resolved tenant. It supports:
 
-- **repeated claims**, each holding a single id (`tenant_id: acme`, `tenant_id: globex`), and
-- a single claim holding a **JSON array** (`tenant_id: ["acme","globex"]`, or numbers
-  `[1,2]` for numeric keys).
+- repeated claims, each holding one id (`tenant_id: acme`, `tenant_id: globex`), and
+- one claim holding a JSON array (`tenant_id: ["acme","globex"]`, or numbers `[1,2]` for numeric keys).
 
 Each candidate value is parsed as `TKey`, with the invariant culture, and compared with the resolved tenant's id:
 the claims list tenant ids, not other identifiers such as slugs. Requires `UseTenantry()` to run after
@@ -118,8 +110,7 @@ public sealed class Membership
 tenant.ValidateTenantAccess<MembershipValidator>();
 ```
 
-`ValidateTenantAccess<TValidator>()` returns the builder without its key type, so put it last in a chain or call it
-as a statement of its own (see [Registration](core-concepts.md#registration)).
+Like `UseResolver<T>()`, it returns the builder without its key type ([Registration](core-concepts.md#registration)).
 
 A validator that needs only the request and the tenant can be a delegate, synchronous or asynchronous:
 
@@ -134,15 +125,15 @@ tenant.ValidateTenantAccess(async (http, t, ct) =>
 
 ### Combining validators: AND vs OR
 
-Multiple validators are combined with logical **AND** — every one must pass, in the order they were added, and the
-first that refuses stops the rest:
+Several validators combine with AND: each must pass, in the order they were added, and the first that refuses stops
+the rest:
 
 ```csharp
 tenant.ValidateTenantAccessByClaim("tenant_id");           // must hold the claim …
 tenant.ValidateTenantAccess((http, _) => IsFromTrustedIp(http)); // … AND be from a trusted IP
 ```
 
-For **OR** semantics, put the alternatives in one validator:
+For OR, put the alternatives in one validator:
 
 ```csharp
 tenant.ValidateTenantAccess((http, t) =>
@@ -165,7 +156,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
 {
     tenant.ResolveFromHeader("X-Tenant-Id");     // the tenant the caller asks for
     tenant.UseStore<EfCoreTenantStore>();
-    tenant.RequireTenantByDefault();             // no anonymous tenant access
+    tenant.RequireTenantByDefault();             // every endpoint needs a tenant
     tenant.ValidateTenantAccessByClaim("tenant_id"); // the token must list that tenant
     tenant.ValidateTenantActivity(t => !t.As<AppTenant>().IsSuspended); // and it must be active
 });
