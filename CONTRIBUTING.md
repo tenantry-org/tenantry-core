@@ -5,7 +5,7 @@ change must pass.
 
 ## Prerequisites
 
-- .NET SDK **10.0** (the repo multi-targets `net8.0;net9.0;net10.0` — the 10 SDK builds all three).
+- .NET SDK **10.0** (the repo multi-targets `net8.0;net9.0;net10.0`, and the 10 SDK builds all three).
   To *run* the full test matrix locally you also need the 8.0 and 9.0 runtimes installed.
 
 ## Build & test
@@ -83,7 +83,7 @@ version its range allows (`bash scripts/test-latest-dependencies.sh`).
 2. Make your change with tests and docs.
 3. Open a PR against `master` and fill in the PR template.
 4. A maintainer reviews (CODEOWNERS are auto-requested). All conversations must be resolved and the
-   required checks green before merge. History is linear — your PR will be squashed/rebased.
+   required checks green before merge. History is linear: your PR will be squashed or rebased.
 
 > **Note:** Workflows on PRs from forks require maintainer approval before they run.
 
