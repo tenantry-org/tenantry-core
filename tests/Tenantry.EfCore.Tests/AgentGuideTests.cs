@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Xunit.Sdk;
 
 namespace Tenantry.EfCore.Tests;
 
@@ -18,10 +19,12 @@ public sealed class AgentGuideTests
     public async Task TheGuidesTest_PassesWithTheApplicationsRegistration() =>
         await GuideTestAsync(isolated: true);
 
+    // Without UseTenantry(), Globex reads Acme's row, so the guide's first check fails: any other failure means the
+    // setup broke, not the isolation.
     [Fact]
     public async Task TheGuidesTest_FailsWhenTheApplicationsRegistrationLosesUseTenantry() =>
         await FluentActions.Awaiting(() => GuideTestAsync(isolated: false))
-            .Should().ThrowAsync<Exception>("an application that forgot UseTenantry() must fail the test");
+            .Should().ThrowExactlyAsync<EmptyException>("an application that forgot UseTenantry() must fail the test");
 
     // The guide's EachTenantSeesOnlyItsOwnRows_AndAnotherTenantsRowIsRefused, with xUnit's asserts.
     private static async Task GuideTestAsync(bool isolated)
