@@ -89,9 +89,11 @@ reserve the `Tenantry.Templates` id on NuGet.org. The release workflow then publ
 ## Repository settings
 
 `release/*` branches need a ruleset like `master`'s: changes only through pull requests with CI passing, and no force
-pushes or deletion. SonarCloud analyses them as long-lived branches by its default pattern; check the project's
-settings keep it so, with a quality gate. The `release` environment must accept `v*` tags, and NuGet.org's trusted
-publishing policy names this repository, `release.yml` and the `release` environment.
+pushes or deletion. SonarCloud's default long-lived branch pattern, `(branch|release)-.*`, does not match
+`release/0.7`: set it to `release/.*` (the project's Administration → Branches and Pull Requests) before the first
+release branch is pushed, since a branch's kind is fixed at its first analysis, and keep a quality gate on it. The
+`release` environment must accept `v*` tags, and NuGet.org's trusted publishing policy names this repository,
+`release.yml` and the `release` environment.
 
 ## After any release
 
