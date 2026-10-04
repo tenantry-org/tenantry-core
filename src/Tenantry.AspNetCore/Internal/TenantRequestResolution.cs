@@ -140,10 +140,9 @@ internal sealed class TenantRequestResolution<TKey>
             return new(ResolutionResult.NotFound, identifier, null, null);
         }
 
-        // An inactive (suspended) tenant is refused like one an access validator refuses.
         if (_activity is not null && !await _activity.IsActiveAsync(tenant, cancellationToken))
         {
-            return new(ResolutionResult.AccessDenied, identifier, tenant, null);
+            return new(ResolutionResult.Inactive, identifier, tenant, null);
         }
 
         if (!beforeAuthentication && !await ValidateAsync(context, tenant))

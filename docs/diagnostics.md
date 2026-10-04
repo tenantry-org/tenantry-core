@@ -15,13 +15,14 @@ between versions, so you can alert on it. Alert on 2001 above all: a save that t
 | 1002 | `NoTenantIdentifier` | Debug | A request carries no identifier, and its endpoint does not require a tenant. |
 | 1003 | `TenantRequired` | Warning | A request carries no identifier, and its endpoint requires a tenant. |
 | 1004 | `TenantNotFound` | Warning | A request's identifier names no tenant, and its endpoint requires a tenant. |
-| 1005 | `TenantAccessDenied` | Warning | A request's tenant is not active, or an access validator refuses it. |
-| 1006 | `ContinuingWithoutTenant` | Debug | A request's identifier names no tenant, or one it may not use, and its endpoint does not require a tenant. |
+| 1005 | `TenantAccessDenied` | Warning | An access validator refuses a request's tenant. |
+| 1006 | `ContinuingWithoutTenant` | Debug | A request's identifier names no tenant, one that is not active, or one it may not use, and its endpoint does not require a tenant. |
 | 1007 | `TenantryBeforeRouting` | Warning | `app.UseTenantry()` ran before routing chose an endpoint with `RequireTenant()` or `AllowMissingTenant()`. Requests without a tenant are still rejected where one is required. Logged once. |
 | 1008 | `TenantryBeforeAuthentication` | Warning | The authentication middleware ran after `app.UseTenantry()` and signed in a user with the claim `ResolveFromClaim` reads, which it therefore missed. Logged once. |
 | 1009 | `OutputCacheBeforeTenantry` | Warning | The output cache ran before `app.UseTenantry()` for a request, so `IsolateOutputCache()` did not cache its response. Logged once. |
 | 1010 | `TenantResolutionAfterAuthentication` | Warning | `app.UseTenantResolution()` ran after the authentication middleware, so authentication used no tenant's settings. Logged once. |
 | 1011 | `TenantryDidNotRun` | Error | `app.UseTenantResolution()` resolved a request, but `app.UseTenantry()` did not run before its endpoint, which was not run (500). |
+| 1012 | `TenantInactive` | Warning | A request's tenant is not active (`ValidateTenantActivity`). |
 | 2001 | `TenantIsolationViolation` | Error | `SaveChanges` refused to write an entity of another tenant. |
 | 2002 | `WriteWithoutTenant` | Warning | `SaveChanges` wrote tenant-owned entities without a tenant, under `OnMissingTenant = Warn`. |
 | 2003 | `WriteMatchedNoRow` | Warning | An update or delete of a tenant-owned entity matched no row: it does not exist, belongs to another tenant, or changed concurrently. |
@@ -58,7 +59,7 @@ tag. Tenantry.Pro tags its jobs' and messages' spans the same way.
 
 It also starts a span of its own, `Tenantry.ResolveTenant`, on the `Tenantry.AspNetCore` activity source, around the
 resolvers, the store lookup and the access validators. It has the tags `tenantry.resolution.result` (`resolved`,
-`missing`, `not_found` or `access_denied`) and, when resolved, `tenant.id`. Add the source to record it:
+`missing`, `not_found`, `access_denied` or `inactive`) and, when resolved, `tenant.id`. Add the source to record it:
 
 ```csharp
 using OpenTelemetry.Trace;
@@ -76,7 +77,7 @@ The `Tenantry.AspNetCore` meter has one instrument:
 
 | Instrument | Type | Unit | Tags |
 |------------|------|------|------|
-| `tenantry.resolutions` | Counter | `{request}` | `tenantry.resolution.result` (`resolved`, `missing`, `not_found`, `access_denied`); `tenantry.resolution.rejected` (`true` when the request was refused) |
+| `tenantry.resolutions` | Counter | `{request}` | `tenantry.resolution.result` (`resolved`, `missing`, `not_found`, `access_denied`, `inactive`); `tenantry.resolution.rejected` (`true` when the request was refused) |
 
 It counts every request the middleware handles, including the ones an endpoint that requires a tenant refuses,
 which never reach your endpoints. It has no `tenant.id` tag, to keep its series few.

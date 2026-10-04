@@ -21,6 +21,7 @@ public sealed class ResolutionTests
 {
     private static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme Corp" };
     private static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex LLC" };
+    private static readonly TenantDescriptor<string> Umbrella = new() { TenantId = "umbrella", Name = "Umbrella" };
 
     [Fact]
     public async Task AGuidKeyedStore_ResolvesSubdomainsAndCustomDomains_ByItsOwnMapping()
@@ -444,18 +445,49 @@ public sealed class ResolutionTests
     }
 
     [Fact]
-    public async Task AnInactiveTenant_IsRefusedLikeOneAnAccessValidatorRefuses()
+    public async Task AnInactiveTenant_IsRejectedAsInactive_WithTheAccessDeniedResponseByDefault()
     {
-        var (app, _) = await StartWithLogsAsync<string>(tenant => tenant
-            .ResolveFromHeader("X-Tenant-Id")
-            .UseInMemoryStore([Acme, Globex])
-            .ValidateTenantActivity(t => t.TenantId != "globex"));
+        List<string> seen = [];
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant
+                .ResolveFromHeader("X-Tenant-Id")
+                .UseInMemoryStore([Acme, Globex])
+                .ValidateTenantActivity(t => t.TenantId != "globex")
+                .ConfigureResolution(o => o.OnRejected = context =>
+                {
+                    seen.Add($"{context.Reason} {context.StatusCode} {context.Tenant?.TenantId}");
+                    return Task.CompletedTask;
+                }),
+            services => services.AddProblemDetails());
         await using var _ = app;
         using var client = app.GetTestClient();
 
         (await Get(client, "acme", "/required")).Should().Be(HttpStatusCode.OK);
-        (await Get(client, "globex", "/required")).Should().Be(HttpStatusCode.Forbidden);
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
+        var inactive = await client.GetAsync("/required", TestContext.Current.CancellationToken);
         (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+
+        inactive.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await inactive.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+            .Should().Contain("Tenant access denied", "a caller cannot tell a suspended tenant from one it may not use");
+        seen.Should().Equal("Inactive 403 globex");
+        logs.For(1012).Should().HaveCount(2).And.OnlyContain(e => e.Message.Contains("globex"));
+        logs.For(1005).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AnInactiveTenant_GetsInactiveTenantStatusCode()
+    {
+        await using var app = await StartAsync<string>(tenant => tenant
+            .ResolveFromHeader("X-Tenant-Id")
+            .UseInMemoryStore([Acme, Globex])
+            .ValidateTenantActivity(t => t.TenantId != "globex")
+            .ValidateTenantAccess((_, t) => t.TenantId != "acme")
+            .ConfigureResolution(o => o.InactiveTenantStatusCode = StatusCodes.Status402PaymentRequired));
+        using var client = app.GetTestClient();
+
+        (await Get(client, "globex", "/required")).Should().Be(HttpStatusCode.PaymentRequired);
+        (await Get(client, "acme", "/required")).Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
@@ -463,8 +495,9 @@ public sealed class ResolutionTests
     {
         await using var app = await StartAsync<string>(tenant => tenant
             .ResolveFromHeader("X-Tenant-Id")
-            .UseInMemoryStore([Acme, Globex])
-            .ValidateTenantAccess((_, t) => t.TenantId != "globex"));
+            .UseInMemoryStore([Acme, Globex, Umbrella])
+            .ValidateTenantAccess((_, t) => t.TenantId != "globex")
+            .ValidateTenantActivity(t => t.TenantId != "umbrella"));
         List<string> measurements = [];
         using MeterListener listener = new();
         var meterFactory = app.Services.GetRequiredService<IMeterFactory>();
@@ -492,9 +525,11 @@ public sealed class ResolutionTests
         await Get(client, null, "/required");
         await Get(client, "initech", "/required");
         await Get(client, "globex");
+        await Get(client, "umbrella", "/required");
 
         measurements.Should().Equal(
-            "1 resolved False", "1 missing False", "1 missing True", "1 not_found True", "1 access_denied False");
+            "1 resolved False", "1 missing False", "1 missing True", "1 not_found True", "1 access_denied False",
+            "1 inactive True");
     }
 
     private static bool Record(List<string> calls, string name, bool allow)

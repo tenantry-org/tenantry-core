@@ -111,14 +111,19 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         // rest of the request.
         using var noTenant = _tenantContext.HasTenant ? _tenantContext.UseNoTenant() : null;
 
-        if (resolution.Result == ResolutionResult.AccessDenied)
+        if (resolution is { Result: ResolutionResult.AccessDenied or ResolutionResult.Inactive, Tenant: { } refused })
         {
-            TenantResolutionLog.TenantAccessDenied(
-                _logger,
-                context.Request.Method,
-                context.Request.Path,
-                context.User.Identity?.Name ?? "(anonymous)",
-                TenantIds.Format(resolution.Tenant!.TenantId));
+            var user = context.User.Identity?.Name ?? "(anonymous)";
+            var refusedId = TenantIds.Format(refused.TenantId);
+
+            if (resolution.Result == ResolutionResult.Inactive)
+            {
+                TenantResolutionLog.TenantInactive(_logger, context.Request.Method, context.Request.Path, user, refusedId);
+            }
+            else
+            {
+                TenantResolutionLog.TenantAccessDenied(_logger, context.Request.Method, context.Request.Path, user, refusedId);
+            }
         }
 
         if (required)
@@ -134,6 +139,13 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                 break;
             case ResolutionResult.NotFound:
                 TenantResolutionLog.ContinuingWithoutTenant(_logger, context.Request.Method, context.Request.Path, "names no tenant");
+                break;
+            case ResolutionResult.Inactive:
+                TenantResolutionLog.ContinuingWithoutTenant(
+                    _logger,
+                    context.Request.Method,
+                    context.Request.Path,
+                    "names a tenant that is not active");
                 break;
             default:
                 TenantResolutionLog.ContinuingWithoutTenant(
@@ -287,14 +299,16 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         var request = context.Request;
 
         // With access validators, a tenant that does not exist gets the same response as one the caller may not
-        // use, so a caller cannot find out which tenants exist.
+        // use, so a caller cannot find out which tenants exist. An inactive tenant gets that response too, with its own
+        // status code, so only an application that changes the status tells a caller the tenant is suspended.
         var (statusCode, title, detail) = resolution.Result switch
         {
             ResolutionResult.Missing => (_options.MissingTenantStatusCode, "Tenant required",
                 "This endpoint requires a tenant, and the request does not identify one."),
             ResolutionResult.NotFound when !_resolution.HasValidators => (_options.TenantNotFoundStatusCode, "Tenant not found",
                 "The request's tenant does not exist."),
-            _ => (_options.AccessDeniedStatusCode, "Tenant access denied", "The request may not use its tenant."),
+            _ => (resolution.Result == ResolutionResult.Inactive ? _options.InactiveTenantStatusCode : _options.AccessDeniedStatusCode,
+                "Tenant access denied", "The request may not use its tenant."),
         };
 
         switch (resolution.Result)
@@ -311,6 +325,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         {
             ResolutionResult.Missing => TenantRejectionReason.Missing,
             ResolutionResult.NotFound => TenantRejectionReason.NotFound,
+            ResolutionResult.Inactive => TenantRejectionReason.Inactive,
             _ => TenantRejectionReason.AccessDenied,
         };
 
@@ -319,7 +334,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             reason,
             statusCode,
             resolution.Identifier,
-            resolution.Result == ResolutionResult.AccessDenied ? resolution.Tenant : null);
+            resolution.Result is ResolutionResult.AccessDenied or ResolutionResult.Inactive ? resolution.Tenant : null);
 
         if (_options.OnRejected is { } onRejected)
         {

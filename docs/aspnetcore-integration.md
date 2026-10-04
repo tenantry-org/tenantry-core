@@ -55,7 +55,7 @@ For each request, the middleware:
    rejected (see [Status codes](#status-codes)).
 4. Checks the tenant is [active](tenant-stores.md#suspended-and-inactive-tenants), then runs the
    [access validators](access-control.md) in the order they were added. If either refuses, a request that requires a
-   tenant is rejected (`403 Forbidden`).
+   tenant is rejected (see [Status codes](#status-codes)).
 5. Makes the tenant current (`ITenantContextSetter.Use`) for the remainder of the request, tags the request's
    trace span `tenant.id` and opens a log scope with `TenantId`, and raises [`OnResolved`](#events). The tenant is
    restored when the request ends.
@@ -74,11 +74,14 @@ created in the request's service scope, so they can depend on a scoped `DbContex
 |---------------------------------------------------|----------------|--------|
 | No resolver produced an identifier | `400 Bad Request` | `MissingTenantStatusCode` |
 | The identifier names no tenant (with the default lookup: it does not parse, is the key type's default, or is not in the store) | `404 Not Found` | `TenantNotFoundStatusCode` |
-| The tenant is not active (`ValidateTenantActivity`), or an access validator refused it | `403 Forbidden` | `AccessDeniedStatusCode` |
+| An access validator refused the tenant | `403 Forbidden` | `AccessDeniedStatusCode` |
+| The tenant is not active (`ValidateTenantActivity`) | `403 Forbidden`, with the access-denied response | `InactiveTenantStatusCode` |
 | The identifier names no tenant, and access validators are configured | same as access denied | `AccessDeniedStatusCode` |
 
 With access validators, a tenant that does not exist gets exactly the response of one the caller may not use,
-so an authenticated user of one tenant cannot probe for others. Change the codes with `ConfigureResolution`:
+so an authenticated user of one tenant cannot probe for others. A suspended tenant gets that response too, unless you
+give `InactiveTenantStatusCode` another value, such as `402 Payment Required` for a lapsed subscription. Change the
+codes with `ConfigureResolution`:
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -109,8 +112,8 @@ response of your own in [`OnRejected`](#events).
   `UseRequestLocalization` with a culture provider that reads `ITenantContext<TKey>`. To refuse a tenant, use an
   [access validator](access-control.md#validating-tenant-access).
 - `OnRejected` runs when an endpoint that requires a tenant rejects a request, before Tenantry writes its response.
-  It is told the `Reason` (`Missing`, `NotFound` or `AccessDenied`), the `StatusCode` Tenantry would send, the
-  `Identifier` the request sent and, for `AccessDenied`, the refused `Tenant`. Change `StatusCode`, or write your
+  It is told the `Reason` (`Missing`, `NotFound`, `AccessDenied` or `Inactive`), the `StatusCode` Tenantry would send,
+  the `Identifier` the request sent and, for `AccessDenied` and `Inactive`, the refused `Tenant`. Change `StatusCode`, or write your
   own response and call `HandleResponse()`, so Tenantry writes none:
 
 ```csharp

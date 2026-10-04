@@ -44,10 +44,19 @@ public sealed class TenantResolutionOptions<TKey>
     public int TenantNotFoundStatusCode { get; set; } = StatusCodes.Status404NotFound;
 
     /// <summary>
-    /// The status code when the request's tenant is inactive or an access validator refuses it. Default
-    /// <c>403 Forbidden</c>.
+    /// The status code when an access validator refuses the request's tenant. Default <c>403 Forbidden</c>.
     /// </summary>
     public int AccessDeniedStatusCode { get; set; } = StatusCodes.Status403Forbidden;
+
+    /// <summary>
+    /// The status code when the request's tenant is not active (<c>ValidateTenantActivity</c>). Default
+    /// <c>403 Forbidden</c>.
+    /// </summary>
+    /// <remarks>
+    /// The response is the access-denied one, so by default a caller cannot tell a suspended tenant from one it may
+    /// not use. Set another status, such as <c>402 Payment Required</c>, to tell it.
+    /// </remarks>
+    public int InactiveTenantStatusCode { get; set; } = StatusCodes.Status403Forbidden;
 
     /// <summary>
     /// Called when a request's tenant is made current, before the rest of the pipeline runs: to add the tenant to
