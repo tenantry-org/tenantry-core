@@ -114,11 +114,25 @@ NuGet.org.
 
 The GitHub release attaches the packages as the workflow built them, which its checksums (`SHA256SUMS`) and build
 provenance attestations are for. NuGet.org adds its repository signature to each package it serves, so its copy
-hashes differently and has no attestation of its own. `gh attestation verify Tenantry.Core.0.7.0.nupkg --repo
-tenantry-org/tenantry-core` checks an attached package. `dotnet nuget verify --all tenantry.core.0.7.0.nupkg` checks
-NuGet.org's signature on its copy and prints its content hash, the SHA-512 of the package before NuGet.org signed it,
-which equals the attached package's `openssl dgst -sha512 -binary Tenantry.Core.0.7.0.nupkg | base64`. Releases up to
-0.7.0 attach only the checksums and SBOMs.
+hashes differently and has no attestation of its own. A tag runs the `release.yml` of the tagged commit, so only a
+release branch whose `release.yml` attaches the packages gives releases that do: those cut from `master` from 0.8 on,
+and `release/0.7` once a patch brings `master`'s `release.yml` to it ([A patch](#a-patch)). 0.7.0 and earlier releases
+attach only the checksums and SBOMs. To check a package, download each copy into its own folder, since the two file
+names differ only in case:
+
+```sh
+mkdir github nuget
+gh release download v0.8.0 --repo tenantry-org/tenantry-core -p Tenantry.Core.0.8.0.nupkg -D github
+curl -fsSL -o nuget/tenantry.core.0.8.0.nupkg \
+  https://api.nuget.org/v3-flatcontainer/tenantry.core/0.8.0/tenantry.core.0.8.0.nupkg
+gh attestation verify github/Tenantry.Core.0.8.0.nupkg --repo tenantry-org/tenantry-core
+openssl dgst -sha512 -binary github/Tenantry.Core.0.8.0.nupkg | openssl base64 -A && echo
+dotnet nuget verify --all nuget/tenantry.core.0.8.0.nupkg
+```
+
+`gh attestation verify` shows the attached package was built by the release workflow from the tagged commit.
+`dotnet nuget verify --all` checks NuGet.org's signature on its copy and prints its content hash, the SHA-512 of the
+package before NuGet.org signed it, which is the line `openssl` prints.
 
 Before anything is built, the workflow checks that no package already has the version on NuGet.org
 (`scripts/check-unpublished.sh`), and the push refuses a duplicate rather than skipping it. So a tag moved or pushed

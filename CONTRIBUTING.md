@@ -111,8 +111,10 @@ checks, then **pauses for approval** in the `release` environment (only `v*` tag
 same packages, with their symbol packages, to NuGet.org via OIDC trusted publishing. The GitHub release's notes are the
 version's section of `CHANGELOG.md` (`scripts/release-notes.sh`), and a tag without one fails before anything is built.
 The release attests each package's build provenance and attaches the packages as built, their checksums (`SHA256SUMS`)
-and a CycloneDX SBOM per package. NuGet.org's copy of a package also carries NuGet.org's repository signature, so it
-hashes differently from the attached one ([The release](RELEASING.md#the-release) says how to check each). A tag
+and a CycloneDX SBOM per package; 0.7.0 and earlier attach no packages. NuGet.org's copy of a package also carries
+NuGet.org's repository signature, so it hashes differently from the attached one: download each into its own folder,
+then check the attached one with `gh attestation verify` and NuGet.org's with `dotnet nuget verify --all`
+([The release](RELEASING.md#the-release) has the commands, and says which releases attach packages). A tag
 with a prerelease suffix makes a GitHub prerelease, and only the highest released version is marked as the latest
 GitHub release. [RELEASING.md](RELEASING.md) has the steps.
 
