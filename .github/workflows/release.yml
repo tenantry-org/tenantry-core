@@ -81,6 +81,17 @@ jobs:
         if: github.event_name == 'push'
         run: bash scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
 
+      - name: Require the release's notes in master's CHANGELOG.md too
+        # Every section added to a release branch is also added to master's (RELEASING.md), so the next minor's
+        # changelog keeps it. A new minor's section reaches master as the cherry-pick pushed before the tag.
+        if: github.event_name == 'push'
+        run: |
+          git show refs/remotes/origin/master:CHANGELOG.md > "$RUNNER_TEMP/master-CHANGELOG.md"
+          bash scripts/release-notes.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/master-CHANGELOG.md" > /dev/null || {
+            echo "::error::master's CHANGELOG.md has no ## [${GITHUB_REF_NAME#v}] section: add it there, then rerun"
+            exit 1
+          }
+
       - name: Require the version to be unpublished on NuGet.org
         # A published version cannot be replaced, and the push below refuses a duplicate: a moved or re-pushed tag for
         # a released version stops here, before anything is built, rather than releasing packages whose checksums do not

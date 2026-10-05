@@ -70,7 +70,9 @@ The script makes only a minor's `X.Y.0`. To start with a release candidate, do s
 Later candidates and `v0.7.0` follow on the same branch, each from a pull request into it that adds its own
 `CHANGELOG.md` section (`## [0.7.0-rc.2]`, `## [0.7.0]`), as a patch does. A rule added after the first candidate
 joins the `## Release 0.7.0` table, which the analyzer accepts, rather than a second section. Every section added to
-`release/X.Y` is also added to `master`'s `CHANGELOG.md`, placed by version.
+`release/X.Y` is also added to `master`'s `CHANGELOG.md`, placed by version, before the tag is pushed: the release
+workflow refuses a tag whose section is missing from `origin/master`. The first candidate's section reaches `master` as
+the cherry-pick in step 4 above, so push `master` before its tag, as for a new minor.
 
 ## A patch
 
@@ -83,8 +85,8 @@ joins the `## Release 0.7.0` table, which the analyzer accepts, rather than a se
 3. Merge it and wait for CI to pass on the push to `release/X.Y`.
 4. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.7.*'`), that `git log
    v0.7.0..origin/release/0.7` holds only what the patch should, that `TenantryPackageBaseline` names the line's last
-   release, and that the `CHANGELOG.md` section is there. Then tag the branch's head and push the tag, as for a new
-   minor.
+   release, and that the `CHANGELOG.md` section is there, and on `master`, which the workflow checks. Then tag the
+   branch's head and push the tag, as for a new minor.
 
 Tag the head of a push to `release/X.Y`: CI runs once for each push, on its last commit, so a commit in the middle of
 a push of several has no run of its own, and its tag is refused.
@@ -96,8 +98,9 @@ NuGet.org.
 ## The release
 
 1. The workflow checks that the tag is a release tag on its branch's history, that CI passed on the push to
-   `release/X.Y` that put the commit there, and that it has notes. A tag on a commit `master` contains, on another
-   minor's branch, or on an unmerged branch fails before anything is built (`scripts/release-source.sh`).
+   `release/X.Y` that put the commit there, and that it has notes, on its branch and on `master`. A tag on a commit
+   `master` contains, on another minor's branch, or on an unmerged branch fails before anything is built
+   (`scripts/release-source.sh`).
 2. It reruns CI on the tagged commit, then waits for approval in the `release` environment. Once approved, it pushes
    the six library packages and their symbol packages to NuGet.org, then `Tenantry.Templates`
    ([The templates package](#the-templates-package)), and creates the GitHub release, marked as the latest only if no
