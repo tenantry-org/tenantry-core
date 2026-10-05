@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fails if any of the packages already has the version on the feed, so a release never publishes over, or skips, a
 # version that exists: a moved or re-pushed tag would otherwise attest and release packages whose checksums do not
-# match the published ones. Run by release.yml before anything is built. Usage:
+# match the published ones. Run by release.yml before anything is built, and by Tenantry Core's prerelease job
+# (ci.yml). Usage:
 #
 #   scripts/check-unpublished.sh <version> <package id>...
 #
