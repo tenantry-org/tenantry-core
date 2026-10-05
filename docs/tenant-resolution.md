@@ -169,6 +169,12 @@ the factory returns, so return a new one. An instance is used for every request.
 
 A custom resolver runs in the order it was added among the built-in ones.
 
+With `app.UseTenantResolution()`, the resolvers first run before authentication, up to the first `ResolveFromClaim` or
+`ResolveFromPropagationHeader`. A custom resolver that reads `HttpContext.User` finds no user there and returns
+nothing, so the resolvers after it are tried, and a tenant one of them finds stands in place of the user's. Only when
+none finds one does `app.UseTenantry()` run them all again after authentication. Add such a resolver last, or use
+`ResolveFromClaim`.
+
 Return only the identifier, not the tenant: the store looks it up. An identifier the store does not know is rejected
 on an endpoint that requires a tenant (`404`, or `403` when access validators are configured).
 
