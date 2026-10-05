@@ -241,8 +241,8 @@ Copy this into the application's agent instructions:
   awaited, never blocked on.
 - `CreateScope` and `MakeCurrent` only take a tenant read from the store, never one built from outside input.
 - Resolve DbContexts inside the tenant's scope; do not keep one across tenants.
-- Prefer `Guid` tenant ids. String ids must not differ only in case or accents, which SQL Server's and MySQL's default
-  collations ignore.
+- Prefer `Guid` tenant ids. String ids must not differ only in case or accents: SQL Server's and MySQL's default
+  collations ignore case, and MySQL's also ignores accents.
 - Every change to tenant-owned data access keeps the isolation test passing: one tenant cannot read or write
   another's rows.
 ```
