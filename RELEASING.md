@@ -123,8 +123,9 @@ Before anything is built, the workflow checks that no package already has the ve
 again for a released version fails, instead of creating a GitHub release whose checksums do not match the published
 packages. A dry run given a version checks it too.
 
-If a release stops part way, after some packages were pushed, do not rerun it: the check refuses the version, since
-it is partly published, and a published package cannot be replaced. Release the next patch instead, from the same
+If a release stops part way, after some packages were pushed, rerunning it does not finish it, and a published package
+cannot be replaced. Rerunning the failed job fails at the push, as NuGet.org refuses a version a package has already;
+rerunning every job fails at the check that the version is unpublished. Release the next patch instead, from the same
 branch: add its `CHANGELOG.md` section, which says it replaces the incomplete release, and tag it. Unlist the
 incomplete version's packages on NuGet.org, so no one picks a set that does not match, unless the release stopped
 only at `Tenantry.Templates` ([The templates package](#the-templates-package)). `TenantryPackageBaseline` names the
@@ -132,6 +133,30 @@ last release whose six library packages were all published, which is the incompl
 for each library package at the baseline version, and would fail for one never published at it. An incomplete `X.Y.0`
 is the exception, as the workflow refuses a patch whose baseline is in an older minor: set `TenantryPackageBaseline` to
 `X.Y.0`, and in the project file of each library package `X.Y.0` lacks, to the previous release.
+
+If every package was pushed and only the GitHub release is missing, create it by hand instead, from the run's packages,
+which it attested before the push, within 7 days of the run, while GitHub keeps them. In a checkout with the tags
+fetched, with the run's id from its URL, and the same files and marks the workflow would have given it:
+
+```sh
+tag=v0.7.1
+run=<the release run's id>
+rm -rf artifacts/release
+gh run download "$run" --repo tenantry-org/tenantry-core --name nuget-packages --dir artifacts/release
+(cd artifacts/release && sha256sum -- *.nupkg *.snupkg > SHA256SUMS)
+bash scripts/release-notes.sh "$tag" <(git show "$tag:CHANGELOG.md") > artifacts/release/notes.md
+release='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+newest="$(git tag --list 'v[0-9]*' | grep -E "$release" | sort -V | tail -n 1)"
+flags=(--latest=false)
+[[ "$tag" == "$newest" ]] && flags=(--latest)
+[[ "$tag" == *-* ]] && flags+=(--prerelease)
+gh release create "$tag" --repo tenantry-org/tenantry-core --verify-tag --title "$tag" \
+  --notes-file artifacts/release/notes.md "${flags[@]}" artifacts/release/*.nupkg artifacts/release/*.snupkg \
+  artifacts/release/SHA256SUMS artifacts/release/sbom/*.cdx.json
+```
+
+If the workflow created the release but not all its files, upload the missing ones with `gh release upload "$tag"
+<files> --clobber` instead.
 
 ## Prereleases from master
 
