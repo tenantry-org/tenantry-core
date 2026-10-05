@@ -174,7 +174,8 @@ jobs:
         # builds for every target framework and runs, as an application would (see the script). Without the templates
         # package, which an application cannot reference: the script checks every package in the folder it is given.
         run: |
-          mkdir -p ./artifacts/libraries
+          rm -rf ./artifacts/libraries
+          mkdir ./artifacts/libraries
           cp ./artifacts/*.nupkg ./artifacts/libraries/
           rm ./artifacts/libraries/Tenantry.Templates.[0-9]*.nupkg
           bash scripts/check-package-consumer.sh ./artifacts/libraries 'Tenantry.*'
