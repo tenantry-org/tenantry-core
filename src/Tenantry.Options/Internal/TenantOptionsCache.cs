@@ -9,7 +9,7 @@ namespace Tenantry.Options.Internal;
 
 /// <summary>
 /// The current tenant's id as text, for the options caches, which have no key type: <c>ConfigurePerTenant</c>
-/// registers it for the application's.
+/// registers it as <see cref="CurrentTenantId{TKey}"/> for the application's tenant key type.
 /// </summary>
 internal interface ICurrentTenantId
 {
