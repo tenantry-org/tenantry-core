@@ -83,7 +83,11 @@ compatibility = File.Exists(compatibility) ? compatibility : Path.Combine("docs"
 var documented = Regex.Match(File.ReadAllText(compatibility), @"The packages target (?:\*\*)?(?<list>net\d+\.\d+(?:(?:, | and )net\d+\.\d+)*)").Groups["list"].Value;
 var documentedFrameworks = Regex.Matches(documented, @"net\d+\.\d+").Select(m => m.Value).ToHashSet();
 var shippedFrameworks = packages.SelectMany(p => p.Dependencies).Select(d => d.Framework).Where(f => f.StartsWith("net", StringComparison.Ordinal)).ToHashSet();
-if (!documentedFrameworks.SetEquals(shippedFrameworks))
+if (documentedFrameworks.Count == 0)
+{
+    failures.Add($"{compatibility} has no sentence naming the target frameworks in the form \"The packages target net8.0, net9.0 and net10.0\", the list in bold or not.");
+}
+else if (!documentedFrameworks.SetEquals(shippedFrameworks))
 {
     failures.Add($"{compatibility} lists {string.Join(", ", documentedFrameworks.Order())} but the packages ship {string.Join(", ", shippedFrameworks.Order())}.");
 }
