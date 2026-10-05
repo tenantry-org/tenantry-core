@@ -76,11 +76,11 @@ foreach (var package in packages)
     Console.WriteLine($"{package.Id} {package.Version}: {package.Dependencies.Count} dependencies checked");
 }
 
-// docs/compatibility.md names the target frameworks ("The packages target net8.0, net9.0 and net10.0"); the list
-// must match what the packages ship.
+// docs/compatibility.md names the target frameworks ("The packages target net8.0, net9.0 and net10.0", the list in
+// bold or not, as each repository writes it); the list must match what the packages ship.
 var compatibility = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(directory))!, "docs", "compatibility.md");
 compatibility = File.Exists(compatibility) ? compatibility : Path.Combine("docs", "compatibility.md");
-var documented = Regex.Match(File.ReadAllText(compatibility), @"The packages target (?<list>net\d+\.\d+(?:(?:, | and )net\d+\.\d+)*)").Groups["list"].Value;
+var documented = Regex.Match(File.ReadAllText(compatibility), @"The packages target (?:\*\*)?(?<list>net\d+\.\d+(?:(?:, | and )net\d+\.\d+)*)").Groups["list"].Value;
 var documentedFrameworks = Regex.Matches(documented, @"net\d+\.\d+").Select(m => m.Value).ToHashSet();
 var shippedFrameworks = packages.SelectMany(p => p.Dependencies).Select(d => d.Framework).Where(f => f.StartsWith("net", StringComparison.Ordinal)).ToHashSet();
 if (!documentedFrameworks.SetEquals(shippedFrameworks))
