@@ -35,7 +35,10 @@ public interface ITenantInvalidator<in TKey>
     /// <param name="cancellationToken">Cancels the invalidation.</param>
     /// <returns>A task that completes when every handler has run.</returns>
     /// <remarks>
-    /// Every handler runs even when another throws, the broadcasting ones after the others. An exception from a
+    /// Handlers run one after another, the broadcasting ones after the others, and each runs even when an earlier one
+    /// throws: once they have all run, the call throws the exception, or an <see cref="AggregateException"/> of
+    /// several. A cancelled <paramref name="cancellationToken"/> stops the call before the next handler with an
+    /// <see cref="OperationCanceledException"/>, in place of any exceptions so far. An exception from a
     /// broadcasting handler means this instance is invalidated and some others may not be: they keep their copies
     /// until those expire, or until a retry of this call reaches them.
     /// </remarks>

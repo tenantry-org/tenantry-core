@@ -83,7 +83,7 @@ Exceptions:
 - `ArgumentException`: `tenantId` is one Tenantry reserves for "no tenant": the key type's default (`Guid.Empty`, `0`) or an empty string.
 - `Exception`: A handler threw (several: `AggregateException`), after every handler ran.
 
-Every handler runs even when another throws, the broadcasting ones after the others. An exception from a broadcasting handler means this instance is invalidated and some others may not be: they keep their copies until those expire, or until a retry of this call reaches them.
+Handlers run one after another, the broadcasting ones after the others, and each runs even when an earlier one throws: once they have all run, the call throws the exception, or an `AggregateException` of several. A cancelled `cancellationToken` stops the call before the next handler with an `OperationCanceledException`, in place of any exceptions so far. An exception from a broadcasting handler means this instance is invalidated and some others may not be: they keep their copies until those expire, or until a retry of this call reaches them.
 
 ### `InvalidateLocallyAsync(TKey, CancellationToken)`
 

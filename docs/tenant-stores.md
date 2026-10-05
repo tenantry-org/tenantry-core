@@ -216,8 +216,10 @@ public sealed class PriceListCache : ITenantInvalidationHandler<Guid>
 }
 ```
 
-Each handler runs even when another throws; the exception is thrown once they have all run. Invalidating an id
-Tenantry reserves for "no tenant" (`Guid.Empty`, `0`, an empty string) throws, since no tenant has it.
+Handlers run one after another, and each runs even when an earlier one throws: once they have all run, the call throws
+the exception, or an `AggregateException` of several. A cancelled token stops the call before the next handler with
+an `OperationCanceledException`, in place of any exceptions so far. Invalidating an id Tenantry reserves for "no
+tenant" (`Guid.Empty`, `0`, an empty string) throws, since no tenant has it.
 
 ### Several instances
 
