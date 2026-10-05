@@ -323,6 +323,29 @@ leases, and a context used as another tenant after opening its connection or tra
 bulk updates and deletes, creating, migrating and deleting the database, and HiLo keys (SQL Server, PostgreSQL). The
 [`DatabasePerTenant` sample](../samples/Tenantry.Samples.DatabasePerTenant) gives each tenant its own SQLite file.
 
+### A second database per tenant
+
+`UseConnectionStrings` gives each tenant one connection string, so every context `AddDbContextPerTenantDatabase`
+registers connects to the same database. For a second per-tenant database, such as a reporting one, register its
+context with `AddDbContext` and build the connection string from the current tenant in the options callback, which
+`AddDbContext` runs for each scope:
+
+```csharp
+builder.Services.AddDbContext<ReportingDbContext>((sp, options) =>
+{
+    var tenant = sp.GetRequiredService<ITenantContext<string>>().CurrentTenant
+        ?? throw new TenantNotResolvedException("No tenant is current, so there is no reporting database.");
+    options.UseSqlServer($"Server=reports;Database=reports_{tenant.TenantId};Integrated Security=true").UseTenantry();
+});
+
+public class ReportingDbContext(DbContextOptions<ReportingDbContext> options) : DbContext(options);
+```
+
+That context is not pooled, since a pool runs the options callback once, and it has no guard: one used after a
+switch to another tenant keeps the first tenant's database. To fail closed there too, derive a guard from
+`TenantContextGuard` ([Extending](#extending-contributors)) that compares the context's connection string with the
+current tenant's, and add it with `AddInterceptors`.
+
 ## Extending: contributors
 
 Packages that build on Tenantry (Tenantry Pro, or your own) can add to every context that uses `UseTenantry()`.
