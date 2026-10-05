@@ -61,39 +61,9 @@ jobs:
         # so a new release of a tool never changes a build, a release build included
         run: dotnet tool restore
 
-      - name: Check every action is pinned to a commit
-        # A tag can be moved; a commit cannot. Dependabot keeps the pins and their version comments up to date.
-        run: |
-          if grep -rnE '^\s*(-\s*)?uses:\s*[^./][^@]*@' .github/workflows | grep -vE '@[0-9a-f]{40}( |$)'; then
-            echo "::error::Pin these actions to a full commit SHA, with the version in a comment (uses: owner/repo@<sha> # vX.Y.Z)"
-            exit 1
-          fi
-
-      - name: Lint the workflows
-        # actionlint checks the workflows' syntax and expressions, and runs shellcheck on each run block
-        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
-        with:
-          version: 1.7.12   # a new actionlint release never changes a build
-
-      - name: Check the Dependabot configuration
-        # Its list of banded packages (version ranges, per-framework versions) must match the project files
-        run: dotnet run scripts/check-dependabot.cs
-
-      - name: Check for removed names
-        # The README, docs, samples and src name no API or package that no longer exists (eng/common/removed-names.txt)
-        run: dotnet run scripts/check-removed-names.cs
-
-      - name: Check the documentation's links
-        # Every link in the README, docs and samples reaches a file, page and heading, as tenantry.dev serves docs/
-        run: dotnet run scripts/check-doc-links.cs
-
       - name: Restore
         # Locked: fails if a test or sample project's packages.lock.json is out of date
         run: dotnet restore Tenantry.slnx --locked-mode
-
-      - name: Check formatting
-        # .editorconfig; fix locally with `dotnet format Tenantry.slnx`
-        run: dotnet format Tenantry.slnx --verify-no-changes --no-restore
 
       - name: SonarCloud begin
         if: ${{ inputs.run_sonar }}
@@ -172,11 +142,6 @@ jobs:
         # for Microsoft.Extensions.*, otherwise up to the next breaking version (see the script)
         run: dotnet run scripts/check-package-ranges.cs -- ./artifacts
 
-      - name: Check the API reference
-        # docs/api is generated from the XML documentation comments; a change to the public API or its comments
-        # must commit the regenerated pages (scripts/generate-api-docs.sh)
-        run: bash scripts/generate-api-docs.sh --check
-
       - name: Consumer check
         # A stand-in application restores these packages from an empty cache with package source mapping,
         # builds for every target framework and runs, as an application would (see the script). Without the templates
@@ -211,6 +176,71 @@ jobs:
             ./artifacts/sbom/*.cdx.json
           if-no-files-found: error
           retention-days: 7
+
+  # The checks that need neither the tests nor the packages, beside the job above to shorten the run: the workflows,
+  # the Dependabot configuration, the documentation's names and links, formatting, the API reference and the Native
+  # AOT publish. A caller's job that needs this workflow waits for both jobs (ci.yml's prerelease, release.yml's
+  # publish), and the packages come only from the job above.
+  checks:
+    name: Checks and Native AOT
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # MinVer needs full history
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Show selected SDK
+        # global.json pins the 10.0 feature band, so an installed preview SDK is never used.
+        run: dotnet --version
+
+      - name: Check every action is pinned to a commit
+        # A tag can be moved; a commit cannot. Dependabot keeps the pins and their version comments up to date.
+        run: |
+          if grep -rnE '^\s*(-\s*)?uses:\s*[^./][^@]*@' .github/workflows | grep -vE '@[0-9a-f]{40}( |$)'; then
+            echo "::error::Pin these actions to a full commit SHA, with the version in a comment (uses: owner/repo@<sha> # vX.Y.Z)"
+            exit 1
+          fi
+
+      - name: Lint the workflows
+        # actionlint checks the workflows' syntax and expressions, and runs shellcheck on each run block
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          version: 1.7.12   # a new actionlint release never changes a build
+
+      - name: Check the Dependabot configuration
+        # Its list of banded packages (version ranges, per-framework versions) must match the project files
+        run: dotnet run scripts/check-dependabot.cs
+
+      - name: Check for removed names
+        # The README, docs, samples and src name no API or package that no longer exists (eng/common/removed-names.txt)
+        run: dotnet run scripts/check-removed-names.cs
+
+      - name: Check the documentation's links
+        # Every link in the README, docs and samples reaches a file, page and heading, as tenantry.dev serves docs/
+        run: dotnet run scripts/check-doc-links.cs
+
+      - name: Restore
+        # Locked: fails if a test or sample project's packages.lock.json is out of date
+        run: dotnet restore Tenantry.slnx --locked-mode
+
+      - name: Check formatting
+        # .editorconfig; fix locally with `dotnet format Tenantry.slnx`
+        run: dotnet format Tenantry.slnx --verify-no-changes --no-restore
+
+      - name: Check the API reference
+        # docs/api is generated from the XML documentation comments; a change to the public API or its comments
+        # must commit the regenerated pages (scripts/generate-api-docs.sh)
+        run: bash scripts/generate-api-docs.sh --check
 
       - name: Verify AOT publish
         run: dotnet publish samples/Tenantry.Samples.Aot -c Release

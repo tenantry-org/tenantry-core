@@ -45,10 +45,12 @@ builds on Windows.
 ## Checks your PR must pass
 
 CI runs these steps (`.github/workflows/build-test.yml`) on every push to `master` or a `release/X.Y` branch and every
-pull request into them, in this
-order, and the release workflow runs them again on the tagged commit. Each one runs locally with the same command,
-from the repository root. `dotnet tool restore` installs the tools `dotnet-tools.json` pins (docfx, dotnet-coverage,
-ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them restore them too.
+pull request into them, and the release workflow runs them again on the tagged commit. One job restores, builds, tests
+and packs, in this order; a second job beside it runs the checks that need neither the tests nor the packages: the
+workflow, Dependabot, name and link checks, the lock files, formatting, the API reference and Native AOT. Each one runs
+locally with the same command, from the repository root. `dotnet tool restore` installs the tools `dotnet-tools.json`
+pins (docfx, dotnet-coverage, ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them restore them
+too.
 
 | Check | Command | When it fails |
 |-------|---------|---------------|

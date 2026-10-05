@@ -86,8 +86,8 @@ jobs:
   # Every push to master publishes its packages to NuGet.org as a prerelease (X.Y.0-alpha.0.N), so Tenantry Pro can
   # build against master's packages from a clean clone. Stable versions come only from tags on release/X.Y
   # (release.yml), on commits master does not contain, so master's versions only grow. It publishes the packages the
-  # Build & Test job of this run built, tested and checked, once that job and the Windows build have passed; the
-  # .NET 11 lane does not block it. Not the templates package, which only a release publishes.
+  # Build & Test job of this run built, tested and checked, once build-test.yml's jobs and the Windows build have
+  # passed; the .NET 11 lane does not block it. Not the templates package, which only a release publishes.
   prerelease:
     name: Publish the prerelease to NuGet
     runs-on: ubuntu-latest

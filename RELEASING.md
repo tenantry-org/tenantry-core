@@ -192,7 +192,7 @@ immutable release's files cannot be added to or replaced once it is published.
 ## Prereleases from master
 
 Each push to `master` publishes its packages to NuGet.org as a prerelease, with no approval, once that run's Build &
-Test job and Windows build have passed; the .NET 11 lane is not waited for. The `prerelease` job in
+Test jobs (`build-test.yml`) and Windows build have passed; the .NET 11 lane is not waited for. The `prerelease` job in
 `.github/workflows/ci.yml` pushes the packages, with their symbol packages, that the Build & Test job built and checked.
 A version is `X.Y.0-alpha.0.N`, such as `0.7.0-alpha.0.126`. `X.Y` is `MinVerMinimumMajorMinor`, the minor `master`
 works towards, and `N` is MinVer's count of the commits since `master`'s nearest release tag, `v0.6.0`. No release tag
