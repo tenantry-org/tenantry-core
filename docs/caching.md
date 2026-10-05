@@ -91,6 +91,11 @@ public sealed class DraftStore(ITenantDistributedCache cache)
 }
 ```
 
+### IMemoryCache
+
+Tenantry does not isolate `IMemoryCache`: a tenant's data cached there under a key without the tenant is read by every
+tenant. Use `HybridCache`, which `IsolateCaches()` isolates, or put the tenant id in the key.
+
 ## Output caching
 
 `IsolateOutputCache()`, in `Tenantry.AspNetCore`, makes every cached response vary by the request's tenant:
