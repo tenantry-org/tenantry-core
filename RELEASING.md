@@ -110,10 +110,10 @@ packages. A dry run given a version checks it too.
 If a release stops part way, after some packages were pushed, do not rerun it: the check refuses the version, since
 it is partly published, and a published package cannot be replaced. Release the next patch instead, from the same
 branch: add its `CHANGELOG.md` section, which says it replaces the incomplete release, and tag it. Unlist the
-incomplete version's packages on NuGet.org, so no one picks a set that does not match, and leave
-`TenantryPackageBaseline` at the last release whose six library packages were all published: pack looks for each
-library package at the baseline version, and would fail for one never published at it. A release that stopped only at
-`Tenantry.Templates` is the exception to both ([The templates package](#the-templates-package)).
+incomplete version's packages on NuGet.org, so no one picks a set that does not match, unless the release stopped
+only at `Tenantry.Templates` ([The templates package](#the-templates-package)). `TenantryPackageBaseline` names the
+last release whose six library packages were all published, which is the incomplete one only in that case: pack looks
+for each library package at the baseline version, and would fail for one never published at it.
 
 ## Prereleases from master
 
@@ -177,8 +177,8 @@ Before the first release that includes it, the maintainer does two things on NuG
 If the second is missed, the release pushes the six library packages and their symbol packages, then fails on
 `Tenantry.Templates`, before the GitHub release is created. Do not rerun it: as for any release that stops part way
 ([The release](#the-release)), fix the policy and release the next patch. The six library packages already published
-are a complete set, so they need not be unlisted, and `TenantryPackageBaseline` may move to that version: all six
-exist at it, and pack never validates `Tenantry.Templates`.
+are a complete set, so they need not be unlisted, and `TenantryPackageBaseline` moves to that version, as after any
+release: all six exist at it, and pack never validates `Tenantry.Templates`.
 
 ## Repository settings
 
@@ -202,7 +202,7 @@ NuGet.org user name in the `NUGET_USER` repository secret.
 ## After any release
 
 - On the release branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, once
-  every package of it is on NuGet.org, and remove the `<TenantryPackageBaseline />` of a package released for the
+  its library packages are on NuGet.org, and remove the `<TenantryPackageBaseline />` of a package released for the
   first time (`Tenantry.Templates` has none, as pack does not validate it). Pack then checks each package against that
   release, so a patch cannot break code compiled against it (Tenantry.Pro accepts any release in the minor). After an
   `X.Y.0`, do the same on `master`, and delete each `src/*/CompatibilitySuppressions.xml` on both: the release
