@@ -166,6 +166,8 @@ The rule reports a registration only when it sees everything the options do, so 
   this does not count, and neither does the framework;
 - options that are not a lambda or a method of the project's own (a delegate in a variable), a method that can be
   overridden (a virtual, abstract or interface method), and a registration without options;
+- a registration made through a generic method of the project's own (`AddDbContext<TContext>` inside a method generic
+  in `TContext`), whose context type the rule cannot tell;
 - a registration in generated code, where nothing is reported; generated code still counts for the helpers and
   `OnConfiguring` it holds;
 - a context with an `OnConfiguring`, of its own or a base context's, that calls `UseTenantry()` or hands the builder
@@ -182,8 +184,10 @@ The rule reports a registration only when it sees everything the options do, so 
 A context declared in the same project is still reported when only a library's `ConfigureDbContext<TContext>` helper
 applies `UseTenantry()`, as the rule cannot see into it: suppress the warning there, or add `.UseTenantry()` to the
 registration, which is harmless, since `UseTenantry()` returns at once when the options already have it. On EF Core 8,
-a test project that registers the application's context again gets only its own registration's options: add
-`.UseTenantry()` to the test registration, or set `dotnet_diagnostic.TNY1004.severity = none` for the test project.
+a test project that removes the application's options (`services.RemoveAll<DbContextOptions<AppDbContext>>()`) and
+registers the context again gets only its own registration's options; without the removal, EF Core 8 keeps the first
+registration's, the application's. Add `.UseTenantry()` to the test registration, or set
+`dotnet_diagnostic.TNY1004.severity = none` for the test project.
 
 The registrations in a method are all taken to run, in source order, so one on a branch that excludes another, after
 an early return, or in a callback that runs later still counts. A few false reports remain by design: the builder
