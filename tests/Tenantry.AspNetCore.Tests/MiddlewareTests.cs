@@ -406,7 +406,7 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
     [Fact]
     public async Task ValidateTenantAccess_WhenUnauthenticatedUserIsDenied_Returns403()
     {
-        // The principal has no identity at all (User.Identity is null) and is denied —
+        // The principal has no identity at all (User.Identity is null) and is denied, which
         // exercises the null-identity branch of the access-denied warning log, which falls
         // back to "(anonymous)".
         var builder = WebApplication.CreateBuilder();
@@ -798,7 +798,7 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        // No tenant header — no tenant resolved, not required
+        // No tenant header: no tenant resolved, not required
         var response = await client.GetAsync("/tenant", TestContext.Current.CancellationToken);
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
@@ -841,7 +841,7 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
     [Fact]
     public async Task Middleware_WhenNoEndpointMatched_UsesDefaultTenantRequirement()
     {
-        // A request to an unmapped path has no endpoint — context.GetEndpoint() returns null.
+        // A request to an unmapped path has no endpoint, so context.GetEndpoint() returns null.
         // The middleware then applies the default requirement.
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -862,7 +862,7 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        // Request to an unmapped path — no endpoint, no tenant header
+        // Request to an unmapped path: no endpoint, no tenant header
         var response = await client.GetAsync("/unmapped-path-that-has-no-endpoint", TestContext.Current.CancellationToken);
 
         // Middleware defers to default (not required), framework returns 404

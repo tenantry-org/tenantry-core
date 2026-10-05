@@ -118,7 +118,7 @@ public sealed class InterceptorNoTenantContextTests : IDisposable
     [Fact]
     public void SavingChanges_WithNullContext_DoesNotThrow()
     {
-        // DbContextEventData.Context is DbContext? — null is a valid (if rare) input.
+        // DbContextEventData.Context is DbContext?, so null is a valid (if rare) input.
         // Exercises the null-context guard in ApplyTenantIsolation.
         var act = () => TenantSaveChangesInterceptor.Instance.SavingChanges(new NullContextEventData(), default);
 

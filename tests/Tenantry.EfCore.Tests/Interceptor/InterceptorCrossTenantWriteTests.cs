@@ -11,7 +11,7 @@ public sealed class InterceptorCrossTenantWriteTests
     [Fact]
     public async Task SaveChanges_WhenModifyingEntityWithDifferentTenantId_ThrowsIsolationViolation()
     {
-        // Arrange — seed an "acme" entity
+        // Arrange: seed an "acme" entity
         var ctx = TestTenantContext.For("acme");
         await using var conn = DbContextFactory.CreateSharedConnection();
         var db = await DbContextFactory.CreateContextAsync(ctx, conn);
@@ -39,7 +39,7 @@ public sealed class InterceptorCrossTenantWriteTests
         db.Orders.Attach(attackerEntity);
         db.Entry(attackerEntity).State = EntityState.Modified;
 
-        // Act & Assert — throws before any DB write
+        // Act & Assert: throws before any DB write
         Func<Task> act = () => db.SaveChangesAsync();
         await act.Should().ThrowAsync<TenantIsolationViolationException>()
             .WithMessage("*acme*")
@@ -75,7 +75,7 @@ public sealed class InterceptorCrossTenantWriteTests
     [Fact]
     public async Task SaveChanges_WhenModifyingOwnEntity_Succeeds()
     {
-        // Arrange — modifying own entity should NOT throw
+        // Arrange: modifying own entity should NOT throw
         var ctx = TestTenantContext.For("acme");
         await using var conn = DbContextFactory.CreateSharedConnection();
         var db = await DbContextFactory.CreateContextAsync(ctx, conn);

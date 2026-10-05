@@ -36,7 +36,7 @@ public sealed class SubdomainTenantResolverTests
     [Fact]
     public async Task TwoSegmentHost_ReturnsNull()
     {
-        // "app.com" has only 2 segments — the resolver requires 3+ to distinguish
+        // "app.com" has only 2 segments, and the resolver requires 3+ to distinguish
         // a true subdomain from a plain domain name.
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost("app.com");
@@ -73,7 +73,7 @@ public sealed class SubdomainTenantResolverTests
     public async Task MultiSegmentHost_WithEmptyLeadingSegment_ReturnsNull()
     {
         // ".example.com" has 3 segments (so it passes the length check), but the first
-        // label is blank — the resolved subdomain is whitespace, so we return null
+        // label is blank: the resolved subdomain is whitespace, so we return null
         // rather than an empty string.
         SubdomainTenantResolver resolver = new();
         var context = ContextWithHost(".example.com");

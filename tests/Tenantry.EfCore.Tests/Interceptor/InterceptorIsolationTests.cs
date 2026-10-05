@@ -11,7 +11,7 @@ public sealed class InterceptorIsolationTests
     [Fact]
     public async Task Query_WhenTwoTenantsHaveData_ReturnsOnlyCurrentTenantData()
     {
-        // Arrange — one mutable context, one connection, one database
+        // Arrange: one mutable context, one connection, one database
         TestTenantContext ctx = new();
         await using var conn = DbContextFactory.CreateSharedConnection();
 
@@ -54,7 +54,7 @@ public sealed class InterceptorIsolationTests
         db.Orders.Add(new Order { Description = "Globex order" });
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Act — explicit opt-in to bypass filters
+        // Act: explicit opt-in to bypass filters
         var allOrders = await db.Orders.IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert

@@ -16,7 +16,7 @@ public sealed class TenantWriteGuardTests
 
         await using var conn = DbContextFactory.CreateSharedConnection();
         var db = await DbContextFactory.CreateContextAsync(ctx, conn);
-        // TenantId = null (the actual default for string) — it is stamped
+        // TenantId = null (the actual default for string): it is stamped
         Order order = new() { TenantId = null!, Description = "unstamped" };
         db.Orders.Add(order);
 
@@ -190,7 +190,7 @@ public sealed class TenantWriteGuardTests
     public async Task AddedEntity_NonStringKey_DoesNotThrow()
     {
         // With a value-type key (Guid), the `tenantId is string` fast-path in TenantIds.IsReserved is
-        // never matched — this exercises the non-string branch of the unstamped check that
+        // never matched, so this exercises the non-string branch of the unstamped check that
         // the string-keyed tests can't reach.
         var tenantId = Guid.NewGuid();
         var ctx = new GuidTestTenantContext().As(tenantId);
@@ -213,7 +213,7 @@ public sealed class TenantWriteGuardTests
         await using var conn = DbContextFactory.CreateSharedConnection();
         var db = await DbContextFactory.CreateContextAsync(ctx, conn);
 
-        // Add a mapped entity that does not implement ITenantEntity — it is skipped
+        // Add a mapped entity that does not implement ITenantEntity: it is skipped
         db.NonTenants.Add(new NonTenant { Name = "plain" });
 
         var act = () => TenantWriteGuard<string>.Check(db);

@@ -14,7 +14,7 @@ namespace Tenantry.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// xUnit creates a new class instance per [Fact], so each test gets its own database in the run's
-/// SQL Server container — no inter-test data leakage.
+/// SQL Server container, so there is no inter-test data leakage.
 /// </remarks>
 public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifetime
 {
@@ -27,7 +27,7 @@ public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifeti
     {
         // Force Development so the Developer Exception Page turns unhandled exceptions
         // (isolation violations, NOT NULL failures) into 500s. Without this, the host
-        // defaults to Production in CI — no exception handler is registered, and TestServer
+        // defaults to Production in CI, where no exception handler is registered, and TestServer
         // rethrows straight to the HttpClient instead of returning 500.
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
         builder.WebHost.UseTestServer();
@@ -69,7 +69,7 @@ public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifeti
             return new IntegrationOrderResponse(order.Id, order.TenantId, order.Description);
         });
 
-        // Endpoint: global reference data — no tenant filter (Labels don't implement ITenantEntity)
+        // Endpoint: global reference data, with no tenant filter (Labels don't implement ITenantEntity)
         _app.MapGet("/labels", async (IntegrationOrderDbContext db) =>
         {
             var labels = await db.Labels
@@ -79,7 +79,7 @@ public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifeti
             return labels;
         });
 
-        // Endpoint: admin cross-tenant query — bypasses query filter
+        // Endpoint: admin cross-tenant query, which bypasses query filter
         _app.MapGet("/orders/all", async (IntegrationOrderDbContext db) =>
         {
             var orders = await db.Orders
@@ -90,7 +90,7 @@ public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifeti
             return orders;
         });
 
-        // Endpoint: admin delete — loads with IgnoreQueryFilters, so the entity is found even if
+        // Endpoint: admin delete, which loads with IgnoreQueryFilters, so the entity is found even if
         // it belongs to a different tenant; interceptor still validates TenantId on SaveChanges.
         _app.MapDelete("/orders/{id:int}/admin", async (int id, IntegrationOrderDbContext db) =>
         {
@@ -106,7 +106,7 @@ public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifeti
             return Results.NoContent();
         });
 
-        // Endpoint: create with an explicit TenantId — used to test strict-mode spoofing detection
+        // Endpoint: create with an explicit TenantId, used to test strict-mode spoofing detection
         _app.MapPost("/orders/explicit-tenant", async (IntegrationOrderDbContext db, IntegrationCreateOrderWithTenantRequest req) =>
         {
             IntegrationOrder order = new() { TenantId = req.TenantId, Description = req.Description };
@@ -220,7 +220,7 @@ public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifeti
         var acmeLabels = await acmeClient.GetFromJsonAsync<List<string>>("/labels", cancellationToken: TestContext.Current.CancellationToken);
         acmeLabels.Should().ContainSingle().Which.Should().Be("Global notice");
 
-        // No tenant header — endpoint still returns data
+        // No tenant header: endpoint still returns data
         using var anonClient = _app.GetTestClient();
         var anonLabels = await anonClient.GetFromJsonAsync<List<string>>("/labels", cancellationToken: TestContext.Current.CancellationToken);
         anonLabels.Should().ContainSingle().Which.Should().Be("Global notice");
@@ -239,7 +239,7 @@ public sealed class FullPipelineTests(SqlServerFixture sqlServer) : IAsyncLifeti
         globexClient.DefaultRequestHeaders.Add("X-Tenant-Id", "globex");
         await globexClient.PostAsJsonAsync("/orders", new IntegrationCreateOrderRequest("Globex Gadget"), cancellationToken: TestContext.Current.CancellationToken);
 
-        // Admin query — no tenant header, bypasses filter
+        // Admin query: no tenant header, bypasses filter
         using var adminClient = _app.GetTestClient();
         var allOrders = await adminClient.GetFromJsonAsync<List<IntegrationOrderResponse>>("/orders/all", cancellationToken: TestContext.Current.CancellationToken);
 

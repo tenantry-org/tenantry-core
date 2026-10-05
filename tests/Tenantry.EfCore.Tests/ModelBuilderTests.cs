@@ -50,7 +50,7 @@ public sealed class ModelBuilderTests
         ctx.As("globex");
         var globexView = await db.Products.AsNoTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        // Both scopes see all products — no filter was applied
+        // Both scopes see all products, as no filter was applied
         acmeView.Should().HaveCount(2);
         globexView.Should().HaveCount(2);
     }

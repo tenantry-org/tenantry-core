@@ -9,7 +9,7 @@ namespace Tenantry.IntegrationTests;
 /// <summary>
 /// End-to-end tests for EF Core-backed tenant resolution.
 /// Proves that the full middleware → EF store → tenant context chain works
-/// against a real SQL Server database — not just an in-memory store.
+/// against a real SQL Server database, not an in-memory store.
 /// </summary>
 /// <remarks>Each test gets its own database in the run's SQL Server container.</remarks>
 public sealed class EfCoreTenantStoreTests(SqlServerFixture sqlServer) : IAsyncLifetime

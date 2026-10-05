@@ -33,7 +33,7 @@ public sealed class TenantDescriptorTests
 
         // The interface-typed local is the assertion: this only compiles if
         // TenantDescriptor<T> implements ITenantDescriptor<T>. CA1859 (prefer the
-        // concrete type for perf) is intentionally suppressed — using the concrete
+        // concrete type for perf) is intentionally suppressed: using the concrete
         // type here would defeat the purpose of the test.
 #pragma warning disable CA1859
         ITenantDescriptor<string> iface = descriptor;

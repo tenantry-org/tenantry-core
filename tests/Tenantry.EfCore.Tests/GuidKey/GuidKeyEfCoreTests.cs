@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 namespace Tenantry.EfCore.Tests.GuidKey;
 
 /// <summary>
-/// Verifies that the generic <c>TKey</c> constraint works correctly with <see cref="Guid"/> keys —
+/// Verifies that the generic <c>TKey</c> constraint works correctly with <see cref="Guid"/> keys,
 /// covering query filtering, interceptor stamping, cross-tenant write prevention, and
 /// <see cref="System.Threading.AsyncLocal{T}"/> isolation under concurrent load.
 /// </summary>
@@ -82,7 +82,7 @@ public sealed class GuidKeyEfCoreTests
             // Act
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            // Assert — interceptor must have stamped the Guid TenantId
+            // Assert: interceptor must have stamped the Guid TenantId
             order.TenantId.Should().Be(tenantId);
         }
     }
@@ -90,7 +90,7 @@ public sealed class GuidKeyEfCoreTests
     [Fact]
     public async Task Interceptor_ThrowsOnCrossTenantModify()
     {
-        // Arrange — seed as acme
+        // Arrange: seed as acme
         GuidTestTenantContext ctx = new();
         Guid acme = Guid.NewGuid();
         Guid globex = Guid.NewGuid();
@@ -107,7 +107,7 @@ public sealed class GuidKeyEfCoreTests
         ctx.As(globex);
         acmeOrder.Description = "Tampered by globex";
 
-        // Act & Assert — interceptor must block the write
+        // Act & Assert: interceptor must block the write
         await db.Invoking(d => d.SaveChangesAsync())
             .Should().ThrowAsync<TenantIsolationViolationException>();
     }
@@ -115,7 +115,7 @@ public sealed class GuidKeyEfCoreTests
     [Fact]
     public async Task AsyncLocalIsolation_ConcurrentRequests_EachSeeOnlyTheirData()
     {
-        // Arrange — two separate databases, each pre-seeded for one tenant
+        // Arrange: two separate databases, each pre-seeded for one tenant
         Guid acme = Guid.NewGuid();
         Guid globex = Guid.NewGuid();
 
@@ -137,7 +137,7 @@ public sealed class GuidKeyEfCoreTests
         globexDb.Orders.Add(new GuidOrder { Description = "Globex order" });
         await globexDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Act — query both tenants concurrently
+        // Act: query both tenants concurrently
         Task<List<GuidOrder>> acmeTask = Task.Run(async () =>
         {
             acmeCtx.As(acme);
@@ -152,7 +152,7 @@ public sealed class GuidKeyEfCoreTests
 
         List<GuidOrder>[] results = await Task.WhenAll(acmeTask, globexTask);
 
-        // Assert — AsyncLocal must not have leaked between the concurrent tasks
+        // Assert: AsyncLocal must not have leaked between the concurrent tasks
         results[0].Should().HaveCount(1).And.AllSatisfy(o => o.TenantId.Should().Be(acme));
         results[1].Should().HaveCount(1).And.AllSatisfy(o => o.TenantId.Should().Be(globex));
 

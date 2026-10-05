@@ -61,7 +61,7 @@ public sealed class TestTenantContext : ITenantContext<string>
 /// </summary>
 /// <remarks>
 /// Uses a <see langword="static"/> <see cref="AsyncLocal{T}"/> so that all instances within
-/// the same async context share the same current tenant — required by EF Core's compiled model cache.
+/// the same async context share the same current tenant, as required by EF Core's compiled model cache.
 /// xUnit runs each <c>[Fact]</c> in its own async context, so tests running concurrently
 /// do not interfere with each other.
 /// </remarks>
