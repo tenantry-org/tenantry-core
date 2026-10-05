@@ -63,7 +63,7 @@ ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them re
 | The build has no warnings | `dotnet build Tenantry.slnx -c Release --no-restore` | Warnings are errors, trim (`IL2xxx`) and AOT (`IL3xxx`) warnings in `src/` included |
 | The samples start | `bash scripts/smoke-samples.sh` | After the Release build |
 | Every test passes on every target framework, with coverage | `bash scripts/test-with-coverage.sh` | Docker runs the integration tests; it writes `coverage/coverage.xml` |
-| SonarCloud quality gate | CI only | On every push to `master` or `release/X.Y` and every pull request into them. A pull request from a fork, or from Dependabot, gets no `SONAR_TOKEN`, so its Sonar step fails. For a result, a maintainer pushes its commits to a branch of this repository (`git fetch origin pull/<number>/head && git push origin FETCH_HEAD:refs/heads/<branch>`) and opens a pull request from that branch |
+| SonarCloud quality gate | CI only | On every push to `master` and every pull request into it; not on `release/X.Y`, whose changes were analysed on `master` (the SonarCloud plan serves only the main branch). A pull request from a fork, or from Dependabot, gets no `SONAR_TOKEN`, so its Sonar step fails. For a result, a maintainer pushes its commits to a branch of this repository (`git fetch origin pull/<number>/head && git push origin FETCH_HEAD:refs/heads/<branch>`) and opens a pull request from that branch |
 | Line coverage is at least 90% | `dotnet reportgenerator -reports:coverage/coverage.xml -targetdir:coverage/report -reporttypes:JsonSummary`, then `jq '.summary.linecoverage' coverage/report/Summary.json` | CI fails below 90: add tests for the new code |
 | The public API still works for code built against the last release | `for p in src/*/*.csproj; do dotnet pack "$p" -c Release --no-build -o artifacts; done` (the pack validates each package against `TenantryPackageBaseline`) | Keep the old member, or, for an intended break in a minor release, record it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true` |
 | A CycloneDX SBOM per package | The `dotnet CycloneDX` loop in `build-test.yml` | Run it after the pack, as it reads each package's version from `artifacts`, and fix the project it names |
@@ -105,8 +105,8 @@ If you have signing configured, signed commits are appreciated. See GitHub's gui
 Every release is a `vX.Y.Z` tag on the head of its own branch, `release/X.Y`, which is cut from `master` before the
 minor's first tag; fixes land on `master` and are cherry-picked into the branch for later patches. A ruleset lets only
 the maintainer create, move or delete `v*` tags. The release workflow checks that the tag is a release tag on its
-`release/X.Y` branch, on a commit `master` does not contain, checks that CI, SonarCloud included, passed on the push to
-that branch that put the tagged commit there, reruns the CI gate on it (without SonarCloud), including both package
+`release/X.Y` branch, on a commit `master` does not contain, checks that CI passed on the push to that branch that
+put the tagged commit there, reruns the CI gate on it (without SonarCloud), including both package
 checks, then **pauses for approval** in the `release` environment (only `v*` tags can deploy to it) and publishes those
 same packages, with their symbol packages, to NuGet.org via OIDC trusted publishing. The GitHub release's notes are the
 version's section of `CHANGELOG.md` (`scripts/release-notes.sh`), and a tag without one fails before anything is built.

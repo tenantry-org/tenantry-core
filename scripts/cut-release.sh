@@ -99,7 +99,7 @@ title="Tenantry $version"
 cat <<EOF
 Prepared $branch at $(git rev-parse --short "$release"), and two commits on master. Nothing is pushed or tagged.
 
-1. Push the branch, and wait for CI, SonarCloud included, to pass on that push:
+1. Push the branch, and wait for CI to pass on that push:
    git push origin $branch
 2. Push master:
    git push origin master

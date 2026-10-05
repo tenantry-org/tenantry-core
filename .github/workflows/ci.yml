@@ -23,11 +23,15 @@ jobs:
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
-      # SonarCloud analyses pushes to master and release/*, whose runs release.yml requires, and every pull request
-      # into them. A fork's or Dependabot's pull request gets no SONAR_TOKEN, so its Sonar step fails until a
-      # maintainer runs the change from a branch of this repository. A run started by hand or by
-      # dependabot-lock-files.yml is neither a push nor a pull request.
-      run_sonar: ${{ github.event_name != 'workflow_dispatch' }}
+      # SonarCloud analyses pushes to master and pull requests into it. Not release/*, nor pull requests into them:
+      # the organization's SonarCloud plan serves only the main branch, so the quality gate of any other branch cannot
+      # be read and the step would fail. What a release branch holds was analysed on master, where every change lands
+      # first. A fork's or Dependabot's pull request gets no SONAR_TOKEN, so its Sonar step fails until a maintainer
+      # runs the change from a branch of this repository. A run started by hand or by dependabot-lock-files.yml is
+      # neither a push nor a pull request.
+      run_sonar: >-
+        ${{ github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/heads/release/')
+        && !startsWith(github.base_ref, 'release/') }}
 
   # Windows, where paths use backslashes: restore and build only (the tests need Docker with Linux containers).
   windows-build:
