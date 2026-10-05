@@ -72,6 +72,13 @@ internal static partial class TenantResolutionLog
         EventName = "TenantResolutionAfterAuthentication")]
     public static partial void TenantResolutionAfterAuthentication(ILogger logger, string method, string path);
 
+    [LoggerMessage(1016, LogLevel.Warning,
+        "app.UseTenantResolution() ran before routing chose {Endpoint}, so ResolveFromRouteValue read no route value, " +
+        "and the tenant current during authentication, if any, did not come from the route. Call app.UseRouting() " +
+        "before app.UseTenantResolution(). Logged once",
+        EventName = "TenantResolutionBeforeRouting")]
+    public static partial void TenantResolutionBeforeRouting(ILogger logger, string endpoint);
+
     [LoggerMessage(1011, LogLevel.Error,
         "app.UseTenantResolution() resolved request {Method} {Path}, but app.UseTenantry() did not run before its " +
         "endpoint, so the access validators never checked the tenant. The endpoint was not run (500). Call " +

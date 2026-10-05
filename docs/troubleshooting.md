@@ -234,7 +234,8 @@ The middleware ran before routing chose the endpoint, so `RequireTenantByDefault
 
 Routing ran after the middleware, so the route value did not exist yet. Unless `RequireTenantByDefault()` rejected
 the request first, the middleware logs this once (event 1007). See
-[Pipeline ordering](aspnetcore-integration.md#pipeline-ordering).
+[Pipeline ordering](aspnetcore-integration.md#pipeline-ordering). With `app.UseTenantResolution()`, call
+`app.UseRouting()` before it as well, or authentication runs without the route's tenant (event 1016, logged once).
 
 ## Subdomain resolution returns null on localhost
 

@@ -362,6 +362,75 @@ public sealed class ResolutionTests
     }
 
     [Fact]
+    public async Task RouteValueResolutionBeforeRouting_FollowedByAResolverThatFindsATenant_IsLogged()
+    {
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant.ResolveFromRouteValue().ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme, Globex]),
+            pipeline: a =>
+            {
+                a.UseTenantry();
+                a.UseRouting();
+                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+            });
+        await using var _ = app;
+        using var client = app.GetTestClient();
+        using HttpRequestMessage request = new(HttpMethod.Get, "/acme/orders");
+        request.Headers.Add("X-Tenant-Id", "globex");
+
+        // The route's tenant would have come first.
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("globex");
+
+        logs.For(1007).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task RouteValueResolutionBeforeUseTenantResolutionsRouting_FollowedByAResolverThatFindsATenant_IsLogged()
+    {
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant.ResolveFromRouteValue().ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme, Globex]),
+            pipeline: a =>
+            {
+                a.UseTenantResolution();
+                a.UseRouting();
+                a.UseTenantry();
+                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+            });
+        await using var _ = app;
+        using var client = app.GetTestClient();
+        using HttpRequestMessage request = new(HttpMethod.Get, "/acme/orders");
+        request.Headers.Add("X-Tenant-Id", "globex");
+
+        // The header's tenant was current during authentication, and stays: the route's is never considered.
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("globex");
+
+        logs.For(1016).Should().ContainSingle();
+        logs.For(1007).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ClaimResolutionBeforeAuthentication_FollowedByAResolverThatFindsATenant_IsLogged()
+    {
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant.ResolveFromClaim().ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme, Globex]),
+            services => services.AddAuthentication(TestAuthentication.Name)
+                .AddScheme<AuthenticationSchemeOptions, TestAuthentication>(TestAuthentication.Name, null),
+            pipeline: a =>
+            {
+                a.UseTenantry();
+                a.UseAuthentication();
+            });
+        await using var _ = app;
+        using var client = app.GetTestClient();
+
+        // The user's claim names Acme, and would have come first.
+        (await Get(client, "globex")).Should().Be(HttpStatusCode.OK);
+
+        logs.For(1008).Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task UseTenantryInTheRightPlace_LogsNoOrderingWarning()
     {
         var (app, logs) = await StartWithLogsAsync<string>(

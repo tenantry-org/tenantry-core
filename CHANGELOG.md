@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ResolveFromRouteValue` could not read. Before, it was logged only for an endpoint with `RequireTenant()` or
   `AllowMissingTenant()`, so without `RequireTenantByDefault()` a request to `/{tenant}/orders` ran without a tenant
   and nothing was logged above Debug.
+- `app.UseTenantResolution()` before `app.UseRouting()` logs event 1016 when routing chooses an endpoint whose route
+  value `ResolveFromRouteValue` could not read. Before, nothing was logged, and authentication ran without the route's
+  tenant: with no tenant's settings, or with the tenant a later resolver named.
+- Events 1007 and 1008 are also logged when a resolver that could not read its value yet (`ResolveFromRouteValue`
+  before routing, `ResolveFromClaim` before authentication) was followed by one that named a tenant, which then won.
 - Behaviour the docs misstated: with `app.UseTenantResolution()`, a signed-in request whose tenant was current
   during authentication, and which the access validators refuse, is refused on every endpoint, not only on those that
   require a tenant (the ASP.NET Core and access control guides, and the comments on `ITenantAccessValidator<TKey>`,

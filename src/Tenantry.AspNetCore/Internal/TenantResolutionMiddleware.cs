@@ -254,7 +254,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             context.GetEndpoint() is { } endpoint &&
             (HasTenantMetadata(endpoint) ||
              (resolution.MissedResolvers is not null &&
-              await ResolvesNowAsync<RouteValueTenantResolver>(context, resolution).ConfigureAwait(false))) &&
+              await resolution.ResolvesNowAsync<RouteValueTenantResolver>(context).ConfigureAwait(false))) &&
             Interlocked.Exchange(ref _warnedBeforeRouting, 1) == 0)
         {
             TenantResolutionLog.TenantryBeforeRouting(_logger, endpoint.DisplayName ?? "(unnamed endpoint)");
@@ -264,27 +264,11 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             Volatile.Read(ref _warnedBeforeAuthentication) == 0 &&
             context.Features.Get<IAuthenticationFeature>() is not null &&
             context.User.Identity?.IsAuthenticated == true &&
-            await ResolvesNowAsync<ClaimTenantResolver>(context, resolution).ConfigureAwait(false) &&
+            await resolution.ResolvesNowAsync<ClaimTenantResolver>(context).ConfigureAwait(false) &&
             Interlocked.Exchange(ref _warnedBeforeAuthentication, 1) == 0)
         {
             TenantResolutionLog.TenantryBeforeAuthentication(_logger, context.Request.Method, context.Request.Path);
         }
-    }
-
-    // Whether a resolver of this kind, which found nothing before the pipeline gave it what it reads, finds an
-    // identifier now.
-    private static async ValueTask<bool> ResolvesNowAsync<TResolver>(HttpContext context, TenantResolution<TKey> resolution)
-        where TResolver : ITenantResolver
-    {
-        foreach (var resolver in resolution.MissedResolvers?.OfType<TResolver>() ?? [])
-        {
-            if (!string.IsNullOrWhiteSpace(await resolver.ResolveAsync(context, context.RequestAborted).ConfigureAwait(false)))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     // A scheme that signed the refused user in may keep it on the server (a cookie's SessionStore) and renew it as the

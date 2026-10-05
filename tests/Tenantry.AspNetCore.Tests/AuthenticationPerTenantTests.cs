@@ -842,6 +842,46 @@ public sealed class AuthenticationPerTenantTests
     }
 
     [Fact]
+    public async Task RouteValueResolution_WithRoutingAfterUseTenantResolution_AuthenticatesWithoutTheTenant_AndIsLoggedOnce()
+    {
+        RecordingLoggerProvider logs = new();
+        await using var app = await StartRoutedAsync(RouteJwtTenants, routingFirst: false, logs);
+
+        // An endpoint without the route value the resolver reads is not warned about.
+        (await Get(app, null, "/tenant")).Body.Should().Be("(none)");
+        logs.For(1016).Should().BeEmpty();
+
+        // The route names Acme, but authentication ran with no tenant's settings, which refuse Acme's token.
+        (await Get(app, null, "/acme/whoami", Token("acme", "alice"))).Status.Should().Be(HttpStatusCode.Unauthorized);
+        (await Get(app, null, "/acme/whoami", Token("acme", "alice"))).Status.Should().Be(HttpStatusCode.Unauthorized);
+
+        logs.For(1016).Should().ContainSingle().Which.Message.Should().Contain("/{tenant}/whoami")
+            .And.Contain("app.UseRouting() before app.UseTenantResolution()");
+    }
+
+    [Fact]
+    public async Task RouteValueResolution_WithRoutingFirst_AuthenticatesWithTheTenant_AndLogsNoOrderingWarning()
+    {
+        RecordingLoggerProvider logs = new();
+        await using var app = await StartRoutedAsync(RouteJwtTenants, routingFirst: true, logs);
+
+        (await Get(app, null, "/acme/whoami", Token("acme", "alice"))).Should().Be((HttpStatusCode.OK, "acme:alice"));
+
+        logs.For(1016).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RoutingAfterUseTenantResolution_WithoutARouteValueResolver_LogsNoOrderingWarning()
+    {
+        RecordingLoggerProvider logs = new();
+        await using var app = await StartRoutedAsync(JwtTenants, routingFirst: false, logs);
+
+        (await Get(app, "acme", "/acme/whoami", Token("acme", "alice"))).Should().Be((HttpStatusCode.OK, "acme:alice"));
+
+        logs.For(1016).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task WebApplicationsOwnUseAuthentication_RunsTooEarly_AndIsLogged()
     {
         RecordingLoggerProvider logs = new();
@@ -910,11 +950,51 @@ public sealed class AuthenticationPerTenantTests
         tenant
             .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
             .UseInMemoryStore([Acme, Globex])
-            .ConfigurePerTenant(perTenant => perTenant.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, (o, t) =>
+            .ConfigurePerTenant(perTenant => perTenant.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, TenantIssuer));
+
+    // The tenant comes from the route: /{tenant}/whoami.
+    private static void RouteJwtTenants(ITenantBuilder<string> tenant) =>
+        tenant
+            .ResolveFromRouteValue()
+            .UseInMemoryStore([Acme, Globex])
+            .ConfigurePerTenant(perTenant => perTenant.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, TenantIssuer));
+
+    // Accepts only the tokens of the tenant's own issuer and key.
+    private static void TenantIssuer(JwtBearerOptions o, ITenantDescriptor<string> t)
+    {
+        o.TokenValidationParameters.ValidIssuer = Issuer(t.Name.ToLowerInvariant());
+        o.TokenValidationParameters.IssuerSigningKey = Keys[t.Name.ToLowerInvariant()];
+    }
+
+    // UseTenantResolution(), authentication, UseTenantry() and authorization, with routing where the test puts it.
+    private static Task<WebApplication> StartRoutedAsync(
+        Action<ITenantBuilder<string>> configure,
+        bool routingFirst,
+        RecordingLoggerProvider logs) =>
+        StartAsync(
+            configure,
+            AddJwt,
+            pipeline: a =>
             {
-                o.TokenValidationParameters.ValidIssuer = Issuer(t.Name.ToLowerInvariant());
-                o.TokenValidationParameters.IssuerSigningKey = Keys[t.Name.ToLowerInvariant()];
-            }));
+                if (routingFirst)
+                {
+                    a.UseRouting();
+                }
+
+                a.UseTenantResolution();
+
+                if (!routingFirst)
+                {
+                    a.UseRouting();
+                }
+
+                a.UseAuthentication();
+                a.UseTenantry();
+                a.UseAuthorization();
+                a.MapGet("/{tenant}/whoami", (HttpContext http, ITenantContext<string> current) => $"{current.CurrentTenantId}:{http.User.Identity!.Name}")
+                    .RequireAuthorization();
+            },
+            logs);
 
     private static void AddJwt(IServiceCollection services)
     {

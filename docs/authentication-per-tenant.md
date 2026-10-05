@@ -101,7 +101,8 @@ Between the two, the tenant is current but not yet checked against the user. So:
 
 Add the resolver that names the tenant for authentication (host, subdomain, route or header) before any claim
 resolver. A tenant resolved after authentication, by a claim or by a resolver added after one, authenticated with the
-default settings.
+default settings. A route value exists only once routing has run: `WebApplication` adds routing first, and a pipeline
+that calls `app.UseRouting()` itself must call it before `app.UseTenantResolution()` (event 1016 warns otherwise).
 
 ## Sign-in redirects
 

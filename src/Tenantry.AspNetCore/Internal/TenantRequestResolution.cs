@@ -5,15 +5,34 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Tenantry.AspNetCore.Internal;
 
 /// <summary>
-/// What resolution found for a request, and the resolvers that found nothing because what they read was not there yet:
-/// a claim resolver before authentication, and a route-value resolver before routing.
+/// What resolution found for a request, and the resolvers tried before the one that found it (or all, when none did)
+/// that found nothing because what they read was not there yet: a claim resolver before authentication, and a
+/// route-value resolver before routing.
 /// </summary>
 internal sealed record TenantResolution<TKey>(
     ResolutionResult Result,
     string? Identifier,
     ITenantDescriptor<TKey>? Tenant,
     List<ITenantResolver>? MissedResolvers)
-    where TKey : IEquatable<TKey>, IParsable<TKey>;
+    where TKey : IEquatable<TKey>, IParsable<TKey>
+{
+    /// <summary>
+    /// Whether a missed resolver of this kind finds an identifier now that the pipeline has given it what it reads.
+    /// </summary>
+    public async ValueTask<bool> ResolvesNowAsync<TResolver>(HttpContext context)
+        where TResolver : ITenantResolver
+    {
+        foreach (var resolver in MissedResolvers?.OfType<TResolver>() ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(await resolver.ResolveAsync(context, context.RequestAborted).ConfigureAwait(false)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
 
 /// <summary>
 /// Finds a request's tenant: the resolvers in registration order, the store lookup, the access validators, and the
@@ -144,22 +163,22 @@ internal sealed class TenantRequestResolution<TKey>
 
         if (tenant is null)
         {
-            return new(ResolutionResult.NotFound, identifier, null, null);
+            return new(ResolutionResult.NotFound, identifier, null, missedResolvers);
         }
 
         // The access validators first, so only a caller they allow can learn that a tenant is suspended. Before
         // authentication they cannot run yet: app.UseTenantry() runs them on an inactive tenant too (CompleteAsync).
         if (!beforeAuthentication && !await ValidateAsync(context, tenant).ConfigureAwait(false))
         {
-            return new(ResolutionResult.AccessDenied, identifier, tenant, null);
+            return new(ResolutionResult.AccessDenied, identifier, tenant, missedResolvers);
         }
 
         if (_activity is not null && !await _activity.IsActiveAsync(tenant, cancellationToken).ConfigureAwait(false))
         {
-            return new(ResolutionResult.Inactive, identifier, tenant, null);
+            return new(ResolutionResult.Inactive, identifier, tenant, missedResolvers);
         }
 
-        return new(ResolutionResult.Resolved, identifier, tenant, null);
+        return new(ResolutionResult.Resolved, identifier, tenant, missedResolvers);
     }
 }
 

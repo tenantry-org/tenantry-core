@@ -25,6 +25,7 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger(TenantResolutionLog.Category);
     private int _warnedAfterAuthentication;
+    private int _warnedBeforeRouting;
 
     public async Task InvokeAsync(HttpContext context)
     {
@@ -92,6 +93,16 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
             {
                 context.SetEndpoint(guarded.Endpoint);
             }
+        }
+
+        // Routing ran after this middleware, so a route-value resolver read nothing before authentication.
+        if (resolved.MissedResolvers is not null &&
+            Volatile.Read(ref _warnedBeforeRouting) == 0 &&
+            context.GetEndpoint() is { } endpoint &&
+            await resolved.ResolvesNowAsync<RouteValueTenantResolver>(context).ConfigureAwait(false) &&
+            Interlocked.Exchange(ref _warnedBeforeRouting, 1) == 0)
+        {
+            TenantResolutionLog.TenantResolutionBeforeRouting(_logger, endpoint.DisplayName ?? "(unnamed endpoint)");
         }
     }
 
