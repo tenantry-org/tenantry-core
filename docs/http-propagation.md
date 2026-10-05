@@ -1,9 +1,8 @@
 # Calling other services
 
-When one of your services calls another as a tenant, the called service needs to know which tenant. `Tenantry.Http`
-sends the current tenant with an `HttpClient`'s or gRPC client's requests, in the `tenantry-tenant-id` header
-(`TenantPropagation.HeaderName`), and `Tenantry.AspNetCore` reads it on the other side with
-`ResolveFromPropagationHeader`.
+When one of your services calls another as a tenant, `Tenantry.Http` sends the current tenant with an `HttpClient`'s or
+gRPC client's requests, in the `tenantry-tenant-id` header (`TenantPropagation.HeaderName`), and `Tenantry.AspNetCore`
+reads it on the other side with `ResolveFromPropagationHeader`.
 
 The header name is fixed. To call a service that expects another header, set it from the current tenant in a
 `DelegatingHandler` of your own. To accept another header, use `ResolveFromHeader("X-Tenant-Id")`, which, unlike
@@ -55,7 +54,7 @@ A client created with neither, or without `AddHttpPropagation()`, fails when it 
   (`TenantIds.Format`). With no tenant, the request goes without the header, and the called service decides what that
   means, for example with `RequireTenant()`.
 - A request that already carries the header with another tenant's id, while a tenant is current, throws
-  `InvalidOperationException`. That catches a header forwarded from the incoming request or set in
+  `InvalidOperationException`, which catches a header forwarded from the incoming request or set in
   `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.MakeCurrent`. With
   no current tenant, a header you set is sent as it is.
 - Only requests to the scheme, host and port of the address passed to `UseTenantry`, or else of the registration's
@@ -74,7 +73,7 @@ throws `InvalidOperationException`.
 ## Receiving the tenant
 
 The called service resolves the tenant from the header with `ResolveFromPropagationHeader`. Any caller that reaches
-the service can set the header, so it takes a check of the caller, and reads the header only when the check passes.
+the service can set the header, so the resolver takes a check of the caller and reads the header only when it passes.
 Here the caller must have authenticated with a token carrying an `internal` scope, which your identity provider gives
 only to your services:
 
@@ -97,8 +96,8 @@ client-credentials token may be easier to recognise by its `client_id` or `azp` 
 `http.Connection.ClientCertificate`.
 
 - The check reads the authenticated user, so `app.UseTenantResolution()` stops before this resolver and
-  `app.UseTenantry()` runs it after `app.UseAuthentication()`. A tenant from the header is therefore not known while
-  authentication runs, so its schemes use their default settings.
+  `app.UseTenantry()` runs it after `app.UseAuthentication()`: a tenant from the header is not known while
+  authentication runs, and its schemes use their default settings.
 - When the check fails, the header is ignored and the next resolver runs. A caller with no token is not trusted, so
   placing `app.UseTenantry()` before `app.UseAuthentication()` makes every header ignored rather than accepted.
 - The resolver reads the value as a tenant id, with `TenantIds.TryParse`, and looks the tenant up with the store's

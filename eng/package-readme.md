@@ -1,6 +1,5 @@
-Part of Tenantry, multi-tenancy for ASP.NET Core and EF Core: one call on your `DbContext`, no base class, and it fails
-closed. A coding agent adding Tenantry to an application should follow
-[the guide for AI coding agents](https://tenantry.dev/docs/core/ai-agents).
+Part of Tenantry, multi-tenancy for ASP.NET Core and EF Core. A coding agent adding Tenantry to an application should
+follow [the guide for AI coding agents](https://tenantry.dev/docs/core/ai-agents).
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -20,8 +19,9 @@ app.UseTenantry();
 ```
 
 - Any key type (`Guid`, `int`, `string`), resolved from a header, subdomain, host, route, claim or your own resolver.
-- With no tenant, queries return nothing and tenant-owned writes are refused. A write to another tenant's row is
-  rejected, and `TenantId` is checked in every `UPDATE` and `DELETE`, so a forged key matches no row.
+- `UseTenantry()` isolates a plain `DbContext`, with no base class.
+- It fails closed: with no tenant, queries return nothing and tenant-owned writes are refused. A write to another
+  tenant's row is rejected, and `TenantId` is checked in every `UPDATE` and `DELETE`, so a forged key matches no row.
 - A database per tenant, with per-tenant connection strings and `DbContext` pooling across tenant databases.
 
 ## Which packages

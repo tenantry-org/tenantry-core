@@ -2,8 +2,8 @@
 
 A tenant store finds a tenant by id (`GetTenantAsync`) or by the identifier a request carries
 (`FindByIdentifierAsync`), returning `null` when there is none, and lists every tenant, suspended ones included
-(`GetAllTenantsAsync`). Whether work may run for a tenant is decided separately: see
-[Suspended and inactive tenants](#suspended-and-inactive-tenants).
+(`GetAllTenantsAsync`). Whether work may run for a tenant is decided separately
+([Suspended and inactive tenants](#suspended-and-inactive-tenants)).
 
 ```csharp no-compile
 public interface ITenantStore<TKey>
@@ -17,9 +17,9 @@ public interface ITenantStore<TKey>
 ```
 
 The request middleware finds a request's tenant with `FindByIdentifierAsync`. Implement it when requests name
-tenants by something other than their id, such as a subdomain slug or a custom domain with `Guid` keys: see
-[Identifiers other than the id](tenant-resolution.md#identifiers-other-than-the-id). A store that wraps another (to
-log, say) must forward `FindByIdentifierAsync` too: otherwise it gets the default, which never reaches the inner
+tenants by something other than their id, such as a subdomain slug or a custom domain with `Guid` keys
+([Identifiers other than the id](tenant-resolution.md#identifiers-other-than-the-id)). A store that wraps another, for
+logging for example, must forward `FindByIdentifierAsync` too, or it gets the default, which never reaches the inner
 store's own mapping.
 
 ## Registration and lifetimes
@@ -33,7 +33,7 @@ already holds needs none, but `ITenantLookup` and `RunInScopeAsync` throw `Inval
 
 ## In-memory store
 
-For tests, demos, and simple single-instance deployments where tenants do not change at runtime:
+For tests, demos and single-instance deployments where tenants do not change at run time:
 
 ```csharp
 tenant.UseInMemoryStore(
@@ -43,20 +43,19 @@ tenant.UseInMemoryStore(
 ]);
 ```
 
-This registers `InMemoryTenantStore<TKey>`, built when you register it. It does not see later
-changes to the collection. Two tenants with the same id, or a tenant with an id Tenantry reserves for "no tenant"
-(`Guid.Empty`, `0`, an empty string), throw `ArgumentException` at registration. So do two `string` ids that differ
-only in case, such as `acme` and `ACME`: a database whose collation ignores case (the default on SQL Server and MySQL)
-takes them for one tenant, and one tenant's query filter would match the other's rows. Ids that differ only in accents
-or trailing spaces are not refused; avoid them too. The store finds a tenant by its id exactly as written.
+This registers `InMemoryTenantStore<TKey>`, built when you register it, so it does not see later changes to the
+collection. Two tenants with the same id, or a tenant with an id Tenantry reserves for "no tenant" (`Guid.Empty`, `0`,
+an empty string), throw `ArgumentException` at registration. So do two `string` ids that differ only in case, such as
+`acme` and `ACME`, which a database whose collation ignores case takes for one tenant
+([String tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)). Ids that differ only in
+accents or trailing spaces are not refused; avoid them too. The store finds a tenant by its id exactly as written.
 
 ## Custom store
 
 For tenants in a database, a cache or a configuration service, implement `ITenantStore<TKey>`. With `string` ids, make
-sure no two tenants have ids the database's collation takes for one, such as `acme` and `ACME` under a collation that
-ignores case: a table keyed by the id in the same database guarantees it, while tenants read from configuration or
-another service do not. See
-[String tenant ids and the database's collation](efcore-integration.md#string-tenant-ids-and-the-databases-collation).
+sure no two tenants have ids the database's collation takes for one: a table keyed by the id in the same database
+guarantees it, while tenants read from configuration or another service do not
+([String tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)).
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -83,13 +82,13 @@ tenant.UseStore<EfCoreTenantStore>();
 tenant.UseStore(sp => new EfCoreTenantStore(sp.GetRequiredService<AppDbContext>()));
 ```
 
-Both are scoped ([Registration and lifetimes](#registration-and-lifetimes)). To avoid a database round trip on
-every request, [cache the tenants](#caching).
+Both are scoped ([Registration and lifetimes](#registration-and-lifetimes)). [Cache the tenants](#caching) to avoid a
+database round trip on every request.
 
 ## Suspended and inactive tenants
 
 Tenantry has no tenant status of its own: a descriptor carries only `TenantId` and `Name`. Keep the status on your
-own descriptor type, and return every tenant from the store, suspended ones included. Migration tools (Tenantry.Pro's
+own descriptor type, and return every tenant from the store, suspended ones included: migration tools (Tenantry.Pro's
 among them) find tenants through the store, so a hidden tenant misses migrations and breaks when reactivated. Keep its
 database until you remove it from the store.
 
@@ -107,14 +106,14 @@ tenant.UseStore<EfCoreTenantStore>();
 tenant.ValidateTenantActivity(t => t is Tenant { IsActive: true });
 ```
 
-Check for the active status, as here, rather than the suspended one, so a descriptor of another type is refused
-rather than served. For a check that needs services, implement `ITenantActivityValidator<TKey>` and register it as a
-singleton; every registered check must allow the tenant. Tenantry then refuses an inactive tenant:
+Check for the active status, as here, rather than the suspended one, so a descriptor of another type is refused. For a
+check that needs services, implement `ITenantActivityValidator<TKey>` and register it as a singleton; every registered
+check must allow the tenant. Tenantry then refuses an inactive tenant:
 
 - An HTTP request gets `403 Forbidden` where a tenant is required, and runs without a tenant elsewhere, even with
   `app.UseTenantResolution()`, which does not make an inactive tenant current. `OnRejected` is told the reason is
-  `Inactive`, and `InactiveTenantStatusCode` changes the status (see
-  [Status codes](aspnetcore-integration.md#status-codes)).
+  `Inactive`, and `InactiveTenantStatusCode` changes the status
+  ([Status codes](aspnetcore-integration.md#status-codes)).
 - `RunInScopeAsync` throws `TenantInactiveException`, a `TenantNotResolvedException`.
 - Tenantry.Pro's background services, schedulers and message integrations skip it.
 
@@ -136,14 +135,13 @@ With [caching](#caching), invalidate a tenant when you suspend it, or it is serv
 ## Bootstrapping with an EF Core-backed store
 
 If your tenants are in the same database as your tenant-owned entities, the `Tenant` entity must not implement
-`ITenantEntity<TKey>`: with no tenant current, the query filter would hide every row from the store. The
+`ITenantEntity<TKey>`, or, with no tenant current, the query filter would hide every row from the store. The
 [`EfCoreWeb` sample](../samples/Tenantry.Samples.EfCoreWeb) has a `Tenant` entity, an `EfCoreTenantStore` and
 seeded data.
 
 ## Caching
 
-The middleware looks the request's tenant up on every request. To serve requests without asking the store each
-time, cache the tenants:
+The middleware looks the request's tenant up on every request. To avoid asking the store each time, cache the tenants:
 
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant
@@ -152,9 +150,9 @@ builder.Services.AddTenantry<string>(tenant => tenant
     .CacheTenants(o => o.Duration = TimeSpan.FromMinutes(1)));   // 5 minutes by default
 ```
 
-`CacheTenants` keeps each tenant the store finds, in memory, for the duration, by the id or identifier it was
-looked up with. It serves Tenantry's own lookups: the request middleware's and `ITenantLookup<TKey>`'s
-(which `ITenantScopeFactory.RunInScopeAsync` and Tenantry.Pro's jobs and messages use). A lookup that finds no
+`CacheTenants` keeps each tenant the store finds in memory for the duration, by the id or identifier it was looked up
+with. It serves Tenantry's own lookups: the request middleware's and `ITenantLookup<TKey>`'s (which
+`ITenantScopeFactory.RunInScopeAsync` and Tenantry.Pro's jobs and messages use). A lookup that finds no
 tenant is not cached, so a tenant you add is found at once, and `GetAllTenantsAsync` is never cached. Code that
 injects `ITenantStore<TKey>` itself reads the store.
 
@@ -175,18 +173,17 @@ app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, IT
 });
 ```
 
-`AddTenantry` always registers `ITenantInvalidator<TKey>`, so this code runs with caching off too, when there is no
-cached copy to remove. Each instance of the application has its own cache, so `InvalidateAsync` clears this instance's
-copy, and other instances serve theirs until it expires unless you
-[publish the invalidation to them](#several-instances). The cache reads the time from a registered `TimeProvider`, so
-tests can control expiry.
+`AddTenantry` always registers `ITenantInvalidator<TKey>`, so this code also runs with caching off. Each instance of the
+application has its own cache: `InvalidateAsync` clears this instance's copy, and other instances serve theirs until it
+expires unless you [publish the invalidation to them](#several-instances). The cache reads the time from a registered
+`TimeProvider`, so tests can control expiry.
 
 ### Everything kept for a tenant
 
 `InvalidateAsync` also runs every registered `ITenantInvalidationHandler<TKey>`, with or without `CacheTenants`.
 Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options each register one, so one call clears all of them.
 Register your own for data you keep per tenant. When your code also injects the class to read from it, register it
-once and point the handler registration at that instance, so both use the same data:
+once and point the handler registration at that instance:
 
 ```csharp
 using System.Collections.Concurrent;
@@ -284,6 +281,6 @@ public sealed class InvalidationSubscriber(IInvalidationChannel channel, Instanc
 ```
 
 When the publisher throws, `InvalidateAsync` throws its exception after every other handler has run: this instance is
-cleared, and the others keep their copies until those expire. Retry the call to reach them; clearing this instance
-again does no harm. An instance that misses a message, because it was starting or lost its connection, also keeps its
-copies until they expire, so keep cache durations no longer than you can serve a stale tenant for.
+cleared, and the others keep their copies until those expire. Retry the call to reach them; clearing this instance again
+does no harm. An instance that misses a message, because it was starting or lost its connection, also keeps its copies
+until they expire, so keep cache durations no longer than you can serve a stale tenant for.

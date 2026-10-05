@@ -1,8 +1,7 @@
 # ASP.NET Core Identity
 
-ASP.NET Core Identity keeps users in your database. When tenants share that database, make the user type tenant-owned
-and its user names unique within a tenant. Tenantry then keeps each tenant's users apart like any other tenant-owned
-entity.
+When tenants share the database ASP.NET Core Identity keeps users in, make the user type tenant-owned and its user
+names unique within a tenant. Tenantry then keeps each tenant's users apart like any other tenant-owned entity.
 
 ## The user type and context
 
@@ -93,7 +92,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 ```
 
 The validator lets an anonymous caller through, so the sign-in page has its tenant current and finds the tenant's
-users. Resolve the tenant from the request (its host or route), not from a claim, since nobody is signed in yet.
+users. Resolve the tenant from the request (its host or route), not from a claim, as nobody is signed in yet.
 
 ## Pipeline order
 
@@ -110,14 +109,14 @@ app.UseTenantry();
 app.UseAuthorization();
 ```
 
-During authentication the tenant is current but not yet checked against the user. Cookie events such as
-`OnValidatePrincipal`, `SecurityStampValidatorOptions.OnRefreshingPrincipal`, and claims transformations must not
-grant claims, roles or permissions from the current tenant, and must not write as it. Do not renew or reissue the
-cookie with claims taken from the tenant: a cookie valid on several tenants carries them across.
+During authentication the tenant is current but not yet checked against the user, so cookie events such as
+`OnValidatePrincipal` and `SecurityStampValidatorOptions.OnRefreshingPrincipal`, and claims transformations, must not
+grant claims, roles or permissions from it, write as it, or renew or reissue the cookie with claims taken from it
+([How the two steps work](authentication-per-tenant.md#how-the-two-steps-work)).
 
-Name Identity's cookies per tenant whenever your tenants' hosts share cookies. Each tenant's handlers then read,
-check, renew and delete only that tenant's cookies, so a user of one tenant is anonymous on another: its sign-in page
-works, and their own session is untouched. Identity has four cookie schemes; name each:
+Name Identity's four cookie schemes per tenant whenever your tenants' hosts share cookies. Each tenant's handlers then
+read, check, renew and delete only that tenant's cookies, so a user of one tenant is anonymous on another: its sign-in
+page works, and their own session is untouched.
 
 ```csharp
 using Microsoft.AspNetCore.Authentication.Cookies;

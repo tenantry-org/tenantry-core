@@ -7,8 +7,8 @@ were resolved. None of it needs setting up beyond your logging, tracing and metr
 
 Tenantry logs under four categories: `Tenantry.AspNetCore` (the request middleware), `Tenantry.AspNetCore.OutputCache`
 (output caching per tenant, event 1009), `Tenantry.EfCore` (the isolation in your `DbContext`) and `Tenantry.Options`
-(options per tenant). Each message has an event id that does not change between versions, so you can alert on it.
-Alert on 2001 above all: a save that tried to write another tenant's row.
+(options per tenant). Event ids do not change between versions, so you can alert on them; above all on 2001, a save
+that tried to write another tenant's row.
 
 | Event id | Name | Level | When |
 |----------|------|-------|------|
@@ -33,12 +33,12 @@ Alert on 2001 above all: a save that tried to write another tenant's row.
 | 2003 | `WriteMatchedNoRow` | Warning | An update or delete of a tenant-owned entity matched no row: it does not exist, belongs to another tenant, or changed concurrently. |
 | 2004 | `TransactionNotCommitted` | Error | A save failed, or never finished, after sending statements in a transaction where a save wrote rows that depend on another of its statements' tenant check. EF Core could not roll back only that save (no savepoint, or a `TransactionScope`), so the transaction is rolled back instead of committed. `EntityType` is the entity whose check failed, or the context's type for any other failure, such as a caught save failure the application went on after. |
 | 2005 | `SaveInTransaction` | Debug | A save whose rows rely on another of its statements' tenant check runs in a transaction although `AutoTransactionBehavior` is `Never` (`OnSaveWithoutTransaction = UseTransaction`). |
-| 2006 | `UnmarkedEntityTypes` | Warning | A context's model has entity types that are neither tenant-owned nor marked as shared across tenants, and the application set `OnUnmarkedEntityType = Warn` (the default, `Allow`, logs nothing). Logged once for each model EF Core builds: usually once per context type, and again if EF Core drops the model from its cache and builds it again. |
+| 2006 | `UnmarkedEntityTypes` | Warning | A context's model has entity types that are neither tenant-owned nor marked as shared across tenants, and the application set `OnUnmarkedEntityType = Warn` (the default, `Allow`, logs nothing). Logged once for each model EF Core builds: usually once per context type, and again if EF Core drops the model from its cache. |
 | 3001 | `OrdinaryOptionsReadAsTenant` | Warning | `IOptions<T>` of a type configured per tenant was read while a tenant is current. It gives the ordinary value, so the code most likely wants `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. Logged once per options type. |
 
 While a request's tenant is current, a log scope with one property, `TenantId`, is open, so every entry the request
-writes carries it. A logging provider adds scope properties to its entries when it records scopes: Serilog's, or the
-console's and OpenTelemetry's with `IncludeScopes`. Tenantry.Pro's jobs and messages open the same scope.
+writes carries it in a logging provider that records scopes: Serilog's, or the console's and OpenTelemetry's with
+`IncludeScopes`. Tenantry.Pro's jobs and messages open the same scope.
 
 ```csharp
 builder.Logging.AddJsonConsole(o => o.IncludeScopes = true);
@@ -85,8 +85,8 @@ The `Tenantry.AspNetCore` meter has one instrument:
 |------------|------|------|------|
 | `tenantry.resolutions` | Counter | `{request}` | `tenantry.resolution.result` (`resolved`, `missing`, `not_found`, `access_denied`, `inactive`); `tenantry.resolution.rejected` (`true` when the request was refused) |
 
-It counts every request the middleware handles, including the ones an endpoint that requires a tenant refuses,
-which never reach your endpoints. It has no `tenant.id` tag, to keep its series few.
+It counts every request the middleware handles, including those refused before they reach your endpoints. It has no
+`tenant.id` tag, to keep its series few.
 
 ```csharp
 using OpenTelemetry.Metrics;

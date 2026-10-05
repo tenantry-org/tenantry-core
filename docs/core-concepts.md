@@ -1,6 +1,6 @@
 # Core concepts
 
-Everything in Tenantry is built on a small set of types in the `Tenantry` namespace (package `Tenantry.Core`).
+Tenantry is built on a few types in the `Tenantry` namespace (package `Tenantry.Core`).
 
 ## The tenant key (`TKey`)
 
@@ -14,20 +14,17 @@ where TKey : IEquatable<TKey>, IParsable<TKey>
 - `IParsable<TKey>` lets Tenantry turn text, such as the identifier a request carries in a header, route or
   claim, into a `TKey`, with the invariant culture.
 
-`TenantIds` does this the way Tenantry does, for code of your own that carries tenant ids as text: `Format` writes
-an id with the invariant culture, and `TryParse` reads one back, refusing text that names no tenant. `IsReserved` is
-true for the ids Tenantry reserves for "no tenant": `null`, the key type's default (`Guid.Empty`, `0`) and an
-empty string.
+`Guid`, `int`, `long`, `string` and most numeric types satisfy this. An application has one key type, used by its
+entities, store and registration: calling `AddTenantry` with a second one throws, and an entity that implements
+`ITenantEntity<string>` in a `Guid` application fails its model's first query or save instead of going unisolated.
 
-`Guid`, `int`, `long`, `string`, and most numeric types satisfy this. Choose one type and use it
-everywhere: the same `TKey` flows through your entities, store and registration. An application
-has one key type: calling `AddTenantry` with a second one throws, and an entity that implements
-`ITenantEntity<string>` in a `Guid` application fails its model's first query or save instead of going
-unisolated.
+The key type's default value (`Guid.Empty`, `0`, and for `string` keys `null` or an empty string) means "no tenant",
+so no tenant may have it: making such a tenant current throws `ArgumentException`, and an identifier that parses to it
+names no tenant.
 
-The key type's default value (`Guid.Empty`, `0`, and for `string` keys `null` or an empty string) means "no
-tenant" to Tenantry, so no tenant may have it: making such a tenant current throws `ArgumentException`, and an
-identifier that parses to it names no tenant.
+For code of your own that carries tenant ids as text, `TenantIds` does what Tenantry does: `Format` writes an id with
+the invariant culture, `TryParse` reads one back and refuses text that names no tenant, and `IsReserved` is true for
+the "no tenant" ids.
 
 ## `ITenantDescriptor<TKey>`
 
@@ -51,11 +48,11 @@ new TenantDescriptor<Guid> { TenantId = id, Name = "Acme" };
 
 ### Your own tenant type
 
-Implement `ITenantDescriptor<TKey>` on your own type to carry what your application knows about a tenant (its
-plan, region, connection string, feature flags…), and return it from your [tenant store](tenant-stores.md).
-Tenantry only ever reads `TenantId` and `Name`. It has no tenant status of its own: keep yours on your tenant type
-and give Tenantry a check for it with `ValidateTenantActivity` (see
-[Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
+Implement `ITenantDescriptor<TKey>` on your own type to carry what your application knows about a tenant (its plan,
+region, connection string, feature flags), and return it from your [tenant store](tenant-stores.md). Tenantry reads
+only `TenantId` and `Name`. It has no tenant status of its own: keep yours on your tenant type and give Tenantry a
+check for it with `ValidateTenantActivity`
+([Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
 
 ```csharp no-compile
 public class AppTenant : ITenantDescriptor<Guid>
@@ -81,8 +78,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 app.MapGet("/plan", (ITenantContext<Guid> tenants) => tenants.GetCurrentTenant<AppTenant>()?.Plan);
 ```
 
-Both throw `InvalidOperationException`, naming both types, if the tenant is not of the type you ask for: the store
-returns another one.
+Both throw `InvalidOperationException`, naming both types, if the store returned a tenant of another type.
 
 ## `ITenantEntity<TKey>`
 
@@ -96,9 +92,8 @@ public interface ITenantEntity<TKey>
 ```
 
 - Implement it directly, or derive from `TenantEntity<TKey>`, which has a `TenantId` with a public setter.
-- Leave `TenantId` unset. The EF Core interceptor stamps it from the current tenant on `SaveChanges`, and rejects a
-  new entity that already names another tenant. It sets the value through EF Core, so your entity can give
-  `TenantId` a private or init-only setter.
+- Leave `TenantId` unset. The EF Core interceptor stamps it from the current tenant on `SaveChanges`, through EF Core,
+  so it can have a private or init-only setter, and rejects a new entity that already names another tenant.
 - Entities that do not implement it are shared by all tenants and are never filtered or stamped.
 
 ## `ITenantContext<TKey>`
@@ -117,8 +112,8 @@ public interface ITenantContext<TKey>
 ```
 
 Without a tenant, `CurrentTenantId` is `default(TKey)`: `null` for `string` keys, but `Guid.Empty` or `0` for
-value-type keys, because `TKey?` on an unconstrained generic is not nullable for them. Check `HasTenant` to tell "no
-tenant" apart. [Below](#how-ef-core-queries-see-the-current-tenant) is how EF Core reads it.
+value-type keys, as `TKey?` on an unconstrained generic is not nullable for them. Check `HasTenant` to tell "no
+tenant" apart.
 
 ## `ITenantContextSetter<TKey>`
 
@@ -142,23 +137,23 @@ using (tenantContext.MakeCurrent(acme))
 // previous tenant (or "none") restored here
 ```
 
-In ASP.NET Core the middleware calls `MakeCurrent` for you once the tenant is resolved. In console and worker apps,
-`ITenantScopeFactory<TKey>` makes a tenant current together with a fresh DI scope, which is what most code
-wants; call `MakeCurrent` yourself only when you need no new scope.
+In ASP.NET Core the middleware calls `MakeCurrent` once the tenant is resolved. In console and worker apps,
+`ITenantScopeFactory<TKey>` makes a tenant current together with a new DI scope, which is what most code wants; call
+`MakeCurrent` yourself only when you need no new scope.
 
-`MakeCurrent` trusts the descriptor it is given. It does not look the tenant up in the store or check whether it is
-active, so a descriptor the store does not hold becomes current like any other: shared-database queries are filtered by
-its id and new rows are stamped with it. Pass it a tenant you already hold, and run work that starts from an id with
-`ITenantScopeFactory.RunInScopeAsync`, which refuses a missing or inactive tenant.
-[Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant) has a table for choosing between `RunInScopeAsync`,
-`CreateScope` and `MakeCurrent`.
+`MakeCurrent` trusts the descriptor it is given: it does not look the tenant up in the store or check whether it is
+active, so a descriptor the store does not hold becomes current like any other, and shared-database queries are
+filtered by its id and new rows stamped with it. Pass it a tenant you already hold, and run work that starts from an id
+with `ITenantScopeFactory.RunInScopeAsync`, which refuses a missing or inactive tenant
+([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant) has a table for choosing between them).
 
 `MakeNoTenantCurrent()` does the opposite: code inside it sees no tenant, and disposing it restores the tenant that
 was current. The middleware uses it for the rest of a request whose tenant the access validators refused.
 
 ### Nesting
 
-An inner `MakeCurrent` shadows the outer tenant and the outer one is restored on dispose:
+An inner `MakeCurrent` shadows the outer tenant, which is restored on dispose. Maintenance code can use this to act as
+another tenant for a moment:
 
 ```csharp
 using (tenantContext.MakeCurrent(acme))       // current = Acme
@@ -168,8 +163,6 @@ using (tenantContext.MakeCurrent(acme))       // current = Acme
     }                                         // current = Acme again
 }                                             // current = none
 ```
-
-Nest them in maintenance code that acts as another tenant for a moment.
 
 ## The `AsyncLocal` model
 
@@ -184,21 +177,16 @@ concurrent requests never see each other's tenant.
 - Disposing the innermost scope restores the nearest one still open. Disposing any other, out of order or from
   another async flow, closes it without changing the current tenant, and only in the flow that disposes it.
 
-### How EF Core queries see the current tenant
-
-EF Core compiles a global query filter once and caches the plan, but it evaluates the parts of a filter that
-read from the `DbContext` again every time a query runs. Tenantry's filter reads the tenant through the context
-that runs the query, from its `ITenantContext<TKey>`, so the same cached plan always uses the current tenant
-([EF Core integration](efcore-integration.md#how-the-query-filter-stays-correct) has the detail).
+EF Core's query filter reads this tenant on every query through the context that runs it, so one compiled query
+serves every tenant ([How the query filter stays correct](efcore-integration.md#how-the-query-filter-stays-correct)).
 
 ## `ITenantScopeFactory<TKey>` and `ITenantScope<TKey>`
 
 Outside a request, `ITenantScopeFactory<TKey>` creates an `ITenantScope<TKey>`: a dependency-injection scope with a
-tenant current, so the scoped services resolved from it (such as a `DbContext`) are the tenant's. It follows the
-`IServiceScopeFactory` → `IServiceScope` pattern. `RunInScopeAsync(tenantId, …)` looks the tenant up in the store,
-refuses a missing or inactive one, and runs your work in such a scope. `CreateScope(tenant)` opens one for a tenant
-you already hold and, like `MakeCurrent`, checks nothing. See
-[Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant).
+tenant current, so the scoped services resolved from it (such as a `DbContext`) are the tenant's. It works like
+`IServiceScopeFactory` and `IServiceScope`. `RunInScopeAsync(tenantId, …)` looks the tenant up in the store, refuses a
+missing or inactive one, and runs your work in such a scope. `CreateScope(tenant)` opens one for a tenant you already
+hold and, like `MakeCurrent`, checks nothing ([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant)).
 
 ## Exceptions
 
@@ -211,13 +199,11 @@ you already hold and, like `MakeCurrent`, checks nothing. See
 
 ## Registration
 
-There is one entry point, `AddTenantry<TKey>(configure?)` in `Tenantry.Core`, for every kind of host. It registers
-the ambient tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITenantScopeFactory<TKey>`,
-`ITenantLookup<TKey>`, `ITenantInvalidator<TKey>`, `ITenantActivity<TKey>` and
-`ITenantKeyType`. Inside the `configure` lambda you add a store, connection strings, EF Core options and, with
-`Tenantry.AspNetCore`, resolution and access control. A `DbContext` is isolated where it is registered, with `options.UseTenantry()`.
-
-The registration rules:
+Every kind of host uses one entry point, `AddTenantry<TKey>(configure?)` in `Tenantry.Core`. It registers the ambient
+tenant (`ITenantContext<TKey>`, `ITenantContextSetter<TKey>`), `ITenantScopeFactory<TKey>`, `ITenantLookup<TKey>`,
+`ITenantInvalidator<TKey>`, `ITenantActivity<TKey>` and `ITenantKeyType`. In the `configure` lambda you add a store,
+connection strings, EF Core options and, with `Tenantry.AspNetCore`, resolution and access control. A `DbContext` is
+isolated where it is registered, with `options.UseTenantry()`. The registration rules:
 
 - Every builder method returns the builder, so calls chain. Three return it without its key type:
   `UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()` and `AddDbContextPerTenantDatabase<TContext>()`.

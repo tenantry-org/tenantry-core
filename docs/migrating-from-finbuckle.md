@@ -1,7 +1,7 @@
 # Migrating from Finbuckle.MultiTenant
 
 This guide moves an ASP.NET Core application with EF Core from Finbuckle.MultiTenant 10.1.4 to Tenantry. Work
-through the numbered steps in order. The sections after them list the behaviour that changes and what Tenantry does
+through the numbered steps in order; the sections after them list the behaviour that changes and what Tenantry does
 not have.
 
 ## How the concepts map
@@ -36,26 +36,25 @@ dotnet add package Tenantry.AspNetCore
 dotnet add package Tenantry.EfCore
 ```
 
-Add `Tenantry.Options` if you configure options per tenant. If you use
-`Finbuckle.MultiTenant.Identity.EntityFrameworkCore`, remove it too, and set Identity up as in
+Remove any other Finbuckle package too, and every `using Finbuckle…` directive. Add `Tenantry.Options` if you configure
+options per tenant. If you used `Finbuckle.MultiTenant.Identity.EntityFrameworkCore`, set Identity up as in
 [ASP.NET Core Identity](aspnetcore-identity.md).
 
 ## 2. Keep string tenant ids
 
-Finbuckle's tenant ids are strings, and so is the `TenantId` column it adds to your tables. Register Tenantry with
+Finbuckle's tenant ids, and the `TenantId` column it adds to your tables, are strings. Register Tenantry with
 `string` keys and that column and its data stay as they are.
 
 To move to `Guid` or `int` keys, change the key type on your tenant type, your entities and `AddTenantry`, then add a
 migration. The `AlterColumn` that EF Core generates for each `TenantId` column leaves converting the stored ids to the
-database. Check that your database converts them, or convert them yourself in the migration with
-`migrationBuilder.Sql`. Tenant ids stored anywhere else, such as claims in issued tokens, change too.
+database: check that it does, or convert them yourself in the migration with `migrationBuilder.Sql`. Tenant ids stored
+anywhere else, such as claims in issued tokens, change too.
 
 ## 3. Move the tenant type and store
 
-Finbuckle's strategies return an identifier, and the store finds the tenant with that `Identifier`. Tenantry's
-resolvers return an identifier too, and the store's `FindByIdentifierAsync` finds the tenant. By default it reads the
-identifier as the tenant id. When your identifiers differ from your ids, keep `Identifier` on your own tenant type and
-look it up there:
+As with Finbuckle's strategies, Tenantry's resolvers return an identifier, and the store's `FindByIdentifierAsync` finds
+the tenant; by default it reads the identifier as the tenant id. When your identifiers differ from your ids, keep
+`Identifier` on your own tenant type and look it up there:
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -88,8 +87,8 @@ public sealed class AppTenantStore(CatalogDbContext db) : ITenantStore<string>
 ```
 
 This replaces Finbuckle's EF Core store. `UseInMemoryStore` finds tenants by id only, so it replaces Finbuckle's
-in-memory store only where each identifier equals its id. To avoid a database round trip on every request, add
-`CacheTenants()` ([Caching](tenant-stores.md#caching)).
+in-memory store only where each identifier equals its id. Add `CacheTenants()` to avoid a database round trip on every
+request ([Caching](tenant-stores.md#caching)).
 
 ## 4. Register Tenantry and its middleware
 
@@ -166,10 +165,10 @@ app.UseAuthorization();
 | `WithHostStrategy("__tenant__")` | `ResolveFromHost()` |
 | `WithStrategy<T>()`, `WithDelegateStrategy(…)`, `WithHttpContextStrategy(…)` | `UseResolver<T>()`, with an `ITenantResolver` of your own |
 
-Finbuckle's header, claim and route value are named `__tenant__` by default. Tenantry's header resolver needs a name.
-Its claim defaults to `tenant_id` and its route value to `tenant`. Pass the names your clients already send.
+Finbuckle's header, claim and route value are named `__tenant__` by default. Tenantry's header resolver needs a name;
+its claim defaults to `tenant_id` and its route value to `tenant`. Pass the names your clients already send.
 
-Finbuckle's default host template takes the first label of any host. Without base domains, `ResolveFromSubdomain()`
+Finbuckle's default host template takes the first label of any host; without base domains, `ResolveFromSubdomain()`
 takes it only from a host with at least three labels. List your domains in `BaseDomains`, `localhost` included
 ([Subdomain](tenant-resolution.md#subdomain)).
 
@@ -240,8 +239,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 }
 ```
 
-The context loses its constructor parameter, its three properties and its `SaveChanges` overrides. A context that
-derived from Finbuckle's base class derives from `DbContext` instead, with the same constructor change.
+The context loses its constructor parameter, its three properties and its `SaveChanges` overrides. A context derived
+from Finbuckle's base class derives from `DbContext` instead, with the same constructor change.
 
 ### The TenantId column
 
@@ -249,13 +248,13 @@ Finbuckle adds `TenantId` as a shadow property, or uses an existing `string Tena
 property, which `TenantEntity<string>` provides. An entity that already has one implements `ITenantEntity<string>`
 instead, and its setter can be private. Either maps to the column Finbuckle created, as a required string.
 
-Finbuckle's `AdjustKey`, `AdjustIndex`, `AdjustIndexes` and `AdjustUniqueIndexes` add `TenantId` to keys and indexes.
-Tenantry adds none. Declare them yourself with their current names and columns, as above. Otherwise the next migration
-drops `TenantId` from them, and a unique index becomes unique across every tenant.
+Finbuckle's `AdjustKey`, `AdjustIndex`, `AdjustIndexes` and `AdjustUniqueIndexes` add `TenantId` to keys and indexes;
+Tenantry adds none. Declare them yourself with their current names and columns, as above, or the next migration drops
+`TenantId` from them and a unique index becomes unique across every tenant.
 
-When `TenantId` is part of the primary key, set it to `ITenantContext<string>.CurrentTenantId` before `Add`. EF Core
-cannot track an entity whose key is null, and Tenantry stamps `TenantId` only when saving. Finbuckle's
-`EnforceMultiTenantOnTracking` did this for you.
+When `TenantId` is part of the primary key, set it to `ITenantContext<string>.CurrentTenantId` before `Add`, as
+Finbuckle's `EnforceMultiTenantOnTracking` did: EF Core cannot track an entity whose key is null, and Tenantry stamps
+`TenantId` only when saving.
 
 Then add a migration. It should contain no operations:
 
@@ -263,7 +262,7 @@ Then add a migration. It should contain no operations:
 dotnet ef migrations add MoveToTenantry
 ```
 
-The model snapshot still changes, because Tenantry makes `TenantId` a concurrency token, which changes no column. If
+The model snapshot still changes, as Tenantry makes `TenantId` a concurrency token, which changes no column. If
 the migration makes `TenantId` nullable, your project does not use nullable reference types: add
 `modelBuilder.Entity<Order>().Property(o => o.TenantId).IsRequired()`.
 
@@ -274,10 +273,13 @@ the migration makes `TenantId` nullable, your project does not use nullable refe
 - Code that ignored Finbuckle's named filter (`Constants.TenantToken`) names `TenantryQueryFilters.Tenant` instead.
 - Code that created a context per tenant with Finbuckle's static `Create` method uses
   `ITenantScopeFactory<string>.CreateScope(tenant)` and resolves the context from the scope. Like `Create`, it trusts
-  the tenant it is given; code that has only an id uses `RunInScopeAsync`, which looks it up
+  the tenant it is given; with only an id, use `RunInScopeAsync`, which looks it up
   ([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant)).
 - A connection string on the tenant, read in `OnConfiguring`, becomes `UseConnectionStrings` with
   `AddDbContextPerTenantDatabase` ([Database per tenant](efcore-integration.md#database-per-tenant)).
+- Code that relied on `TenantMismatchMode` or `TenantNotSetMode` to write across tenants moves to a maintenance context,
+  and tests that expected an exception with no tenant now expect empty results
+  ([Behaviour that changes](#behaviour-that-changes)).
 
 ## 6. Move per-tenant options
 
@@ -287,18 +289,20 @@ your tenant type with `t.As<AppTenant>()`. Finbuckle's `Reset()` and `Clear(tena
 `ITenantInvalidator<string>.InvalidateAsync(tenantId)`. The named variants become `Configure<TOptions>(name, …)` and
 `ConfigureAll<TOptions>(…)` on the same builder. Code that reads the tenant's value through `IOptions<TOptions>`
 changes to `IOptionsSnapshot<TOptions>`, or `IOptionsMonitor<TOptions>` in a singleton: in Tenantry,
-`IOptions<TOptions>` keeps the ordinary value. See [Options per tenant](per-tenant-options.md).
+`IOptions<TOptions>` keeps the ordinary value ([Options per tenant](per-tenant-options.md)).
 
 `WithPerTenantAuthentication()` becomes `ConfigurePerTenant` on each scheme's options, such as
-`Configure<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, and `app.UseTenantResolution()` before
-`app.UseAuthentication()`, so the tenant is known when the scheme authenticates, with `app.UseAuthorization()` after
-`app.UseTenantry()`. A tenant's own challenge scheme becomes
-a policy scheme that forwards to it ([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)). Finbuckle
-also refused a cookie signed in under another tenant. To keep that check, add the tenant id as a claim when the user
-signs in, and validate it with `ValidateTenantAccessByClaim`. A request for another tenant then gets `403` on every
-endpoint there; Finbuckle treated the same user as signed out. Give each tenant its own cookie name and the user is
-anonymous on the other tenant instead, as under Finbuckle ([Cookies](authentication-per-tenant.md#cookies)). Sessions
-signed in before the change lack the claim, so their users sign in again. See [Authentication per tenant](authentication-per-tenant.md).
+`Configure<OpenIdConnectOptions>("oidc", (o, t) => o.Authority = …)`, with `app.UseTenantResolution()` before
+`app.UseAuthentication()`, so the tenant is known when the scheme authenticates, and `app.UseAuthorization()` after
+`app.UseTenantry()`. A tenant's own challenge scheme becomes a policy scheme that forwards to it
+([A scheme per tenant](authentication-per-tenant.md#a-scheme-per-tenant)).
+
+Finbuckle also refused a cookie signed in under another tenant. To keep that check, add the tenant id as a claim when
+the user signs in, and validate it with `ValidateTenantAccessByClaim`. A request for another tenant then gets `403` on
+every endpoint there, where Finbuckle treated the user as signed out; give each tenant its own cookie name and the user
+is anonymous on the other tenant, as under Finbuckle ([Cookies](authentication-per-tenant.md#cookies)). Sessions signed
+in before the change lack the claim, so their users must sign in again. See
+[Authentication per tenant](authentication-per-tenant.md).
 
 ## Behaviour that changes
 
@@ -324,24 +328,8 @@ type is not tenant-owned ([the list](efcore-advanced.md#models-that-cannot-be-is
 - There is no base path, session, static or remote authentication callback resolver. Write an `ITenantResolver`
   ([Custom resolvers](tenant-resolution.md#custom-resolvers)). For a tenant in the path, use a route template with
   `{tenant}` and `ResolveFromRouteValue()`; nothing rewrites `PathBase`.
-- `BypassWhen` and `BypassWhenEndpointNotResolved` have no equivalent. `UseTenantry()` resolves every request that
+- `BypassWhen` and `BypassWhenEndpointNotResolved` have no equivalent: `UseTenantry()` resolves every request that
   reaches it, so put middleware that must skip it, such as static files, before it.
-- `IgnoredIdentifiers` has no equivalent. The subdomain resolver ignores the subdomains in `IgnoredSubdomains`, and a
+- `IgnoredIdentifiers` has no equivalent: the subdomain resolver ignores the subdomains in `IgnoredSubdomains`, and a
   store can return `null` for any other identifier.
 
-## Checklist
-
-1. No Finbuckle package or `using` directive is left.
-2. Tenantry is registered with `string` keys, or a key type change has a migration that converts the data.
-3. Your tenant type implements `ITenantDescriptor<string>`, and the store maps identifiers in `FindByIdentifierAsync`.
-4. The resolvers read the header, claim or route value your clients already send.
-5. `UseTenantry()` runs after `UseAuthentication()`, and, with per-tenant authentication, `UseTenantResolution()`
-   before it and `UseAuthorization()` after `UseTenantry()`.
-6. Tenant-owned entities implement `ITenantEntity<string>`, and each context is a plain `DbContext` registered with
-   `UseTenantry()`.
-7. Keys and indexes that Finbuckle adjusted are declared, and the new migration has no operations.
-8. Ignored query filters name `TenantryQueryFilters.Tenant`.
-9. Code that relied on `TenantMismatchMode` or `TenantNotSetMode` uses a maintenance context.
-10. Per-tenant options use `ConfigurePerTenant`, per-tenant authentication names its scheme, and per-tenant
-    sign-in is checked with a tenant claim.
-11. Tests that expected an exception without a tenant expect empty results.

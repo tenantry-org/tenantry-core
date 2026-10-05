@@ -1,11 +1,10 @@
 # Testing
 
-Tenantry's services run in memory, so tests can use the real ones: register Tenantry as the application does, with
-an in-memory store, and make a tenant current the way the application does. Such a test checks what a substitute
-for `ITenantContext<TKey>` cannot: that the code runs inside a tenant's scope, that the scoped services it resolves
-see the tenant, and that EF Core keeps each tenant's data to itself.
-
-The examples use xUnit v3; the approach is the same with any test framework.
+Tenantry's services run in memory, so tests can use the real ones: register Tenantry as the application does, with an
+in-memory store, and make a tenant current the way the application does. Such a test checks what a substitute for
+`ITenantContext<TKey>` cannot: that the code runs inside a tenant's scope, that the scoped services it resolves see the
+tenant, and that EF Core keeps each tenant's data to itself. The examples use xUnit v3; the approach is the same with
+any test framework.
 
 ## Code that reads the current tenant
 
@@ -43,13 +42,13 @@ public class InvoiceNumbersTests
 
 `validateScopes: true` makes the provider refuse a scoped service resolved from the root, as the host does in
 Development. `CreateScope` trusts the descriptor and does not look it up in the store, which suits a test that holds
-its tenants. Code that receives only a tenant id is tested the same way with `RunInScopeAsync(id, …)`, which does
-look it up, and code that already has its services with `ITenantContextSetter<TKey>.MakeCurrent(tenant)`
-([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant)). Background work is tested the same way too: run the
-work for one tenant inside that tenant's scope.
+its tenants. Test code that receives only a tenant id with `RunInScopeAsync(id, …)`, which does look it up, and code
+that already has its services with `ITenantContextSetter<TKey>.MakeCurrent(tenant)`
+([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant)). Test background work by running the work for one
+tenant inside that tenant's scope.
 
-Make the tenant current in the test method itself. A tenant made current in an `async` setup method (an
-`InitializeAsync` that awaits, say) is not current when it returns
+Make the tenant current in the test method itself. A tenant made current in an `async` setup method, such as an
+`InitializeAsync` that awaits, is not current when it returns
 ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)), so the test would run with no tenant.
 
 ## Requests: `WebApplicationFactory`
@@ -88,14 +87,13 @@ public class OrdersApiTests(WebApplicationFactory<Program> app) : IClassFixture<
 }
 ```
 
-The [response for each rejection](aspnetcore-integration.md#status-codes) is the same as in production: 400 without
-a tenant, 404 for an id the store does not have, and 403 for a tenant an access validator refuses. With access
-validators configured, an id the store does not have gets 403 too, so a caller cannot probe for tenants. For subdomain or
-host resolution, give the client the tenant's host instead of a header:
-`app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://acme.example.com") })`.
-For claim-based access validation, the client needs a signed-in caller: the
-[`SecureApi` sample's tests](../tests/Tenantry.IntegrationTests/SecureApiTests.cs) sign tokens with a key set
-for the test.
+Rejections get the [same responses](aspnetcore-integration.md#status-codes) as in production: 400 without a tenant, 404
+for an id the store does not have (403 with access validators configured, so a caller cannot probe for tenants), and 403
+for a tenant an access validator refuses. For subdomain or host resolution, give the client the tenant's host instead of
+a header:
+`app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://acme.example.com") })`. For
+claim-based access validation, the client needs a signed-in caller: the [`SecureApi` sample's
+tests](../tests/Tenantry.IntegrationTests/SecureApiTests.cs) sign tokens with a key set for the test.
 
 To test with tenants of your own rather than the ones the application's store holds, replace the store:
 
@@ -138,10 +136,9 @@ public class TestTenantsApiTests(WebApplicationFactory<Program> app) : IClassFix
 ## EF Core isolation
 
 Test isolation against a relational database. SQLite in memory is fast, and Tenantry's own unit tests check its
-isolation on it; to test what depends on your database (a database per tenant, your migrations), run the same
-tests against the database you deploy on, in a container ([Testcontainers](https://dotnet.testcontainers.org/), for
-example). EF Core's documentation advises against its in-memory provider for tests: it is not a relational
-database.
+isolation on it; to test what depends on your database (a database per tenant, your migrations), run the same tests
+against the database you deploy on, in a container ([Testcontainers](https://dotnet.testcontainers.org/), for
+example). EF Core's documentation advises against its in-memory provider for tests, as it is not relational.
 
 With these entities:
 
@@ -255,8 +252,7 @@ with an extension method that both `Program.cs` and the tests call.
 
 ### Entity types left unisolated
 
-`TenantModel.FindUnisolatedEntityTypes` lists the entity types that are neither tenant-owned nor marked as shared, whose
-rows every tenant reads and writes
+`TenantModel.FindUnisolatedEntityTypes` lists the entity types that are neither tenant-owned nor marked as shared
 ([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)). This test
 fails when a new entity type is one of them:
 

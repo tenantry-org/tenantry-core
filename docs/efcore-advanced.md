@@ -1,7 +1,7 @@
 # Owned and multi-table entities
 
 Owned rows in a table of their own, the rows of an entity mapped to more than one table, and the join rows of a
-many-to-many relationship have no tenant check of their own. Tenantry checks them through another statement and keeps
+many-to-many relationship have no tenant check of their own. Tenantry checks them through another statement and makes
 the save all-or-nothing.
 
 ## Owned entities
@@ -23,7 +23,7 @@ owner loaded or attached as the current tenant. The database then confirms the o
 - An owner whose `TenantId` EF Core does not write after an insert (it is part of another key, such as an alternate key
   on `(TenantId, Id)`, or is configured not to be saved) has its stored row read before the save, one query per owner.
   The read names the current tenant and ignores every query filter, yours too, as EF Core's own writes do, so an owner
-  your filter hides (an archived one, say) can still be given owned entities.
+  your filter hides, such as an archived one, can still be given owned entities.
 
 An owned entity saved without its owner in the same context is rejected. With no tenant, `OnMissingTenant` treats
 owned entities as tenant-owned. Owned rows in their own table rely on the owner's statement, so the save must succeed
@@ -32,7 +32,7 @@ or fail as a whole (below).
 ## Entities mapped to more than one table
 
 An entity mapped to more than one table (table-per-type inheritance, entity splitting) is updated only in the tables
-whose columns changed. So when one changes, its `TenantId` is also written back to its table to be checked there, or,
+whose columns changed, so when one changes, its `TenantId` is also written back to its table to be checked there, or,
 when EF Core does not save `TenantId`, its stored row is read before the save. One keyed by its `TenantId` needs
 neither: every table's key names the tenant. A save that deletes such an entity and adds one under the same key, which
 EF Core saves as an `UPDATE` of what differs, table by table, has the deleted one's stored row read. Rows outside the
@@ -66,17 +66,16 @@ public class BlogDbContext(DbContextOptions<BlogDbContext> options) : DbContext(
 ```
 
 A join row holds the keys of the rows it joins and no `TenantId`. Reads through `Tags` and `Posts` return only the
-current tenant's rows, as the query filters of both ends apply. EF Core inserts and deletes join rows for ends that are
+current tenant's rows, as both ends' query filters apply. EF Core inserts and deletes join rows for ends that are
 themselves unchanged, so a save that adds, changes or deletes a join row confirms each tenant-owned end it names, as
 it confirms an owned row's owner:
 
 - An end the save writes is checked by its own `UPDATE`, `DELETE` or `INSERT`.
-- An end it does not write must have been loaded or attached as the current tenant, must still hold the current
-  tenant's `TenantId` in memory, and has its stored row confirmed by writing its `TenantId` back with its concurrency
-  token. Through a stub that carries another tenant's key with the
-  current tenant's `TenantId`, that `UPDATE` matches no row, the save fails with `DbUpdateConcurrencyException`, and
-  nothing is written. A stub that names another tenant fails with `TenantIsolationViolationException` before anything
-  is sent.
+- An end it does not write must have been loaded or attached as the current tenant, must still hold the current tenant's
+  `TenantId` in memory, and has its stored row confirmed by writing its `TenantId` back with its concurrency token.
+  Through a stub that carries another tenant's key with the current tenant's `TenantId`, that `UPDATE` matches no row,
+  the save fails with `DbUpdateConcurrencyException`, and nothing is written. A stub that names another tenant fails
+  with `TenantIsolationViolationException` before anything is sent.
 - A join row saved without its tenant-owned ends tracked (added through the join entity's own set, with only key
   values) is refused with `TenantIsolationViolationException`.
 - An end whose key in the join row includes its `TenantId` needs no confirmation: the join row can only name that
@@ -84,7 +83,7 @@ it confirms an owned row's owner:
 
 This costs one `UPDATE` for each end the save does not otherwise write, however many join rows name it: adding five
 existing tags to an existing post sends six. New ends cost nothing, as their `INSERT` is the check. The confirmations
-and the join rows succeed or fail together ([Saves that succeed or fail as a whole](#saves-that-succeed-or-fail-as-a-whole)).
+and the join rows succeed or fail together ([below](#saves-that-succeed-or-fail-as-a-whole)).
 
 An end that is shared across tenants is not confirmed. A tenant's join row from its post to a shared tag is that
 tenant's, and another tenant reading the tag's `Posts` sees none of it, as the posts' query filter applies through
@@ -99,15 +98,14 @@ reach every tenant's join rows (the join entity has no query filter). Change joi
 ## Saves that succeed or fail as a whole
 
 Rows checked through another statement are safe only if the whole save is undone when the check fails. EF Core
-usually ensures this with a transaction, but not in every setup. For these saves:
+usually ensures this with a transaction, but not in every setup, so for these saves:
 
 - The failed check cannot be suppressed. An interceptor of yours that suppresses concurrency failures
   (`ThrowingConcurrencyException`), such as "last write wins" or EF Core's sample that ignores rows already deleted,
   still works for other entities, but Tenantry throws a failed check that other rows depend on before any interceptor
-  added with `AddInterceptors` sees it, wherever yours is registered. Tenantry hears of every save's end, and of every
-  command and transaction, through interceptors of EF Core's internal service provider, which EF Core runs before
-  every interceptor added with `AddInterceptors`; its refusal of a commit (below) also comes before your
-  `TransactionCommitting` hooks.
+  added with `AddInterceptors` sees it, wherever yours is registered: it hears of every save's end, command and
+  transaction through interceptors of EF Core's internal service provider, which EF Core runs before those. Its refusal
+  of a commit (below) also comes before your `TransactionCommitting` hooks.
 - With `Database.AutoTransactionBehavior` set to `Never`, EF Core still runs the save in a transaction of its own, and
   the setting goes back to `Never` when the save ends (event 2005, at `Debug`). Other saves still run without one. If
   your database or connection pooler cannot run transactions, set `OnSaveWithoutTransaction` to `Reject`: such a save
@@ -118,14 +116,14 @@ usually ensures this with a transaction, but not in every setup. For these saves
     Tenantry's turns its failure into another exception, the setting stays `WhenNeeded` until a later save of the
     context ends with nothing left to save. The same goes for `AutoSavepointsEnabled`, which stays `true`.
 - In your own transaction, EF Core rolls a failed save back to a savepoint it creates first, and Tenantry turns
-  savepoints on for the save if you turned them off (`AutoSavepointsEnabled = false`). A transaction without
-  savepoints, such as SQL Server with multiple active result sets (MARS), is rolled back instead of committed once such
-  a save has run in it, if any save in it failed after sending a statement, or if EF Core could not roll back to its
-  savepoint (any failed operation on the transaction counts as that, except a commit, a rollback, and creating or
-  releasing a savepoint). `Commit` then throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
+  savepoints on for the save if you turned them off (`AutoSavepointsEnabled = false`). A transaction without savepoints,
+  such as SQL Server with multiple active result sets (MARS), is rolled back instead of committed once such a save has
+  run in it, if any save in it failed after sending a statement, or if EF Core could not roll back to its savepoint (any
+  failed operation on the transaction counts as that, except a commit, a rollback, and creating or releasing a
+  savepoint). `Commit` then throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
   - Any failure counts, of any save in the transaction. EF Core does not say which save a failure is for when one save
-    runs inside another, and a save can fail before EF Core reads the check (on a duplicate key, say), so Tenantry
-    cannot know whether the check held, and a forged write looks like a real conflict.
+    runs inside another, and a save can fail before EF Core reads the check (on a duplicate key, for example), so
+    Tenantry cannot know whether the check held, and a forged write looks like a real conflict.
   - So does a save that an interceptor fails after it succeeded, by throwing from `SavedChanges`.
   - So does a concurrency conflict on any row, once the save sent statements, even one an interceptor of yours
     suppresses: Tenantry hears of it before your interceptor decides.
@@ -181,5 +179,5 @@ Building these models throws `TenantIsolationViolationException` (or `InvalidOpe
 - on EF Core 10, a filter of your own named `TenantryQueryFilters.Tenant`, which the tenant filter would replace.
 
 Something that runs after `UseTenantry()`, such as a model-building convention, can still remove the tenant filter or
-concurrency token. The interceptors check each model on its first query and first save, and throw
+concurrency token, so the interceptors check each model on its first query and first save, and throw
 `TenantIsolationViolationException` instead of running either if a tenant-owned entity type has lost one.

@@ -18,7 +18,7 @@ Please include:
 
 ## What to expect
 
-- **Acknowledgement** within a few business days.
+- An acknowledgement within a few business days.
 - An assessment and, where applicable, a coordinated fix and release.
 - Credit in the release notes / advisory if you'd like it (let us know).
 

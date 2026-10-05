@@ -15,8 +15,8 @@ dotnet new tenantry-worker -n Orders.Worker
   `RunInScopeAsync`, which refuses a tenant the store does not have.
 
 Each references the Tenantry packages of the same version as the templates; `--TenantryVersion` picks another. The
-projects target `net10.0` and reference Microsoft packages at 10.0.x, so an older SDK can install the templates and
-create a project, but building it needs the .NET 10 SDK. A coding agent working on an application made from them
+projects target `net10.0` and reference Microsoft packages at 10.0.x, so building one needs the .NET 10 SDK, although
+an older SDK can install the templates and create a project. A coding agent working on an application made from them
 should follow [the guide for AI coding agents](https://tenantry.dev/docs/core/ai-agents).
 
 [Docs](https://tenantry.dev/docs/core) ·

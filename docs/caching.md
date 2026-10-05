@@ -1,8 +1,8 @@
 # Caching per tenant
 
 A cache keyed only by what the code asks for (`"orders:recent"`) serves one tenant's data to another. `Tenantry.Caching`
-keeps `HybridCache` entries per tenant, and `Tenantry.AspNetCore` does the same for the output cache, so the code that
-reads and writes the cache does not have to name the tenant.
+keeps `HybridCache` entries per tenant, and `Tenantry.AspNetCore` does the same for the output cache, so code that
+reads and writes the cache need not name the tenant.
 
 ```bash
 dotnet add package Tenantry.Caching
@@ -47,7 +47,7 @@ public sealed class RecentOrders(HybridCache cache, AppDbContext db)
   `AddTenantry`, the host does not start (`InvalidOperationException`). A service provider built without a host is not
   checked.
 - The cache must be a singleton, as `AddHybridCache()` registers it: `IsolateCaches()` throws for a `HybridCache`,
-  keyed or not, registered as scoped or transient, because invalidating a tenant clears the cache outside any scope.
+  keyed or not, registered as scoped or transient, as invalidating a tenant clears the cache outside any scope.
 - A keyed `HybridCache` registered before `AddTenantry` is kept per tenant the same way:
   `[FromKeyedServices("reports")] HybridCache` holds the current tenant's entries, and
   `[FromKeyedServices("reports")] SharedHybridCache` holds entries every tenant shares in that cache. Invalidating a
@@ -76,7 +76,7 @@ entry. Its factory always runs with no current tenant, on the thread pool, whoev
 
 ### IDistributedCache
 
-`IsolateCaches()` leaves `IDistributedCache` as it is: framework components use it outside any tenant (session state,
+`IsolateCaches()` leaves `IDistributedCache` as it is, as framework components use it outside any tenant (session state,
 and `HybridCache`'s own second level, whose keys already carry the tenant), so isolating it everywhere would break them.
 Code that uses `IDistributedCache` directly for a tenant's data injects `ITenantDistributedCache` instead, the same
 cache with each key under the current tenant's prefix:
@@ -123,8 +123,8 @@ is cached apart from every tenant's.
 
 `ITenantInvalidator<TKey>.InvalidateAsync(tenantId)` removes the tenant's `HybridCache` entries (by a tag every tenant
 entry carries) and evicts its cached responses, along with its cached descriptor; `InvalidateAllAsync()` does it for
-every tenant, and leaves shared entries. Call it when a tenant changes or is removed (see
-[Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)).
+every tenant, and leaves shared entries. Call it when a tenant changes or is removed
+([Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)).
 
 - It takes effect on the instance that calls it. Microsoft's `HybridCache` marks the tag invalid in its second level,
   but each instance keeps the invalidation times it has already read, so other instances of the application serve

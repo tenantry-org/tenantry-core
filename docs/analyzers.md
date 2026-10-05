@@ -1,8 +1,8 @@
 # Analyzers
 
-`Tenantry.EfCore` and `Tenantry.AspNetCore` carry Roslyn analyzers, so an application that references them gets
-warnings for the mistakes that leave tenant data unprotected, in `dotnet build`, Visual Studio and Rider, with no other
-package to install. They add no runtime dependency: the compiler loads them, and they are not copied to the output.
+`Tenantry.EfCore` and `Tenantry.AspNetCore` carry Roslyn analyzers that warn, in `dotnet build`, Visual Studio and
+Rider, of mistakes that leave tenant data unprotected. There is no other package to install, and no runtime dependency:
+the compiler loads them, and they are not copied to the output.
 
 | Rule | Package | Default | Reports |
 |------|---------|---------|---------|
@@ -19,6 +19,10 @@ scopes. Each rule reports only what it can be sure of, so code it cannot see int
 rules are about `Tenantry.Core`'s API, and come with `Tenantry.EfCore`, which every application that keeps tenant data
 in EF Core references.
 
+TNY1001, TNY1004 and TNY2001 decide once the whole project is compiled, so `dotnet build` reports them, while Visual
+Studio and Rider may show them only after a build or with analysis of the whole solution turned on. For the same
+reason they have no code fix: the IDEs offer fixes only for diagnostics found file by file.
+
 ## Configuring the rules
 
 Set a rule's severity, for the whole project or for some files, in `.editorconfig`:
@@ -34,7 +38,7 @@ dotnet_diagnostic.TNY1002.severity = none
 ```
 
 The severities are `error`, `warning`, `suggestion` (shown as info), `silent` and `none`. With `TreatWarningsAsErrors`,
-a warning fails the build. To silence one occurrence that is meant, say why next to it:
+a warning fails the build. To silence one intended occurrence, give the reason next to it:
 
 ```csharp no-compile
 #pragma warning disable TNY1002 // the admin report counts every tenant's orders
@@ -51,7 +55,7 @@ maps tenant-owned types. Tenantry filters and checks only the types that impleme
 writes all of this type's rows.
 
 Implement `ITenantEntity<TKey>`, or derive from `TenantEntity<TKey>`. The message names `TKey`, the type of
-`TenantId`; a `TenantId` that cannot be a tenant key (`Guid?`, say) must first become one (a non-nullable `Guid`,
+`TenantId`; a `TenantId` that cannot be a tenant key, such as `Guid?`, must first become one (a non-nullable `Guid`,
 `int`, `long` or `string`). If every tenant shares the type, mark it shared, with `[SharedAcrossTenants]` or
 `IsSharedAcrossTenants()`, which also states it in the model
 ([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
@@ -80,10 +84,7 @@ What it looks at:
   or `<Type>Id` property, a `[Key]`, or a `[PrimaryKey]` without `TenantId`). A registry with a key of its own and a
   `TenantId` column, in a context with tenant-owned types, is reported: mark it `[SharedAcrossTenants]`.
 
-Each type is reported once, where it is first mapped outside generated code. The rule decides once the whole project
-is compiled, so `dotnet build` reports it, while an IDE may show it only after a build or with analysis of the whole
-solution turned on. For the same reason it has no code fix: Visual Studio and Rider offer fixes only for diagnostics
-found file by file.
+Each type is reported once, where it is first mapped outside generated code.
 
 ## TNY1002
 
@@ -91,8 +92,8 @@ found file by file.
 entity reads every tenant's rows of it, and an `ExecuteUpdate` or `ExecuteDelete` after it changes them. The rule
 reports the call when the type the query reads is tenant-owned, and when the query brings a tenant-owned type in: an
 `Include` or `ThenInclude` of it, a `Select`, `SelectMany`, `Join` or `GroupJoin` of it, or a navigation to it or a
-query of it in one of the query's lambdas. A query of a shared entity with a filter of its own, such as a soft delete,
-is where this happens by accident:
+query of it in one of the query's lambdas. The accidental case is usually a query of a shared entity with a filter of
+its own, such as a soft delete:
 
 ```csharp no-compile
 // Category is shared and has a soft-delete filter; Purchase is tenant-owned.
@@ -110,11 +111,11 @@ filter, read the tenant-owned rows in a query of their own, without `IgnoreQuery
 
 The rule looks at one expression: the calls on the query `IgnoreQueryFilters()` is in, before and after it, and the
 other queries passed to them (a `Join`'s or `GroupJoin`'s inner query, the other query of a `Union`, `Concat`,
-`Intersect` or `Except`), through casts. EF Core ignores the filters for the whole query wherever the call is, so all of
-them count. A call that returns no query, such as `Count()` or `First()`, ends the chain, and a value it computes passed
-as an argument, as in `Take(db.Orders.Count())`, is a query of its own. In each call it looks at the type arguments of a
-call that returns a query, at the navigations an `Include` string names, and at the navigations and queries in the
-lambdas EF Core translates.
+`Intersect` or `Except`), through casts; all of them count, as EF Core ignores the filters for the whole query. A call
+that returns no query, such as `Count()` or `First()`, ends the chain, and a value it computes passed as an argument, as
+in `Take(db.Orders.Count())`, is a query of its own. In each call it looks at the type arguments of a call that returns
+a query, at the navigations an `Include` string names, and at the navigations and queries in the lambdas EF Core
+translates.
 
 What it does not see:
 
@@ -140,9 +141,9 @@ the current tenant's id from `ITenantContext<TKey>`. It is info by default, sinc
 ## TNY1004
 
 `AddDbContext`, `AddDbContextPool`, `AddDbContextFactory` or `AddPooledDbContextFactory` registers a context that has
-tenant-owned entities, and its options do not call `UseTenantry()`. `UseTenantry()` is what installs the tenant filter,
-the `TenantId` stamping and the write checks, so without it every tenant reads and changes every tenant's rows, and
-nothing fails or logs at run time.
+tenant-owned entities, and its options do not call `UseTenantry()`, which installs the tenant filter, the `TenantId`
+stamping and the write checks. Without it every tenant reads and changes every tenant's rows, and nothing fails or logs
+at run time.
 
 ```csharp no-compile
 // TNY1004: AppDbContext has a DbSet<Order>, and Order implements ITenantEntity<Guid>.
@@ -152,11 +153,11 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(conn
 Add `.UseTenantry()` to the options. `AddDbContextPerTenantDatabase` applies `UseTenantry()` itself and is not
 reported.
 
-A context has tenant-owned entities when it, or a base context, has a `DbSet<T>` property of a type that implements
-`ITenantEntity<TKey>`, or maps one with `modelBuilder.Entity<T>()` in one of its methods; a type parameter constrained
-to a tenant-owned type counts as one. Not seen: a type mapped only in an `IEntityTypeConfiguration<T>` (or
-`ApplyConfigurationsFromAssembly`), with `Entity(typeof(T))`, with `Entity<T>()` in a method of another class, or
-reached only through a navigation, and a generic base context that maps an unconstrained type parameter.
+A context has tenant-owned entities when it, or a base context, has a `DbSet<T>` of one or maps one with
+`modelBuilder.Entity<T>()` in its methods (a type parameter constrained to a tenant-owned type counts). Not seen: a type
+mapped only in an `IEntityTypeConfiguration<T>` (or `ApplyConfigurationsFromAssembly`), with `Entity(typeof(T))` or with
+`Entity<T>()` in another class, or reached only through a navigation, and a generic base context that maps an
+unconstrained type parameter.
 
 The rule reports a registration only when it sees everything the options do, so these are not reported:
 
@@ -184,23 +185,18 @@ The rule reports a registration only when it sees everything the options do, so 
 
 A context declared in the same project is still reported when only a library's `ConfigureDbContext<TContext>` helper
 applies `UseTenantry()`, as the rule cannot see into it: suppress the warning there, or add `.UseTenantry()` to the
-registration, which is harmless, since `UseTenantry()` returns at once when the options already have it. On EF Core 8,
-a test project that removes the application's options (`services.RemoveAll<DbContextOptions<AppDbContext>>()`) and
-registers the context again gets only its own registration's options; without the removal, EF Core 8 keeps the first
-registration's, the application's. Add `.UseTenantry()` to the test registration, or set
+registration, which is harmless, as `UseTenantry()` returns at once when the options already have it. On EF Core 8, a
+test project's second registration of the context is reported too. If the test removes the application's options
+(`services.RemoveAll<DbContextOptions<AppDbContext>>()`), the context gets only the test registration's options;
+without the removal, EF Core 8 keeps the application's. Add `.UseTenantry()` to the test registration, or set
 `dotnet_diagnostic.TNY1004.severity = none` for the test project.
 
 The registrations in a method are all taken to run, in source order, so one on a branch that excludes another, after
 an early return, or in a callback that runs later still counts. A few false reports remain by design: the builder
 passed inside an array or a `params object[]`, through reflection, or as a method group to a framework or third-party
 method, and a package that does not reference `Tenantry.EfCore` calling back into the application's override of its
-virtual method. Suppress the warning there.
-
-It decides once the whole project is compiled, so `dotnet build` reports it, while Visual Studio and Rider may show it
-only after a build, or with analysis of the whole solution turned on. Where a context is meant to be unisolated, such
-as a test that registers one on purpose, suppress it there with `#pragma warning disable TNY1004`,
-`[SuppressMessage("Tenantry", "TNY1004", Justification = "...")]`, or `dotnet_diagnostic.TNY1004.severity = none` in
-`.editorconfig` for those files.
+virtual method. Suppress the warning there, as where a context is meant to be unisolated, such as in a test that
+registers one on purpose ([Configuring the rules](#configuring-the-rules)).
 
 ## TNY2001
 
@@ -226,9 +222,6 @@ itself.
 dotnet_diagnostic.TNY2001.severity = none
 ```
 
-It decides once the whole project is compiled, so `dotnet build` reports it, while an IDE may show it only after a
-build, or with analysis of the whole solution turned on.
-
 ## TNY3001
 
 `ITenantContextSetter<TKey>.MakeCurrent` or `ITenantScopeFactory<TKey>.CreateScope` is given a descriptor created in the
@@ -248,4 +241,4 @@ is info by default, since tests build descriptors this way.
 blocking on it there, as on a desktop app's UI thread, can deadlock. It is info by default: ASP.NET Core, workers and a
 console app's `Main` have no such context, and blocking there cannot deadlock.
 
-Await it ([Desktop apps](non-http-hosts.md#desktop-apps)).
+Await it instead ([Desktop apps](non-http-hosts.md#desktop-apps)).

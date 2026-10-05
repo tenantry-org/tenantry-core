@@ -1,7 +1,7 @@
 # Access control
 
-Access control answers two separate questions: whether a request needs a tenant, and whether the caller may use the
-tenant it named. The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does both with JWT authentication, and its
+Access control answers two questions: whether a request needs a tenant, and whether the caller may use the tenant it
+named. The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does both with JWT authentication, and its
 tests check the 401, 403 and 400 responses.
 
 ## Requiring a tenant
@@ -23,9 +23,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
 With this on, a request that does not resolve a tenant gets `400 Bad Request`, and one whose tenant is unknown or
 refused is rejected too ([status codes](aspnetcore-integration.md#status-codes)). Individual endpoints opt out with
 `AllowMissingTenant()`. On an endpoint that does not require a tenant, a request whose tenant is unknown or refused
-continues without one, except that with `app.UseTenantResolution()` a signed-in request whose tenant was current
-during authentication, and which the access validators refuse, is rejected on every endpoint
-([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
+continues without one (with `app.UseTenantResolution()`, see the exception [below](#validating-tenant-access)).
 
 ### Per-endpoint
 
@@ -51,17 +49,17 @@ public class OrdersController : ControllerBase
 }
 ```
 
-Endpoint metadata overrides `RequireTenantByDefault()`. If an endpoint has both `RequireTenant` and
-`AllowMissingTenant`, the one added last wins. Use one per endpoint.
+Endpoint metadata overrides `RequireTenantByDefault()`. Give an endpoint one of `RequireTenant` and
+`AllowMissingTenant`: with both, the one added last wins.
 
 ## Validating tenant access
 
-A tenant that resolves and is in the store is not necessarily one the caller may use: a user of Acme should not be
-able to send `X-Tenant-Id: globex`. Access validators run after the tenant is found in the store. If validation fails,
-an endpoint that requires a tenant responds `403 Forbidden`, and any other endpoint runs without a tenant; either way
-the endpoint never runs with the refused tenant. With `app.UseTenantResolution()`, the tenant is already current
-during authentication, before the validators run, and a signed-in request whose tenant they refuse gets
-`403 Forbidden` on every endpoint ([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
+A tenant that is in the store is not necessarily one the caller may use: a user of Acme should not be able to send
+`X-Tenant-Id: globex`. Access validators run after the tenant is found in the store. If one refuses, an endpoint that
+requires a tenant responds `403 Forbidden`, and any other endpoint runs without a tenant, never with the refused one.
+With `app.UseTenantResolution()`, the tenant is already current during authentication, before the validators run, and a
+signed-in request whose tenant they refuse gets `403 Forbidden` on every endpoint ([Authentication per
+tenant](authentication-per-tenant.md#how-the-two-steps-work)).
 
 Once any validator is configured, a request for a tenant that does not exist gets the same response as one for a
 tenant the caller may not use, so an authenticated user of one tenant cannot discover which others exist.
@@ -79,9 +77,8 @@ This passes when any `tenant_id` claim on `HttpContext.User` matches the resolve
 - repeated claims, each holding one id (`tenant_id: acme`, `tenant_id: globex`), and
 - one claim holding a JSON array (`tenant_id: ["acme","globex"]`, or numbers `[1,2]` for numeric keys).
 
-Each candidate value is parsed as `TKey`, with the invariant culture, and compared with the resolved tenant's id:
-the claims list tenant ids, not other identifiers such as slugs. Requires `UseTenantry()` to run after
-`UseAuthentication()`.
+Each value is parsed as `TKey`, with the invariant culture, and compared with the resolved tenant's id, so the claims
+list tenant ids, not other identifiers such as slugs. `UseTenantry()` must run after `UseAuthentication()`.
 
 ### Custom validators
 
@@ -144,13 +141,13 @@ tenant.ValidateTenantAccess((http, t) =>
     || (http.Request.Headers.ContainsKey("X-Admin") && IsInternal(http))); // … OR an internal admin
 ```
 
-That validator still combines with any others you add using AND. `HasClaim` compares the claim value as
-a string; it does not read the JSON-array form that `ValidateTenantAccessByClaim` accepts.
+That validator still combines with any others by AND. `HasClaim` compares the claim value as a string; it does not
+read the JSON-array form that `ValidateTenantAccessByClaim` accepts.
 
 ### Suspended tenants
 
 Refuse suspended tenants with `ValidateTenantActivity`, not an access validator: it also stops their background
-work, jobs and messages. See [Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants).
+work, jobs and messages ([Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
 
 ## Putting it together
 
@@ -165,8 +162,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
 });
 ```
 
-A user whose token lists several tenants picks one with the header, and the validator checks it against all of
-them. This is what the [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does.
-
-See the [`Quickstart` sample](../samples/Tenantry.Samples.Quickstart) for a runnable demonstration of
-required tenants, chained (AND) validators, and endpoint metadata.
+A user whose token lists several tenants picks one with the header, and the validator checks it against all of them,
+as in the [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi). The
+[`Quickstart` sample](../samples/Tenantry.Samples.Quickstart) shows required tenants, chained (AND) validators and
+endpoint metadata.

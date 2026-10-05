@@ -1,8 +1,7 @@
 # Getting started
 
-This guide takes you from an empty project to a working multi-tenant ASP.NET Core app with EF Core
-data isolation. If you are not using ASP.NET Core, read [Non-HTTP hosts](non-http-hosts.md) after
-the first two sections.
+This guide takes you from an empty project to a multi-tenant ASP.NET Core app with EF Core data isolation. Without
+ASP.NET Core, read [Non-HTTP hosts](non-http-hosts.md) after the first two sections.
 
 To start from a generated project instead, `dotnet new install Tenantry.Templates` and then
 `dotnet new tenantry-api -n Orders.Api` create an ASP.NET Core API with EF Core that takes the tenant from the
@@ -18,17 +17,16 @@ dotnet add package Tenantry.AspNetCore
 dotnet add package Tenantry.EfCore
 ```
 
-`Tenantry.Core` comes in transitively; reference it directly only if you want the core types in a
-project that has neither of the above.
+`Tenantry.Core` comes with them; reference it directly only if you want the core types in a project that has neither.
 
 Tenantry is built for .NET 10, and still ships for .NET 8 and 9 ([Compatibility](compatibility.md)). Each build of
 `Tenantry.EfCore` uses the EF Core major of its target framework (8.x, 9.x or 10.x).
 
 ## 2. Choose your tenant key type
 
-`TKey` is the type of your tenant ids. `Guid`, `int`, `long` and `string` all work
+`TKey` is the type of your tenant ids: `Guid`, `int`, `long` and `string` all work
 ([Core concepts](core-concepts.md#the-tenant-key-tkey) has the constraints). Use the same type in your entities, store
-and registration. This guide uses `Guid`.
+and registration; this guide uses `Guid`.
 
 ## 3. Register Tenantry
 
@@ -58,14 +56,13 @@ builder.Services.AddTenantry<Guid>(tenant =>
 });
 ```
 
-Builder methods chain, so this can also be one chain:
-`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`. `app.UseTenantry()` (step 7) throws
-at startup if no resolver or no store is registered. The rules are in [Registration](core-concepts.md#registration).
+Builder methods chain, so this can also be
+`tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`. `app.UseTenantry()` (step 7) throws at
+startup if no resolver or no store is registered ([Registration](core-concepts.md#registration) has the rules).
 
 ## 4. Mark your tenant-owned entities
 
-An entity becomes tenant-owned by implementing `ITenantEntity<TKey>`. The convenience base class
-`TenantEntity<TKey>` implements it for you:
+An entity is tenant-owned when it implements `ITenantEntity<TKey>`, as the base class `TenantEntity<TKey>` does:
 
 ```csharp
 using Tenantry;
@@ -83,8 +80,8 @@ tables) and are never filtered or stamped. Leave `TenantId` unset: Tenantry stam
 
 ## 5. Keep your DbContext as it is
 
-Your `DbContext` needs no base class, no interface and no Tenantry calls. Configure it as you normally would,
-in any order, including your own query filters:
+Your `DbContext` needs no base class, interface or Tenantry calls. Configure it as usual, in any order, including your
+own query filters:
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -121,8 +118,8 @@ var app = builder.Build();
 app.UseTenantry();   // resolves the tenant; place after UseAuthentication() if resolving from claims
 ```
 
-`UseTenantry()` must run before any endpoint that needs a tenant. The ordering rules are in
-[ASP.NET Core integration](aspnetcore-integration.md#pipeline-ordering).
+`UseTenantry()` must run before any endpoint that needs a tenant
+([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)).
 
 ## 8. Use the tenant in your endpoints
 
@@ -158,8 +155,8 @@ curl -H "X-Tenant-Id: not-a-guid" "…/orders"                             # 404
 curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000099" "…/orders"  # 404 (not in store)
 ```
 
-The rejections have an empty body. Add `builder.Services.AddProblemDetails()` to get `application/problem+json`
-bodies instead; see [ASP.NET Core integration](aspnetcore-integration.md#status-codes).
+The rejections have an empty body; add `builder.Services.AddProblemDetails()` for `application/problem+json` bodies
+([Status codes](aspnetcore-integration.md#status-codes)).
 
 ## Next steps
 

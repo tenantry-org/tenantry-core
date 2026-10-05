@@ -6,7 +6,7 @@ shared database, tenant-owned entities carry a `TenantId` that every query and s
 Your entities need no base class, and Tenantry does not take over your request pipeline. Schema per tenant,
 provisioning and migrations across tenant databases are in [Tenantry.Pro](https://tenantry.dev/docs/pro).
 
-If you are new, start with [Getting started](getting-started.md) and [Core concepts](core-concepts.md).
+Start with [Getting started](getting-started.md) and [Core concepts](core-concepts.md).
 
 ## Guides
 
@@ -36,13 +36,13 @@ If you are new, start with [Getting started](getting-started.md) and [Core conce
 
 ## How the pieces fit together
 
-Tenantry has three responsibilities, each configured in the `AddTenantry` lambda:
+Tenantry has three parts, each configured in the `AddTenantry` lambda:
 
-| Responsibility | Question it answers | Configured with |
-|----------------|---------------------|-----------------|
-| **Resolution** | *Who is the tenant for this request/operation?* | `ResolveFromHeader(...)`, `ResolveFromClaim(...)`, … (ASP.NET Core), or `ITenantScopeFactory` (non-HTTP) |
-| **Storage** | *Which tenants exist, and what are their details?* | `UseInMemoryStore(...)`, `UseStore<T>()` |
-| **Isolation** | *How is each tenant's data kept separate?* | `options.UseTenantry()` on each `DbContext`, or `UseConnectionStrings(...)` and `AddDbContextPerTenantDatabase<TContext>(...)` for a database per tenant |
+| Part | What it decides | Configured with |
+|------|-----------------|-----------------|
+| Resolution | The tenant of a request or operation | `ResolveFromHeader(...)`, `ResolveFromClaim(...)`, … (ASP.NET Core), or `ITenantScopeFactory` (non-HTTP) |
+| Storage | Which tenants exist, and their details | `UseInMemoryStore(...)`, `UseStore<T>()` |
+| Isolation | How each tenant's data is kept apart | `options.UseTenantry()` on each `DbContext`, or `UseConnectionStrings(...)` and `AddDbContextPerTenantDatabase<TContext>(...)` for a database per tenant |
 
 The flow on an ASP.NET Core request:
 
@@ -62,5 +62,5 @@ Your endpoint + EF Core
    └─ writes ──► SaveChanges interceptor stamps/validates TenantId
 ```
 
-In a console or worker app there is no request, so you make the tenant current yourself with
-`ITenantScopeFactory` (or `ITenantContextSetter.MakeCurrent`); everything below that line behaves identically.
+A console or worker app has no request, so you make the tenant current yourself with `ITenantScopeFactory` (or
+`ITenantContextSetter.MakeCurrent`); everything below that line behaves the same.

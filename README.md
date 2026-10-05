@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/github/license/tenantry-org/tenantry-core)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0%20LTS%20%7C%208.0%2C%209.0%20legacy-512BD4)](docs/compatibility.md)
 
-Tenant isolation for ASP.NET Core and EF Core: one call on your `DbContext`, no base class, and it fails closed.
+Tenant isolation for ASP.NET Core and EF Core.
 
 Tenantry keeps each tenant's data apart in EF Core, either in a shared database, where tenant-owned entities carry a
 `TenantId` that every query and save is scoped to, or in a database per tenant. You choose the key type, how tenants
@@ -23,12 +23,13 @@ builder.Services.AddDbContext<AppDbContext>(options => options
     .UseTenantry());                    // how data is isolated
 ```
 
-## Why Tenantry?
+## Features
 
 - Any key type that is `IEquatable<T>` and `IParsable<T>`: `Guid`, `int`, `string` and so on. Resolve tenants from a
   header, subdomain, host, route, claim or a resolver of your own, and keep them in any store behind an interface.
-- `options.UseTenantry()` isolates any `DbContext`, pooled or not, with your own model configuration in any order.
-- It fails closed. With no tenant, queries return nothing and tenant-owned writes are refused. A write to another
+- `options.UseTenantry()` isolates any `DbContext`, pooled or not, with no base class and your own model
+  configuration in any order.
+- It fails closed: with no tenant, queries return nothing and tenant-owned writes are refused. A write to another
   tenant's row is rejected before saving, and `TenantId` is part of every `UPDATE` and `DELETE`, so a forged key
   matches no row. `Database.SqlQuery`, `ExecuteSql` and `IgnoreQueryFilters()` are not isolated
   ([details](docs/efcore-integration.md#what-is-and-isnt-isolated)).
@@ -49,7 +50,7 @@ tenant databases, offboarding, audit logging, and the tenant in background jobs 
 | `Tenantry.Caching`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Caching.svg)](https://www.nuget.org/packages/Tenantry.Caching)       | Keeps `HybridCache` entries per tenant                                         |
 | `Tenantry.Options`    | [![NuGet](https://img.shields.io/nuget/v/Tenantry.Options.svg)](https://www.nuget.org/packages/Tenantry.Options)       | Options values per tenant                                                      |
 
-Each depends on `Tenantry.Core`. Reference whichever combination matches your host:
+Each depends on `Tenantry.Core`. Reference the ones your host needs:
 
 ```bash
 # ASP.NET Core app with EF Core isolation (most common)
@@ -114,8 +115,8 @@ app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.CurrentTenant!.Na
 app.Run();
 ```
 
-Add EF Core isolation where you register your context, with `options.UseTenantry()`: queries are filtered to
-the current tenant, and saves are stamped and checked. See the [EF Core integration guide](docs/efcore-integration.md).
+Add EF Core isolation where you register your context, with `options.UseTenantry()`: queries are filtered to the
+current tenant, and saves are stamped and checked ([EF Core integration](docs/efcore-integration.md)).
 
 To start from a generated project instead, run `dotnet new install Tenantry.Templates`, then `dotnet new tenantry-api`
 for an ASP.NET Core API or `dotnet new tenantry-worker` for a worker service. The projects target `net10.0`, so
@@ -123,7 +124,7 @@ building one needs the .NET 10 SDK.
 
 ## Quick start (console or worker)
 
-There is no request to resolve a tenant from, so you open a tenant scope around each unit of work:
+With no request to resolve a tenant from, open a tenant scope around each unit of work:
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -151,8 +152,7 @@ foreach (var tenant in await tenants.GetAllTenantsAsync(cancellationToken))
 `CreateScope` trusts the descriptor it is given: it does not look it up or check whether it is active, so pass it only
 a tenant you already hold.
 
-See the runnable [`Tenantry.Samples.EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) project
-and the [non-HTTP hosts guide](docs/non-http-hosts.md).
+See the [`EfCoreConsole` sample](samples/Tenantry.Samples.EfCoreConsole) and [Non-HTTP hosts](docs/non-http-hosts.md).
 
 ## AOT & trimming
 
@@ -189,7 +189,7 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and i
 |--------|--------------|
 | [`SecureApi`](samples/Tenantry.Samples.SecureApi) | **Start here for production:** JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation, integration tests |
 | [`Quickstart`](samples/Tenantry.Samples.Quickstart) | Minimal ASP.NET Core setup, resolvers, access validators, endpoint metadata |
-| [`EfCoreWeb`](samples/Tenantry.Samples.EfCoreWeb) | Realistic EF Core app: migrations, DB-backed store, mixed tenanted/global entities, admin queries |
+| [`EfCoreWeb`](samples/Tenantry.Samples.EfCoreWeb) | An EF Core app with migrations, DB-backed store, mixed tenanted/global entities, admin queries |
 | [`EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantry` and manual scopes |
 | [`DatabasePerTenant`](samples/Tenantry.Samples.DatabasePerTenant) | A database per tenant with `UseConnectionStrings` and a pooled `AddDbContextPerTenantDatabase`, plus worker scopes |
 | [`Aot`](samples/Tenantry.Samples.Aot) | Native-AOT-published ASP.NET Core app: header, subdomain and custom resolvers, problem details |

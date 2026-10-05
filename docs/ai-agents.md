@@ -1,15 +1,15 @@
 # For AI coding agents
 
-This page is written for a coding agent adding Tenantry to an application, and for the developer who reviews what the
-agent did. Follow the steps in order, then write the test in [Verify isolation](#verify-isolation) and check the list
-of [mistakes](#mistakes-and-the-correct-form). The other guides have the detail behind each step.
+This page is for a coding agent adding Tenantry to an application, and for the developer who reviews its work. Follow
+the steps in order, write the test in [Verify isolation](#verify-isolation), and check the list of
+[mistakes](#mistakes-and-the-correct-form). The other guides have the detail behind each step.
 
 ## When to use Tenantry
 
-Use it when one deployment of a .NET application serves several customers (tenants) whose data must be kept apart,
-and the data is in EF Core: rows of a shared database tagged with a `TenantId`, or a database per tenant. It resolves
-the tenant of each HTTP request, or lets background work run as a tenant, and EF Core then filters every query and
-checks every save for that tenant.
+Use it when one deployment of a .NET application serves several customers (tenants) whose data must be kept apart in
+EF Core: rows of a shared database tagged with a `TenantId`, or a database per tenant. It resolves the tenant of each
+HTTP request, or runs background work as a tenant, and EF Core then filters every query and checks every save for that
+tenant.
 
 Do not use it to separate users within one tenant: that is authorization. Without EF Core, Tenantry still resolves
 the tenant and keeps caches and options per tenant, but nothing keeps your data apart.
@@ -24,7 +24,7 @@ the tenant and keeps caches and options per tenant, but nothing keeps your data 
 4. Add `UseTenantry()` to the `DbContext` options, in a registration method of the application's own that
    `Program.cs` calls, so the isolation test can call the same one ([Verify isolation](#verify-isolation)). The
    context needs no base class and no other change.
-5. Register Tenantry with a resolver, a store, and an access validator. A resolver that reads the request (a header,
+5. Register Tenantry with a resolver, a store and an access validator. A resolver that reads the request (a header,
    a route value, the query string, the host or subdomain) lets any caller name any tenant, so check the tenant
    against the authenticated user.
 6. Add `app.UseTenantry()` after `app.UseAuthentication()`, and before the endpoints. Without
@@ -106,18 +106,17 @@ await scopes.RunInScopeAsync(message.TenantId, async (scope, ct) =>
 }, cancellationToken);
 ```
 
-[Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant) has the table that picks between `RunInScopeAsync`,
-`CreateScope` and `MakeCurrent`. In short: an id from outside goes to `RunInScopeAsync`; a tenant you already loaded
-from the store goes to `CreateScope`, or to `ITenantContextSetter<TKey>.MakeCurrent` when a scope already exists.
+A tenant you already loaded from the store goes to `CreateScope`, or to `ITenantContextSetter<TKey>.MakeCurrent` when a
+scope already exists ([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant) has the full table).
 
 ## Verify isolation
 
-Write a test that runs the application's own registration of its context with Tenantry's real services and two
-tenants: one tenant's rows must not be visible to the other, and a row for another tenant must be refused. The test
-calls the same `AddBillingDbContext` that `Program.cs` calls, and replaces only the database, so it fails if the
-application's registration loses `UseTenantry()`. A test that registers the context again with its own
-`AddDbContext(... .UseTenantry())` passes whatever the application does, and proves nothing. This one runs on SQLite
-in memory with xUnit:
+Write a test that runs the application's own registration of its context with Tenantry's real services and two tenants:
+one tenant's rows must not be visible to the other, and a row for another tenant must be refused. Call the same
+`AddBillingDbContext` that `Program.cs` calls and replace only the database, so the test fails if the application's
+registration loses `UseTenantry()`; a test that registers the context again with its own
+`AddDbContext(... .UseTenantry())` passes whatever the application does, and proves nothing. This one runs on SQLite in
+memory with xUnit:
 
 ```csharp
 using Microsoft.Data.Sqlite;
@@ -177,13 +176,13 @@ public sealed class IsolationTests : IAsyncLifetime
 }
 ```
 
-Check that the test can fail: remove `options.UseTenantry()` from `AddBillingDbContext` and run it. It must fail;
-put the call back. Tenantry's own tests run this test against a registration without `UseTenantry()` and check that it
-fails. To check that every entity type is either tenant-owned or meant to be shared, assert that
-`TenantModel.FindUnisolatedEntityTypes(db.Model)` lists only the types every tenant shares
-([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
-A request test through `WebApplicationFactory<Program>` adds what this test cannot see: how requests name a tenant,
-that the access validator refuses a caller, and the pipeline order ([Testing](testing.md)).
+Check that the test can fail: remove `options.UseTenantry()` from `AddBillingDbContext` and run it. It must fail; put
+the call back. (Tenantry's own tests run this test against a registration without `UseTenantry()` and check that it
+fails.) To check that every entity type is either tenant-owned or meant to be shared, assert that
+`TenantModel.FindUnisolatedEntityTypes(db.Model)` lists only the types every tenant shares ([Entity types that are not
+tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)). A request test through
+`WebApplicationFactory<Program>` adds what this test cannot see: how requests name a tenant, that the access validator
+refuses a caller, and the pipeline order ([Testing](testing.md)).
 
 ## Mistakes and the correct form
 
@@ -192,10 +191,10 @@ that the access validator refuses a caller, and the pipeline order ([Testing](te
 
 - An entity with a `TenantId` property that does not implement `ITenantEntity<TKey>` is not tenant-owned: every
   tenant reads and writes all its rows. Implement `ITenantEntity<TKey>` (or derive from `TenantEntity<TKey>`).
-- An entity type that implements nothing is shared by every tenant. That is the design, for reference data. Do not
-  add filters or `TenantId` checks of your own to such types; make the type tenant-owned if its rows belong to one
-  tenant. To have the model list every shared type, mark them `[SharedAcrossTenants]` and set `OnUnmarkedEntityType`
-  ([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
+- An entity type that implements nothing is shared by every tenant, by design, for reference data. Do not add filters or
+  `TenantId` checks of your own to such types; make the type tenant-owned if its rows belong to one tenant. To have the
+  model list every shared type, mark them `[SharedAcrossTenants]` and set `OnUnmarkedEntityType` ([Entity types that are
+  not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
 - A context registered without `UseTenantry()` isolates nothing: every tenant reads and writes all its tenant-owned
   rows, and nothing fails at run time. Call `UseTenantry()` in the options of every registration of a context with
   tenant-owned entities.
@@ -210,10 +209,11 @@ that the access validator refuses a caller, and the pipeline order ([Testing](te
   caller act as any tenant. Add `ValidateTenantAccessByClaim(...)` or `ValidateTenantAccess(...)` in the same
   `AddTenantry`.
 - `MakeCurrent` and `CreateScope` trust the descriptor they are given: they do not look it up or check that the tenant
-  is active. Do not build a `TenantDescriptor` from an id that came from outside and pass it to them. Pass the id to
+  is active. Do not pass them a `TenantDescriptor` built from an id that came from outside; pass the id to
   `RunInScopeAsync`, or look the tenant up with `ITenantLookup<TKey>` first.
-- A context from `AddDbContextPerTenantDatabase` is connected to one tenant's database. A query or save with it after
-  the current tenant changes throws `TenantIsolationViolationException`. Resolve a new context in each tenant's scope.
+- A context from `AddDbContextPerTenantDatabase` is connected to one tenant's database, and a query or save with it
+  after the current tenant changes throws `TenantIsolationViolationException`. Resolve a new context in each tenant's
+  scope.
 - `RunInScopeAsync` returns to the caller's synchronization context to start the work, so blocking on it
   (`.Result`, `.Wait()`, `.GetAwaiter().GetResult()`) on a desktop app's UI thread can deadlock. Await it
   ([Desktop apps](non-http-hosts.md#desktop-apps)).
