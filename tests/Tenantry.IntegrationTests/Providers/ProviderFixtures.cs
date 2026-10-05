@@ -78,12 +78,13 @@ internal static partial class DatabaseContainers
         {
             // xUnit creates no further fixture once one fails, so none would dispose the containers started for them:
             // once every start has finished, successful or not, dispose them all. A fixture xUnit did create disposes
-            // its container again, which Testcontainers allows.
+            // its container again, which Testcontainers allows. A failure to dispose one is dropped, so the start's
+            // failure is the one reported.
             await Task.WhenAll(Started.Value.Select(async started =>
             {
                 await Task.WhenAny(started.Value);
                 await started.Key.DisposeAsync();
-            }));
+            })).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             throw;
         }
     }
