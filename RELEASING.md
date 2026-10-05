@@ -59,7 +59,8 @@ Only the maintainer can push `v*` tags.
 
 The script makes only a minor's `X.Y.0`. To start with a release candidate, do step 2 by hand:
 
-1. From `master`, up to date: `git switch -c release/0.7`.
+1. From `master`, up to date, once its CI, SonarCloud included, has passed on its head (the check
+   `scripts/cut-release.sh` makes): `git switch -c release/0.7`.
 2. In `CHANGELOG.md`, add `## [0.7.0-rc.1] - YYYY-MM-DD`, dated today in UTC, below `## [Unreleased]`, so the
    section holds the entries, and leave `## [Unreleased]` empty above it.
 3. Move the analyzer rules to `AnalyzerReleases.Shipped.md` under `## Release 0.7.0`, not `## Release 0.7.0-rc.1`:
