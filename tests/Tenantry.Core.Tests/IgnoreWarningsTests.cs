@@ -31,7 +31,11 @@ public sealed class IgnoreWarningsTests
 
         using var sp = Build(tenant => tenant.IgnoreWarnings(eventIds));
 
-        eventIds.Should().HaveCountGreaterThanOrEqualTo(2).And.OnlyContain(eventId => TenantryWarnings.IsIgnored(sp, eventId));
+        eventIds.Should().HaveCountGreaterThanOrEqualTo(2);
+        foreach (var eventId in eventIds)
+        {
+            TenantryWarnings.IsIgnored(sp, eventId).Should().BeTrue($"TenantryWarnings names {eventId}");
+        }
     }
 
     [Fact]
