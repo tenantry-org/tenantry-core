@@ -8,7 +8,8 @@
 # It reads each package's version list from the feed's flat container (NuGet's PackageBaseAddress resource):
 # FLAT_CONTAINER, by default NuGet.org's https://api.nuget.org/v3-flatcontainer. For a feed that needs credentials,
 # set FEED_USER and FEED_TOKEN, sent as basic authentication. An id the feed has never seen (404) has no versions; any
-# other failure fails the check, since an unanswered question is not an answer.
+# other failure, including a response that is not JSON with a versions array, fails the check, since an unanswered
+# question is not an answer.
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
@@ -46,6 +47,10 @@ for id in "$@"; do
     exit 1
   fi
 
+  if ! jq -e '.versions | type == "array"' "$index" > /dev/null; then
+    echo "::error::Could not read $id's versions from $feed: the response is not JSON with a versions array" >&2
+    exit 1
+  fi
   if jq -e --arg version "$wanted" '.versions | index($version) != null' "$index" > /dev/null; then
     published+=("$id")
     echo "$id: $version is already published"
