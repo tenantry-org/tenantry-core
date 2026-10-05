@@ -46,10 +46,9 @@ jobs:
           branch="$(bash scripts/release-source.sh)"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
-      - name: Require CI, SonarCloud included, to have passed on the tagged commit
-        # The run of ci.yml for the push that put the commit on its release branch. The rerun below skips SonarCloud, so
-        # this is where its quality gate is required: CI on release/* runs it in the Build & Test job, which fails when
-        # the gate does.
+      - name: Require CI to have passed on the tagged commit
+        # The run of ci.yml for the push that put the commit on its release branch. SonarCloud analyses master only
+        # (ci.yml says why), where every change a release branch holds landed first.
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -97,9 +96,8 @@ jobs:
           bash scripts/check-unpublished.sh "${RELEASE#v}" "${ids[@]}"
 
   # Re-run build + tests + coverage gate + AOT publish against the tagged commit before
-  # publishing. SonarCloud is skipped: it cannot analyze a tag ref (auto-detection fails with
-  # "Not authorized or project not found"), and the source job checked that the tagged commit passed
-  # CI, the Sonar quality gate included, on its release branch.
+  # publishing. SonarCloud is skipped: it analyses master only (ci.yml says why), and the source job checked that the
+  # tagged commit passed CI on its release branch.
   ci:
     needs: source
     uses: ./.github/workflows/build-test.yml

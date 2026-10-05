@@ -32,7 +32,7 @@ Only the maintainer can push `v*` tags.
    fast-forwarding the branch into `master`: that would put the tagged commit on `master`'s history, where MinVer
    would count `master`'s prerelease versions from the tag and restart them. The release workflow refuses a tag on a
    commit `master` contains, and the prerelease job refuses a version below one already published.
-3. Push the branch, and wait for CI, SonarCloud included, to pass on that push: the release requires that run.
+3. Push the branch, and wait for CI to pass on that push: the release requires that run.
 
    ```sh
    git push origin release/0.7
@@ -73,10 +73,10 @@ joins the `## Release 0.7.0` table, which the analyzer accepts, rather than a se
 ## A patch
 
 1. Fix it on `master` first, in a pull request as usual, unless the code is gone there.
-2. In a pull request into `release/X.Y`, which runs CI, SonarCloud included, cherry-pick the fix and add the patch's
+2. In a pull request into `release/X.Y`, which runs CI, cherry-pick the fix and add the patch's
    section to `CHANGELOG.md` (`## [0.7.1] - YYYY-MM-DD`). Add the same section to `master`'s `CHANGELOG.md`, placed by
    version among the other releases. The release's notes come from the branch's copy.
-3. Merge it and wait for CI, SonarCloud included, to pass on the push to `release/X.Y`.
+3. Merge it and wait for CI to pass on the push to `release/X.Y`.
 4. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.7.*'`), that `git log
    v0.7.0..origin/release/0.7` holds only what the patch should, that `TenantryPackageBaseline` names the line's last
    release, and that the `CHANGELOG.md` section is there. Then tag the branch's head and push the tag, as for a new
@@ -161,11 +161,10 @@ The `master` ruleset covers `release/*` too: changes only through pull requests 
 force pushes or deletion. Pushing a new `release/X.Y` with its commit, and `master`'s two commits from
 `scripts/cut-release.sh`, rely on the maintainer's bypass of that ruleset. The `release` tag ruleset lets only the
 maintainer create `v*` tags, and requires them signed, so tag with `git tag -s` as above; the release workflow does not
-check the signature. SonarCloud's default long-lived branch pattern, `(branch|release)-.*`, does not match
-`release/0.7`: set it to `release/.*` (the project's Administration → Branches and Pull Requests) before the first
-release branch is pushed, since a branch's kind is fixed at its first analysis, and keep a quality gate on it. The
-`release` environment must accept `v*` tags, and NuGet.org's trusted publishing policy names this repository,
-`release.yml` and the `release` environment.
+check the signature. SonarCloud analyses `master` and pull requests into it, not `release/*`: the organization's plan
+serves only the main branch, so another branch's quality gate cannot be read, and what a release branch holds was
+analysed on `master`, where every change lands first. The `release` environment must accept `v*` tags, and NuGet.org's
+trusted publishing policy names this repository, `release.yml` and the `release` environment.
 
 The `prerelease` environment has no required reviewers and accepts only the `master` branch. NuGet.org needs a second
 trusted publishing policy for it, with the same package owner as the release's policy: repository owner `tenantry-org`,
