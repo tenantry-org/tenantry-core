@@ -20,7 +20,7 @@ public static IServiceCollection AddTenantry<TKey>(this IServiceCollection servi
 
 Type parameters:
 
-- `TKey`: The tenant identifier type (e.g. `Guid`, `int`, `string`). Must implement `IEquatable<T>` and `IParsable<TSelf>`.
+- `TKey`: The tenant identifier type, such as `Guid`, `int` or `string`.
 
 Parameters:
 

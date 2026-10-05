@@ -22,25 +22,25 @@ public static class TenantryDbContextOptionsBuilderExtensions
     /// <returns>The same <paramref name="optionsBuilder"/> for chaining.</returns>
     /// <remarks>
     /// <para>
-    /// Any <see cref="DbContext"/> works, pooled or not, with no base class or interface. Tenantry adds the tenant
-    /// query filter after <c>OnModelCreating</c>, so your own configuration can come in any order, and it combines
-    /// the tenant filter with your own filters. On EF Core 10 and later the tenant filter is named
-    /// <see cref="TenantryQueryFilters.Tenant"/>, and an unnamed filter of your own beside it is named
-    /// <see cref="TenantryQueryFilters.Application"/>; on EF Core 8 and 9 it is merged into your filter. It also makes each tenant-owned entity's <c>TenantId</c> a concurrency token, so every <c>UPDATE</c>
-    /// and <c>DELETE</c> matches only a row stored under the tenant the entity was loaded as.
+    /// Any <see cref="DbContext"/> works, pooled or not, with no base class or interface. The tenant query filter is
+    /// added after <c>OnModelCreating</c>, so your configuration can come in any order, and is combined with your own
+    /// filters: on EF Core 10 and later it is named <see cref="TenantryQueryFilters.Tenant"/>, and an unnamed filter
+    /// of yours beside it is named <see cref="TenantryQueryFilters.Application"/>; on EF Core 8 and 9 it is merged
+    /// into your filter. Each tenant-owned entity's <c>TenantId</c> becomes a concurrency token, so every
+    /// <c>UPDATE</c> and <c>DELETE</c> matches only a row stored under the tenant the entity was loaded as.
     /// </para>
     /// <para>
     /// The current tenant is read from the context's application service provider, which <c>AddDbContext</c>,
-    /// <c>AddDbContextPool</c>, <c>AddDbContextFactory</c> and <c>AddPooledDbContextFactory</c> supply, so Tenantry
-    /// must be registered there with <c>AddTenantry</c> for the tenant key type your entities use. A context
-    /// without an application service provider (one built by hand without <c>UseApplicationServiceProvider</c>)
-    /// builds its model, for design-time tools, but throws on its first query or save.
+    /// <c>AddDbContextPool</c>, <c>AddDbContextFactory</c> and <c>AddPooledDbContextFactory</c> supply, so register
+    /// Tenantry there with <c>AddTenantry</c> for your entities' key type. A context built by hand without
+    /// <c>UseApplicationServiceProvider</c> builds its model, for design-time tools, but throws on its first query or
+    /// save.
     /// </para>
     /// <para>
     /// Every <see cref="ITenantDbContextOptionsContributor"/> registered in the application service provider
     /// configures the options here, and every <see cref="ITenantModelContributor"/> the model; without an application
     /// service provider, none runs. The application's <see cref="EfCoreIsolationOptions"/> are read here too, so set
-    /// the application service provider before calling it: otherwise a context whose application sets
+    /// the application service provider first: otherwise a context whose application sets
     /// <see cref="EfCoreIsolationOptions.OnUnmarkedEntityType"/> to <c>Warn</c> or <c>Reject</c> throws
     /// <see cref="InvalidOperationException"/> on its first query, save or command. Calling this again changes nothing.
     /// </para>

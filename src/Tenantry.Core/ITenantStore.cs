@@ -47,8 +47,8 @@ public interface ITenantStore<TKey>
     /// culture and looked up with <see cref="GetTenantAsync"/>, and an identifier that does not parse, or parses to
     /// the key type's default (<see cref="Guid.Empty"/>, <c>0</c>) or an empty string, names no tenant. Implement it
     /// to resolve tenants by another name, for example a <see cref="Guid"/>-keyed store whose tenants have slugs. A
-    /// store that wraps another (to log, say) must forward it to the inner store: otherwise it gets this default,
-    /// which never reaches the inner store's own mapping.
+    /// store that wraps another, for logging for example, must forward it to the inner store, or it gets this
+    /// default, which never reaches the inner store's own mapping.
     /// </remarks>
     /// <example>
     /// <code>

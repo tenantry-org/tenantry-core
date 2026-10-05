@@ -24,20 +24,18 @@ public static class TenantryCachingTenantBuilderExtensions
     /// </para>
     /// <para>
     /// It wraps the <see cref="HybridCache"/> registered before it, so call <c>AddHybridCache()</c> before
-    /// <c>AddTenantry</c>. When the host starts, it checks that <see cref="HybridCache"/> resolves to the cache it keys
-    /// by tenant, and throws <see cref="InvalidOperationException"/> otherwise: for a <see cref="HybridCache"/>, keyed or
-    /// not, registered after it (which would replace it), for one registered for any key, and for <c>AddHybridCache()</c>
-    /// called after it. With no <see cref="HybridCache"/> registered at all, the one it registers throws when used, naming
-    /// the fix.
+    /// <c>AddTenantry</c>. The host throws <see cref="InvalidOperationException"/> as it starts if a
+    /// <see cref="HybridCache"/>, keyed or not, is registered after it (<c>AddHybridCache()</c> included), or one is
+    /// registered for any key. With no <see cref="HybridCache"/> registered at all, the one it registers throws when
+    /// used, naming the fix.
     /// </para>
     /// <para>
     /// A keyed <see cref="HybridCache"/> registered before it is kept per tenant the same way, and the same key gives a
     /// <see cref="SharedHybridCache"/> for that cache's shared entries.
     /// </para>
     /// <para>
-    /// A <see cref="HybridCache"/> call with no current tenant throws <see cref="TenantNotResolvedException"/>, rather
-    /// than writing an entry no tenant owns. The tenant's prefix makes keys longer: keep them within the cache's
-    /// maximum key length (1,024 characters by default) with the id added.
+    /// A <see cref="HybridCache"/> call with no current tenant throws <see cref="TenantNotResolvedException"/>. Keep
+    /// keys within the cache's maximum key length (1,024 characters by default) with the tenant's id added.
     /// </para>
     /// </remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>

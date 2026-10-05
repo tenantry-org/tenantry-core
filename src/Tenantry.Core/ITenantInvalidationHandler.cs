@@ -10,8 +10,8 @@ namespace Tenantry;
 /// </typeparam>
 /// <remarks>
 /// Tenantry.Caching, <c>IsolateOutputCache()</c> and Tenantry.Options register their own. Register a handler as a
-/// singleton, once, with <c>TryAddEnumerable</c>. When the application also injects the handler
-/// to read what it keeps, register it once and forward the handler registration to that instance:
+/// singleton, once, with <c>TryAddEnumerable</c>. When the application also injects the handler to read what it
+/// keeps, forward the handler registration to that one instance:
 /// <code>
 /// services.AddSingleton&lt;PriceListCache&gt;();
 /// services.TryAddEnumerable(ServiceDescriptor.Singleton&lt;ITenantInvalidationHandler&lt;Guid&gt;, PriceListCache&gt;(
@@ -21,10 +21,10 @@ namespace Tenantry;
 /// <see cref="ITenantInvalidator{TKey}"/>. They run one after another, and each runs even when another throws; the
 /// exception, or an <see cref="AggregateException"/> of several, is thrown once they have all run. A cancelled token
 /// stops them before the next handler, with an <see cref="OperationCanceledException"/> in place of those exceptions.
-/// A handler registered with <c>BroadcastInvalidations</c> runs after the others, and only for
-/// <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> and <see cref="ITenantInvalidator{TKey}.InvalidateAllAsync"/>,
-/// so an instance that applies a received invalidation with <see cref="ITenantInvalidator{TKey}.InvalidateLocallyAsync"/>
-/// does not publish it again.
+/// A handler registered with <c>BroadcastInvalidations</c> runs after the others, and not for
+/// <see cref="ITenantInvalidator{TKey}.InvalidateLocallyAsync"/> or
+/// <see cref="ITenantInvalidator{TKey}.InvalidateAllLocallyAsync"/>, so a received invalidation, applied with those,
+/// is not published again.
 /// </remarks>
 public interface ITenantInvalidationHandler<in TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>

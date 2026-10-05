@@ -16,8 +16,7 @@ public static class TenantryServiceCollectionExtensions
     /// connection strings, EF Core isolation and so on.
     /// </summary>
     /// <typeparam name="TKey">
-    /// The tenant identifier type (e.g. <see cref="Guid"/>, <see cref="int"/>, <see cref="string"/>).
-    /// Must implement <see cref="IEquatable{T}"/> and <see cref="IParsable{T}"/>.
+    /// The tenant identifier type, such as <see cref="Guid"/>, <see cref="int"/> or <see cref="string"/>.
     /// </typeparam>
     /// <param name="services">The application's service collection.</param>
     /// <param name="configure">Adds Tenantry's features, or <see langword="null"/> to register only the core services.</param>

@@ -17,21 +17,17 @@ public static class TenantryHttpClientBuilderExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Requires <c>tenant.AddHttpPropagation()</c> in <c>AddTenantry</c>. While a tenant is current, a request carries
-    /// the tenant's id in the header. A request that already carries the header with another tenant's id (forwarded
-    /// from an incoming request, or from the client's <c>DefaultRequestHeaders</c>) throws
+    /// Requires <c>tenant.AddHttpPropagation()</c> in <c>AddTenantry</c>. A request that already carries the header
+    /// with another tenant's id (forwarded from an incoming request, or from the client's <c>DefaultRequestHeaders</c>)
+    /// throws
     /// <see cref="InvalidOperationException"/>. With no tenant current, the request goes as the caller built it, and
     /// the receiving service decides what a missing header means, for example with <c>RequireTenant()</c>.
     /// </para>
     /// <para>
-    /// The header goes only to the service the client is for: requests to the scheme, host and port of
-    /// <paramref name="serviceAddress"/>, or else of the base address set in the client's registration
-    /// (<c>AddHttpClient(c =&gt; c.BaseAddress = …)</c>). A request to an absolute address elsewhere does not carry it.
-    /// A redirect that the client follows keeps the request's headers, this one included.
-    /// </para>
-    /// <para>
-    /// The id must be printable ASCII with no space at either end, as a header carries it; a request as a tenant whose
-    /// id is not throws <see cref="InvalidOperationException"/>.
+    /// The header goes only to the scheme, host and port of <paramref name="serviceAddress"/>, or else of the base
+    /// address set in the client's registration (<c>AddHttpClient(c =&gt; c.BaseAddress = …)</c>), not to an absolute
+    /// address elsewhere. A redirect the client follows keeps it. The id must be printable ASCII with no space at
+    /// either end.
     /// </para>
     /// </remarks>
     /// <param name="builder">The client's builder, from <c>AddHttpClient</c> or <c>AddGrpcClient</c>.</param>

@@ -30,11 +30,9 @@ Exceptions:
 - `InvalidOperationException`: `builder` is `ConfigureHttpClientDefaults`'s, which configures every client, third-party SDKs' included. The client is created without `tenant.AddHttpPropagation()`, or with neither `serviceAddress` nor an absolute `BaseAddress` in its registration (thrown when it is created). A request sent while a tenant is current already carries the header with another tenant's id, or the tenant's id is not printable ASCII without a space at either end (thrown when the request is sent).
 - `ArgumentException`: `serviceAddress` is not absolute.
 
-Requires `tenant.AddHttpPropagation()` in `AddTenantry`. While a tenant is current, a request carries the tenant's id in the header. A request that already carries the header with another tenant's id (forwarded from an incoming request, or from the client's `DefaultRequestHeaders`) throws `InvalidOperationException`. With no tenant current, the request goes as the caller built it, and the receiving service decides what a missing header means, for example with `RequireTenant()`.
+Requires `tenant.AddHttpPropagation()` in `AddTenantry`. A request that already carries the header with another tenant's id (forwarded from an incoming request, or from the client's `DefaultRequestHeaders`) throws `InvalidOperationException`. With no tenant current, the request goes as the caller built it, and the receiving service decides what a missing header means, for example with `RequireTenant()`.
 
-The header goes only to the service the client is for: requests to the scheme, host and port of `serviceAddress`, or else of the base address set in the client's registration (`AddHttpClient(c => c.BaseAddress = …)`). A request to an absolute address elsewhere does not carry it. A redirect that the client follows keeps the request's headers, this one included.
-
-The id must be printable ASCII with no space at either end, as a header carries it; a request as a tenant whose id is not throws `InvalidOperationException`.
+The header goes only to the scheme, host and port of `serviceAddress`, or else of the base address set in the client's registration (`AddHttpClient(c => c.BaseAddress = …)`), not to an absolute address elsewhere. A redirect the client follows keeps it. The id must be printable ASCII with no space at either end.
 
 ```csharp
 builder.Services.AddHttpClient<BillingClient>(c => c.BaseAddress = new Uri("https://billing.internal"))

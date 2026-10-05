@@ -38,9 +38,9 @@ public interface ITenantInvalidator<in TKey>
     /// Handlers run one after another, the broadcasting ones after the others, and each runs even when an earlier one
     /// throws: once they have all run, the call throws the exception, or an <see cref="AggregateException"/> of
     /// several. A cancelled <paramref name="cancellationToken"/> stops the call before the next handler with an
-    /// <see cref="OperationCanceledException"/>, in place of any exceptions so far. An exception from a
-    /// broadcasting handler means this instance is invalidated and some others may not be: they keep their copies
-    /// until those expire, or until a retry of this call reaches them.
+    /// <see cref="OperationCanceledException"/>, in place of any exceptions so far. When a broadcasting handler throws,
+    /// this instance is invalidated, and other instances may keep their copies until those expire or a retry reaches
+    /// them.
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="tenantId"/> is null.</exception>
     /// <exception cref="ArgumentException">

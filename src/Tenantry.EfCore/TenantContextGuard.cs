@@ -15,16 +15,15 @@ namespace Tenantry.EfCore;
 /// <remarks>
 /// <para>
 /// Add it to a context's options with <c>AddInterceptors</c>, or from an <see cref="ITenantDbContextOptionsContributor"/>.
-/// EF Core raises no event for a connection that is already open, so a context opened under one tenant and then used
-/// under another is caught at its next command. <c>SaveChanges</c> is checked before it starts, because EF Core wraps
-/// an exception thrown while a save runs its commands in a <c>DbUpdateException</c>. A command EF Core runs without a
+/// A context opened under one tenant and then used under another is caught at its next command, as EF Core raises no
+/// event for a connection already open. <c>SaveChanges</c> is checked before it starts, so the exception is not
+/// wrapped in a <c>DbUpdateException</c>. A command EF Core runs without a
 /// context (a HiLo sequence fetch) is checked against the context that opened its connection.
 /// </para>
 /// <para>
 /// In a context that uses <c>UseTenantry()</c>, the check runs before Tenantry stamps the save's new entities with the
 /// current tenant, wherever the guard is among the context's interceptors, so a save it refuses leaves the tracked
-/// entities as they were. Interceptors of your own run in the order they were added: add the guard before one that
-/// changes entities when a save starts.
+/// entities as they were. Add the guard before an interceptor of your own that changes entities when a save starts.
 /// </para>
 /// <para>
 /// Throw <see cref="TenantNotResolvedException"/> when the context needs a tenant and none is current, and

@@ -10,8 +10,7 @@ namespace Tenantry;
 /// </typeparam>
 /// <remarks>
 /// <para>
-/// Registered as a singleton by <c>AddTenantry</c>, so hosted services can
-/// take it as a constructor dependency. There are two ways to use it:
+/// A singleton registered by <c>AddTenantry</c>, used in two ways:
 /// </para>
 /// <list type="bullet">
 /// <item><description>
@@ -27,9 +26,8 @@ namespace Tenantry;
 /// </description></item>
 /// </list>
 /// <para>
-/// There is no <c>CreateScopeAsync(tenantId)</c>: a scope opened inside an asynchronous lookup would not be current
-/// for the code that awaited it, because the tenant is held in an <see cref="AsyncLocal{T}"/>.
-/// <see cref="RunInScopeAsync"/> does the lookup and runs your work inside the scope instead.
+/// There is no <c>CreateScopeAsync(tenantId)</c>, as a scope opened inside an asynchronous lookup would not be
+/// current for the code that awaited it (the tenant is held in an <see cref="AsyncLocal{T}"/>).
 /// </para>
 /// </remarks>
 public interface ITenantScopeFactory<TKey>
@@ -44,19 +42,18 @@ public interface ITenantScopeFactory<TKey>
     /// <param name="tenant">The tenant to activate.</param>
     /// <remarks>
     /// <para>
-    /// The tenant is not looked up in the store and not checked with <see cref="ITenantActivity{TKey}"/>: the
-    /// descriptor passed becomes current as it is, even when the store does not hold its id, the tenant is inactive,
-    /// or its other fields differ from the store's. Shared-database queries are then filtered by its id and saves
-    /// stamp new rows with it, so a descriptor the store does not hold leaves rows owned by an id the store does not
-    /// know. Per-tenant options from Tenantry.Options are the exception: they are built from the store's copy when the
-    /// store holds the id.
+    /// The tenant is not looked up in the store or checked with <see cref="ITenantActivity{TKey}"/>: the descriptor
+    /// becomes current as it is, even when the store does not hold its id, the tenant is inactive, or its other fields
+    /// differ from the store's, and shared-database queries and saves use its id, so a descriptor the store does not
+    /// hold leaves rows owned by an id the store does not know. Per-tenant options from Tenantry.Options are the
+    /// exception: they are built from the store's copy when the store holds the id.
     /// </para>
     /// <para>
     /// Pass a tenant you already hold: one read from <see cref="ITenantLookup{TKey}"/> while iterating the store, or
     /// one being onboarded before its store row exists. Reaching inactive tenants suits provisioning and migrations;
     /// for other work, check <see cref="ITenantActivity{TKey}"/> first. For an id from outside the application, such
-    /// as a queue message or a command-line argument, use <see cref="RunInScopeAsync"/>, which looks the tenant up
-    /// and refuses a missing or inactive one.
+    /// as a queue message or a command-line argument, use <see cref="RunInScopeAsync"/>, which looks the tenant up and
+    /// refuses a missing or inactive one.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".</exception>

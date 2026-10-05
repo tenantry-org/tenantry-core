@@ -24,18 +24,17 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
     /// <returns>A handle that restores the previously current tenant on disposal.</returns>
     /// <remarks>
     /// <para>
-    /// The tenant is not looked up in the store and not checked with <see cref="ITenantActivity{TKey}"/>: the
-    /// descriptor passed becomes current as it is, even when the store does not hold its id, the tenant is inactive,
-    /// or its other fields differ from the store's. Shared-database queries are then filtered by its id and saves
-    /// stamp new rows with it, so a descriptor the store does not hold leaves rows owned by an id the store does not
-    /// know. Per-tenant options from Tenantry.Options are the exception: they are built from the store's copy when the
-    /// store holds the id.
+    /// The tenant is not looked up in the store or checked with <see cref="ITenantActivity{TKey}"/>: the descriptor
+    /// becomes current as it is, even when the store does not hold its id, the tenant is inactive, or its other fields
+    /// differ from the store's, and shared-database queries and saves use its id, so a descriptor the store does not
+    /// hold leaves rows owned by an id the store does not know. Per-tenant options from Tenantry.Options are the
+    /// exception: they are built from the store's copy when the store holds the id.
     /// </para>
     /// <para>
     /// Pass a tenant you already hold: one that request resolution found, one read from
     /// <see cref="ITenantLookup{TKey}"/>, or one being onboarded before its store row exists. For an id from outside
-    /// the application, such as a queue message or a command-line argument, use the <c>RunInScopeAsync</c> method of
-    /// <see cref="ITenantScopeFactory{TKey}"/>, which looks the tenant up and refuses a missing or inactive one.
+    /// the application, such as a queue message or a command-line argument, use
+    /// <c>ITenantScopeFactory.RunInScopeAsync</c>, which looks the tenant up and refuses a missing or inactive one.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">

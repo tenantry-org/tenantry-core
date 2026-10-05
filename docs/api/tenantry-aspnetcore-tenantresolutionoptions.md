@@ -62,7 +62,7 @@ Value: `Func<TenantRejectedContext<TKey>, Task>`
 
 ### `OnResolved`
 
-Called when a request's tenant is made current, before the rest of the pipeline runs: to add the tenant to your own telemetry, say. To refuse a tenant, use an access validator.
+Called when a request's tenant is made current, before the rest of the pipeline runs, for example to add the tenant to your own telemetry. To refuse a tenant, use an access validator.
 
 ```csharp
 public Func<TenantResolvedContext<TKey>, Task>? OnResolved { get; set; }

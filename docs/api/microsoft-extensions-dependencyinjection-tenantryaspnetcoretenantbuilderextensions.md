@@ -162,11 +162,11 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-Any caller that reaches the service can set the header, so it is read only when `isTrustedCaller` returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) for the request, typically because the caller authenticated as one of your services. From any other caller it is ignored, and the next resolver runs.
+Any caller can set the header, so it is read only when `isTrustedCaller` returns [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) for the request, typically because the caller authenticated as one of your services; otherwise the next resolver runs.
 
 The value is read as a tenant id ([`TenantIds.TryParse<TKey>`](tenantry-tenantids.md)) and looked up with the store's [`ITenantStore<TKey>.GetTenantAsync`](tenantry-itenantstore.md), not its [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md); a value that is not a tenant id finds no tenant.
 
-`isTrustedCaller` runs after authentication, so it can read `HttpContext.User`: `app.UseTenantResolution()` stops before this resolver, and `app.UseTenantry()` runs it once the user is known. A tenant from the header is therefore not known while authentication runs. Resolvers run in the order they are added, and the first that finds a value wins.
+`isTrustedCaller` runs after authentication, so it can read `HttpContext.User`: `app.UseTenantResolution()` stops before this resolver, and `app.UseTenantry()` runs it once the user is known, so a tenant from the header is not known while authentication runs. The first resolver, in the order added, that finds a value wins.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant

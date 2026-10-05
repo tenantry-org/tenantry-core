@@ -19,16 +19,15 @@ namespace Tenantry.Options;
 /// ordinary value. <c>IOptions&lt;TOptions&gt;</c> always gives the ordinary value.
 /// </para>
 /// <para>
-/// <c>IOptions&lt;TOptions&gt;</c> is not per tenant because its value is read once and kept: a singleton that reads
-/// <c>options.Value</c> in its constructor would keep the first tenant's settings and use them for every tenant. Read
-/// <c>IOptionsSnapshot&lt;TOptions&gt;</c>, which is scoped, in request code, and hold <c>IOptionsMonitor&lt;TOptions&gt;</c>
-/// in a singleton and read <c>CurrentValue</c> each time. Reading <c>CurrentValue</c> once in a constructor keeps one
-/// tenant's value, as reading <c>Value</c> would. The first read of <c>IOptions&lt;TOptions&gt;</c> while a tenant is
+/// <c>IOptions&lt;TOptions&gt;</c> is not per tenant because its value is read once and kept, often in a singleton's
+/// constructor. Read <c>IOptionsSnapshot&lt;TOptions&gt;</c>, which is scoped, in request code, and in a singleton
+/// hold <c>IOptionsMonitor&lt;TOptions&gt;</c> and read <c>CurrentValue</c> each time, not once in the constructor.
+/// The first read of <c>IOptions&lt;TOptions&gt;</c> while a tenant is
 /// current logs a warning, event 3001 in the category <c>Tenantry.Options</c>.
 /// </para>
 /// <para>
-/// Each tenant's value is built on first use and cached; <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> clears
-/// it, so changing a tenant's settings is followed by invalidating the tenant. With a store, the value is built from
+/// Each tenant's value is built on first use and cached until <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/>
+/// clears it, so invalidate a tenant after changing its settings. With a store, the value is built from
 /// the store's copy of the tenant, read once per value built, not from the copy that is current; a value for an id the
 /// store does not hold is built from the current copy on every read and not kept. A change to the configuration the
 /// options are bound to clears every tenant's value. Validation (<c>Validate</c>, <c>IValidateOptions</c>) runs on each

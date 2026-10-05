@@ -10,8 +10,8 @@ namespace Tenantry.EfCore;
 /// Register implementations in the application's service collection, as singletons. Contributors run while EF Core
 /// builds the model, after the context's <c>OnModelCreating</c> and before Tenantry adds its tenant query filters, so
 /// an entity type a contributor adds is isolated too. EF Core builds a model once and caches it, by default once per
-/// context type. They are resolved from the context's application service provider: a context built without it (a
-/// design-time factory that builds its options by hand, say) gets a model without their contributions.
+/// context type. They are resolved from the context's application service provider: a context built without it, such
+/// as by a design-time factory that builds its options by hand, gets a model without their contributions.
 /// </remarks>
 [EditorBrowsable(EditorBrowsableState.Advanced)]
 public interface ITenantModelContributor

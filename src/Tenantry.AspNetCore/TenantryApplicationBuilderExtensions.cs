@@ -15,9 +15,9 @@ public static class TenantryApplicationBuilderExtensions
     /// <param name="app">The application's request pipeline.</param>
     /// <returns>The same <paramref name="app"/> for chaining.</returns>
     /// <remarks>
-    /// Call it after <c>app.UseAuthentication()</c>, because claim resolvers and access validators read the user.
-    /// Call it after routing, because it reads <c>RequireTenant()</c> and <c>AllowMissingTenant()</c>
-    /// (<see cref="WebApplication"/> adds routing first). Call it before anything that needs the tenant. After
+    /// Call it after <c>app.UseAuthentication()</c>, as claim resolvers and access validators read the user; after
+    /// routing, as it reads <c>RequireTenant()</c> and <c>AllowMissingTenant()</c> (<see cref="WebApplication"/> adds
+    /// routing first); and before anything that needs the tenant. After
     /// <see cref="UseTenantResolution"/>, it runs the access validators on the tenant found before authentication, and
     /// the claim resolvers if nothing else named a tenant; <c>app.UseAuthorization()</c> then comes after it.
     /// </remarks>
@@ -43,9 +43,9 @@ public static class TenantryApplicationBuilderExtensions
     /// <para>
     /// Call it before <c>app.UseAuthentication()</c>, and <see cref="UseTenantry"/> after it, which runs the access
     /// validators, and the claim resolvers if nothing else named a tenant, then rejects or continues as it does alone.
-    /// Between the two, the tenant is current but not yet checked against the user, so put only
-    /// <c>app.UseAuthentication()</c> between them, and <c>app.UseAuthorization()</c> after <see cref="UseTenantry"/>,
-    /// so no authorization policy sees a tenant the access validators have not checked. An endpoint whose request did
+    /// The tenant is current but unchecked between the two, so put only <c>app.UseAuthentication()</c> there, and
+    /// <c>app.UseAuthorization()</c> after <see cref="UseTenantry"/>, so no authorization policy sees a tenant the
+    /// access validators have not checked. An endpoint whose request did
     /// not pass through <see cref="UseTenantry"/> after this does not run: it gets <c>500</c> and log event 1011. A
     /// request the authorization middleware ran for between the two gets <c>500</c> and log event 1013. If the access
     /// validators refuse the tenant for a signed-in user, the request is refused whatever its endpoint requires, every

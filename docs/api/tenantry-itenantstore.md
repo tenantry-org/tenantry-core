@@ -35,7 +35,7 @@ Parameters:
 
 Returns: `ValueTask<ITenantDescriptor<TKey>>`
 
-An identifier is what a resolver reads from a request: the tenant's id, or a name your store maps to a tenant, such as a subdomain (`acme`), a slug in a route or a custom domain (`app.acme.com`). By default the identifier is the tenant's id: it is parsed as `TKey` with the invariant culture and looked up with [`ITenantStore<TKey>.GetTenantAsync`](tenantry-itenantstore.md), and an identifier that does not parse, or parses to the key type's default (`Empty`, `0`) or an empty string, names no tenant. Implement it to resolve tenants by another name, for example a `Guid`-keyed store whose tenants have slugs. A store that wraps another (to log, say) must forward it to the inner store: otherwise it gets this default, which never reaches the inner store's own mapping.
+An identifier is what a resolver reads from a request: the tenant's id, or a name your store maps to a tenant, such as a subdomain (`acme`), a slug in a route or a custom domain (`app.acme.com`). By default the identifier is the tenant's id: it is parsed as `TKey` with the invariant culture and looked up with [`ITenantStore<TKey>.GetTenantAsync`](tenantry-itenantstore.md), and an identifier that does not parse, or parses to the key type's default (`Empty`, `0`) or an empty string, names no tenant. Implement it to resolve tenants by another name, for example a `Guid`-keyed store whose tenants have slugs. A store that wraps another, for logging for example, must forward it to the inner store, or it gets this default, which never reaches the inner store's own mapping.
 
 ```csharp
 public async ValueTask<ITenantDescriptor<Guid>?> FindByIdentifierAsync(string identifier, CancellationToken ct) =>

@@ -70,34 +70,29 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// <returns>The same builder, without its key type: call methods that need it (such as <c>UseConnectionStrings</c>) first.</returns>
     /// <remarks>
     /// <para>
-    /// It replaces <c>AddDbContext</c> and <c>AddDbContextPool</c> because it sets each context's connection string
-    /// when the context, or a pooled context's lease, is handed out, which EF Core has no hook for.
+    /// Use it instead of <c>AddDbContext</c> and <c>AddDbContextPool</c>: it sets each context's connection string
+    /// when the context, or a pooled context's lease, is handed out, which EF Core has no hook for. It registers a
+    /// scoped <typeparamref name="TContext"/> and a singleton <see cref="IDbContextFactory{TContext}"/>. A context that
+    /// is not pooled gets the other services its constructor needs, and its application service provider, from its
+    /// scope (the scoped context) or the root provider (the factory's). Creating a context
+    /// without a current tenant throws <see cref="TenantNotResolvedException"/>, so <c>dotnet ef</c> needs an
+    /// <c>IDesignTimeDbContextFactory</c>.
     /// </para>
     /// <para>
-    /// Registers a scoped <typeparamref name="TContext"/> and a singleton <see cref="IDbContextFactory{TContext}"/>.
-    /// A context that is not pooled is created with its options and any other services its constructor needs, and
-    /// has them as its application service provider, as with <c>AddDbContext</c>: the scoped
-    /// <typeparamref name="TContext"/> from its scope, and one from the factory from the root provider, as EF Core's
-    /// <c>AddDbContextFactory</c> does. Creating a context without a current tenant throws
-    /// <see cref="TenantNotResolvedException"/>, so <c>dotnet ef</c> needs an <c>IDesignTimeDbContextFactory</c>
-    /// for the context.
-    /// </para>
-    /// <para>
-    /// The options get <c>UseTenantry()</c> before <paramref name="configure"/> runs, so interceptors added there
-    /// (an audit log, say) see new entities already stamped with their tenant. For the same reason, an interceptor
-    /// added there that changes what a save writes (a soft delete) runs after Tenantry's checks and is not checked.
+    /// The options get <c>UseTenantry()</c> before <paramref name="configure"/> runs, so interceptors added there,
+    /// such as an audit log, see new entities already stamped, and one that changes what a save writes (a soft delete)
+    /// runs after Tenantry's checks and is not checked.
     /// </para>
     /// <para>
     /// When the provider cannot read connection strings synchronously
-    /// (<see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>), a context created synchronously, the
-    /// scoped <typeparamref name="TContext"/> among them, reads its connection string when it first opens a
-    /// connection, so only asynchronous EF Core calls work on it.
+    /// (<see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>), a context created synchronously, such
+    /// as the scoped <typeparamref name="TContext"/>, reads its connection string when it first opens a connection, so
+    /// only asynchronous EF Core calls work on it.
     /// </para>
     /// <para>
-    /// A guard checks each context before it opens a connection and before every command it runs, including on a
-    /// connection that is already open: the connection must have been set for the context (and, pooled, for its
-    /// current lease) and for the tenant that is current now. Otherwise it throws
-    /// <see cref="TenantIsolationViolationException"/> rather than use another tenant's database.
+    /// Before a context opens a connection and before every command, even on an open connection, a guard throws
+    /// <see cref="TenantIsolationViolationException"/> unless the connection was set for the context (and, pooled, its
+    /// current lease) and for the tenant current now.
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">

@@ -37,15 +37,13 @@ Exceptions:
 
 - `InvalidOperationException`: No [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) is registered yet, or `TContext` is already registered this way. The first context created throws it when the registered provider is scoped or transient.
 
-It replaces `AddDbContext` and `AddDbContextPool` because it sets each context's connection string when the context, or a pooled context's lease, is handed out, which EF Core has no hook for.
+Use it instead of `AddDbContext` and `AddDbContextPool`: it sets each context's connection string when the context, or a pooled context's lease, is handed out, which EF Core has no hook for. It registers a scoped `TContext` and a singleton `IDbContextFactory<TContext>`. A context that is not pooled gets the other services its constructor needs, and its application service provider, from its scope (the scoped context) or the root provider (the factory's). Creating a context without a current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), so `dotnet ef` needs an `IDesignTimeDbContextFactory`.
 
-Registers a scoped `TContext` and a singleton `IDbContextFactory<TContext>`. A context that is not pooled is created with its options and any other services its constructor needs, and has them as its application service provider, as with `AddDbContext`: the scoped `TContext` from its scope, and one from the factory from the root provider, as EF Core's `AddDbContextFactory` does. Creating a context without a current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), so `dotnet ef` needs an `IDesignTimeDbContextFactory` for the context.
+The options get `UseTenantry()` before `configure` runs, so interceptors added there, such as an audit log, see new entities already stamped, and one that changes what a save writes (a soft delete) runs after Tenantry's checks and is not checked.
 
-The options get `UseTenantry()` before `configure` runs, so interceptors added there (an audit log, say) see new entities already stamped with their tenant. For the same reason, an interceptor added there that changes what a save writes (a soft delete) runs after Tenantry's checks and is not checked.
+When the provider cannot read connection strings synchronously ([`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md)), a context created synchronously, such as the scoped `TContext`, reads its connection string when it first opens a connection, so only asynchronous EF Core calls work on it.
 
-When the provider cannot read connection strings synchronously ([`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md)), a context created synchronously, the scoped `TContext` among them, reads its connection string when it first opens a connection, so only asynchronous EF Core calls work on it.
-
-A guard checks each context before it opens a connection and before every command it runs, including on a connection that is already open: the connection must have been set for the context (and, pooled, for its current lease) and for the tenant that is current now. Otherwise it throws [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) rather than use another tenant's database.
+Before a context opens a connection and before every command, even on an open connection, a guard throws [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) unless the connection was set for the context (and, pooled, its current lease) and for the tenant current now.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant

@@ -611,9 +611,10 @@ internal sealed class AtomicSave
                 "Server's multiple active result sets, or it is an ambient transaction), so rows it wrote could belong " +
                 "to another tenant. Catching a failed SaveChanges (a unique key, a foreign key, a concurrency conflict) " +
                 "and going on in the same transaction causes this too, as does a save in which an interceptor " +
-                "suppressed a concurrency conflict (a last-write-wins policy, say). Run the unit of work again in a new " +
-                "transaction, or use a transaction with savepoints, where EF Core undoes the failed save itself: turn " +
-                "off multiple active result sets, or use Database.BeginTransaction rather than a TransactionScope.");
+                "suppressed a concurrency conflict (for a last-write-wins policy, for example). Run the unit of work " +
+                "again in a new transaction, or use a transaction with savepoints, where EF Core undoes the failed save " +
+                "itself: turn off multiple active result sets, or use Database.BeginTransaction rather than a " +
+                "TransactionScope.");
         }
     }
 

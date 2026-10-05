@@ -119,9 +119,9 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Any caller that reaches the service can set the header, so it is read only when
-    /// <paramref name="isTrustedCaller"/> returns <see langword="true"/> for the request, typically because the caller
-    /// authenticated as one of your services. From any other caller it is ignored, and the next resolver runs.
+    /// Any caller can set the header, so it is read only when <paramref name="isTrustedCaller"/> returns
+    /// <see langword="true"/> for the request, typically because the caller authenticated as one of your services;
+    /// otherwise the next resolver runs.
     /// </para>
     /// <para>
     /// The value is read as a tenant id (<see cref="TenantIds.TryParse{TKey}"/>) and looked up with the store's
@@ -131,8 +131,8 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// <para>
     /// <paramref name="isTrustedCaller"/> runs after authentication, so it can read <c>HttpContext.User</c>:
     /// <c>app.UseTenantResolution()</c> stops before this resolver, and <c>app.UseTenantry()</c> runs it once the user
-    /// is known. A tenant from the header is therefore not known while authentication runs. Resolvers run in the order
-    /// they are added, and the first that finds a value wins.
+    /// is known, so a tenant from the header is not known while authentication runs. The first resolver, in the order
+    /// added, that finds a value wins.
     /// </para>
     /// </remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>

@@ -79,7 +79,7 @@ internal sealed class TenantStoreCache<TKey>
 
         var duration = _options.Duration;
 
-        // A duration too long to add to the current time (TimeSpan.MaxValue, say) never expires.
+        // A duration too long to add to the current time (such as TimeSpan.MaxValue) never expires.
         Entry entry = new(tenant, duration < DateTimeOffset.MaxValue - now ? now + duration : DateTimeOffset.MaxValue);
 
         lock (_writes)

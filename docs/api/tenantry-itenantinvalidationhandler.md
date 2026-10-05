@@ -4,7 +4,7 @@ Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
 Clears data kept per tenant when the tenant changes, or, registered with `BroadcastInvalidations`, publishes the invalidation to the application's other instances. Every registered handler runs on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md) invalidation, with or without `CacheTenants`.
 
-Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options register their own. Register a handler as a singleton, once, with `TryAddEnumerable`. When the application also injects the handler to read what it keeps, register it once and forward the handler registration to that instance:
+Tenantry.Caching, `IsolateOutputCache()` and Tenantry.Options register their own. Register a handler as a singleton, once, with `TryAddEnumerable`. When the application also injects the handler to read what it keeps, forward the handler registration to that one instance:
 
 ```csharp
 services.AddSingleton<PriceListCache>();
@@ -12,7 +12,7 @@ services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler
     sp => sp.GetRequiredService<PriceListCache>()));
 ```
 
-The handlers are resolved the first time a tenant is invalidated, so a handler may depend on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md). They run one after another, and each runs even when another throws; the exception, or an `AggregateException` of several, is thrown once they have all run. A cancelled token stops them before the next handler, with an `OperationCanceledException` in place of those exceptions. A handler registered with `BroadcastInvalidations` runs after the others, and only for [`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md) and [`ITenantInvalidator<TKey>.InvalidateAllAsync`](tenantry-itenantinvalidator.md), so an instance that applies a received invalidation with [`ITenantInvalidator<TKey>.InvalidateLocallyAsync`](tenantry-itenantinvalidator.md) does not publish it again.
+The handlers are resolved the first time a tenant is invalidated, so a handler may depend on [`ITenantInvalidator<TKey>`](tenantry-itenantinvalidator.md). They run one after another, and each runs even when another throws; the exception, or an `AggregateException` of several, is thrown once they have all run. A cancelled token stops them before the next handler, with an `OperationCanceledException` in place of those exceptions. A handler registered with `BroadcastInvalidations` runs after the others, and not for [`ITenantInvalidator<TKey>.InvalidateLocallyAsync`](tenantry-itenantinvalidator.md) or [`ITenantInvalidator<TKey>.InvalidateAllLocallyAsync`](tenantry-itenantinvalidator.md), so a received invalidation, applied with those, is not published again.
 
 ```csharp
 public interface ITenantInvalidationHandler<in TKey> where TKey : IEquatable<TKey>, IParsable<TKey>

@@ -30,9 +30,9 @@ internal interface ICurrentTenantId
     /// <param name="keep">
     /// False when the value must not be kept under the current id. The store does not hold the id: the value is built
     /// from the caller's copy, and keeping it would add an entry for every made-up id and give the next caller with
-    /// that id this one's value. Or the store answered with a tenant whose id differs (a store that matches ids without
-    /// regard to case, say): the value is built from the store's copy, as request resolution would use it, but not kept
-    /// under the caller's id, which no invalidation of the store's id clears.
+    /// that id this one's value. Or the store answered with a tenant whose id differs, as from a store that matches ids
+    /// without regard to case: the value is built from the store's copy, as request resolution would use it, but not
+    /// kept under the caller's id, which no invalidation of the store's id clears.
     /// </param>
     IDisposable? MakeStoreCopyCurrent(out bool keep);
 }

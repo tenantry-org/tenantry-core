@@ -36,7 +36,7 @@ internal sealed class TenantDatabaseContexts<
 
         // The guard goes first, so a context used under the wrong tenant is rejected before any other interceptor
         // acts on it (for example, stamping pending inserts with the current tenant). Tenantry's own interceptors come
-        // next, so the application's (an audit log, say) see new entities already stamped.
+        // next, so the application's, such as an audit log, see new entities already stamped.
         builder.AddInterceptors(new TenantDatabaseGuard<TKey>(_tenantContext, _connectionStrings));
         builder.UseTenantry();
         configure(services, builder);
