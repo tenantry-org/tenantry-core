@@ -82,7 +82,9 @@ the cherry-pick in step 4 above, so push `master` before its tag, as for a new m
 2. In a pull request into `release/X.Y`, which runs CI, cherry-pick the fix and add the patch's
    section to `CHANGELOG.md` (`## [0.7.1] - YYYY-MM-DD`). Add the same section to `master`'s `CHANGELOG.md`, placed by
    version among the other releases. The release's notes come from the branch's copy.
-3. Merge it and wait for CI to pass on the push to `release/X.Y`.
+3. Merge it and wait for CI to pass on the push to `release/X.Y`. Then run the Dependency lanes workflow on
+   `release/X.Y` (Actions → Dependency lanes → Run workflow) and wait for it to pass: its weekly run tests only
+   `master`.
 4. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.7.*'`), that `git log
    v0.7.0..origin/release/0.7` holds only what the patch should, that `TenantryPackageBaseline` names the line's last
    release, and that the `CHANGELOG.md` section is there, and on `master`. The workflow checks the section on both
