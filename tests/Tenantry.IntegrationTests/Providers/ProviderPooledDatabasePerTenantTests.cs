@@ -40,8 +40,8 @@ public abstract class ProviderPooledDatabasePerTenantTests : IAsyncLifetime
     {
         GC.SuppressFinalize(this);
 
-        // A fresh pool drops the databases: SQL Server takes about 3 seconds to end each session that a context in
-        // the test's pool still holds open.
+        // A fresh pool drops the databases: through a pool whose context had a connection opened explicitly, SQL
+        // Server takes about 3 seconds to drop each.
         await _services.DisposeAsync();
         _services = Build(poolSize: 4);
 
