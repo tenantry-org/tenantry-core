@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Tenantry.Templates`, `dotnet new` templates for applications that use Tenantry, published with each release.
+  Install them with `dotnet new install Tenantry.Templates`, then create a project with
+  `dotnet new tenantry-api -n Orders.Api`, an ASP.NET Core API with EF Core that takes the tenant from the
+  `X-Tenant-Id` header and checks it against the caller's JWT `tenant` claims, or
+  `dotnet new tenantry-worker -n Orders.Worker`, a worker service with EF Core that runs each message as the tenant it
+  names with `RunInScopeAsync`. The projects reference the Tenantry packages of the templates' version;
+  `--TenantryVersion` picks another.
+
 ### Fixed
 
 - Behaviour the docs misstated: with `app.UseTenantResolution()`, a signed-in request whose tenant was current
