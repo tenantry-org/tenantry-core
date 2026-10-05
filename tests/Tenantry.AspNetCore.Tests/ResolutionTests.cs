@@ -304,7 +304,7 @@ public sealed class ResolutionTests
             {
                 a.UseTenantry();
                 a.UseRouting();
-                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+                a.MapGet("/{tenant}/orders", (string tenant, ITenantContext<string> t) => t.CurrentTenantId ?? $"(none; the route names {tenant})");
             });
         await using var _ = app;
         using var client = app.GetTestClient();
@@ -314,8 +314,8 @@ public sealed class ResolutionTests
         logs.For(1007).Should().BeEmpty();
 
         // The endpoint needs no tenant, so the request runs without the one its route names.
-        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none)");
-        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none; the route names acme)");
+        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none; the route names acme)");
 
         logs.For(1007).Should().ContainSingle().Which.Message.Should().Contain("/{tenant}/orders").And.Contain("ResolveFromRouteValue");
     }
@@ -329,14 +329,14 @@ public sealed class ResolutionTests
             {
                 a.UseTenantry();
                 a.UseRouting();
-                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+                a.MapGet("/{tenant}/orders", (string tenant, ITenantContext<string> t) => t.CurrentTenantId ?? $"(none; the route names {tenant})");
             });
         await using var _ = app;
         using var client = app.GetTestClient();
 
         (await Get(client, "acme")).Should().Be(HttpStatusCode.OK);
         (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
-        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none; the route names acme)");
 
         logs.For(1007).Should().BeEmpty();
     }
@@ -350,7 +350,7 @@ public sealed class ResolutionTests
             {
                 a.UseRouting();
                 a.UseTenantry();
-                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+                a.MapGet("/{tenant}/orders", (string tenant, ITenantContext<string> t) => t.CurrentTenantId ?? $"(none; the route names {tenant})");
             });
         await using var _ = app;
         using var client = app.GetTestClient();
@@ -370,7 +370,7 @@ public sealed class ResolutionTests
             {
                 a.UseTenantry();
                 a.UseRouting();
-                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+                a.MapGet("/{tenant}/orders", (string tenant, ITenantContext<string> t) => t.CurrentTenantId ?? $"(none; the route names {tenant})");
             });
         await using var _ = app;
         using var client = app.GetTestClient();
@@ -394,7 +394,7 @@ public sealed class ResolutionTests
                 a.UseTenantResolution();
                 a.UseRouting();
                 a.UseTenantry();
-                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+                a.MapGet("/{tenant}/orders", (string tenant, ITenantContext<string> t) => t.CurrentTenantId ?? $"(none; the route names {tenant})");
             });
         await using var _ = app;
         using var client = app.GetTestClient();

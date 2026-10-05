@@ -991,7 +991,10 @@ public sealed class AuthenticationPerTenantTests
                 a.UseAuthentication();
                 a.UseTenantry();
                 a.UseAuthorization();
-                a.MapGet("/{tenant}/whoami", (HttpContext http, ITenantContext<string> current) => $"{current.CurrentTenantId}:{http.User.Identity!.Name}")
+                a.MapGet(
+                        "/{tenant}/whoami",
+                        (string tenant, HttpContext http, ITenantContext<string> current) =>
+                            $"{current.CurrentTenantId ?? $"(none; the route names {tenant})"}:{http.User.Identity!.Name}")
                     .RequireAuthorization();
             },
             logs);

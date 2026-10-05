@@ -68,7 +68,7 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
             (context, early, context.Response.Headers.SetCookie));
 
         var previous = context.Features.Get<IEndpointFeature>();
-        ReplacingEndpointFeature guarded = new(previous, endpoint => Guard(endpoint, early));
+        ReplacingEndpointFeature guarded = new(previous, routed => Guard(routed, early));
         context.Features.Set<IEndpointFeature>(guarded);
 
         // Routing ran first: guard the endpoint it chose.

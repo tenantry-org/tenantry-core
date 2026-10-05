@@ -124,9 +124,14 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 break;
 
             // A method of the application's that cannot be overridden.
-            case IDelegateCreationOperation { Target: IMethodReferenceOperation { Method: { MethodKind: MethodKind.Ordinary } optionsMethod } }
-                when SymbolEqualityComparer.Default.Equals(optionsMethod.ContainingAssembly, state.Compilation.Assembly) &&
-                     !optionsMethod.IsVirtual && !optionsMethod.IsAbstract && !optionsMethod.IsOverride:
+            case IDelegateCreationOperation
+            {
+                Target: IMethodReferenceOperation
+                {
+                    Method: { MethodKind: MethodKind.Ordinary, IsVirtual: false, IsAbstract: false, IsOverride: false } optionsMethod,
+                },
+            }
+                when SymbolEqualityComparer.Default.Equals(optionsMethod.ContainingAssembly, state.Compilation.Assembly):
                 call.Targets.Add(Key(optionsMethod));
                 break;
 
@@ -286,7 +291,7 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
     {
         var applying = new HashSet<ISymbol>(state.DirectlyApplying.Keys, SymbolEqualityComparer.Default);
         var callers = state.HandOffs.ToLookup(
-            handOff => (ISymbol)handOff.Target, handOff => handOff.Owner, SymbolEqualityComparer.Default);
+            handOff => handOff.Target, handOff => handOff.Owner, SymbolEqualityComparer.Default);
         var pending = new Stack<ISymbol>(applying);
 
         while (pending.Count > 0)
