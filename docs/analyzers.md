@@ -106,13 +106,22 @@ filter, which keeps the tenant filter: `IgnoreQueryFilters(["SoftDelete"])`. A c
 when a name among them is the tenant filter's, `TenantryQueryFilters.Tenant`. On EF Core 8 and 9, which cannot name a
 filter, read the tenant-owned rows in a query of their own, without `IgnoreQueryFilters()`.
 
-The rule sees the calls on the query in the expression that calls `IgnoreQueryFilters()`, before and after it, up to the
-first that runs in memory (`AsEnumerable()`, `ToDictionaryAsync`'s selectors). EF Core ignores the filters for the whole
-query wherever the call is, so a `Join` that takes the query as its inner query counts too. A query kept in a variable
-or returned from a method, and extended elsewhere, is seen only as far as that expression goes, and a call in a
-subquery, inside another query's lambda, is checked against the subquery only. An `Include` path in a string is followed
-as far as its navigations are properties of the types it names, and an entity EF Core includes by itself
-(`AutoInclude()`) is not seen.
+EF Core ignores the filters for the whole query wherever the call is, so the rule checks every call that makes up the
+query: the calls before `IgnoreQueryFilters()` and after it, the other queries the query takes (a `Join`'s inner query,
+the other query of a `Union`, `Concat`, `Intersect` or `Except`), through casts and both arms of a conditional, and
+through a local the query is kept in. In each, it looks at the type arguments of a call that returns a query, at the
+navigations an `Include` string names, and at the navigations and queries in the lambdas EF Core translates.
+
+What it does not see:
+
+- calls on the query in another method, after it is returned or passed there, or kept in a field;
+- a local after it is assigned a query that does not start from it (`q = db.Categories.Where(...)`), and a local a
+  lambda or local function assigns;
+- a call in a subquery inside another query's lambda, which is checked against the subquery only;
+- what runs in memory: after `AsEnumerable()`, and the selectors of `ToDictionaryAsync` and other methods that take a
+  delegate rather than an expression;
+- the rest of an `Include` string path after a name it cannot find as a property, and an entity EF Core includes by
+  itself (`AutoInclude()`).
 
 ## TNY1003
 

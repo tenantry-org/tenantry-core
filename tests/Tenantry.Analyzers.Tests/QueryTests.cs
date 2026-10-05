@@ -152,6 +152,13 @@ public sealed class QueryTests
                 public static Task<Dictionary<int, int>> Counted(AppDbContext db) =>
                     db.Categories.IgnoreQueryFilters().ToDictionaryAsync(c => c.Id, c => c.Purchases.Count);
 
+                public static Task<Dictionary<int, Purchase?>> First(AppDbContext db) =>
+                    db.Categories.IgnoreQueryFilters().ToDictionaryAsync(c => c.Id, c => c.Purchases.FirstOrDefault());
+
+                // A list in memory, sent to the database as values.
+                public static List<Category> Bought(AppDbContext db, List<Purchase> mine) =>
+                    db.Categories.IgnoreQueryFilters().Where(c => mine.Any(p => p.CategoryId == c.Id)).ToList();
+
                 // A purchase of the caller's, compared in the query as a value.
                 public static List<Category> Matching(AppDbContext db, Purchase purchase) =>
                     db.Categories.IgnoreQueryFilters().Where(c => c.Id == purchase.CategoryId).ToList();
@@ -159,19 +166,131 @@ public sealed class QueryTests
             """);
 
     [Fact]
-    public Task IgnoreQueryFilters_SeesOnlyTheExpressionItIsIn() =>
+    public Task IgnoreQueryFilters_FollowsCastsConditionalsAndTheOtherQueryOfASetOperator() =>
         Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
             public static class Reports
             {
-                public static List<Category> Later(AppDbContext db)
+                public static List<Category> Cast(AppDbContext db) =>
+                    ((IQueryable<Category>){|TNY1002:db.Categories.IgnoreQueryFilters()|}).Include(c => c.Purchases).ToList();
+
+                public static List<Category> Either(AppDbContext db, bool all) =>
+                    (all ? {|TNY1002:db.Categories.IgnoreQueryFilters()|} : db.Categories).Include(c => c.Purchases).ToList();
+
+                public static List<Category> FromEither(AppDbContext db, bool all) =>
+                    {|TNY1002:(all ? db.Categories.Include(c => c.Purchases) : db.Categories.AsQueryable()).IgnoreQueryFilters()|}.ToList();
+
+                public static List<Category> Both(AppDbContext db) =>
+                    {|TNY1002:db.Categories.IgnoreQueryFilters()|}.Union(db.Categories.Where(c => c.Purchases.Any())).ToList();
+
+                public static List<Category> Neither(AppDbContext db) =>
+                    db.Categories.IgnoreQueryFilters().Except(db.Categories.Where(c => c.IsDeleted)).ToList();
+            }
+            """);
+
+    [Fact]
+    public Task IgnoreQueryFilters_FollowsALocalTheQueryIsKeptIn() =>
+        Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
+            public static class Reports
+            {
+                public static List<Category> Declared(AppDbContext db)
                 {
-                    var categories = db.Categories.IgnoreQueryFilters();
+                    var categories = {|TNY1002:db.Categories.IgnoreQueryFilters()|};
                     return categories.Include(c => c.Purchases).ToList();
                 }
 
+                public static List<Category> Conditional(AppDbContext db, bool all)
+                {
+                    var categories = db.Categories.AsQueryable();
+
+                    if (all)
+                        categories = {|TNY1002:categories.IgnoreQueryFilters()|};
+
+                    categories = categories.Where(c => !c.IsDeleted);
+                    categories = categories.Include(c => c.Purchases);
+                    return categories.ToList();
+                }
+
+                // The filters are ignored for the whole query, so an Include before the call counts.
+                public static List<Category> IncludedFirst(AppDbContext db)
+                {
+                    IQueryable<Category> categories = db.Categories.Include(c => c.Purchases);
+                    categories = {|TNY1002:categories.IgnoreQueryFilters()|};
+                    return categories.ToList();
+                }
+
+                public static List<Category> AnotherLocal(AppDbContext db)
+                {
+                    var all = db.Categories.IgnoreQueryFilters();
+                    var mine = db.Categories.Include(c => c.Purchases);
+                    return all.Concat(db.Categories.Where(c => !c.IsDeleted)).ToList().Concat(mine).ToList();
+                }
+
+                // Following stops where the local is given a query that does not start from it.
+                public static List<Category> Replaced(AppDbContext db)
+                {
+                    var categories = db.Categories.IgnoreQueryFilters();
+                    categories = db.Categories.Where(c => !c.IsDeleted);
+                    return categories.Include(c => c.Purchases).ToList();
+                }
+
+                public static List<Category> ReplacedBefore(AppDbContext db)
+                {
+                    IQueryable<Category> categories = db.Categories.Include(c => c.Purchases);
+                    categories = db.Categories.Where(c => !c.IsDeleted);
+                    return categories.IgnoreQueryFilters().ToList();
+                }
+
+                // A query run before the call is another query.
+                public static int Earlier(AppDbContext db)
+                {
+                    var categories = db.Categories.AsQueryable();
+                    var bought = categories.Include(c => c.Purchases).Count();
+                    categories = categories.IgnoreQueryFilters();
+                    return bought + categories.Count();
+                }
+
+                // A local a lambda assigns is not followed.
+                public static List<Category> Captured(AppDbContext db)
+                {
+                    var categories = db.Categories.IgnoreQueryFilters();
+                    Action narrow = () => categories = categories.Where(c => !c.IsDeleted);
+                    return categories.Include(c => c.Purchases).ToList();
+                }
+            }
+            """);
+
+    [Fact]
+    public Task IgnoreQueryFilters_SeesNoQueryReturnedFromOrPassedToAMethod() =>
+        Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
+            public static class Reports
+            {
                 public static List<Category> Elsewhere(AppDbContext db) => AllCategories(db).Include(c => c.Purchases).ToList();
 
                 private static IQueryable<Category> AllCategories(AppDbContext db) => db.Categories.IgnoreQueryFilters();
+
+                public static List<Category> Passed(AppDbContext db) => WithPurchases(db.Categories.IgnoreQueryFilters());
+
+                private static List<Category> WithPurchases(IQueryable<Category> categories) =>
+                    categories.Include(c => c.Purchases).ToList();
+            }
+            """);
+
+    [Fact]
+    public Task IgnoreQueryFilters_OnATypeParameterConstrainedToATenantOwnedType_IsReported() =>
+        Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
+            public class Repository<T>(DbContext db) where T : class, ITenantEntity<Guid>
+            {
+                public IQueryable<T> Everyone() => {|TNY1002:db.Set<T>().IgnoreQueryFilters()|};
+            }
+
+            public class PurchaseRepository<T>(DbContext db) where T : Purchase
+            {
+                public IQueryable<T> Everyone() => {|TNY1002:db.Set<T>().IgnoreQueryFilters()|};
+            }
+
+            public class SharedRepository<T>(DbContext db) where T : class
+            {
+                public IQueryable<T> Everything() => db.Set<T>().IgnoreQueryFilters();
             }
             """);
 

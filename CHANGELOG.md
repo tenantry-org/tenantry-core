@@ -34,11 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - TNY1002 also reports `IgnoreQueryFilters()` on a query of a shared entity that brings in a tenant-owned one, through
-  an `Include` or `ThenInclude`, a `Select`, `SelectMany`, `Join` or `GroupJoin`, or a navigation in one of its lambdas,
-  in the same expression. `db.Categories.IgnoreQueryFilters().Include(c => c.Purchases)`, where `Category` is shared
-  and `Purchase` is tenant-owned, reads every tenant's purchases, and was not reported. A build that treats warnings
-  as errors fails on it. On EF Core 10, a call that names only filters other than `TenantryQueryFilters.Tenant` is
-  still not reported. See [TNY1002](docs/analyzers.md#tny1002).
+  an `Include` or `ThenInclude`, a `Select`, `SelectMany`, `Join` or `GroupJoin`, the other query of a `Union`,
+  `Concat`, `Intersect` or `Except`, or a navigation in one of its lambdas, also through casts, conditionals and a local
+  the query is kept in within the method; and a call on a type parameter constrained to a tenant-owned type, as in a
+  generic repository. `db.Categories.IgnoreQueryFilters().Include(c => c.Purchases)`, where `Category` is shared and
+  `Purchase` is tenant-owned, reads every tenant's purchases, and was not reported. A build that treats warnings as
+  errors fails on it. On EF Core 10, a call that names only filters other than `TenantryQueryFilters.Tenant` is still
+  not reported. See [TNY1002](docs/analyzers.md#tny1002).
 
 ### Fixed
 
