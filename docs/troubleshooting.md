@@ -228,7 +228,8 @@ Use the asynchronous EF Core methods, or also set `GetConnectionString`. See
 ## `AllowMissingTenant()` has no effect
 
 The middleware ran before routing chose the endpoint, so `RequireTenantByDefault()` applied. It logs this once (event
-1007). See [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering).
+1007) for the first request it lets through, such as one with a tenant, not for one it rejects. See
+[Pipeline ordering](aspnetcore-integration.md#pipeline-ordering).
 
 ## Route-value resolution returns null
 
