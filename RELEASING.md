@@ -79,17 +79,22 @@ the cherry-pick in step 4 above, so push `master` before its tag, as for a new m
 1. Fix it on `master` first, in a pull request as usual, unless the code is gone there. Before cherry-picking the fix
    to the release branch, check that `master`'s CI, SonarCloud included, has passed on it: release branches skip
    SonarCloud.
-2. In a pull request into `release/X.Y`, which runs CI, cherry-pick the fix and add the patch's
+2. A tag runs the `release.yml` of the tagged commit. `release/0.7` was cut before `release.yml` checked a patch's
+   `TenantryPackageBaseline` and its changelog section on `master`, and before it attached the packages, so the first
+   0.7 patch brings them first, in a pull request into `release/0.7`: `.github/workflows/release.yml` from `master`,
+   `TenantryPackageBaseline` raised to `0.7.0`, and both `src/*/CompatibilitySuppressions.xml` deleted. Branches cut
+   from `master` from 0.8 on have them already.
+3. In a pull request into `release/X.Y`, which runs CI, cherry-pick the fix and add the patch's
    section to `CHANGELOG.md` (`## [0.7.1] - YYYY-MM-DD`). Add the same section to `master`'s `CHANGELOG.md`, placed by
    version among the other releases. The release's notes come from the branch's copy.
-3. Merge it and wait for CI to pass on the push to `release/X.Y`. Then run the Dependency lanes workflow on
+4. Merge it and wait for CI to pass on the push to `release/X.Y`. Then run the Dependency lanes workflow on
    `release/X.Y` (Actions → Dependency lanes → Run workflow) and wait for it to pass: its weekly run tests only
    `master`.
-4. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.7.*'`), that `git log
+5. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.7.*'`), that `git log
    v0.7.0..origin/release/0.7` holds only what the patch should, that `TenantryPackageBaseline` names the line's last
-   release, and that the `CHANGELOG.md` section is there, and on `master`. The workflow checks the section on both
-   branches, and refuses a patch whose `TenantryPackageBaseline` is not a release of its own minor. Then tag the
-   branch's head and push the tag, as for a new minor.
+   release, and that the `CHANGELOG.md` section is there, and on `master`. With the `release.yml` of step 2, the
+   workflow checks the section on both branches, and refuses a patch whose `TenantryPackageBaseline` is not a release
+   of its own minor. Then tag the branch's head and push the tag, as for a new minor.
 
 Tag the head of a push to `release/X.Y`: CI runs once for each push, on its last commit, so a commit in the middle of
 a push of several has no run of its own, and its tag is refused.
@@ -101,9 +106,9 @@ NuGet.org.
 ## The release
 
 1. The workflow checks that the tag is a release tag on its branch's history, that CI passed on the push to
-   `release/X.Y` that put the commit there, and that it has notes, on its branch and on `master`. A tag on a commit
-   `master` contains, on another minor's branch, or on an unmerged branch fails before anything is built
-   (`scripts/release-source.sh`).
+   `release/X.Y` that put the commit there, and that it has notes, on its branch and, with `master`'s `release.yml`
+   ([A patch](#a-patch), step 2), on `master`. A tag on a commit `master` contains, on another minor's branch, or on an
+   unmerged branch fails before anything is built (`scripts/release-source.sh`).
 2. It reruns CI on the tagged commit, then waits for approval in the `release` environment. Once approved, it pushes
    the six library packages and their symbol packages to NuGet.org, then `Tenantry.Templates`
    ([The templates package](#the-templates-package)), and creates the GitHub release, marked as the latest only if no
