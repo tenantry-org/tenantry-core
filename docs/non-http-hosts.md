@@ -4,6 +4,10 @@ Worker services, scheduled jobs, CLI tools and desktop apps get the same isolati
 `Tenantry.Core`, with no ASP.NET Core dependency. With no request or middleware, you decide when a tenant is current,
 usually with `ITenantScopeFactory<TKey>`. EF Core filtering, stamping and checks then work as they do on the web.
 
+To start from a generated project, `dotnet new install Tenantry.Templates` and then
+`dotnet new tenantry-worker -n Orders.Worker` create a worker service with EF Core that runs each message as the tenant
+it names, with `RunInScopeAsync`. It targets `net10.0`, so building it needs the .NET 10 SDK.
+
 ## Registration with `AddTenantry`
 
 The same `AddTenantry` as in a web app, from `Tenantry.Core`, without the ASP.NET Core methods:

@@ -4,6 +4,11 @@ This guide takes you from an empty project to a working multi-tenant ASP.NET Cor
 data isolation. If you are not using ASP.NET Core, read [Non-HTTP hosts](non-http-hosts.md) after
 the first two sections.
 
+To start from a generated project instead, `dotnet new install Tenantry.Templates` and then
+`dotnet new tenantry-api -n Orders.Api` create an ASP.NET Core API with EF Core that takes the tenant from the
+`X-Tenant-Id` header and checks it against the caller's JWT claims. It targets `net10.0`, so building it needs the
+.NET 10 SDK.
+
 ## 1. Install the packages
 
 For an ASP.NET Core app backed by EF Core:

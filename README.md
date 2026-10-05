@@ -117,6 +117,10 @@ app.Run();
 Add EF Core isolation where you register your context, with `options.UseTenantry()`: queries are filtered to
 the current tenant, and saves are stamped and checked. See the [EF Core integration guide](docs/efcore-integration.md).
 
+To start from a generated project instead, run `dotnet new install Tenantry.Templates`, then `dotnet new tenantry-api`
+for an ASP.NET Core API or `dotnet new tenantry-worker` for a worker service. The projects target `net10.0`, so
+building one needs the .NET 10 SDK.
+
 ## Quick start (console or worker)
 
 There is no request to resolve a tenant from, so you open a tenant scope around each unit of work:
