@@ -29,8 +29,8 @@ accepts any later release of it:
 | net9.0 | 9.0.20 or later 9.x |
 | net10.0 | 10.0.12 or later 10.x |
 
-These minimums are the versions the tests run against. EF Core 9 on .NET 8 is not supported: use the EF
-Core that matches your target framework, as you would in any EF Core application.
+These minimums are the versions the tests run against. EF Core 9 on .NET 8 is not supported: each target
+framework's build accepts, and is tested with, only that framework's EF Core major.
 
 Three things Tenantry reads from EF Core are not documented by EF Core: the expressions of `ExecuteUpdate` setters,
 the query behind `GetDatabaseValues()` and `Reload()`, and the name EF Core gives a failed transaction operation.
@@ -95,10 +95,9 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does. See [
   Azure SDKs need 10.x even on .NET 8.
 - **EF Core**: the target framework's major only, as above.
 - **Tenantry packages**: `Tenantry.EfCore`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and
-  `Tenantry.Options` take `Tenantry.Core` from their own release up to the next minor (`[0.6.0, 0.7.0)` for 0.6),
+  `Tenantry.Options` take `Tenantry.Core` from their own release up to the next minor (`[x.y.z, x.(y+1).0)`),
   because a minor release may break the API before 1.0. Within a minor they can be updated separately.
-- **Tenantry.Pro**: in the beta it releases each minor version with Tenantry Core's, and runs on that Core minor
-  (Tenantry.Pro 0.5 on Tenantry Core 0.5.x).
+- **Tenantry.Pro**: in the beta it releases each minor version with Tenantry Core's, and runs on that Core minor.
 
 CI checks every minimum is a version the tests run against, and a weekly job runs the whole test suite with
 every dependency at the newest version it allows.
