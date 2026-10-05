@@ -93,7 +93,7 @@ internal static class Verify
         await test.RunAsync(TestContext.Current.CancellationToken);
     }
 
-    private static MetadataReference ReferenceAssembly(Library library, MetadataReference[] references)
+    private static PortableExecutableReference ReferenceAssembly(Library library, MetadataReference[] references)
     {
         var compilation = CSharpCompilation.Create(
             library.Name,
