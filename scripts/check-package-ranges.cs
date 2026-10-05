@@ -100,7 +100,7 @@ foreach (var failure in failures)
 
 Console.WriteLine(failures.Count == 0
     ? $"All dependency ranges in {packages.Count} packages are as intended."
-    : $"{failures.Count} problems: dependencies without their intended range, or docs/compatibility.md out of date.");
+    : $"{failures.Count} problem(s): dependencies without their intended range, or docs/compatibility.md out of date.");
 
 return failures.Count == 0 ? 0 : 1;
 

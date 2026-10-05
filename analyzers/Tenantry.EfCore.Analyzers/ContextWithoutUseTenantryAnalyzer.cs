@@ -127,6 +127,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 break;
 
             // A method of the application's that cannot be overridden, and that the compiler did not declare.
+            // The analyzer tests cannot express a compiler-declared method passed as the options delegate (a C# 14
+            // extension member as a method group), so only a build with that language version checks this pattern.
             case IDelegateCreationOperation
             {
                 Target: IMethodReferenceOperation
