@@ -19,8 +19,9 @@ namespace Tenantry;
 /// </code>
 /// The handlers are resolved the first time a tenant is invalidated, so a handler may depend on
 /// <see cref="ITenantInvalidator{TKey}"/>. They run one after another, and each runs even when another throws; the
-/// exception, or an <see cref="AggregateException"/> of several, is thrown once they have all run. A handler registered
-/// with <c>BroadcastInvalidations</c> runs after the others, and only for
+/// exception, or an <see cref="AggregateException"/> of several, is thrown once they have all run. A cancelled token
+/// stops them before the next handler, with an <see cref="OperationCanceledException"/> in place of those exceptions.
+/// A handler registered with <c>BroadcastInvalidations</c> runs after the others, and only for
 /// <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> and <see cref="ITenantInvalidator{TKey}.InvalidateAllAsync"/>,
 /// so an instance that applies a received invalidation with <see cref="ITenantInvalidator{TKey}.InvalidateLocallyAsync"/>
 /// does not publish it again.
