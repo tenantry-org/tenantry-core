@@ -162,10 +162,11 @@ unconstrained type parameter.
 The rule reports a registration only when it sees everything the options do, so these are not reported:
 
 - options that hand the builder to code that could call `UseTenantry()`, or store it in a field or property: a method
-  of the project's own that does so in turn, another project of the solution, a package that references
-  `Tenantry.EfCore` (directly or through another package), a delegate, an interface, virtual or unsealed override
-  method, a local function, or a constructor of the project's own. A method of the project's own that does none of
-  this does not count, and neither does the framework;
+  of the project's own that does so in turn (a C# 14 extension method called on the builder too), another project of
+  the solution, a package that references `Tenantry.EfCore` (directly or through another package), a delegate, an
+  interface, virtual or unsealed override method, a local function, a constructor of the project's own, or a property
+  of the project's own read on the builder, such as an extension property. A method of the project's own that does
+  none of this does not count, and neither does the framework;
 - options that are not a lambda or a method of the project's own (a delegate in a variable), a method that can be
   overridden (a virtual, abstract or interface method), and a registration without options;
 - a registration made through a generic method of the project's own (`AddDbContext<TContext>` inside a method generic

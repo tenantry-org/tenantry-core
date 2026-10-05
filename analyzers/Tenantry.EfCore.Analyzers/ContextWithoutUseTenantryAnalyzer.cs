@@ -19,10 +19,11 @@ namespace Tenantry.EfCore.Analyzers;
 /// or a method of the compilation's that cannot be overridden, that neither calls <c>UseTenantry()</c> nor hands an
 /// options builder to code that could, nor assigns one anywhere. Code that could is a delegate, an interface, virtual or
 /// unsealed override method, a local function or lambda, a constructor or method of an assembly that references
-/// Tenantry.EfCore (directly or through others) or of another project's reference assembly; a method of the
-/// application's instead counts when it does any of this itself, decided once every method is seen. A registration
-/// without options, or with a delegate it cannot see into, is not reported. Generated code counts for what it does, and
-/// nothing in it is reported.
+/// Tenantry.EfCore (directly or through others) or of another project's reference assembly, or a property of the
+/// application's read on the builder (a C# 14 extension property); a method of the application's, a C# 14 extension
+/// method called on the builder among them, instead counts when it does any of this itself, decided once every method
+/// is seen. A registration without options, or with a delegate it cannot see into, is not reported. Generated code
+/// counts for what it does, and nothing in it is reported.
 /// </para>
 /// <para>
 /// From EF Core 9, a context declared in another assembly is not reported: a registration or
@@ -168,7 +169,9 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
     {
         switch (operation)
         {
-            case IInvocationOperation call when HasBuilder(call.Arguments, types):
+            // A C# 14 extension member takes the builder as its receiver, not as an argument.
+            case IInvocationOperation call
+                when HasBuilder(call.Arguments, types) || OnBuilder(call.Instance, call.TargetMethod, types, state):
                 var method = call.TargetMethod;
 
                 // A delegate's, an interface's or a virtual method: the code that runs may be the application's.
@@ -187,6 +190,10 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 return (ReachesTenantryEfCore(constructor.ContainingAssembly, state), null);
 
             case ISimpleAssignmentOperation assignment when IsBuilder(assignment.Value, types):
+                return (true, null);
+
+            // A property of the application's on the builder, such as a C# 14 extension property, is taken to apply it.
+            case IPropertyReferenceOperation reference when OnBuilder(reference.Instance, reference.Property, types, state):
                 return (true, null);
 
             default:
@@ -411,6 +418,10 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
 
         return false;
     }
+
+    // Whether the member is the application's, called or read on an options builder.
+    private static bool OnBuilder(IOperation? instance, ISymbol member, KnownTypes types, State state) =>
+        IsBuilder(instance, types) && SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, state.Compilation.Assembly);
 
     // Whether the value is an options builder (DbContextOptionsBuilder<TContext> too), as it is or before a conversion.
     private static bool IsBuilder(IOperation? value, KnownTypes types)

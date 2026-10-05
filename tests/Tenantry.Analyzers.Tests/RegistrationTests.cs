@@ -711,6 +711,31 @@ public sealed class RegistrationTests
             }
             """);
 
+    // A C# 14 extension member takes the builder as its receiver, as an instance member does here: the compiler these
+    // tests run is older than extension blocks.
+    [Fact]
+    public Task AMemberOfTheApplicationsOnTheBuilder_IsJudgedByItsCode_AndAPropertyIsTakenToCallUseTenantry() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public class IsolatingOptionsBuilder(DbContextOptions options) : DbContextOptionsBuilder(options)
+            {
+                public DbContextOptionsBuilder WithTenantry() => this.UseTenantry();
+
+                public DbContextOptionsBuilder WithLogging() => EnableSensitiveDataLogging();
+
+                public DbContextOptionsBuilder Isolated => this.UseTenantry();
+            }
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
+                {
+                    services.AddDbContext<AppDbContext>(options => ((IsolatingOptionsBuilder)options).WithTenantry());
+                    services.AddDbContext<ReportsDbContext>(options => ((IsolatingOptionsBuilder)options).Isolated.EnableDetailedErrors());
+                    {|TNY1004:services.AddDbContext<BillingDbContext>(options => ((IsolatingOptionsBuilder)options).WithLogging())|};
+                }
+            }
+            """);
+
 #if NET9_0_OR_GREATER
     [Fact]
     public Task AnotherRegistrationOfTheSameContextWithUseTenantry_ClearsIt_FromEfCore9() =>
