@@ -110,9 +110,10 @@ packages. A dry run given a version checks it too.
 If a release stops part way, after some packages were pushed, do not rerun it: the check refuses the version, since
 it is partly published, and a published package cannot be replaced. Release the next patch instead, from the same
 branch: add its `CHANGELOG.md` section, which says it replaces the incomplete release, and tag it. Unlist the
-incomplete version's packages on NuGet.org, so no one picks a set that does not match. Leave `TenantryPackageBaseline`
-at the last complete release, not the incomplete one: pack would look for each package at the baseline version, and
-fail for the packages that were never published at it.
+incomplete version's packages on NuGet.org, so no one picks a set that does not match, and leave
+`TenantryPackageBaseline` at the last release whose six library packages were all published: pack looks for each
+library package at the baseline version, and would fail for one never published at it. A release that stopped only at
+`Tenantry.Templates` is the exception to both ([The templates package](#the-templates-package)).
 
 ## Prereleases from master
 
@@ -164,16 +165,20 @@ pack could validate, so `TenantryPackageBaseline` does not apply to it.
 Before the first release that includes it, the maintainer does two things on NuGet.org:
 
 1. Checks that the reserved ID prefix that gives the six library packages their verified mark covers
-   `Tenantry.Templates`, so no one else can take the id first; if it does not, asks NuGet.org to reserve one that
-   does ([ID prefix reservation](https://learn.microsoft.com/nuget/nuget-org/id-prefix-reservation)).
-2. Lets the `release` environment's trusted publishing policy push `Tenantry.Templates` as a new package: if its scope
-   allows only new versions of existing packages, or names packages, add the glob pattern `Tenantry.Templates` with
-   the scope to push new packages and new versions. A glob can name a package NuGet.org does not have yet.
+   `Tenantry.Templates`, so no one else can take the id first, unless the prefix is public, which lets anyone push
+   under it. If it does not cover it, asks NuGet.org to reserve one that does
+   ([ID prefix reservation](https://learn.microsoft.com/nuget/nuget-org/id-prefix-reservation)).
+2. Checks the `release` environment's trusted publishing policy in NuGet.org's UI. Its scope, set for the whole
+   policy, must allow pushing new packages and package versions, and its package list must include
+   `Tenantry.Templates` or a pattern that covers it. If not, edit the policy, or replace it if its scope cannot be
+   edited once created. Whether a pattern can name a package id NuGet.org does not have yet is not confirmed: check
+   in the UI that the policy covers `Tenantry.Templates` before the first release that includes it.
 
-If the second is skipped, the release pushes the six library packages and their symbol packages, then fails on
+If the second is missed, the release pushes the six library packages and their symbol packages, then fails on
 `Tenantry.Templates`, before the GitHub release is created. Do not rerun it: as for any release that stops part way
-([The release](#the-release)), fix the policy and release the next patch. The six packages already published are a
-complete set, so they need not be unlisted.
+([The release](#the-release)), fix the policy and release the next patch. The six library packages already published
+are a complete set, so they need not be unlisted, and `TenantryPackageBaseline` may move to that version: all six
+exist at it, and pack never validates `Tenantry.Templates`.
 
 ## Repository settings
 

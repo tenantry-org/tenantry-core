@@ -173,7 +173,8 @@ jobs:
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         # No --skip-duplicate: a version already there fails the push rather than being skipped (RELEASING.md says what
-        # to do when a release stops part way). The glob's order pushes Tenantry.Templates last, after the libraries.
+        # to do when a release stops part way). The glob pushes in name order, so Tenantry.Templates goes after the
+        # libraries, and a future package whose name sorts after it would be pushed after it.
         run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
 
       - name: Create GitHub Release
