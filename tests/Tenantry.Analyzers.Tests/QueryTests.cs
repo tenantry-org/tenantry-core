@@ -382,8 +382,9 @@ public sealed class QueryTests
             }
             """);
 
-        // Generous: the compilation takes most of it, and following locals through the method took minutes.
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"took {stopwatch.Elapsed}");
+        // Generous: alone it takes a few seconds, the compilation most of them, but CI runs every test project at once,
+        // where it took over 30 seconds. Following locals through the method took 8 minutes.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromMinutes(2), $"took {stopwatch.Elapsed}");
     }
 
     [Fact]
