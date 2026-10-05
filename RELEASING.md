@@ -153,7 +153,10 @@ only at `Tenantry.Templates` ([The templates package](#the-templates-package)). 
 last release whose six library packages were all published, which is the incomplete one only in that case: pack looks
 for each library package at the baseline version, and would fail for one never published at it. An incomplete `X.Y.0`
 is the exception, as the workflow refuses a patch whose baseline is in an older minor: set `TenantryPackageBaseline` to
-`X.Y.0`, and in the project file of each library package `X.Y.0` lacks, to the previous release.
+`X.Y.0`, and in the project file of each library package `X.Y.0` lacks, to the previous release. A package `X.Y.0` has
+deletes its `CompatibilitySuppressions.xml`, or pack fails with "Unnecessary suppressions found"; one it lacks keeps
+its file. Once the replacement patch is released, remove those project-file baselines, as `TenantryPackageBaseline`
+moves to the patch.
 
 If every package was pushed and only the GitHub release is missing, create it by hand instead, from the run's packages,
 which it attested before the push, within 7 days of the run, while GitHub keeps them. In a checkout with the tags
