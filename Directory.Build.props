@@ -15,7 +15,7 @@
     <TenantryPackageReadme>$(MSBuildProjectDirectory)/obj/package-readme.md</TenantryPackageReadme>
     <!-- The last release, which pack checks each package's API against (eng/common/Build.targets). Raise it after each
          release (RELEASING.md). -->
-    <TenantryPackageBaseline>0.6.0</TenantryPackageBaseline>
+    <TenantryPackageBaseline>0.7.0</TenantryPackageBaseline>
     <!-- The minor master works towards. Releases are tagged on release branches, on commits master does not contain, so
          master's last reachable tag stays behind; this keeps master's packages versioned X.Y.0-alpha.0.N above every
          release, and ci.yml publishes them only in that form. Raise it on master after release/X.Y is cut
