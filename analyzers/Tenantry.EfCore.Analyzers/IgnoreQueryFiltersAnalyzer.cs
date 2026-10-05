@@ -13,10 +13,9 @@ namespace Tenantry.EfCore.Analyzers;
 /// keeps the tenant's is not.
 /// </summary>
 /// <remarks>
-/// EF Core ignores the filters for the whole query wherever the call is, so every call that makes up the query is
-/// checked (<see cref="Query"/>). A query returned from or passed to another method, or kept in a field, is not followed;
-/// a local is, within the method, until it is given a query that does not start from it, unless a lambda or local
-/// function assigns it. A call in a subquery, inside another query's lambda, is checked against the subquery only.
+/// EF Core ignores the filters for the whole query wherever the call is, so every call that makes up the query in the one
+/// expression the call is in is checked (<see cref="Query"/>). A query composed across statements, kept in a local, or
+/// chosen with a conditional is not followed.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
@@ -82,236 +81,51 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    // The calls that make up the query the call is in, which EF Core ignores the filters for wherever the call is: the
-    // call; the calls before it in each query it takes (the query it is called on, a Join's inner query, the other query
-    // of a Union, Concat, Intersect or Except); and the calls after it that take its result. Through casts, both arms of
-    // a conditional, and a local the query is kept in within the method. Only the call's result, and what takes it, is
-    // followed forward: a call reached going back may also start other queries, which are not this one.
+    // The calls that make up the query in the one expression the call is in, which EF Core ignores the filters for
+    // wherever the call is: the call; the calls before it in each query it takes (the query it is called on, a Join's
+    // inner query, the other query of a Union, Concat, Intersect or Except); and the calls after it that take its result.
+    // Through casts, and nothing across statements.
     private static IEnumerable<IInvocationOperation> Query(IInvocationOperation start, KnownTypes types)
     {
         var seen = new HashSet<IOperation>();
-        var walked = new HashSet<(IOperation Call, bool Forward)>();
-        var pending = new Stack<(IInvocationOperation Call, bool Forward)>();
-        pending.Push((start, true));
+        var pending = new Stack<IInvocationOperation>();
+        pending.Push(start);
 
         while (pending.Count > 0)
         {
-            var (call, forward) = pending.Pop();
+            var call = pending.Pop();
 
-            if (!walked.Add((call, forward)))
+            if (!seen.Add(call))
                 continue;
 
-            if (seen.Add(call))
-                yield return call;
+            yield return call;
 
             foreach (var argument in call.Arguments)
-                Before(argument.Value, types, seen, pending);
+            {
+                if (WithoutConversions(argument.Value) is IInvocationOperation before && TakesQuery(before, types))
+                    pending.Push(before);
+            }
 
-            if (forward)
-                After(call, types, seen, pending);
+            if (Consumer(call) is { } after && TakesQuery(after, types))
+                pending.Push(after);
         }
     }
 
-    // The calls on a query that make up a value: an extension method on a query, either arm of a conditional, or the
-    // value last assigned to a local before it is read.
-    private static void Before(
-        IOperation? value, KnownTypes types, HashSet<IOperation> seen, Stack<(IInvocationOperation, bool)> pending)
+    // The call the result of this one is passed to, if the expression goes on.
+    private static IInvocationOperation? Consumer(IOperation operation)
+    {
+        while (operation.Parent is IConversionOperation conversion)
+            operation = conversion;
+
+        return operation.Parent is IArgumentOperation { Parent: IInvocationOperation call } ? call : null;
+    }
+
+    private static IOperation WithoutConversions(IOperation value)
     {
         while (value is IConversionOperation conversion)
             value = conversion.Operand;
 
-        switch (value)
-        {
-            case IInvocationOperation call when TakesQuery(call, types):
-                pending.Push((call, false));
-                break;
-
-            case IConditionalOperation conditional:
-                Before(conditional.WhenTrue, types, seen, pending);
-                Before(conditional.WhenFalse, types, seen, pending);
-                break;
-
-            case ILocalReferenceOperation reference when seen.Add(reference) && LastValue(reference) is { } last:
-                Before(last, types, seen, pending);
-                break;
-        }
-    }
-
-    // The calls that take a query's result: passed to an extension method on a query, or kept in a local and read later.
-    private static void After(
-        IOperation query, KnownTypes types, HashSet<IOperation> seen, Stack<(IInvocationOperation, bool)> pending)
-    {
-        var node = query;
-
-        while (node.Parent is IConversionOperation ||
-               (node.Parent is IConditionalOperation conditional && conditional.Condition != node))
-        {
-            node = node.Parent;
-        }
-
-        switch (node.Parent)
-        {
-            case IArgumentOperation { Parent: IInvocationOperation call } when TakesQuery(call, types):
-                pending.Push((call, true));
-                break;
-
-            case ISimpleAssignmentOperation { Target: ILocalReferenceOperation target } assignment
-                when assignment.Value == node && seen.Add(target):
-                foreach (var read in LaterReads(target.Local, assignment))
-                    After(read, types, seen, pending);
-
-                break;
-
-            case IVariableInitializerOperation { Parent: IVariableDeclaratorOperation declarator } initializer
-                when seen.Add(declarator):
-                foreach (var read in LaterReads(declarator.Symbol, initializer))
-                    After(read, types, seen, pending);
-
-                break;
-        }
-    }
-
-    // The reads of a local after it is assigned, in the method, in source order, until it is assigned a query that does not
-    // start from it; leaving out those in another branch of an if/else or switch. None for a local a lambda or local
-    // function assigns.
-    private static IEnumerable<IOperation> LaterReads(ILocalSymbol local, IOperation assigned)
-    {
-        var (references, assignments) = Uses(local, assigned);
-
-        if (assignments is null)
-            yield break;
-
-        foreach (var reference in references)
-        {
-            if (reference.Syntax.SpanStart < assigned.Syntax.Span.End || Exclusive(assigned, reference))
-                continue;
-
-            if (reference.Parent is ISimpleAssignmentOperation assignment && assignment.Target == reference)
-            {
-                if (!StartsFrom(assignment.Value, local))
-                    yield break;
-
-                continue;
-            }
-
-            yield return reference;
-        }
-    }
-
-    // The value last assigned to a local before it is read, in source order: its initializer, or an assignment that ends
-    // before the read and is not in another branch of an if/else or switch.
-    private static IOperation? LastValue(ILocalReferenceOperation reference)
-    {
-        var (_, assignments) = Uses(reference.Local, reference);
-
-        return (assignments ?? [])
-            .LastOrDefault(assignment => assignment.End <= reference.Syntax.SpanStart && !Exclusive(assignment.Value, reference))
-            .Value;
-    }
-
-    // Whether two operations are in different branches of one if/else, conditional or switch, with no loop around it that
-    // could run both.
-    private static bool Exclusive(IOperation first, IOperation second)
-    {
-        var path = new Dictionary<IOperation, IOperation>();
-
-        for (IOperation child = first, current = first.Parent!; current is not null; child = current, current = current.Parent!)
-            path[current] = child;
-
-        for (IOperation child = second, current = second.Parent!; current is not null; child = current, current = current.Parent!)
-        {
-            if (!path.TryGetValue(current, out var other))
-                continue;
-
-            var branches = current switch
-            {
-                IConditionalOperation conditional => other != child && other != conditional.Condition && child != conditional.Condition,
-                ISwitchOperation => other != child,
-                _ => false,
-            };
-
-            for (var outer = current.Parent; branches && outer is not null; outer = outer.Parent)
-                branches = outer is not ILoopOperation;
-
-            return branches;
-        }
-
-        return false;
-    }
-
-    // A local's references and assignments in the method, in source order; no assignments when a lambda or a local
-    // function assigns it, as it is not followed then.
-    private static (List<ILocalReferenceOperation> References, List<(int End, IOperation Value)>? Assignments) Uses(
-        ILocalSymbol local, IOperation inMethod)
-    {
-        var root = inMethod;
-
-        while (root.Parent is not null)
-            root = root.Parent;
-
-        var references = new List<ILocalReferenceOperation>();
-        var assignments = new List<(int End, IOperation Value)>();
-
-        foreach (var operation in root.Descendants())
-        {
-            switch (operation)
-            {
-                case ILocalReferenceOperation reference when SymbolEqualityComparer.Default.Equals(reference.Local, local):
-                    references.Add(reference);
-
-                    if (reference.Parent is ISimpleAssignmentOperation assignment && assignment.Target == reference)
-                    {
-                        if (InNestedFunction(assignment))
-                            return (references, null);
-
-                        assignments.Add((assignment.Syntax.Span.End, assignment.Value));
-                    }
-
-                    break;
-
-                case IVariableDeclaratorOperation { Initializer: { } initializer } declarator
-                    when SymbolEqualityComparer.Default.Equals(declarator.Symbol, local):
-                    assignments.Add((declarator.Syntax.Span.End, initializer.Value));
-                    break;
-            }
-        }
-
-        references.Sort((first, second) => first.Syntax.SpanStart.CompareTo(second.Syntax.SpanStart));
-        assignments.Sort((first, second) => first.End.CompareTo(second.End));
-        return (references, assignments);
-    }
-
-    private static bool InNestedFunction(IOperation operation)
-    {
-        for (var current = operation.Parent; current is not null; current = current.Parent)
-        {
-            if (current is IAnonymousFunctionOperation or ILocalFunctionOperation)
-                return true;
-        }
-
-        return false;
-    }
-
-    // Whether a query starts from the local, as q.Where(...).Include(...) does, or both arms of a conditional do.
-    private static bool StartsFrom(IOperation? value, ILocalSymbol local)
-    {
-        while (true)
-        {
-            switch (value)
-            {
-                case IConversionOperation conversion:
-                    value = conversion.Operand;
-                    break;
-                case IInvocationOperation { TargetMethod.IsExtensionMethod: true, Arguments.Length: > 0 } call:
-                    value = call.Arguments[0].Value;
-                    break;
-                case IConditionalOperation conditional:
-                    return StartsFrom(conditional.WhenTrue, local) && StartsFrom(conditional.WhenFalse, local);
-                default:
-                    return value is ILocalReferenceOperation reference &&
-                           SymbolEqualityComparer.Default.Equals(reference.Local, local);
-            }
-        }
+        return value;
     }
 
     // Whether the call is an extension method on a query, which EF Core translates, rather than on results in memory.

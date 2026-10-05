@@ -140,8 +140,8 @@ var perTenant = await db.Orders
 On EF Core 10, `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes only the tenant filter and keeps your other
 named filters; `IgnoreQueryFilters()` removes them all. Either applies to that whole query: on a shared entity, to
 the tenant-owned entities it includes, joins or reads through a navigation too. Protect endpoints that use it with
-authorization. [TNY1002](analyzers.md#tny1002) warns of a call in a query that reads a tenant-owned entity; where the
-query is meant to cross tenants, as here, suppress the warning there with the reason.
+authorization. [TNY1002](analyzers.md#tny1002) warns of a call whose query, in the same expression, reads a tenant-owned
+entity; where the query is meant to cross tenants, as here, suppress the warning there with the reason.
 
 ## Write isolation: the interceptor
 

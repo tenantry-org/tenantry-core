@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using Microsoft.CodeAnalysis.Testing;
 using Tenantry.EfCore.Analyzers;
 
@@ -146,6 +148,9 @@ public sealed class QueryTests
                     db.Suppliers.IgnoreQueryFilters().Include("Categories").Include("NotANavigation").ToList();
 
                 // In memory, after the query: Purchases is not loaded by it.
+                public static List<Category> Rewrapped(AppDbContext db) =>
+                    db.Categories.IgnoreQueryFilters().AsEnumerable().AsQueryable().Include(c => c.Purchases).ToList();
+
                 public static List<Purchase> Unloaded(AppDbContext db) =>
                     db.Categories.IgnoreQueryFilters().AsEnumerable().SelectMany(c => c.Purchases).ToList();
 
@@ -166,96 +171,18 @@ public sealed class QueryTests
             """);
 
     [Fact]
-    public Task IgnoreQueryFilters_FollowsCastsConditionalsAndTheOtherQueryOfASetOperator() =>
+    public Task IgnoreQueryFilters_FollowsCastsAndTheOtherQueryOfASetOperator() =>
         Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
             public static class Reports
             {
                 public static List<Category> Cast(AppDbContext db) =>
                     ((IQueryable<Category>){|TNY1002:db.Categories.IgnoreQueryFilters()|}).Include(c => c.Purchases).ToList();
 
-                public static List<Category> Either(AppDbContext db, bool all) =>
-                    (all ? {|TNY1002:db.Categories.IgnoreQueryFilters()|} : db.Categories).Include(c => c.Purchases).ToList();
-
-                public static List<Category> FromEither(AppDbContext db, bool all) =>
-                    {|TNY1002:(all ? db.Categories.Include(c => c.Purchases) : db.Categories.AsQueryable()).IgnoreQueryFilters()|}.ToList();
-
                 public static List<Category> Both(AppDbContext db) =>
                     {|TNY1002:db.Categories.IgnoreQueryFilters()|}.Union(db.Categories.Where(c => c.Purchases.Any())).ToList();
 
                 public static List<Category> Neither(AppDbContext db) =>
                     db.Categories.IgnoreQueryFilters().Except(db.Categories.Where(c => c.IsDeleted)).ToList();
-            }
-            """);
-
-    [Fact]
-    public Task IgnoreQueryFilters_FollowsALocalTheQueryIsKeptIn() =>
-        Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
-            public static class Reports
-            {
-                public static List<Category> Declared(AppDbContext db)
-                {
-                    var categories = {|TNY1002:db.Categories.IgnoreQueryFilters()|};
-                    return categories.Include(c => c.Purchases).ToList();
-                }
-
-                public static List<Category> Conditional(AppDbContext db, bool all)
-                {
-                    var categories = db.Categories.AsQueryable();
-
-                    if (all)
-                        categories = {|TNY1002:categories.IgnoreQueryFilters()|};
-
-                    categories = categories.Where(c => !c.IsDeleted);
-                    categories = categories.Include(c => c.Purchases);
-                    return categories.ToList();
-                }
-
-                // The filters are ignored for the whole query, so an Include before the call counts.
-                public static List<Category> IncludedFirst(AppDbContext db)
-                {
-                    IQueryable<Category> categories = db.Categories.Include(c => c.Purchases);
-                    categories = {|TNY1002:categories.IgnoreQueryFilters()|};
-                    return categories.ToList();
-                }
-
-                public static List<Category> AnotherLocal(AppDbContext db)
-                {
-                    var all = db.Categories.IgnoreQueryFilters();
-                    var mine = db.Categories.Include(c => c.Purchases);
-                    return all.Concat(db.Categories.Where(c => !c.IsDeleted)).ToList().Concat(mine).ToList();
-                }
-
-                // Following stops where the local is given a query that does not start from it.
-                public static List<Category> Replaced(AppDbContext db)
-                {
-                    var categories = db.Categories.IgnoreQueryFilters();
-                    categories = db.Categories.Where(c => !c.IsDeleted);
-                    return categories.Include(c => c.Purchases).ToList();
-                }
-
-                public static List<Category> ReplacedBefore(AppDbContext db)
-                {
-                    IQueryable<Category> categories = db.Categories.Include(c => c.Purchases);
-                    categories = db.Categories.Where(c => !c.IsDeleted);
-                    return categories.IgnoreQueryFilters().ToList();
-                }
-
-                // A query run before the call is another query.
-                public static int Earlier(AppDbContext db)
-                {
-                    var categories = db.Categories.AsQueryable();
-                    var bought = categories.Include(c => c.Purchases).Count();
-                    categories = categories.IgnoreQueryFilters();
-                    return bought + categories.Count();
-                }
-
-                // A local a lambda assigns is not followed.
-                public static List<Category> Captured(AppDbContext db)
-                {
-                    var categories = db.Categories.IgnoreQueryFilters();
-                    Action narrow = () => categories = categories.Where(c => !c.IsDeleted);
-                    return categories.Include(c => c.Purchases).ToList();
-                }
             }
             """);
 
@@ -283,106 +210,171 @@ public sealed class QueryTests
             """);
 
     [Fact]
-    public Task IgnoreQueryFilters_OnOneBranch_IsNotJoinedToAQueryOnAnother_OutsideALoop() =>
+    public Task IgnoreQueryFilters_IsCheckedInItsOwnExpression_SoAQueryAcrossStatementsOrAConditionalIsNotReported() =>
         Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
             public static class Reports
             {
-                public static List<Category> IfElse(AppDbContext db, bool all)
+                public static Task<List<Category>> IfElse(AppDbContext db, bool admin)
                 {
-                    var categories = db.Categories.AsQueryable();
+                    IQueryable<Category> q;
 
-                    if (all)
-                        categories = categories.IgnoreQueryFilters();
+                    if (admin)
+                        q = db.Categories.IgnoreQueryFilters();
                     else
-                        categories = categories.Include(c => c.Purchases);
+                        q = db.Categories.Include(c => c.Purchases);
 
-                    return categories.ToList();
+                    return q.ToListAsync();
                 }
 
-                public static List<Category> ElseIf(AppDbContext db, bool all)
+                public static Task<List<Category>> Conditional(AppDbContext db, bool admin) =>
+                    (admin ? db.Categories.IgnoreQueryFilters() : db.Categories.Include(c => c.Purchases)).ToListAsync();
+
+                public static Task<List<Category>> ConditionalInALocal(AppDbContext db, bool admin)
                 {
-                    var categories = db.Categories.AsQueryable();
-
-                    if (all)
-                        categories = categories.Include(c => c.Purchases);
-                    else
-                        categories = categories.IgnoreQueryFilters();
-
-                    return categories.ToList();
+                    var q = admin ? db.Categories.IgnoreQueryFilters() : db.Categories.Include(c => c.Purchases);
+                    return q.ToListAsync();
                 }
 
-                public static List<Category> Switch(AppDbContext db, int mode)
+                public static async Task<int> Guard(AppDbContext db, bool tenantView)
                 {
-                    var categories = db.Categories.AsQueryable();
+                    var q = db.Categories.AsQueryable();
 
-                    switch (mode)
+                    if (tenantView)
                     {
-                        case 1:
-                            categories = categories.IgnoreQueryFilters();
-                            break;
-                        default:
-                            categories = categories.Include(c => c.Purchases);
-                            break;
+                        q = q.Where(c => c.Purchases.Any());
+                        return await q.CountAsync();
                     }
 
-                    return categories.ToList();
+                    return await q.IgnoreQueryFilters().CountAsync();
                 }
 
-                // The condition runs before the branch.
-                public static List<Category> InTheCondition(AppDbContext db)
+                public static async Task<int> EarlyReturn(AppDbContext db, bool admin)
                 {
-                    var categories = db.Categories.AsQueryable();
+                    var q = db.Categories.AsQueryable();
 
-                    if ((categories = {|TNY1002:categories.IgnoreQueryFilters()|}).Any())
-                        return categories.Include(c => c.Purchases).ToList();
+                    if (admin)
+                    {
+                        q = q.IgnoreQueryFilters();
+                        return await q.CountAsync();
+                    }
+
+                    return await q.Where(c => c.Purchases.Any()).CountAsync();
+                }
+
+                public static async Task<int> Throw(AppDbContext db, bool admin)
+                {
+                    var q = db.Categories.AsQueryable();
+
+                    if (admin)
+                    {
+                        q = q.IgnoreQueryFilters();
+                        var count = await q.CountAsync();
+                        throw new InvalidOperationException($"{count} categories");
+                    }
+
+                    return await q.Where(c => c.Purchases.Any()).CountAsync();
+                }
+
+                public static async Task<List<Category>> IncludeFirst(AppDbContext db, bool detail)
+                {
+                    IQueryable<Category> q = db.Categories;
+
+                    if (detail)
+                    {
+                        q = q.Include(c => c.Purchases);
+                        return await q.ToListAsync();
+                    }
+
+                    q = q.IgnoreQueryFilters();
+                    return await q.ToListAsync();
+                }
+
+                public static async Task<int> InAForeach(AppDbContext db, bool[] modes)
+                {
+                    var total = 0;
+
+                    foreach (var admin in modes)
+                    {
+                        IQueryable<Category> q = db.Categories;
+
+                        if (admin)
+                            q = q.IgnoreQueryFilters();
+                        else
+                            q = q.Include(c => c.Purchases);
+
+                        total += await q.CountAsync();
+                    }
+
+                    return total;
+                }
+
+                public static async Task<List<Category>> Retry(AppDbContext db)
+                {
+                    for (var attempt = 0; attempt < 3; attempt++)
+                    {
+                        IQueryable<Category> q = db.Categories;
+
+                        if (attempt == 0)
+                            q = q.Include(c => c.Purchases);
+                        else
+                            q = q.IgnoreQueryFilters();
+
+                        try
+                        {
+                            return await q.ToListAsync();
+                        }
+                        catch (TimeoutException)
+                        {
+                        }
+                    }
 
                     return [];
                 }
 
-                // Both branches can run, one after the other.
-                public static List<Category> Loop(AppDbContext db, bool[] steps)
+                public static async Task<List<int>> Deconstructed(AppDbContext db)
                 {
-                    var categories = db.Categories.AsQueryable();
-
-                    foreach (var all in steps)
-                    {
-                        if (all)
-                            categories = {|TNY1002:categories.IgnoreQueryFilters()|};
-                        else
-                            categories = categories.Include(c => c.Purchases);
-                    }
-
-                    return categories.ToList();
+                    var q = db.Categories.IgnoreQueryFilters();
+                    var n = await q.CountAsync();
+                    (q, _) = (db.Categories.AsQueryable(), n);
+                    return await q.Select(c => c.Purchases.Count).ToListAsync();
                 }
             }
             """);
 
     [Fact]
-    public Task IgnoreQueryFilters_FollowsALocalThroughAConditionalReassignment() =>
-        Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
+    public async Task ALongMethod_IsAnalysedQuickly()
+    {
+        // Thousands of statements and hundreds of calls on one local: each call looks at its own expression only.
+        var statements = new StringBuilder();
+
+        for (var i = 0; i < 300; i++)
+        {
+            statements.AppendLine($"        categories = categories.Where(c => c.Id > {i});");
+
+            for (var j = 0; j < 12; j++)
+                statements.AppendLine($"        total += {i * j};");
+
+            statements.AppendLine("        categories = categories.IgnoreQueryFilters();");
+            statements.AppendLine("        total += categories.Include(c => c.Supplier).Count();");
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        await Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + $$"""
             public static class Reports
             {
-                public static List<Category> Narrowed(AppDbContext db, bool live)
+                public static int Long(AppDbContext db)
                 {
-                    var categories = {|TNY1002:db.Categories.IgnoreQueryFilters()|};
-                    categories = live ? categories.Where(c => !c.IsDeleted) : categories;
-                    return categories.Include(c => c.Purchases).ToList();
+                    var total = 0;
+                    var categories = db.Categories.AsQueryable();
+            {{statements}}
+                    return total;
                 }
-
-                public static List<Category> Replaced(AppDbContext db, bool live)
-                {
-                    var categories = db.Categories.IgnoreQueryFilters();
-                    categories = live ? db.Categories.Where(c => !c.IsDeleted) : categories;
-                    return categories.Include(c => c.Purchases).ToList();
-                }
-
-                // A query used as a condition does not continue into what the conditional chooses.
-                public static List<Category> AsACondition(AppDbContext db) =>
-                    (db.Categories.IgnoreQueryFilters().Any() ? db.Categories.AsQueryable() : db.Categories.Where(c => !c.IsDeleted))
-                        .Include(c => c.Purchases)
-                        .ToList();
             }
             """);
+
+        // Generous: the compilation takes most of it, and following locals through the method took minutes.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"took {stopwatch.Elapsed}");
+    }
 
     [Fact]
     public Task IgnoreQueryFilters_SeesNoQueryReturnedFromOrPassedToAMethod() =>
@@ -397,6 +389,12 @@ public sealed class QueryTests
 
                 private static List<Category> WithPurchases(IQueryable<Category> categories) =>
                     categories.Include(c => c.Purchases).ToList();
+
+                public static List<Category> Built(AppDbContext db) =>
+                    Bought(db.Purchases.Where(p => p.Total > 0)).IgnoreQueryFilters().ToList();
+
+                private static IQueryable<Category> Bought(IQueryable<Purchase> purchases) =>
+                    purchases.Select(p => p.Category!);
             }
             """);
 

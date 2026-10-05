@@ -37,14 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tenant-owned type as one with tenant-owned types, so the other types it maps with a `TenantId` are now reported. It
   also reads generated code for its contexts, types and markers, so an `IsSharedAcrossTenants()` in a generated file
   now counts; nothing in generated code is reported.
-- TNY1002 also reports `IgnoreQueryFilters()` on a query of a shared entity that brings in a tenant-owned one, through
-  an `Include` or `ThenInclude`, a `Select`, `SelectMany`, `Join` or `GroupJoin`, the other query of a `Union`,
-  `Concat`, `Intersect` or `Except`, or a navigation in one of its lambdas, also through casts, conditionals and a local
-  the query is kept in within the method; and a call on a type parameter constrained to a tenant-owned type, as in a
-  generic repository. `db.Categories.IgnoreQueryFilters().Include(c => c.Purchases)`, where `Category` is shared and
-  `Purchase` is tenant-owned, reads every tenant's purchases, and was not reported. A build that treats warnings as
-  errors fails on it. On EF Core 10, a call that names only filters other than `TenantryQueryFilters.Tenant` is still
-  not reported. See [TNY1002](docs/analyzers.md#tny1002).
+- TNY1002 also reports `IgnoreQueryFilters()` on a query of a shared entity that brings in a tenant-owned one in the
+  same expression: through an `Include` or `ThenInclude` (a lambda, or a string path), a `Select`, `SelectMany`,
+  `Join` or `GroupJoin`, the other query of a `Union`, `Concat`, `Intersect` or `Except`, or a navigation or query in
+  one of its lambdas; and a call on a type parameter constrained to a tenant-owned type, as in a generic repository.
+  `db.Categories.IgnoreQueryFilters().Include(c => c.Purchases)`, where `Category` is shared and `Purchase` is
+  tenant-owned, reads every tenant's purchases, and was not reported. A query composed across statements, kept in a
+  local or chosen with a conditional is not followed. Its title is now "A query that reads a tenant-owned entity
+  ignores the tenant filter", and its message names the tenant-owned type the query reads. A build that treats
+  warnings as errors fails on the new reports. On EF Core 10, a call that names only filters other than
+  `TenantryQueryFilters.Tenant` is still not reported. See [TNY1002](docs/analyzers.md#tny1002).
 
 ### Fixed
 
