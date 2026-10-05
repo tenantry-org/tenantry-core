@@ -92,6 +92,23 @@ jobs:
             exit 1
           }
 
+      - name: Require a patch's package baseline in its own minor
+        # Pack checks each package against TenantryPackageBaseline. For a patch X.Y.Z (Z > 0) it must be a release of
+        # X.Y, raised after X.Y.0 (RELEASING.md), not necessarily the latest: against the previous minor, a break in an
+        # API added in X.Y.0 would pass. A dry run with a version checks it too.
+        if: github.event_name == 'push' || inputs.version != ''
+        env:
+          RELEASE: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+        run: |
+          baseline="$(sed -n 's:.*<TenantryPackageBaseline>\(.*\)</TenantryPackageBaseline>.*:\1:p' Directory.Build.props)"
+          if [[ "${RELEASE#v}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) && "${BASH_REMATCH[3]}" != 0 &&
+                "$(cut -d . -f 1-2 <<<"$baseline")" != "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" ]]; then
+            echo "::error::TenantryPackageBaseline is ${baseline:-empty}, but pack must check the patch $RELEASE" \
+              "against a release of ${BASH_REMATCH[1]}.${BASH_REMATCH[2]}: raise it on the release branch" \
+              "(RELEASING.md, After any release)"
+            exit 1
+          fi
+
       - name: Require the version to be unpublished on NuGet.org
         # A published version cannot be replaced, and the push below refuses a duplicate: a moved or re-pushed tag for
         # a released version stops here, before anything is built, rather than releasing packages whose checksums do not

@@ -85,7 +85,8 @@ the cherry-pick in step 4 above, so push `master` before its tag, as for a new m
 3. Merge it and wait for CI to pass on the push to `release/X.Y`.
 4. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.7.*'`), that `git log
    v0.7.0..origin/release/0.7` holds only what the patch should, that `TenantryPackageBaseline` names the line's last
-   release, and that the `CHANGELOG.md` section is there, and on `master`, which the workflow checks. Then tag the
+   release, and that the `CHANGELOG.md` section is there, and on `master`. The workflow checks the section on both
+   branches, and refuses a patch whose `TenantryPackageBaseline` is not a release of its own minor. Then tag the
    branch's head and push the tag, as for a new minor.
 
 Tag the head of a push to `release/X.Y`: CI runs once for each push, on its last commit, so a commit in the middle of
@@ -120,7 +121,9 @@ branch: add its `CHANGELOG.md` section, which says it replaces the incomplete re
 incomplete version's packages on NuGet.org, so no one picks a set that does not match, unless the release stopped
 only at `Tenantry.Templates` ([The templates package](#the-templates-package)). `TenantryPackageBaseline` names the
 last release whose six library packages were all published, which is the incomplete one only in that case: pack looks
-for each library package at the baseline version, and would fail for one never published at it.
+for each library package at the baseline version, and would fail for one never published at it. An incomplete `X.Y.0`
+is the exception, as the workflow refuses a patch whose baseline is in an older minor: set `TenantryPackageBaseline` to
+`X.Y.0`, and in the project file of each library package `X.Y.0` lacks, to the previous release.
 
 ## Prereleases from master
 
