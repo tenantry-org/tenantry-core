@@ -83,14 +83,23 @@ jobs:
 
       - name: Require the release's notes in master's CHANGELOG.md too
         # Every section added to a release branch is also added to master's (RELEASING.md), so the next minor's
-        # changelog keeps it. A new minor's section reaches master as the cherry-pick pushed before the tag.
-        if: github.event_name == 'push'
+        # changelog keeps it. A new minor's section reaches master as the cherry-pick pushed before the tag. A dry run
+        # with a version checks it too.
+        if: github.event_name == 'push' || inputs.version != ''
+        env:
+          RELEASE: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
         run: |
           git show refs/remotes/origin/master:CHANGELOG.md > "$RUNNER_TEMP/master-CHANGELOG.md"
-          bash scripts/release-notes.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/master-CHANGELOG.md" > /dev/null || {
-            echo "::error::master's CHANGELOG.md has no ## [${GITHUB_REF_NAME#v}] section: add it there, then rerun"
+          if ! bash scripts/release-notes.sh "$RELEASE" "$RUNNER_TEMP/master-CHANGELOG.md" > /dev/null 2>&1; then
+            version="${RELEASE#v}"
+            if [[ "$version" =~ ^[0-9]+\.[0-9]+\.0(-|$) ]]; then
+              todo="push master, whose cherry-pick of the release branch's commit adds it, or add it there"
+            else
+              todo="add the section to master's CHANGELOG.md"
+            fi
+            echo "::error::master's CHANGELOG.md has no ## [$version] section: $todo, then rerun (RELEASING.md)"
             exit 1
-          }
+          fi
 
       - name: Require a patch's package baseline in its own minor
         # Pack checks each package against TenantryPackageBaseline. For a patch X.Y.Z (Z > 0) it must be a release of
