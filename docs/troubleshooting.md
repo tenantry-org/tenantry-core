@@ -232,7 +232,7 @@ The middleware ran before routing chose the endpoint, so `RequireTenantByDefault
 
 ## Route-value resolution returns null
 
-Routing ran after the middleware, so the route value did not exist yet. See
+Routing ran after the middleware, so the route value did not exist yet. The middleware logs this once (event 1007). See
 [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering).
 
 ## Subdomain resolution returns null on localhost

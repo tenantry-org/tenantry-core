@@ -4,12 +4,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tenantry.AspNetCore.Internal;
 
-/// <summary>What resolution found for a request.</summary>
+/// <summary>
+/// What resolution found for a request, and the resolvers that found nothing because what they read was not there yet:
+/// a claim resolver before authentication, and a route-value resolver before routing.
+/// </summary>
 internal sealed record TenantResolution<TKey>(
     ResolutionResult Result,
     string? Identifier,
     ITenantDescriptor<TKey>? Tenant,
-    List<ClaimTenantResolver>? MissedClaimResolvers)
+    List<ITenantResolver>? MissedResolvers)
     where TKey : IEquatable<TKey>, IParsable<TKey>;
 
 /// <summary>
@@ -100,7 +103,7 @@ internal sealed class TenantRequestResolution<TKey>
         var cancellationToken = context.RequestAborted;
         string? identifier = null;
         var isTenantId = false;
-        List<ClaimTenantResolver>? claimResolvers = null;
+        List<ITenantResolver>? missedResolvers = null;
 
         foreach (var resolver in context.RequestServices.GetServices<ITenantResolver>())
         {
@@ -123,16 +126,18 @@ internal sealed class TenantRequestResolution<TKey>
 
             identifier = null;
 
-            // The authentication middleware has not run yet: a claim resolver could not see the request's user.
-            if (resolver is ClaimTenantResolver claimResolver && context.Features.Get<IAuthenticationFeature>() is null)
+            // The authentication middleware has not run yet, so a claim resolver could not see the request's user, or
+            // routing has not, so a route-value resolver could not see its route values.
+            if ((resolver is ClaimTenantResolver && context.Features.Get<IAuthenticationFeature>() is null) ||
+                (resolver is RouteValueTenantResolver && context.GetEndpoint() is null))
             {
-                (claimResolvers ??= []).Add(claimResolver);
+                (missedResolvers ??= []).Add(resolver);
             }
         }
 
         if (identifier is null)
         {
-            return new(ResolutionResult.Missing, null, null, claimResolvers);
+            return new(ResolutionResult.Missing, null, null, missedResolvers);
         }
 
         var tenant = await LookUpAsync(identifier, isTenantId, cancellationToken).ConfigureAwait(false);

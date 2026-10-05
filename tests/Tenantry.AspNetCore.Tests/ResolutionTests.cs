@@ -296,6 +296,72 @@ public sealed class ResolutionTests
     }
 
     [Fact]
+    public async Task RouteValueResolutionBeforeRouting_IsLoggedOnce()
+    {
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant.ResolveFromRouteValue().UseInMemoryStore([Acme]),
+            pipeline: a =>
+            {
+                a.UseTenantry();
+                a.UseRouting();
+                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+            });
+        await using var _ = app;
+        using var client = app.GetTestClient();
+
+        // An endpoint without a route value for the resolver costs nothing, and is not warned about.
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        logs.For(1007).Should().BeEmpty();
+
+        // The endpoint needs no tenant, so the request runs without the one its route names.
+        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none)");
+
+        logs.For(1007).Should().ContainSingle().Which.Message.Should().Contain("/{tenant}/orders").And.Contain("ResolveFromRouteValue");
+    }
+
+    [Fact]
+    public async Task UseTenantryBeforeRouting_WithoutRouteValuesOrTenantMetadata_LogsNoOrderingWarning()
+    {
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme]),
+            pipeline: a =>
+            {
+                a.UseTenantry();
+                a.UseRouting();
+                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+            });
+        await using var _ = app;
+        using var client = app.GetTestClient();
+
+        (await Get(client, "acme")).Should().Be(HttpStatusCode.OK);
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("(none)");
+
+        logs.For(1007).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RouteValueResolutionAfterRouting_LogsNoOrderingWarning()
+    {
+        var (app, logs) = await StartWithLogsAsync<string>(
+            tenant => tenant.ResolveFromRouteValue().UseInMemoryStore([Acme]),
+            pipeline: a =>
+            {
+                a.UseRouting();
+                a.UseTenantry();
+                a.MapGet("/{tenant}/orders", (ITenantContext<string> t) => t.CurrentTenantId ?? "(none)");
+            });
+        await using var _ = app;
+        using var client = app.GetTestClient();
+
+        (await client.GetStringAsync("/acme/orders", TestContext.Current.CancellationToken)).Should().Be("acme");
+        (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
+
+        logs.For(1007).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task UseTenantryInTheRightPlace_LogsNoOrderingWarning()
     {
         var (app, logs) = await StartWithLogsAsync<string>(

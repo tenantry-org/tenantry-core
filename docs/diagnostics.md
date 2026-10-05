@@ -18,7 +18,7 @@ Alert on 2001 above all: a save that tried to write another tenant's row.
 | 1004 | `TenantNotFound` | Warning | A request's identifier names no tenant, and its endpoint requires a tenant. |
 | 1005 | `TenantAccessDenied` | Warning | An access validator refuses a request's tenant. |
 | 1006 | `ContinuingWithoutTenant` | Debug | A request's identifier names no tenant, one that is not active, or one it may not use, and its endpoint does not require a tenant. |
-| 1007 | `TenantryBeforeRouting` | Warning | `app.UseTenantry()` ran before routing chose an endpoint with `RequireTenant()` or `AllowMissingTenant()`. Requests without a tenant are still rejected where one is required. Logged once. |
+| 1007 | `TenantryBeforeRouting` | Warning | `app.UseTenantry()` ran before routing chose an endpoint with `RequireTenant()` or `AllowMissingTenant()`, or one with the route value `ResolveFromRouteValue` reads. Requests without a tenant are still rejected where one is required. Logged once. |
 | 1008 | `TenantryBeforeAuthentication` | Warning | The authentication middleware ran after `app.UseTenantry()` and signed in a user with the claim `ResolveFromClaim` reads, which it therefore missed. Logged once. |
 | 1009 | `OutputCacheBeforeTenantry` | Warning | The output cache ran before `app.UseTenantry()` for a request, so `IsolateOutputCache()` did not cache its response. Logged once. |
 | 1010 | `TenantResolutionAfterAuthentication` | Warning | `app.UseTenantResolution()` ran after the authentication middleware, so authentication used no tenant's settings. Logged once. |
