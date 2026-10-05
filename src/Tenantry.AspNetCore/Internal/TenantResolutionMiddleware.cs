@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -137,7 +138,11 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         if (resolution is { Result: ResolutionResult.AccessDenied or ResolutionResult.Inactive, Tenant: { } refused })
         {
-            var user = context.User.Identity?.Name ?? "(anonymous)";
+            // A signed-in user without a name claim is named by its identifier, and is never logged as anonymous.
+            var user = context.User.Identity?.Name
+                ?? context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? context.User.FindFirstValue("sub")
+                ?? (context.User.Identities.Any(identity => identity.IsAuthenticated) ? "(unnamed)" : "(anonymous)");
             var refusedId = TenantIds.Format(refused.TenantId);
 
             if (resolution.Result == ResolutionResult.Inactive)

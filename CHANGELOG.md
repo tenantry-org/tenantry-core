@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tenant: with no tenant's settings, or with the tenant a later resolver named.
 - Events 1007 and 1008 are also logged when a resolver that could not read its value yet (`ResolveFromRouteValue`
   before routing, `ResolveFromClaim` before authentication) was followed by one that named a tenant, which then won.
+- Events 1005 and 1012 name a signed-in user without a name claim by its name identifier or `sub` claim, or as
+  `(unnamed)`. Before, they logged it as `(anonymous)`, as for a request with no user.
 - Behaviour the docs misstated: with `app.UseTenantResolution()`, a signed-in request whose tenant was current
   during authentication, and which the access validators refuse, is refused on every endpoint, not only on those that
   require a tenant (the ASP.NET Core and access control guides, and the comments on `ITenantAccessValidator<TKey>`,
