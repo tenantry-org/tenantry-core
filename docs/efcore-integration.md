@@ -342,9 +342,10 @@ public class ReportingDbContext(DbContextOptions<ReportingDbContext> options) : 
 ```
 
 That context is not pooled, since a pool runs the options callback once, and it has no guard: one used after a
-switch to another tenant keeps the first tenant's database. To fail closed there too, derive a guard from
-`TenantContextGuard` ([Extending](#extending-contributors)) that compares the context's connection string with the
-current tenant's, and add it with `AddInterceptors`.
+switch to another tenant keeps the first tenant's database. To fail closed there too, pass the tenant id to a guard
+derived from `TenantContextGuard` ([Extending](#extending-contributors)) whose `Check` throws unless that tenant is
+current, and add it in the same callback with `AddInterceptors`. Design-time tools (`dotnet ef`) need an
+`IDesignTimeDbContextFactory` for such a context, as creating it with no tenant throws.
 
 ## Extending: contributors
 
@@ -389,7 +390,7 @@ enforce isolation (against direct SQL access, say), add row-level security there
 | `IgnoreQueryFilters()` | No, by design | Removes the tenant filter from that query, so `ExecuteUpdate`/`ExecuteDelete` then affect every tenant. |
 | `FromSql`, `FromSqlRaw`, `FromSqlInterpolated` on a tenant-owned entity | Yes | EF Core applies the entity's query filters over your SQL, so it returns only the current tenant's rows; with no tenant, none. SQL that cannot be composed over, such as a stored procedure call, throws `InvalidOperationException`, because EF Core must wrap it to add the filter. |
 | `Database.SqlQuery`, `SqlQueryRaw`, `ExecuteSql`, `ExecuteSqlRaw` | No | They map to no entity type, so no filter applies, and no interceptor sees what they change. Add the tenant predicate yourself. |
-| Third-party bulk operations (EFCore.BulkExtensions, Z.EntityFramework.Extensions, linq2db and similar) | No | They write with SQL of their own instead of `SaveChanges`, so Tenantry's `SaveChanges` interceptor does not see them: inserts are not stamped, and updates and deletes are not checked. Use `SaveChanges`, or `ExecuteUpdate` and `ExecuteDelete`, which Tenantry checks. |
+| Third-party bulk libraries (EFCore.BulkExtensions, Entity Framework Extensions, linq2db) | No | Tenantry stamps and checks writes only in `SaveChanges`, and limits only `ExecuteUpdate` and `ExecuteDelete`: an insert, update or delete these libraries run another way is neither stamped nor checked. Use `SaveChanges`, `ExecuteUpdate` or `ExecuteDelete` instead. |
 | `Entry(…).Reload()`, `GetDatabaseValues()` | Yes | EF Core reads the row by key without query filters, but Tenantry keeps the tenant filter, so another tenant's row reads as deleted: `GetDatabaseValues()` returns `null` and `Reload()` detaches the entity. On EF Core 10 the entity's other filters are still ignored (an unnamed one is named `TenantryQueryFilters.Application`); on EF Core 8 and 9 its own filter applies too, merged with the tenant filter. |
 | Entities a context already tracks | No | `Find` and `Local` answer from the change tracker, which keeps entities loaded for an earlier tenant. Use a context for one tenant. |
 | Pooled contexts | Yes | Each use reads the tenant current at that moment. |
