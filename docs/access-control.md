@@ -57,12 +57,11 @@ Endpoint metadata overrides `RequireTenantByDefault()`. If an endpoint has both 
 ## Validating tenant access
 
 A tenant that resolves and is in the store is not necessarily one the caller may use: a user of Acme should not be
-able to send `X-Tenant-Id: globex`. Access validators run after the tenant is found in the store and before it is
-made current. If validation fails, an endpoint that requires a tenant responds `403 Forbidden`, and any other endpoint
-runs without a tenant; either way the endpoint never runs with the refused tenant. With `app.UseTenantResolution()`,
-the tenant is already current during authentication, before the validators run, and a signed-in request whose tenant
-they refuse gets `403 Forbidden` on every endpoint
-([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
+able to send `X-Tenant-Id: globex`. Access validators run after the tenant is found in the store. If validation fails,
+an endpoint that requires a tenant responds `403 Forbidden`, and any other endpoint runs without a tenant; either way
+the endpoint never runs with the refused tenant. With `app.UseTenantResolution()`, the tenant is already current
+during authentication, before the validators run, and a signed-in request whose tenant they refuse gets
+`403 Forbidden` on every endpoint ([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
 
 Once any validator is configured, a request for a tenant that does not exist gets the same response as one for a
 tenant the caller may not use, so an authenticated user of one tenant cannot discover which others exist.
