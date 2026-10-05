@@ -80,18 +80,19 @@ What it looks at:
   or `<Type>Id` property, a `[Key]`, or a `[PrimaryKey]` without `TenantId`). A registry with a key of its own and a
   `TenantId` column, in a context with tenant-owned types, is reported: mark it `[SharedAcrossTenants]`.
 
-Each type is reported once, where it is first mapped outside generated code. The rule decides once the whole project is compiled, so `dotnet
-build` reports it, while an IDE may show it only after a build or with analysis of the whole solution turned on. For
-the same reason it has no code fix: Visual Studio and Rider offer fixes only for diagnostics found file by file.
+Each type is reported once, where it is first mapped outside generated code. The rule decides once the whole project
+is compiled, so `dotnet build` reports it, while an IDE may show it only after a build or with analysis of the whole
+solution turned on. For the same reason it has no code fix: Visual Studio and Rider offer fixes only for diagnostics
+found file by file.
 
 ## TNY1002
 
 `IgnoreQueryFilters()` removes Tenantry's tenant filter from the whole query, so a query that reads a tenant-owned
-entity reads every tenant's rows of it, and an `ExecuteUpdate` or `ExecuteDelete` after it changes them. The rule reports
-the call when the type the query reads is tenant-owned, and when the query brings a tenant-owned type in: an `Include`
-or `ThenInclude` of it, a `Select`, `SelectMany`, `Join` or `GroupJoin` of it, or a navigation to it or a query of it in
-one of the query's lambdas. A query of a shared entity with a filter of its own, such as a soft delete, is where this
-happens by accident:
+entity reads every tenant's rows of it, and an `ExecuteUpdate` or `ExecuteDelete` after it changes them. The rule
+reports the call when the type the query reads is tenant-owned, and when the query brings a tenant-owned type in: an
+`Include` or `ThenInclude` of it, a `Select`, `SelectMany`, `Join` or `GroupJoin` of it, or a navigation to it or a
+query of it in one of the query's lambdas. A query of a shared entity with a filter of its own, such as a soft delete,
+is where this happens by accident:
 
 ```csharp no-compile
 // Category is shared and has a soft-delete filter; Purchase is tenant-owned.
