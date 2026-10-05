@@ -90,7 +90,7 @@ jobs:
           RELEASE: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
         run: |
           ids=()
-          for project in src/*/*.csproj; do
+          for project in src/*/*.csproj templates/Tenantry.Templates.csproj; do
             ids+=("$(basename "$project" .csproj)")
           done
           bash scripts/check-unpublished.sh "${RELEASE#v}" "${ids[@]}"
@@ -173,7 +173,7 @@ jobs:
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         # No --skip-duplicate: a version already there fails the push rather than being skipped (RELEASING.md says what
-        # to do when a release stops part way).
+        # to do when a release stops part way). The glob's order pushes Tenantry.Templates last, after the libraries.
         run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
 
       - name: Create GitHub Release
@@ -212,9 +212,9 @@ jobs:
             echo "$(basename "$package")  (version $version)"
           done
           ls ./artifacts/sbom
-          echo "A release would attest each package's provenance, push each .nupkg to NuGet.org, with its .snupkg"
-          echo "to the NuGet.org symbol server, and create a GitHub release with its CHANGELOG.md section as notes and"
-          echo "the packages' checksums and SBOMs attached."
+          echo "A release would attest each package's provenance, push each .nupkg to NuGet.org, with any .snupkg"
+          echo "beside it to the NuGet.org symbol server, and create a GitHub release with its CHANGELOG.md section as"
+          echo "notes and the packages' checksums and SBOMs attached."
 
       - name: Show the release notes
         if: inputs.version != ''

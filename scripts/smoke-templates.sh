@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Packs the dotnet new templates (templates/), installs them into a template hive of their own, creates an application
-# from each, and builds it against the Tenantry packages of the same build, restored from an empty cache with package
-# source mapping, as check-package-consumer.sh restores, and with warnings as errors, so the analyzers the packages
-# carry must find nothing. Then it runs each, for a minute at most. The API, with tokens from its development endpoint:
-# an anonymous caller gets 401, a token for acme gets 403 for globex, acme's new note is listed for acme and not for
-# globex. The worker: it processes its demonstration messages, drops those for an unknown and a suspended tenant, logs
-# the one that fails, and keeps running. Usage, after dotnet pack of src/:
+# Installs the dotnet new templates from the Tenantry.Templates package in the package folder, the one a release
+# publishes, into a template hive of their own, creates an application from each, and builds it against the Tenantry
+# packages of the same build, restored from an empty cache with package source mapping, as check-package-consumer.sh
+# restores, and with warnings as errors, so the analyzers the packages carry must find nothing. Then it runs each, for
+# a minute at most. The API, with tokens from its development endpoint: an anonymous caller gets 401, a token for acme
+# gets 403 for globex, acme's new note is listed for acme and not for globex. The worker: it processes its
+# demonstration messages, drops those for an unknown and a suspended tenant, logs the one that fails, and keeps running.
+# Usage, after dotnet pack of src/ and templates/ (build-test.yml's Pack step):
 #
 #   scripts/smoke-templates.sh <package folder>
 set -euo pipefail
@@ -27,6 +28,17 @@ if [[ ${#core[@]} -eq 0 ]]; then
 fi
 version="$(unzip -p "${core[0]}" '*.nuspec' | sed -n 's:.*<version>\(.*\)</version>.*:\1:p' | head -n 1)"
 
+template_package=("$packages"/Tenantry.Templates.[0-9]*.nupkg)
+if [[ ${#template_package[@]} -ne 1 ]]; then
+  echo "No single Tenantry.Templates package in $packages: pack templates/Tenantry.Templates.csproj into it" >&2
+  exit 1
+fi
+template_version="$(unzip -p "${template_package[0]}" '*.nuspec' | sed -n 's:.*<version>\(.*\)</version>.*:\1:p' | head -n 1)"
+if [[ "$template_version" != "$version" ]]; then
+  echo "Tenantry.Templates is version $template_version, but the packages in $packages are $version" >&2
+  exit 1
+fi
+
 work="$(mktemp -d)"
 pid=""
 cleanup() {
@@ -34,14 +46,6 @@ cleanup() {
   rm -rf "$work"
 }
 trap cleanup EXIT
-
-dotnet pack "$repo/templates/Tenantry.Templates.csproj" -c Release -o "$work/templates" >/dev/null
-template_package=("$work"/templates/Tenantry.Templates.*.nupkg)
-template_version="$(unzip -p "${template_package[0]}" '*.nuspec' | sed -n 's:.*<version>\(.*\)</version>.*:\1:p' | head -n 1)"
-if [[ "$template_version" != "$version" ]]; then
-  echo "Tenantry.Templates is version $template_version, but the packages in $packages are $version" >&2
-  exit 1
-fi
 
 hive="$work/hive"
 dotnet new install "${template_package[0]}" --debug:custom-hive "$hive" >/dev/null

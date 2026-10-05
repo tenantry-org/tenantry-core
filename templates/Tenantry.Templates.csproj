@@ -3,15 +3,18 @@
   <!--
     dotnet new templates for applications that use Tenantry (content/): tenantry-api and tenantry-worker. Packed as
     Tenantry.Templates; each template references the Tenantry packages of the version this package is, which pack
-    writes into its template.json. scripts/smoke-templates.sh installs the package, creates each template, and builds
-    and runs it against the packages of the same build. Not yet part of a release (see RELEASING.md).
+    writes into its template.json. build-test.yml packs it beside the src packages; scripts/smoke-templates.sh installs
+    that package, creates each template, and builds and runs it against the packages of the same build. A release
+    publishes it with them; master's prereleases do not (RELEASING.md).
   -->
   <PropertyGroup>
     <PackageId>Tenantry.Templates</PackageId>
     <PackageType>Template</PackageType>
     <PackageDescription>dotnet new templates for Tenantry: tenantry-api, an ASP.NET Core API with EF Core that resolves the tenant from a header and checks it against the caller's JWT claims, and tenantry-worker, a worker service that runs each message as its tenant with RunInScopeAsync.</PackageDescription>
     <PackageTags>multi-tenancy;multitenancy;multi-tenant;dotnet-new;templates;aspnetcore;efcore;saas;tenantry</PackageTags>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <!-- Not netstandard2.0, whose implicit NETStandard.Library would put a component in the SBOM that the package does
+         not ship. The package holds no assembly, so the framework does not reach it. -->
+    <TargetFramework>net10.0</TargetFramework>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IncludeContentInPack>true</IncludeContentInPack>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
@@ -20,6 +23,8 @@
     <NoDefaultExcludes>true</NoDefaultExcludes>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <MinVerTagPrefix>v</MinVerTagPrefix>
+    <!-- No assemblies, so no API to validate: TenantryPackageBaseline does not apply (eng/common/Build.targets) -->
+    <EnablePackageValidation>false</EnablePackageValidation>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://tenantry.dev</PackageProjectUrl>

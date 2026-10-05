@@ -65,12 +65,12 @@ ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them re
 | Every test passes on every target framework, with coverage | `bash scripts/test-with-coverage.sh` | Docker runs the integration tests; it writes `coverage/coverage.xml` |
 | SonarCloud quality gate | CI only | On every push to `master` and every pull request into it; not on `release/X.Y`, whose changes were analysed on `master` (the SonarCloud plan serves only the main branch). A pull request from a fork, or from Dependabot, gets no `SONAR_TOKEN`, so its Sonar step fails. For a result, a maintainer pushes its commits to a branch of this repository (`git fetch origin pull/<number>/head && git push origin FETCH_HEAD:refs/heads/<branch>`) and opens a pull request from that branch |
 | Line coverage is at least 90% | `dotnet reportgenerator -reports:coverage/coverage.xml -targetdir:coverage/report -reporttypes:JsonSummary`, then `jq '.summary.linecoverage' coverage/report/Summary.json` | CI fails below 90: add tests for the new code |
-| The public API still works for code built against the last release | `for p in src/*/*.csproj; do dotnet pack "$p" -c Release --no-build -o artifacts; done` (the pack validates each package against `TenantryPackageBaseline`) | Keep the old member, or, for an intended break in a minor release, record it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true` |
+| The public API still works for code built against the last release | `for p in src/*/*.csproj; do dotnet pack "$p" -c Release --no-build -o artifacts; done`, then `dotnet pack templates/Tenantry.Templates.csproj -c Release -o artifacts` for the templates package (the pack validates each library package against `TenantryPackageBaseline`) | Keep the old member, or, for an intended break in a minor release, record it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true` |
 | A CycloneDX SBOM per package | The `dotnet CycloneDX` loop in `build-test.yml` | Run it after the pack, as it reads each package's version from `artifacts`, and fix the project it names |
 | The packages' dependency ranges | `dotnet run scripts/check-package-ranges.cs -- artifacts` | Each dependency has its intended range (see the script) |
 | The API reference is up to date | `bash scripts/generate-api-docs.sh --check` | `bash scripts/generate-api-docs.sh`, then commit `docs/api`: a change to the public API or its XML documentation changes it |
-| An application can restore and run the packages | `bash scripts/check-package-consumer.sh artifacts 'Tenantry.*'` | From an empty cache, with package source mapping, on every target framework |
-| The templates work | `bash scripts/smoke-templates.sh artifacts` | Each `dotnet new` template in `templates/` is created from the packed templates, builds against the packages with warnings as errors, and runs |
+| An application can restore and run the packages | `mkdir -p artifacts/libraries && cp artifacts/*.nupkg artifacts/libraries/ && rm artifacts/libraries/Tenantry.Templates.[0-9]*.nupkg`, then `bash scripts/check-package-consumer.sh artifacts/libraries 'Tenantry.*'`: the packages without the templates package, which an application cannot reference | From an empty cache, with package source mapping, on every target framework |
+| The templates work | `bash scripts/smoke-templates.sh artifacts` | Each `dotnet new` template is created from the templates package in `artifacts`, builds against the packages with warnings as errors, and runs |
 | The docs' code blocks build | `bash scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.*'` | Every `csharp` code block in the README and `docs/` builds against the packages |
 | Native AOT publish | `dotnet publish samples/Tenantry.Samples.Aot -c Release` | No trim or AOT warnings |
 | Native AOT smoke test | `dotnet publish eng/aot-smoke -c Release -o artifacts/aot-smoke`, then `artifacts/aot-smoke/AotSmoke` | Tenantry.Http and Tenantry.Caching compile whole for Native AOT, and the binary runs them |
@@ -114,10 +114,11 @@ The release attests each package's build provenance and attaches the packages' c
 SBOM per package. A tag with a prerelease suffix makes a GitHub prerelease, and only the highest released version is
 marked as the latest GitHub release. [RELEASING.md](RELEASING.md) has the steps.
 
-`master` never releases a stable version. Each push to it publishes the packages to NuGet.org as a prerelease
-(`0.7.0-alpha.0.126`) once Build & Test and the Windows build have passed, with no approval, through the `prerelease`
-environment (only `master` can deploy to it). Prereleases exist to build Tenantry Pro and for early testers, with no
-support or compatibility promise ([Prereleases from master](RELEASING.md#prereleases-from-master)).
+`master` never releases a stable version. Each push to it publishes the library packages, not the templates package,
+to NuGet.org as a prerelease (`0.7.0-alpha.0.126`) once Build & Test and the Windows build have passed, with no
+approval, through the `prerelease` environment (only `master` can deploy to it). Prereleases exist to build Tenantry
+Pro and for early testers, with no support or compatibility promise
+([Prereleases from master](RELEASING.md#prereleases-from-master)).
 
 To rehearse a release, run the Release workflow manually (Actions → Release → Run workflow) on `release/X.Y`, or on
 `master`: it runs the same checks and builds the same packages, then lists what a release would publish, without

@@ -95,8 +95,9 @@ NuGet.org.
    `release/X.Y` that put the commit there, and that it has notes. A tag on a commit `master` contains, on another
    minor's branch, or on an unmerged branch fails before anything is built (`scripts/release-source.sh`).
 2. It reruns CI on the tagged commit, then waits for approval in the `release` environment. Once approved, it pushes
-   the packages and their symbol packages to NuGet.org and creates the GitHub release, marked as the latest only if
-   no higher version is released.
+   the six library packages and their symbol packages to NuGet.org, then `Tenantry.Templates`
+   ([The templates package](#the-templates-package)), and creates the GitHub release, marked as the latest only if no
+   higher version is released.
 3. NuGet.org validates and indexes the packages, which takes a few minutes. They are available once
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
@@ -123,7 +124,9 @@ works towards, and `N` is MinVer's count of the commits since `master`'s nearest
 is put on a commit `master` contains (`scripts/release-source.sh` refuses one), so that tag stays the nearest and `N`
 grows with every push: each push publishes a higher version than the one before, and every one sorts below its minor's
 release candidates and release. There is no GitHub release, attestation or SBOM for a prerelease, and the templates
-package is not published.
+package is not published: the job deletes it from the downloaded packages before its checks and the push, since
+NuGet.org's policy for the `prerelease` environment names the six library packages ([Repository
+settings](#repository-settings)).
 
 Prereleases exist so Tenantry Pro can build against `master` from a clean clone, and for early testers. They carry no
 support or compatibility promise: the next one can change or remove any API, and security fixes are made only for the
@@ -149,11 +152,28 @@ when GitHub deletes them; rerunning every job builds them again.
 
 ## The templates package
 
-`templates/Tenantry.Templates.csproj` packs the `dotnet new` templates, and CI checks them
-(`scripts/smoke-templates.sh`), but no release publishes the package yet. To ship it with a release: pack it into
-`./artifacts` in `build-test.yml`'s Pack step; give it an SBOM in the step after; leave it out of the consumer check
-(`check-package-consumer.sh`, shared with Tenantry Pro), whose application cannot reference a template package; and
-reserve the `Tenantry.Templates` id on NuGet.org. The release workflow then publishes it with the rest.
+`templates/Tenantry.Templates.csproj` packs the `dotnet new` templates as `Tenantry.Templates`, at the same version as
+the library packages. Pack writes that version into each template's `template.json`, so an application created from
+the templates references the Tenantry packages of the same release (`--TenantryVersion` picks another). The Build &
+Test job packs it into `./artifacts` with the libraries and writes its SBOM, and `scripts/smoke-templates.sh` installs
+that package, creates each template, and builds and runs it against the libraries. A release pushes it after the
+libraries, as the push takes the packages in name order; the prerelease job leaves it out. The consumer check runs
+without it: its application cannot reference a template package. It has no symbol package, and no assembly whose API
+pack could validate, so `TenantryPackageBaseline` does not apply to it.
+
+Before the first release that includes it, the maintainer does two things on NuGet.org:
+
+1. Checks that the reserved ID prefix that gives the six library packages their verified mark covers
+   `Tenantry.Templates`, so no one else can take the id first; if it does not, asks NuGet.org to reserve one that
+   does ([ID prefix reservation](https://learn.microsoft.com/nuget/nuget-org/id-prefix-reservation)).
+2. Lets the `release` environment's trusted publishing policy push `Tenantry.Templates` as a new package: if its scope
+   allows only new versions of existing packages, or names packages, add the glob pattern `Tenantry.Templates` with
+   the scope to push new packages and new versions. A glob can name a package NuGet.org does not have yet.
+
+If the second is skipped, the release pushes the six library packages and their symbol packages, then fails on
+`Tenantry.Templates`, before the GitHub release is created. Do not rerun it: as for any release that stops part way
+([The release](#the-release)), fix the policy and release the next patch. The six packages already published are a
+complete set, so they need not be unlisted.
 
 ## Repository settings
 
@@ -164,7 +184,8 @@ maintainer create `v*` tags, and requires them signed, so tag with `git tag -s` 
 check the signature. SonarCloud analyses `master` and pull requests into it, not `release/*`: the organization's plan
 serves only the main branch, so another branch's quality gate cannot be read, and what a release branch holds was
 analysed on `master`, where every change lands first. The `release` environment must accept `v*` tags, and NuGet.org's
-trusted publishing policy names this repository, `release.yml` and the `release` environment.
+trusted publishing policy names this repository, `release.yml` and the `release` environment, with a scope that covers
+the six library packages and `Tenantry.Templates`.
 
 The `prerelease` environment has no required reviewers and accepts only the `master` branch. NuGet.org needs a second
 trusted publishing policy for it, with the same package owner as the release's policy: repository owner `tenantry-org`,
@@ -177,11 +198,11 @@ NuGet.org user name in the `NUGET_USER` repository secret.
 
 - On the release branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, once
   every package of it is on NuGet.org, and remove the `<TenantryPackageBaseline />` of a package released for the
-  first time. Pack then checks each package against that release, so a patch cannot break code compiled against it
-  (Tenantry.Pro accepts any release in the minor). After an `X.Y.0`, do the same on `master`, and delete each
-  `src/*/CompatibilitySuppressions.xml` on both: the release branch's patches break nothing, and the next minor's
-  intended breaks are recorded afresh on `master` (`dotnet pack -p:ApiCompatGenerateSuppressionFile=true`), and in
-  the changelog.
+  first time (`Tenantry.Templates` has none, as pack does not validate it). Pack then checks each package against that
+  release, so a patch cannot break code compiled against it (Tenantry.Pro accepts any release in the minor). After an
+  `X.Y.0`, do the same on `master`, and delete each `src/*/CompatibilitySuppressions.xml` on both: the release
+  branch's patches break nothing, and the next minor's intended breaks are recorded afresh on `master`
+  (`dotnet pack -p:ApiCompatGenerateSuppressionFile=true`), and in the changelog.
 
 ## After a minor release
 
