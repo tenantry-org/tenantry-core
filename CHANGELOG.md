@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Behaviour the docs misstated. The ASP.NET Core and access control guides, and the comments on
-  `ITenantAccessValidator<TKey>` and `ValidateTenantAccess`, said a request whose tenant is refused runs without one
-  on an endpoint that does not require a tenant; with `app.UseTenantResolution()`, a signed-in request is refused on
-  every endpoint. A cancelled `ITenantInvalidator<TKey>` call stops before the next handler, and several handler
-  failures are thrown as an `AggregateException`. SQL Server's default collation ignores case but not accents. Event
-  1009 is logged under a fourth category, `Tenantry.AspNetCore.OutputCache`.
+- Behaviour the docs misstated: with `app.UseTenantResolution()`, a signed-in request whose tenant was current
+  during authentication, and which the access validators refuse, is refused on every endpoint, not only on those that
+  require a tenant (the ASP.NET Core and access control guides, and the comments on `ITenantAccessValidator<TKey>`,
+  `ValidateTenantAccess` and `TenantResolutionOptions<TKey>`); a cancelled `ITenantInvalidator<TKey>` call stops
+  before the next handler, and several handler failures are thrown as an `AggregateException`; SQL Server's default
+  collation ignores case but not accents; and event 1009 is logged under a fourth category,
+  `Tenantry.AspNetCore.OutputCache`.
 
 ## [0.7.0] - 2026-10-05
 
