@@ -564,6 +564,48 @@ public sealed class RegistrationTests
             ]);
 
     [Fact]
+    public Task AContextDeclaredInAnotherProject_IsReportedOnlyOnEfCore8() =>
+        Verify.AnalyzerWithLibrariesAsync<ContextWithoutUseTenantryAnalyzer>(
+            """
+            using Microsoft.EntityFrameworkCore;
+            using Microsoft.Extensions.DependencyInjection;
+
+            public static class TestStartup
+            {
+                // A test project re-registering the application's context; from EF Core 9 the application's own
+                // registration, which this project cannot see, still adds UseTenantry().
+                public static void Register(IServiceCollection services) =>
+                    REGISTRATION;
+            }
+            """.Replace(
+                "REGISTRATION",
+#if NET9_0_OR_GREATER
+                "services.AddDbContext<Data.AppDbContext>(options => options.EnableSensitiveDataLogging())",
+#else
+                "{|TNY1004:services.AddDbContext<Data.AppDbContext>(options => options.EnableSensitiveDataLogging())|}",
+#endif
+                StringComparison.Ordinal),
+            [
+                new("Data", """
+                    using System;
+                    using Microsoft.EntityFrameworkCore;
+                    using Tenantry;
+
+                    namespace Data;
+
+                    public class Order : TenantEntity<Guid>
+                    {
+                        public int Id { get; set; }
+                    }
+
+                    public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+                    {
+                        public DbSet<Order> Orders => Set<Order>();
+                    }
+                    """),
+            ]);
+
+    [Fact]
     public Task UseTenantryInGeneratedCode_Counts_AndARegistrationInGeneratedCodeIsNotReported() =>
         Verify.AnalyzerWithFilesAsync<ContextWithoutUseTenantryAnalyzer>(
             Model + """

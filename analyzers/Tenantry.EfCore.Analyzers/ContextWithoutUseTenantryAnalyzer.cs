@@ -25,10 +25,12 @@ namespace Tenantry.EfCore.Analyzers;
 /// nothing in it is reported.
 /// </para>
 /// <para>
-/// Nor is a context with an <c>OnConfiguring</c> in its hierarchy that it cannot see (in another assembly) or that may
+/// From EF Core 9, a context declared in another assembly is not reported: a registration or
+/// <c>ConfigureDbContext</c> there, which it cannot see, adds to the options. Nor is a context with an
+/// <c>OnConfiguring</c> in its hierarchy that it cannot see (in another assembly) or that may
 /// apply <c>UseTenantry()</c> by the same test. A call that may apply it for the same context, or for a type parameter
-/// the context satisfies, clears a registration: from EF Core 9, any registration or <c>ConfigureDbContext</c>, since
-/// their options add up; on EF Core 8, where only the first registration's options apply, one that is not later in the
+/// the context satisfies, clears a registration: from EF Core 9, any registration or <c>ConfigureDbContext</c> in the
+/// compilation, since their options add up; on EF Core 8, where only the first registration's options apply, one that is not later in the
 /// same body (a lambda's or local function's being its own). So it reports at the end of the compilation, when every call
 /// has been seen.
 /// </para>
@@ -260,8 +262,15 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
 
         foreach (var registration in unconfigured)
         {
-            if (registration.Context is INamedTypeSymbol contextType &&
-                !configured.Any(other => Clears(other, registration, contextType, addsUp)) &&
+            if (registration.Context is not INamedTypeSymbol contextType)
+                continue;
+
+            // From EF Core 9, a registration or ConfigureDbContext in another project, which this compilation cannot see,
+            // adds to the options too, so a context declared in another project is not reported.
+            if (addsUp && !SymbolEqualityComparer.Default.Equals(contextType.ContainingAssembly, context.Compilation.Assembly))
+                continue;
+
+            if (!configured.Any(other => Clears(other, registration, contextType, addsUp)) &&
                 !ConfiguresItself(contextType, types, state, applying) &&
                 HasTenantOwned(contextType, types, state))
             {

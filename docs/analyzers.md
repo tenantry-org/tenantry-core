@@ -169,11 +169,19 @@ The rule reports a registration only when it sees everything the options do, so 
 - a context with an `OnConfiguring`, of its own or a base context's, that calls `UseTenantry()` or hands the builder
   on as above, or that is in another assembly. One that only picks a provider or adds logging, as a scaffolded
   context's does, does not count;
-- a context that another registration, or a `ConfigureDbContext<TContext>`, calls `UseTenantry()` for, since from
-  EF Core 9 they add to the same options. A generic method that does so for its type parameter counts for every context
-  that meets the type parameter's constraints, every context when it is constrained only to `DbContext`. On EF Core 8,
-  only a context's first registration's options apply, so another registration counts only when it is not later in
-  the same method; a lambda's or local function's body is a method of its own here.
+- a context that another registration, or a `ConfigureDbContext<TContext>`, in the same project calls `UseTenantry()`
+  for, since from EF Core 9 they add to the same options. A generic method that does so for its type parameter counts
+  for every context that meets the type parameter's constraints, every context when it is constrained only to
+  `DbContext`. On EF Core 8, only a context's first registration's options apply, so another registration counts only
+  when it is not later in the same method; a lambda's or local function's body is a method of its own here;
+- on EF Core 9 and later, a context declared in another project, since a registration or `ConfigureDbContext<TContext>`
+  in that project, which the rule cannot see, may have applied `UseTenantry()`.
+
+A context declared in the same project is still reported when only a library's `ConfigureDbContext<TContext>` helper
+applies `UseTenantry()`, as the rule cannot see into it: suppress the warning there, or add `.UseTenantry()` to the
+registration, which is harmless, since `UseTenantry()` returns at once when the options already have it. On EF Core 8,
+a test project that registers the application's context again gets only its own registration's options: add
+`.UseTenantry()` to the test registration, or set `dotnet_diagnostic.TNY1004.severity = none` for the test project.
 
 The registrations in a method are all taken to run, in source order, so one on a branch that excludes another, after
 an early return, or in a callback that runs later still counts. A few false reports remain by design: the builder

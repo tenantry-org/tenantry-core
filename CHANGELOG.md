@@ -22,8 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AddDbContextFactory` or `AddPooledDbContextFactory` whose options do not call `UseTenantry()`, so none of its
   tenant-owned entities is isolated. A build that treats warnings as errors fails on it. It reports nothing where the
   options hand the builder to code that could call `UseTenantry()`, an `OnConfiguring` of the context could, or
-  another registration or `ConfigureDbContext` of the context calls it (on EF Core 8, an earlier registration or one
-  in another method). See [TNY1004](docs/analyzers.md#tny1004).
+  another registration or `ConfigureDbContext` of the context in the same project calls it (on EF Core 8, an earlier
+  registration or one in another method); and, on EF Core 9 and later, for a context declared in another project,
+  whose own registrations it cannot see. See [TNY1004](docs/analyzers.md#tny1004).
 - Docs: a second per-tenant database beside the one `AddDbContextPerTenantDatabase` connects, through `AddDbContext`
   ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)); and notes that
   `AddDbContextFactory` by default, and `AddDbContext` with singleton options, keep the first tenant's connection
