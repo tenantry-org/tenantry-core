@@ -82,9 +82,9 @@ the cherry-pick in step 4 above, so push `master` before its tag, as for a new m
    SonarCloud.
 2. A tag runs the `release.yml` of the tagged commit. `release/0.7` was cut before `release.yml` checked a patch's
    `TenantryPackageBaseline` and its changelog section on `master`, and before it attached the packages, so the first
-   0.7 patch brings them first, in a pull request into `release/0.7`: `.github/workflows/release.yml` from `master`,
-   `TenantryPackageBaseline` raised to `0.7.0`, and both `src/*/CompatibilitySuppressions.xml` deleted. Branches cut
-   from `master` from 0.8 on have them already.
+   0.7 patch brings them first, in a pull request into `release/0.7`: `.github/workflows/release.yml` from `master` with
+   `scripts/newest-release.sh`, which it calls, `TenantryPackageBaseline` raised to `0.7.0`, and both
+   `src/*/CompatibilitySuppressions.xml` deleted. Branches cut from `master` from 0.8 on have them already.
 3. In a pull request into `release/X.Y`, which runs CI, cherry-pick the fix and add the patch's
    section to `CHANGELOG.md` (`## [0.7.1] - YYYY-MM-DD`). Add the same section to `master`'s `CHANGELOG.md`, placed by
    version among the other releases. The release's notes come from the branch's copy.
@@ -165,8 +165,8 @@ its file. Once the replacement patch is released, remove those project-file base
 moves to the patch.
 
 If every package was pushed and only the GitHub release is missing, create it by hand instead, from the run's packages,
-which it attested before the push, within 7 days of the run, while GitHub keeps them. In a checkout with the tags
-fetched, with the run's id from its URL, and the same files and marks the workflow would have given it:
+which it attested before the push, within 7 days of the run, while GitHub keeps them. In a checkout of `master` with
+the tags fetched, with the run's id from its URL, and the same files and marks the workflow would have given it:
 
 ```sh
 tag=v0.7.1
@@ -175,8 +175,7 @@ rm -rf artifacts/release
 gh run download "$run" --repo tenantry-org/tenantry-core --name nuget-packages --dir artifacts/release
 (cd artifacts/release && sha256sum -- *.nupkg *.snupkg > SHA256SUMS)
 bash scripts/release-notes.sh "$tag" <(git show "$tag:CHANGELOG.md") > artifacts/release/notes.md
-release='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-newest="$(git tag --list 'v[0-9]*' | grep -E "$release" | sort -V | tail -n 1)"
+newest="$(git tag --list 'v[0-9]*' | bash scripts/newest-release.sh)"
 flags=(--latest=false)
 [[ "$tag" == "$newest" ]] && flags=(--latest)
 [[ "$tag" == *-* ]] && flags+=(--prerelease)
