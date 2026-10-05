@@ -18,8 +18,9 @@ namespace Tenantry;
 /// <para>
 /// Do not read it in the options callback of <c>AddDbContextPool</c>, <c>AddPooledDbContextFactory</c> or
 /// <c>AddDbContextFactory</c>, or of <c>AddDbContext</c> with <c>optionsLifetime: ServiceLifetime.Singleton</c>: each
-/// keeps its options as a singleton and runs that callback once, so every context, for every tenant, would keep the
-/// first tenant's connection string. Use <c>AddDbContextPerTenantDatabase</c>.
+/// keeps its options as a singleton (<c>AddDbContextFactory</c> by default) and runs that callback once, so every
+/// context, for every tenant, would keep the first tenant's connection string. Use
+/// <c>AddDbContextPerTenantDatabase</c>.
 /// </para>
 /// </remarks>
 public sealed class CurrentTenantConnectionString<TKey>(

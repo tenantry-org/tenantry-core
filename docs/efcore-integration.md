@@ -297,8 +297,8 @@ in-memory tenant databases only in tests: deleting one runs no command the guard
 
 Do not read the connection string yourself in the options callback of `AddDbContextPool`, `AddPooledDbContextFactory`
 or `AddDbContextFactory`, or of `AddDbContext` with `optionsLifetime: ServiceLifetime.Singleton`: each keeps its options
-as a singleton and runs the callback once, so every context, for every tenant, would use the first tenant's database.
-Use `AddDbContextPerTenantDatabase`.
+as a singleton (`AddDbContextFactory` by default) and runs the callback once, so every context, for every tenant, would
+use the first tenant's database. Use `AddDbContextPerTenantDatabase`.
 
 `UseConnectionStrings` also registers `ITenantConnectionStringProvider<TKey>`, which returns a given tenant's
 connection string (`Get(tenant)`, `GetAsync(tenant)`) for code that visits tenants without making each one current,

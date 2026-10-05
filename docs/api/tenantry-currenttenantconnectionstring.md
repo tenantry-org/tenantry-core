@@ -6,7 +6,7 @@ Returns the current tenant's connection string, through the registered [`ITenant
 
 Registered as a singleton by `UseConnectionStrings`, for code that opens its own connections. For EF Core, Tenantry.EfCore's `AddDbContextPerTenantDatabase` connects each context to its tenant's database, pooled or not.
 
-Do not read it in the options callback of `AddDbContextPool`, `AddPooledDbContextFactory` or `AddDbContextFactory`, or of `AddDbContext` with `optionsLifetime: ServiceLifetime.Singleton`: each keeps its options as a singleton and runs that callback once, so every context, for every tenant, would keep the first tenant's connection string. Use `AddDbContextPerTenantDatabase`.
+Do not read it in the options callback of `AddDbContextPool`, `AddPooledDbContextFactory` or `AddDbContextFactory`, or of `AddDbContext` with `optionsLifetime: ServiceLifetime.Singleton`: each keeps its options as a singleton (`AddDbContextFactory` by default) and runs that callback once, so every context, for every tenant, would keep the first tenant's connection string. Use `AddDbContextPerTenantDatabase`.
 
 ```csharp
 public sealed class CurrentTenantConnectionString<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -33,7 +33,7 @@ Parameters:
 
 Registered as a singleton by `UseConnectionStrings`, for code that opens its own connections. For EF Core, Tenantry.EfCore's `AddDbContextPerTenantDatabase` connects each context to its tenant's database, pooled or not.
 
-Do not read it in the options callback of `AddDbContextPool`, `AddPooledDbContextFactory` or `AddDbContextFactory`, or of `AddDbContext` with `optionsLifetime: ServiceLifetime.Singleton`: each keeps its options as a singleton and runs that callback once, so every context, for every tenant, would keep the first tenant's connection string. Use `AddDbContextPerTenantDatabase`.
+Do not read it in the options callback of `AddDbContextPool`, `AddPooledDbContextFactory` or `AddDbContextFactory`, or of `AddDbContext` with `optionsLifetime: ServiceLifetime.Singleton`: each keeps its options as a singleton (`AddDbContextFactory` by default) and runs that callback once, so every context, for every tenant, would keep the first tenant's connection string. Use `AddDbContextPerTenantDatabase`.
 
 ## Methods
 
