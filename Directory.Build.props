@@ -20,7 +20,7 @@
          master's last reachable tag stays behind; this keeps master's packages versioned X.Y.0-alpha.0.N above every
          release, and ci.yml publishes them only in that form. Raise it on master after release/X.Y is cut
          (RELEASING.md). A tagged commit takes its tag's version. -->
-    <MinVerMinimumMajorMinor>0.7</MinVerMinimumMajorMinor>
+    <MinVerMinimumMajorMinor>0.8</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
 </Project>
