@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-05
+
 ### Upgrading from 0.6
 
 - `Tenantry.EfCore` and `Tenantry.AspNetCore` now carry analyzers ([Analyzers](docs/analyzers.md)). Three report
