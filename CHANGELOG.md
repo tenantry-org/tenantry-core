@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names with `RunInScopeAsync`. The projects reference the Tenantry packages of the templates' version;
   `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK, though an older
   SDK can install the templates and create a project.
+- Docs: a second per-tenant database beside the one `AddDbContextPerTenantDatabase` connects, through `AddDbContext`
+  ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)); a test that fails on an
+  entity type that is neither tenant-owned nor marked shared
+  ([Entity types left unisolated](docs/testing.md#entity-types-left-unisolated)); and notes that
+  `AddDbContextFactory`, and `AddDbContext` with singleton options, keep the first tenant's connection string, that
+  `IMemoryCache` and third-party bulk libraries are not isolated, that with `app.UseTenantResolution()` a custom
+  resolver that reads the user finds none before authentication, and how to call or serve a service that names the
+  tenant in a header other than `tenantry-tenant-id`.
 
 ### Fixed
 
