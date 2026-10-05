@@ -219,9 +219,10 @@ refuses a caller, and the pipeline order ([Testing](testing.md)).
   ([Desktop apps](non-http-hosts.md#desktop-apps)).
 - With `string` tenant ids, the database compares `TenantId` under the column's collation, and SQL Server's and MySQL's
   defaults ignore case: `acme` and `ACME` would read and change each other's rows. Use `Guid` ids, or ids the
-  collation cannot confuse, or a binary collation on `TenantId`
+  collation cannot confuse, or a binary collation on `TenantId` (`ForMySQLHasCollation` with Oracle's MySQL provider)
   ([string tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)).
-  `UseInMemoryStore` refuses two ids that differ only in case.
+  `UseInMemoryStore` refuses two ids that differ only in case. Warning 2007 names the tables at risk; ignore it only
+  when the ids cannot collide.
 - A tenant made current inside an `async` helper is not current for the helper's caller. Make it current, or open
   the scope, in the method that does the work ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
 

@@ -340,4 +340,36 @@ public static class TenantryTenantBuilderExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Stops Tenantry logging the warnings <paramref name="eventIds"/>, each about configuration the application may
+    /// have chosen on purpose. <see cref="TenantryWarnings"/> names the ones it accepts.
+    /// </summary>
+    /// <typeparam name="TKey">The tenant identifier type.</typeparam>
+    /// <param name="builder">The tenant builder.</param>
+    /// <param name="eventIds">The warnings' event ids.</param>
+    /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// Each call adds to the ids of the others. Ids outside Tenantry's events, 1000 to 3999, are kept for the package
+    /// that logs them, which reads them with <see cref="TenantryWarnings.IsIgnored"/>.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// An id is one of Tenantry's events that <see cref="TenantryWarnings"/> does not name.
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;string&gt;(tenant =&gt; tenant
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .IgnoreWarnings(TenantryWarnings.StringTenantIdCollation));
+    /// </code>
+    /// </example>
+    public static ITenantBuilder<TKey> IgnoreWarnings<TKey>(this ITenantBuilder<TKey> builder, params int[] eventIds)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(eventIds);
+
+        TenantryWarnings.Ignore(builder.Services, eventIds);
+        return builder;
+    }
 }

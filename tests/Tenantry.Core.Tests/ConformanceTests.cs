@@ -19,6 +19,7 @@ public sealed class ConformanceTests
             tenant.UseStore<ScopedTenantStore>();
             tenant.CacheTenants();
             tenant.UseConnectionStrings(options => options.GetConnectionString = t => $"Database=app_{t.TenantId}");
+            tenant.IgnoreWarnings(TenantryWarnings.OrdinaryOptionsReadAsTenant);
         });
 
         using var host = builder.Build();

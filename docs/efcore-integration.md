@@ -94,7 +94,12 @@ keyed by the id, under the same collation, guarantees it: the key refuses a seco
 first. `UseInMemoryStore` refuses two `string` ids that differ only in case; other collisions (accents, trailing
 spaces, `ß` and `ss` under some collations) are yours to avoid. A store of your own over configuration or another
 service guarantees nothing. `Guid` or `int` keys avoid the question, as does a binary collation on `TenantId`
-(`UseCollation`), except that SQL Server still ignores trailing spaces.
+(`UseCollation`, or `ForMySQLHasCollation` with Oracle's MySQL provider, which does not apply `UseCollation`), except
+that SQL Server still ignores trailing spaces.
+
+On SQL Server and MySQL, warning 2007 (`StringTenantIdCollation`) names the tables a model leaves to the default
+collation, when it builds the model; a custom key type stored as text is not checked. If your ids cannot collide, turn
+it off with [`IgnoreWarnings`](diagnostics.md#turning-off-a-warning).
 
 ### How the query filter stays correct
 

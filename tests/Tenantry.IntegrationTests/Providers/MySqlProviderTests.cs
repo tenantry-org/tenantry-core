@@ -1,7 +1,9 @@
+using AwesomeAssertions;
 using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
 #if NET10_0_OR_GREATER
 using MySql.Data.MySqlClient;
+using MySql.EntityFrameworkCore.Extensions;
 #else
 using MySqlConnector;
 #endif
@@ -37,6 +39,68 @@ public sealed class MySqlWriteIsolationTests(MySqlFixture fixture) : ProviderWri
 public sealed class MySqlPooledDatabasePerTenantTests(MySqlFixture fixture) : ProviderPooledDatabasePerTenantTests(fixture);
 
 public sealed class MySqlPooledGuardTests(MySqlFixture fixture) : ProviderPooledGuardTests(fixture);
+
+/// <summary>MySQL's default collation ignores case, under Pomelo's provider and Oracle's alike (event 2007).</summary>
+public sealed class MySqlTenantIdCollationTests
+{
+    [Fact]
+    public void StringTenantIdsWithoutACollation_AreLoggedAsEvent2007() =>
+        TenantIdCollationTests.Warnings<UncollatedContext, string>(UseMySql).Should().ContainSingle()
+            .Which.Message.Should().Contain("'UncollatedContext' has string tenant ids in tables whose TenantId column has no collation: Order.");
+
+    [Fact]
+    public void ACollationOnTheTable_SilencesIt() =>
+        TenantIdCollationTests.Warnings<TableCollationContext, string>(UseMySql).Should().BeEmpty();
+
+    [Fact]
+    public void ACollationOnTheColumn_SilencesIt() =>
+        TenantIdCollationTests.Warnings<ColumnCollationContext, string>(UseMySql).Should().BeEmpty();
+
+#if NET10_0_OR_GREATER
+    // Oracle's provider applies only its own ForMySQLHasCollation: EF Core's UseCollation leaves the server's default.
+    [Fact]
+    public void UnderOraclesProvider_UseCollationOnTheColumnOrTheModel_IsLoggedAsEvent2007()
+    {
+        TenantIdCollationTests.Warnings<RelationalColumnCollationContext, string>(UseMySql).Should().ContainSingle();
+        TenantIdCollationTests.Warnings<RelationalModelCollationContext, string>(UseMySql).Should().ContainSingle();
+    }
+
+    private sealed class RelationalColumnCollationContext(DbContextOptions options) : TenantIdCollationTests.ModelContext(options, modelBuilder =>
+        modelBuilder.Entity<TenantIdCollationTests.Order>().Property(order => order.TenantId).UseCollation("utf8mb4_bin"));
+
+    private sealed class RelationalModelCollationContext(DbContextOptions options) : TenantIdCollationTests.ModelContext(options, modelBuilder =>
+    {
+        RelationalModelBuilderExtensions.UseCollation(modelBuilder, "utf8mb4_bin");
+        modelBuilder.Entity<TenantIdCollationTests.Order>();
+    });
+#endif
+
+    private static DbContextOptionsBuilder<TContext> UseMySql<TContext>(DbContextOptionsBuilder<TContext> options)
+        where TContext : DbContext =>
+#if NET10_0_OR_GREATER
+        options.UseMySQL("Server=unused");
+#else
+        options.UseMySql("Server=unused", new MySqlServerVersion(new Version(8, 4, 0)));
+#endif
+
+    private sealed class UncollatedContext(DbContextOptions options) : TenantIdCollationTests.ModelContext(options, modelBuilder =>
+        modelBuilder.Entity<TenantIdCollationTests.Order>());
+
+    // Each provider's own: Pomelo's UseCollation on an entity type, and Oracle's ForMySQLHasCollation.
+    private sealed class TableCollationContext(DbContextOptions options) : TenantIdCollationTests.ModelContext(options, modelBuilder =>
+#if NET10_0_OR_GREATER
+        modelBuilder.Entity<TenantIdCollationTests.Order>().ForMySQLHasCollation("utf8mb4_bin"));
+#else
+        modelBuilder.Entity<TenantIdCollationTests.Order>().UseCollation("utf8mb4_bin"));
+#endif
+
+    private sealed class ColumnCollationContext(DbContextOptions options) : TenantIdCollationTests.ModelContext(options, modelBuilder =>
+#if NET10_0_OR_GREATER
+        modelBuilder.Entity<TenantIdCollationTests.Order>().Property(order => order.TenantId).ForMySQLHasCollation("utf8mb4_bin"));
+#else
+        modelBuilder.Entity<TenantIdCollationTests.Order>().Property(order => order.TenantId).UseCollation("utf8mb4_bin"));
+#endif
+}
 
 internal static partial class DatabaseContainers
 {

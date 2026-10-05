@@ -34,6 +34,7 @@ that tried to write another tenant's row.
 | 2004 | `TransactionNotCommitted` | Error | A save failed, or never finished, after sending statements in a transaction where a save wrote rows that depend on another of its statements' tenant check. EF Core could not roll back only that save (no savepoint, or a `TransactionScope`), so the transaction is rolled back instead of committed. `EntityType` is the entity whose check failed, or the context's type for any other failure, such as a caught save failure the application went on after. |
 | 2005 | `SaveInTransaction` | Debug | A save whose rows rely on another of its statements' tenant check runs in a transaction although `AutoTransactionBehavior` is `Never` (`OnSaveWithoutTransaction = UseTransaction`). |
 | 2006 | `UnmarkedEntityTypes` | Warning | A context's model has entity types that are neither tenant-owned nor marked as shared across tenants, and the application set `OnUnmarkedEntityType = Warn` (the default, `Allow`, logs nothing). Logged once for each model EF Core builds: usually once per context type, and again if EF Core drops the model from its cache. |
+| 2007 | `StringTenantIdCollation` | Warning | On SQL Server or MySQL, a context's model has `string` tenant ids in tables where neither the `TenantId` column, the table nor the model sets a collation, so the database's default, which ignores case, compares them ([String tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)). Logged once for each model EF Core builds, also in `dotnet ef` commands that start the application's host. |
 | 3001 | `OrdinaryOptionsReadAsTenant` | Warning | `IOptions<T>` of a type configured per tenant was read while a tenant is current. It gives the ordinary value, so the code most likely wants `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. Logged once per options type. |
 
 While a request's tenant is current, a log scope with one property, `TenantId`, is open, so every entry the request
@@ -56,6 +57,23 @@ using (logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId)))
     logger.LogInformation("Invoicing");
 }
 ```
+
+### Turning off a warning
+
+Two warnings report configuration that may be what you meant. Once you have checked that it is, stop them with
+`IgnoreWarnings`:
+
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .UseStore<AppTenantStore>()
+    .IgnoreWarnings(TenantryWarnings.StringTenantIdCollation));
+```
+
+It accepts only 2007 (`TenantryWarnings.StringTenantIdCollation`) and 3001
+(`TenantryWarnings.OrdinaryOptionsReadAsTenant`), and throws for any other of Tenantry's events. Events 2002 and 2006
+have their own switches, `OnMissingTenant` and `OnUnmarkedEntityType`. Each call adds to the ids of the others. Ids
+outside Tenantry's events, 1000 to 3999, are left to the package that logs them, which reads them with
+`TenantryWarnings.IsIgnored`.
 
 ## Traces
 

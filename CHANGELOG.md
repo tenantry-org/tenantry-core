@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   another registration or `ConfigureDbContext` of the context in the same project calls it (on EF Core 8, an earlier
   registration or one in another method); and, on EF Core 9 and later, for a context declared in another project,
   whose own registrations it cannot see. See [TNY1004](docs/analyzers.md#tny1004).
+- `tenant.IgnoreWarnings(…)`, which stops the warnings that report configuration that may be deliberate, named in
+  `TenantryWarnings`: 2007 and 3001. It throws for Tenantry's other events. Ids outside Tenantry's events are kept for
+  the package that logs them, which reads them with `TenantryWarnings.IsIgnored`. See
+  [Turning off a warning](docs/diagnostics.md#turning-off-a-warning).
+- Warning 2007, `StringTenantIdCollation`, in `Tenantry.EfCore`: with `string` tenant ids on SQL Server or MySQL, a
+  model with tenant-owned tables where neither the `TenantId` column, the table nor the model sets a collation is
+  logged once as it is built, naming those tables. The database's default collation there ignores case, so tenants
+  `acme` and `ACME` would read and change each other's rows. Any collation the provider applies (with Oracle's MySQL
+  provider, only `ForMySQLHasCollation`, as it does not apply `UseCollation`), or
+  `IgnoreWarnings(TenantryWarnings.StringTenantIdCollation)`, turns it off. See
+  [String tenant ids](docs/efcore-integration.md#string-tenant-ids-and-the-databases-collation).
 - Docs: a second per-tenant database beside the one `AddDbContextPerTenantDatabase` connects, through `AddDbContext`
   ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)); and notes that
   `AddDbContextFactory` by default, and `AddDbContext` with singleton options, keep the first tenant's connection

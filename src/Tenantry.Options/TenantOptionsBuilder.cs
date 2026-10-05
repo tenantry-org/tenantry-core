@@ -187,11 +187,14 @@ public sealed class TenantOptionsBuilder<TKey>
             sp.GetServices<IOptionsChangeTokenSource<TOptions>>()));
         services.TryAddSingleton<IOptionsMonitorCache<TOptions>>(sp => sp.GetRequiredService<TenantOptionsCache<TOptions>>());
 
-        // IOptions<TOptions> stays the ordinary value: a singleton that reads it once must not keep a tenant's.
+        // IOptions<TOptions> stays the ordinary value: a singleton that reads it once must not keep a tenant's. Its
+        // only message is event 3001, so an application that ignores that gives it no logger.
         services.TryAddSingleton<IOptions<TOptions>>(sp => new TenantFreeOptions<TOptions>(
             sp.GetRequiredService<IOptionsFactory<TOptions>>(),
             sp.GetRequiredService<ICurrentTenantId>(),
-            sp.GetService<ILoggerFactory>()?.CreateLogger(TenantOptionsLog.Category) ?? NullLogger.Instance));
+            TenantryWarnings.IsIgnored(sp, TenantryWarnings.OrdinaryOptionsReadAsTenant)
+                ? NullLogger.Instance
+                : sp.GetService<ILoggerFactory>()?.CreateLogger(TenantOptionsLog.Category) ?? NullLogger.Instance));
         services.TryAddScoped<IOptionsSnapshot<TOptions>>(sp => new TenantOptionsManager<TOptions>(
             sp.GetRequiredService<IOptionsFactory<TOptions>>(), sp.GetRequiredService<TenantOptionsCache<TOptions>>()));
 

@@ -70,7 +70,8 @@ apply them to every other tenant, and library code you do not own does the same.
 ordinary value, built with no tenant current, so a tenant's settings never reach code that keeps a value; code that
 should see the tenant's settings reads `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. The first time `IOptions<T>` is
 read while a tenant is current, Tenantry logs a warning (event 3001, [Diagnostics](diagnostics.md#logs)) naming the
-options type, since that code most likely expects the tenant's value.
+options type, since that code most likely expects the tenant's value; where it does not, turn the warning off with
+[`IgnoreWarnings`](diagnostics.md#turning-off-a-warning).
 
 Likewise, reading the monitor's `CurrentValue` once in a constructor keeps one tenant's value: read it where the value
 is used.

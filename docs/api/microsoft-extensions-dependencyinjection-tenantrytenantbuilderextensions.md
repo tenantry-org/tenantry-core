@@ -86,6 +86,37 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 
 A decorator should forward [`ITenantConnectionStringProvider<TKey>.CanGetSynchronously`](tenantry-itenantconnectionstringprovider.md) to the provider it wraps. Resolving the provider without any connection strings configured throws `InvalidOperationException`.
 
+### `IgnoreWarnings<TKey>(ITenantBuilder<TKey>, params int[])`
+
+Stops Tenantry logging the warnings `eventIds`, each about configuration the application may have chosen on purpose. [`TenantryWarnings`](tenantry-tenantrywarnings.md) names the ones it accepts.
+
+```csharp
+public static ITenantBuilder<TKey> IgnoreWarnings<TKey>(this ITenantBuilder<TKey> builder, params int[] eventIds) where TKey : IEquatable<TKey>, IParsable<TKey>
+```
+
+Type parameters:
+
+- `TKey`: The tenant identifier type.
+
+Parameters:
+
+- `builder` [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The tenant builder.
+- `eventIds` `int[]`: The warnings' event ids.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
+
+Exceptions:
+
+- `ArgumentException`: An id is one of Tenantry's events that [`TenantryWarnings`](tenantry-tenantrywarnings.md) does not name.
+
+Each call adds to the ids of the others. Ids outside Tenantry's events, 1000 to 3999, are kept for the package that logs them, which reads them with [`TenantryWarnings.IsIgnored`](tenantry-tenantrywarnings.md).
+
+```csharp
+builder.Services.AddTenantry<string>(tenant => tenant
+    .UseStore<AppTenantStore>()
+    .IgnoreWarnings(TenantryWarnings.StringTenantIdCollation));
+```
+
 ### `UseConnectionStrings<TKey>(ITenantBuilder<TKey>, Action<TenantConnectionStringOptions<TKey>>)`
 
 Configures how each tenant's connection string is found.

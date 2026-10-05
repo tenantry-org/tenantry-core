@@ -72,6 +72,20 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public void ReadingIOptionsAsATenant_LogsNothing_WhenTheApplicationIgnoresTheWarning()
+    {
+        RecordingLoggers loggers = new();
+        using var provider = Build(services => services
+            .AddSingleton<ILoggerFactory>(loggers)
+            .AddTenantry<string>(tenant => tenant.IgnoreWarnings(TenantryWarnings.OrdinaryOptionsReadAsTenant)));
+
+        using (MakeCurrent(provider, Acme))
+            provider.GetRequiredService<IOptions<BrandingOptions>>().Value.Colour.Should().Be("grey");
+
+        loggers.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ASingletonThatReadsIOptionsInItsConstructor_DoesNotKeepTheTenantThatCreatedIt()
     {
         // The usual pattern, _settings = options.CurrentValue: whatever it keeps, it keeps for every tenant.

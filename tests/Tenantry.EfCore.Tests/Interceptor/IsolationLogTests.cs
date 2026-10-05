@@ -107,6 +107,24 @@ public sealed class IsolationLogTests : IAsyncDisposable
         entry.Message.Should().Contain("Invoice").And.Contain("UnmarkedContext");
     }
 
+    [Fact]
+    public async Task StringTenantIdsOnSqlite_AreNotLoggedAsEvent2007()
+    {
+        // SQLite's default collation, BINARY, compares ids exactly. The context type is this test's own, so its model is
+        // built here.
+        _tenant.As("acme");
+        await using SqliteOrdersContext db = new(new DbContextOptionsBuilder<SqliteOrdersContext>()
+            .UseSqlite(_connection)
+            .UseApplicationServiceProvider(DbContextFactory.Services(
+                _tenant, configure: collection => collection.AddLogging(logging => logging.AddProvider(_logs))))
+            .UseTenantry()
+            .Options);
+
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        (await db.Orders.CountAsync(TestContext.Current.CancellationToken)).Should().Be(0);
+        _logs.Entries.Should().NotContain(e => e.EventId.Id == 2007);
+    }
+
     public async ValueTask DisposeAsync() => await _connection.DisposeAsync();
 
     private async Task<TestDbContext> CreateAsync(EfCoreIsolationOptions? isolation = null)
@@ -136,6 +154,11 @@ public sealed class IsolationLogTests : IAsyncDisposable
         public DbSet<Order> Orders => Set<Order>();
 
         public DbSet<Invoice> Invoices => Set<Invoice>();
+    }
+
+    private sealed class SqliteOrdersContext(DbContextOptions<SqliteOrdersContext> options) : DbContext(options)
+    {
+        public DbSet<Order> Orders => Set<Order>();
     }
 
     private sealed class Recorder : ILoggerProvider

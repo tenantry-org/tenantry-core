@@ -21,6 +21,12 @@ internal sealed class TenantModelCustomizer(ModelCustomizerDependencies dependen
             contributor.Configure(modelBuilder, context);
         }
 
-        TenantIsolation.ForModel(modelBuilder.Model)?.ConfigureModel(modelBuilder, context, services);
+        var isolation = TenantIsolation.ForModel(modelBuilder.Model);
+        isolation?.ConfigureModel(modelBuilder, context, services);
+
+        if (isolation?.KeyType == typeof(string))
+        {
+            TenantIdCollation.WarnIfCaseInsensitive(modelBuilder.Model, context, services);
+        }
     }
 }

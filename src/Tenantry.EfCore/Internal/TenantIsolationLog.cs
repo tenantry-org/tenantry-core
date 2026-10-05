@@ -52,4 +52,15 @@ internal static partial class TenantIsolationLog
         "(EfCoreIsolationOptions.OnUnmarkedEntityType = Warn). Logged once for each model EF Core builds",
         EventName = "UnmarkedEntityTypes")]
     public static partial void UnmarkedEntityTypes(ILogger logger, string context, string entityTypes);
+
+    [LoggerMessage(2007, LogLevel.Warning,
+        "'{Context}' has string tenant ids in tables whose TenantId column has no collation: {Tables}. The database " +
+        "compares them under its own collation, which by default on SQL Server and MySQL ignores case, so " +
+        "tenants whose ids differ only in case, such as acme and ACME, read and change each other's rows. Give " +
+        "tenants ids the collation cannot confuse, kept unique by a store keyed by the id under the same collation; " +
+        "or set a binary collation on TenantId; or use Guid or int ids. When the ids cannot collide, ignore this " +
+        "warning with IgnoreWarnings(TenantryWarnings.StringTenantIdCollation). Logged once for each model EF Core " +
+        "builds",
+        EventName = "StringTenantIdCollation")]
+    public static partial void StringTenantIdCollation(ILogger logger, string context, string tables);
 }
