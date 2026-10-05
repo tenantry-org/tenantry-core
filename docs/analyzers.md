@@ -80,7 +80,7 @@ What it looks at:
   or `<Type>Id` property, a `[Key]`, or a `[PrimaryKey]` without `TenantId`). A registry with a key of its own and a
   `TenantId` column, in a context with tenant-owned types, is reported: mark it `[SharedAcrossTenants]`.
 
-Each type is reported once, where it is first mapped. The rule decides once the whole project is compiled, so `dotnet
+Each type is reported once, where it is first mapped outside generated code. The rule decides once the whole project is compiled, so `dotnet
 build` reports it, while an IDE may show it only after a build or with analysis of the whole solution turned on. For
 the same reason it has no code fix: Visual Studio and Rider offer fixes only for diagnostics found file by file.
 
