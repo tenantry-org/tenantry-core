@@ -85,32 +85,37 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
     // The calls that make up the query the call is in, which EF Core ignores the filters for wherever the call is: the
     // call; the calls before it in each query it takes (the query it is called on, a Join's inner query, the other query
     // of a Union, Concat, Intersect or Except); and the calls after it that take its result. Through casts, both arms of
-    // a conditional, and a local the query is kept in within the method.
+    // a conditional, and a local the query is kept in within the method. Only the call's result, and what takes it, is
+    // followed forward: a call reached going back may also start other queries, which are not this one.
     private static IEnumerable<IInvocationOperation> Query(IInvocationOperation start, KnownTypes types)
     {
         var seen = new HashSet<IOperation>();
-        var pending = new Stack<IInvocationOperation>();
-        pending.Push(start);
+        var walked = new HashSet<(IOperation Call, bool Forward)>();
+        var pending = new Stack<(IInvocationOperation Call, bool Forward)>();
+        pending.Push((start, true));
 
         while (pending.Count > 0)
         {
-            var call = pending.Pop();
+            var (call, forward) = pending.Pop();
 
-            if (!seen.Add(call))
+            if (!walked.Add((call, forward)))
                 continue;
 
-            yield return call;
+            if (seen.Add(call))
+                yield return call;
 
             foreach (var argument in call.Arguments)
                 Before(argument.Value, types, seen, pending);
 
-            After(call, types, seen, pending);
+            if (forward)
+                After(call, types, seen, pending);
         }
     }
 
     // The calls on a query that make up a value: an extension method on a query, either arm of a conditional, or the
     // value last assigned to a local before it is read.
-    private static void Before(IOperation? value, KnownTypes types, HashSet<IOperation> seen, Stack<IInvocationOperation> pending)
+    private static void Before(
+        IOperation? value, KnownTypes types, HashSet<IOperation> seen, Stack<(IInvocationOperation, bool)> pending)
     {
         while (value is IConversionOperation conversion)
             value = conversion.Operand;
@@ -118,7 +123,7 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         switch (value)
         {
             case IInvocationOperation call when TakesQuery(call, types):
-                pending.Push(call);
+                pending.Push((call, false));
                 break;
 
             case IConditionalOperation conditional:
@@ -133,7 +138,8 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
     }
 
     // The calls that take a query's result: passed to an extension method on a query, or kept in a local and read later.
-    private static void After(IOperation query, KnownTypes types, HashSet<IOperation> seen, Stack<IInvocationOperation> pending)
+    private static void After(
+        IOperation query, KnownTypes types, HashSet<IOperation> seen, Stack<(IInvocationOperation, bool)> pending)
     {
         var node = query;
 
@@ -146,7 +152,7 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         switch (node.Parent)
         {
             case IArgumentOperation { Parent: IInvocationOperation call } when TakesQuery(call, types):
-                pending.Push(call);
+                pending.Push((call, true));
                 break;
 
             case ISimpleAssignmentOperation { Target: ILocalReferenceOperation target } assignment
@@ -165,8 +171,9 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // The reads of a local after it is assigned, in the method, until it is assigned a query that does not start from it.
-    // None for a local a lambda or local function assigns.
+    // The reads of a local after it is assigned, in the method, in source order, until it is assigned a query that does not
+    // start from it; leaving out those in another branch of an if/else or switch. None for a local a lambda or local
+    // function assigns.
     private static IEnumerable<IOperation> LaterReads(ILocalSymbol local, IOperation assigned)
     {
         var (references, assignments) = Uses(local, assigned);
@@ -176,7 +183,7 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
 
         foreach (var reference in references)
         {
-            if (reference.Syntax.SpanStart < assigned.Syntax.Span.End)
+            if (reference.Syntax.SpanStart < assigned.Syntax.Span.End || Exclusive(assigned, reference))
                 continue;
 
             if (reference.Parent is ISimpleAssignmentOperation assignment && assignment.Target == reference)
@@ -191,19 +198,45 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // The value last assigned to a local before it is read: its initializer, or an assignment that ends before the read.
+    // The value last assigned to a local before it is read, in source order: its initializer, or an assignment that ends
+    // before the read and is not in another branch of an if/else or switch.
     private static IOperation? LastValue(ILocalReferenceOperation reference)
     {
         var (_, assignments) = Uses(reference.Local, reference);
-        IOperation? last = null;
 
-        foreach (var (end, value) in assignments ?? [])
+        return (assignments ?? [])
+            .LastOrDefault(assignment => assignment.End <= reference.Syntax.SpanStart && !Exclusive(assignment.Value, reference))
+            .Value;
+    }
+
+    // Whether two operations are in different branches of one if/else, conditional or switch, with no loop around it that
+    // could run both.
+    private static bool Exclusive(IOperation first, IOperation second)
+    {
+        var path = new Dictionary<IOperation, IOperation>();
+
+        for (IOperation child = first, current = first.Parent!; current is not null; child = current, current = current.Parent!)
+            path[current] = child;
+
+        for (IOperation child = second, current = second.Parent!; current is not null; child = current, current = current.Parent!)
         {
-            if (end <= reference.Syntax.SpanStart)
-                last = value;
+            if (!path.TryGetValue(current, out var other))
+                continue;
+
+            var branches = current switch
+            {
+                IConditionalOperation conditional => other != child && other != conditional.Condition && child != conditional.Condition,
+                ISwitchOperation => other != child,
+                _ => false,
+            };
+
+            for (var outer = current.Parent; branches && outer is not null; outer = outer.Parent)
+                branches = outer is not ILoopOperation;
+
+            return branches;
         }
 
-        return last;
+        return false;
     }
 
     // A local's references and assignments in the method, in source order; no assignments when a lambda or a local
@@ -259,7 +292,7 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    // Whether a query starts from the local, as q.Where(...).Include(...) does.
+    // Whether a query starts from the local, as q.Where(...).Include(...) does, or both arms of a conditional do.
     private static bool StartsFrom(IOperation? value, ILocalSymbol local)
     {
         while (true)
@@ -272,6 +305,8 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
                 case IInvocationOperation { TargetMethod.IsExtensionMethod: true, Arguments.Length: > 0 } call:
                     value = call.Arguments[0].Value;
                     break;
+                case IConditionalOperation conditional:
+                    return StartsFrom(conditional.WhenTrue, local) && StartsFrom(conditional.WhenFalse, local);
                 default:
                     return value is ILocalReferenceOperation reference &&
                            SymbolEqualityComparer.Default.Equals(reference.Local, local);

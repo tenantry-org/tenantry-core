@@ -110,14 +110,17 @@ filter, read the tenant-owned rows in a query of their own, without `IgnoreQuery
 EF Core ignores the filters for the whole query wherever the call is, so the rule checks every call that makes up the
 query: the calls before `IgnoreQueryFilters()` and after it, the other queries the query takes (a `Join`'s inner query,
 the other query of a `Union`, `Concat`, `Intersect` or `Except`), through casts and both arms of a conditional, and
-through a local the query is kept in. In each, it looks at the type arguments of a call that returns a query, at the
+through a local the query is kept in within the method. A read of a local takes the local's last assignment before it
+in source order, and assignments on different branches of one if/else, conditional or switch, with no loop around it,
+are not taken as one query. In each call, it looks at the type arguments of a call that returns a query, at the
 navigations an `Include` string names, and at the navigations and queries in the lambdas EF Core translates.
 
 What it does not see:
 
 - calls on the query in another method, after it is returned or passed there, or kept in a field;
-- a local after it is assigned a query that does not start from it (`q = db.Categories.Where(...)`), and a local a
-  lambda or local function assigns;
+- a local after it is assigned anything but extension calls on itself (`q = q.Where(...)`) or a conditional whose
+  arms both are: `q = db.Categories.Where(...)`, `q = Same(q)` or a deconstruction stops it; and a local a lambda or
+  local function assigns;
 - a call in a subquery inside another query's lambda, which is checked against the subquery only;
 - what runs in memory: after `AsEnumerable()`, and the selectors of `ToDictionaryAsync` and other methods that take a
   delegate rather than an expression;

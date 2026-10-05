@@ -260,6 +260,131 @@ public sealed class QueryTests
             """);
 
     [Fact]
+    public Task IgnoreQueryFilters_OnALocalThatAlsoStartsAnotherQuery_SeesOnlyItsOwnQuery() =>
+        Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
+            public static class Reports
+            {
+                public static async Task<int> SeparateFirst(AppDbContext db, int id)
+                {
+                    var categories = db.Categories.Where(c => c.Id == id);
+                    var visible = await categories.Include(c => c.Purchases).ToListAsync();
+                    var total = await categories.IgnoreQueryFilters().CountAsync();
+                    return visible.Count + total;
+                }
+
+                public static async Task<int> SeparateAfter(AppDbContext db, int id)
+                {
+                    var categories = db.Categories.Where(c => c.Id == id);
+                    var total = await categories.IgnoreQueryFilters().CountAsync();
+                    var visible = await categories.Include(c => c.Purchases).ToListAsync();
+                    return visible.Count + total;
+                }
+            }
+            """);
+
+    [Fact]
+    public Task IgnoreQueryFilters_OnOneBranch_IsNotJoinedToAQueryOnAnother_OutsideALoop() =>
+        Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
+            public static class Reports
+            {
+                public static List<Category> IfElse(AppDbContext db, bool all)
+                {
+                    var categories = db.Categories.AsQueryable();
+
+                    if (all)
+                        categories = categories.IgnoreQueryFilters();
+                    else
+                        categories = categories.Include(c => c.Purchases);
+
+                    return categories.ToList();
+                }
+
+                public static List<Category> ElseIf(AppDbContext db, bool all)
+                {
+                    var categories = db.Categories.AsQueryable();
+
+                    if (all)
+                        categories = categories.Include(c => c.Purchases);
+                    else
+                        categories = categories.IgnoreQueryFilters();
+
+                    return categories.ToList();
+                }
+
+                public static List<Category> Switch(AppDbContext db, int mode)
+                {
+                    var categories = db.Categories.AsQueryable();
+
+                    switch (mode)
+                    {
+                        case 1:
+                            categories = categories.IgnoreQueryFilters();
+                            break;
+                        default:
+                            categories = categories.Include(c => c.Purchases);
+                            break;
+                    }
+
+                    return categories.ToList();
+                }
+
+                // The condition runs before the branch.
+                public static List<Category> InTheCondition(AppDbContext db)
+                {
+                    var categories = db.Categories.AsQueryable();
+
+                    if ((categories = {|TNY1002:categories.IgnoreQueryFilters()|}).Any())
+                        return categories.Include(c => c.Purchases).ToList();
+
+                    return [];
+                }
+
+                // Both branches can run, one after the other.
+                public static List<Category> Loop(AppDbContext db, bool[] steps)
+                {
+                    var categories = db.Categories.AsQueryable();
+
+                    foreach (var all in steps)
+                    {
+                        if (all)
+                            categories = {|TNY1002:categories.IgnoreQueryFilters()|};
+                        else
+                            categories = categories.Include(c => c.Purchases);
+                    }
+
+                    return categories.ToList();
+                }
+            }
+            """);
+
+    [Fact]
+    public Task IgnoreQueryFilters_FollowsALocalThroughAConditionalReassignment() =>
+        Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
+            public static class Reports
+            {
+                public static List<Category> Narrowed(AppDbContext db, bool live)
+                {
+                    var categories = {|TNY1002:db.Categories.IgnoreQueryFilters()|};
+                    categories = live ? categories.Where(c => !c.IsDeleted) : categories;
+                    return categories.Include(c => c.Purchases).ToList();
+                }
+
+                public static List<Category> Replaced(AppDbContext db, bool live)
+                {
+                    var categories = db.Categories.IgnoreQueryFilters();
+                    categories = live ? db.Categories.Where(c => !c.IsDeleted) : categories;
+                    return categories.Include(c => c.Purchases).ToList();
+                }
+
+                // A query used as a condition does not continue into what the conditional chooses.
+                public static List<Category> AsACondition(AppDbContext db) =>
+                    (db.Categories.IgnoreQueryFilters().Any() ? db.Categories.AsQueryable() : db.Categories.Where(c => !c.IsDeleted))
+                        .Include(c => c.Purchases)
+                        .ToList();
+            }
+            """);
+
+    [Fact]
     public Task IgnoreQueryFilters_SeesNoQueryReturnedFromOrPassedToAMethod() =>
         Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
             public static class Reports
