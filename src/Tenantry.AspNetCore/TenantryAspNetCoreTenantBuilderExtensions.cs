@@ -370,7 +370,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="validator">Returns <see langword="true"/> when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with <see cref="TenantResolutionOptions{TKey}.AccessDeniedStatusCode"/>, and any other runs without one.</param>
+    /// <param name="validator">Returns <see langword="true"/> when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with <see cref="TenantResolutionOptions{TKey}.AccessDeniedStatusCode"/>, and any other runs without one (with <c>app.UseTenantResolution()</c>, every endpoint refuses a signed-in request).</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> ValidateTenantAccess<TKey>(
         this ITenantBuilder<TKey> builder,
@@ -389,7 +389,7 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
-    /// <param name="validator">Returns <see langword="true"/> when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with <see cref="TenantResolutionOptions{TKey}.AccessDeniedStatusCode"/>, and any other runs without one. It receives the request's cancellation token.</param>
+    /// <param name="validator">Returns <see langword="true"/> when the request may use the resolved tenant; otherwise an endpoint that needs a tenant refuses the request with <see cref="TenantResolutionOptions{TKey}.AccessDeniedStatusCode"/>, and any other runs without one (with <c>app.UseTenantResolution()</c>, every endpoint refuses a signed-in request). It receives the request's cancellation token.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     public static ITenantBuilder<TKey> ValidateTenantAccess<TKey>(
         this ITenantBuilder<TKey> builder,
