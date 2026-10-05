@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `X-Tenant-Id` header and checks it against the caller's JWT `tenant` claims, or
   `dotnet new tenantry-worker -n Orders.Worker`, a worker service with EF Core that runs each message as the tenant it
   names with `RunInScopeAsync`. The projects reference the Tenantry packages of the templates' version;
-  `--TenantryVersion` picks another.
+  `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK, though an older
+  SDK can install the templates and create a project.
 
 ### Fixed
 
