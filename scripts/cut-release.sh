@@ -44,7 +44,7 @@ command -v gh > /dev/null || fail "gh, the GitHub CLI, is needed to check master
 head="$(git rev-parse master)"
 passed="$(gh run list --repo "$(git remote get-url origin)" --workflow ci.yml --branch master --event push \
   --commit "$head" --status success --json databaseId --jq 'length')" ||
-  fail "gh could not read master's CI runs (above): run gh auth login, or try again."
+  fail "gh could not read master's CI runs (above): origin must be a GitHub URL, and gh signed in (gh auth login)."
 [[ "$passed" != 0 ]] || fail "CI has not passed on master's head, $head: wait for its push's run, or fix master first."
 ! git rev-parse --verify --quiet "refs/heads/$branch" > /dev/null || fail "$branch already exists locally."
 absent_on_origin "refs/heads/$branch" || fail "$branch already exists on origin, or origin could not be read."
