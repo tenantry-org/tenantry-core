@@ -159,8 +159,11 @@ jobs:
           path: ./artifacts
 
       - name: Attest the packages' build provenance
-        # Signed with this workflow's identity: `gh attestation verify <package> --repo tenantry-org/tenantry-core`
-        # shows a package was built by this workflow from the tagged commit.
+        # Signed with this workflow's identity, for the packages as built, which the GitHub release attaches:
+        # `gh attestation verify <package> --repo tenantry-org/tenantry-core` on one of those shows it was built by
+        # this workflow from the tagged commit. NuGet.org's copy carries NuGet.org's repository signature too, so it
+        # hashes differently; `dotnet nuget verify --all` on it prints its content hash, the SHA-512 of the attested
+        # package (RELEASING.md).
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -206,15 +209,17 @@ jobs:
         run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
 
       - name: Create GitHub Release
-        # The packages are on NuGet.org; the release carries their checksums and SBOMs. A version with a
-        # prerelease suffix (v0.6.0-rc.1) is a prerelease, and only the highest version is the latest release: a patch
-        # to an older minor is not.
+        # The packages are on NuGet.org; the release carries them as built, which the attestations and checksums
+        # match, and their SBOMs. A version with a prerelease suffix (v0.6.0-rc.1) is a prerelease, and only the
+        # highest version is the latest release: a patch to an older minor is not.
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           body_path: ${{ runner.temp }}/release-notes.md
           prerelease: ${{ contains(github.ref_name, '-') }}
           make_latest: ${{ needs.source.outputs.latest }}
           files: |
+            ./artifacts/*.nupkg
+            ./artifacts/*.snupkg
             ./artifacts/SHA256SUMS
             ./artifacts/sbom/*.cdx.json
 
@@ -243,7 +248,7 @@ jobs:
           ls ./artifacts/sbom
           echo "A release would attest each package's provenance, push each .nupkg to NuGet.org, with any .snupkg"
           echo "beside it to the NuGet.org symbol server, and create a GitHub release with its CHANGELOG.md section as"
-          echo "notes and the packages' checksums and SBOMs attached."
+          echo "notes and the packages, their checksums and SBOMs attached."
 
       - name: Show the release notes
         if: inputs.version != ''

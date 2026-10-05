@@ -110,9 +110,11 @@ put the tagged commit there, reruns the CI gate on it (without SonarCloud), incl
 checks, then **pauses for approval** in the `release` environment (only `v*` tags can deploy to it) and publishes those
 same packages, with their symbol packages, to NuGet.org via OIDC trusted publishing. The GitHub release's notes are the
 version's section of `CHANGELOG.md` (`scripts/release-notes.sh`), and a tag without one fails before anything is built.
-The release attests each package's build provenance and attaches the packages' checksums (`SHA256SUMS`) and a CycloneDX
-SBOM per package. A tag with a prerelease suffix makes a GitHub prerelease, and only the highest released version is
-marked as the latest GitHub release. [RELEASING.md](RELEASING.md) has the steps.
+The release attests each package's build provenance and attaches the packages as built, their checksums (`SHA256SUMS`)
+and a CycloneDX SBOM per package. NuGet.org's copy of a package also carries NuGet.org's repository signature, so it
+hashes differently from the attached one ([The release](RELEASING.md#the-release) says how to check each). A tag
+with a prerelease suffix makes a GitHub prerelease, and only the highest released version is marked as the latest
+GitHub release. [RELEASING.md](RELEASING.md) has the steps.
 
 `master` never releases a stable version. Each push to it publishes the library packages, not the templates package,
 to NuGet.org as a prerelease (`0.7.0-alpha.0.126`) once Build & Test and the Windows build have passed, with no

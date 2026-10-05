@@ -110,6 +110,14 @@ NuGet.org.
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be
    unlisted afterwards, but never deleted or replaced.
 
+The GitHub release attaches the packages as the workflow built them, which its checksums (`SHA256SUMS`) and build
+provenance attestations are for. NuGet.org adds its repository signature to each package it serves, so its copy
+hashes differently and has no attestation of its own. `gh attestation verify Tenantry.Core.0.7.0.nupkg --repo
+tenantry-org/tenantry-core` checks an attached package. `dotnet nuget verify --all tenantry.core.0.7.0.nupkg` checks
+NuGet.org's signature on its copy and prints its content hash, the SHA-512 of the package before NuGet.org signed it,
+which equals the attached package's `openssl dgst -sha512 -binary Tenantry.Core.0.7.0.nupkg | base64`. Releases up to
+0.7.0 attach only the checksums and SBOMs.
+
 Before anything is built, the workflow checks that no package already has the version on NuGet.org
 (`scripts/check-unpublished.sh`), and the push refuses a duplicate rather than skipping it. So a tag moved or pushed
 again for a released version fails, instead of creating a GitHub release whose checksums do not match the published
