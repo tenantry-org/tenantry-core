@@ -23,8 +23,9 @@ builder.Services.AddTenantry<Guid>(tenant =>
 With this on, a request that does not resolve a tenant gets `400 Bad Request`, and one whose tenant is unknown or
 refused is rejected too ([status codes](aspnetcore-integration.md#status-codes)). Individual endpoints opt out with
 `AllowMissingTenant()`. On an endpoint that does not require a tenant, a request whose tenant is unknown or refused
-continues without one, except that with `app.UseTenantResolution()` a signed-in request whose tenant is refused is
-refused on every endpoint ([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
+continues without one, except that with `app.UseTenantResolution()` a signed-in request whose tenant was current
+during authentication, and which the access validators refuse, is rejected on every endpoint
+([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
 
 ### Per-endpoint
 
@@ -57,10 +58,11 @@ Endpoint metadata overrides `RequireTenantByDefault()`. If an endpoint has both 
 
 A tenant that resolves and is in the store is not necessarily one the caller may use: a user of Acme should not be
 able to send `X-Tenant-Id: globex`. Access validators run after the tenant is found in the store and before it is
-made current. If validation fails, an endpoint that requires a tenant
-responds `403 Forbidden`, and any other endpoint runs without a tenant; either way the refused tenant is never
-current. With `app.UseTenantResolution()`, a signed-in request whose tenant is refused gets `403 Forbidden` on every
-endpoint ([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
+made current. If validation fails, an endpoint that requires a tenant responds `403 Forbidden`, and any other endpoint
+runs without a tenant; either way the endpoint never runs with the refused tenant. With `app.UseTenantResolution()`,
+the tenant is already current during authentication, before the validators run, and a signed-in request whose tenant
+they refuse gets `403 Forbidden` on every endpoint
+([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
 
 Once any validator is configured, a request for a tenant that does not exist gets the same response as one for a
 tenant the caller may not use, so an authenticated user of one tenant cannot discover which others exist.

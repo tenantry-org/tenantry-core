@@ -29,7 +29,8 @@ namespace Tenantry.AspNetCore.Internal;
 /// <see cref="TenantResolutionOptions{TKey}"/> and, when an <see cref="IProblemDetailsService"/> is registered, a
 /// problem details body. Any other endpoint runs without a tenant: a request whose identifier names no tenant, or names
 /// one an access validator refuses, is treated as one without an identifier, so it tells a caller nothing about which
-/// tenants exist.
+/// tenants exist. With <c>app.UseTenantResolution()</c>, a signed-in request whose tenant was current during
+/// authentication, and that an access validator refuses, is rejected on every endpoint.
 /// </para>
 /// </remarks>
 internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>

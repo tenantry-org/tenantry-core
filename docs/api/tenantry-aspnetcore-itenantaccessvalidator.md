@@ -4,7 +4,7 @@ Namespace: `Tenantry.AspNetCore` · Package: `Tenantry.AspNetCore` · [API refer
 
 Decides whether a request may use the tenant it names.
 
-Register one with `tenant.ValidateTenantAccess<TValidator>()`. It is created in each request's scope, so it can depend on scoped services such as a `DbContext`. Every validator must allow a request before its tenant is made current. A request refused by one gets [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md) on an endpoint that needs a tenant, and continues without a tenant on any other. With `app.UseTenantResolution()`, a signed-in request it refuses gets that status on every endpoint.
+Register one with `tenant.ValidateTenantAccess<TValidator>()`. It is created in each request's scope, so it can depend on scoped services such as a `DbContext`. Every validator must allow a request before its endpoint runs with the tenant. A request refused by one gets [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md) on an endpoint that needs a tenant, and continues without a tenant on any other, unless `app.UseTenantResolution()` made the tenant current during authentication and the request is signed in: then it gets that status on every endpoint.
 
 ```csharp
 public sealed class MembershipValidator(AppDbContext db) : ITenantAccessValidator<Guid>

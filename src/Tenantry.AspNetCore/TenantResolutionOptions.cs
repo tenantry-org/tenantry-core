@@ -15,8 +15,10 @@ namespace Tenantry.AspNetCore;
 /// repeats the identifier the request sent. <see cref="OnRejected"/> can write another response.
 /// </para>
 /// <para>
-/// Only an endpoint that needs a tenant rejects a request. On any other endpoint, a request whose identifier names
-/// no tenant, or names a tenant it may not use, continues without a tenant.
+/// An endpoint that needs a tenant rejects a request without a usable one. On any other endpoint, a request whose
+/// identifier names no tenant, or names a tenant it may not use, continues without a tenant, unless
+/// <c>app.UseTenantResolution()</c> made that tenant current during authentication and the request is signed in: then
+/// it is rejected with <see cref="AccessDeniedStatusCode"/>.
 /// </para>
 /// </remarks>
 public sealed class TenantResolutionOptions<TKey>

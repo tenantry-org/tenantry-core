@@ -111,9 +111,9 @@ Check for the active status, as here, rather than the suspended one, so a descri
 rather than served. For a check that needs services, implement `ITenantActivityValidator<TKey>` and register it as a
 singleton; every registered check must allow the tenant. Tenantry then refuses an inactive tenant:
 
-- An HTTP request gets `403 Forbidden` where a tenant is required, and runs without a tenant elsewhere, as for a
-  tenant an [access validator](access-control.md#validating-tenant-access) refuses. `OnRejected` is told the reason
-  is `Inactive`, and `InactiveTenantStatusCode` changes the status (see
+- An HTTP request gets `403 Forbidden` where a tenant is required, and runs without a tenant elsewhere, even with
+  `app.UseTenantResolution()`, which does not make an inactive tenant current. `OnRejected` is told the reason is
+  `Inactive`, and `InactiveTenantStatusCode` changes the status (see
   [Status codes](aspnetcore-integration.md#status-codes)).
 - `RunInScopeAsync` throws `TenantInactiveException`, a `TenantNotResolvedException`.
 - Tenantry.Pro's background services, schedulers and message integrations skip it.

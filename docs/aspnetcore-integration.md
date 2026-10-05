@@ -64,8 +64,8 @@ For each request, the middleware:
 A request to an endpoint that does not require a tenant is not rejected: when its identifier names no tenant, or one
 that is refused, it continues without a tenant, as if it had no identifier. So a `www.` host or a stale header does
 not break your login and health endpoints. With `app.UseTenantResolution()` there is one exception: a signed-in
-request whose tenant the access validators refuse is refused on every endpoint, since it was authenticated as that
-tenant ([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
+request whose tenant was current during authentication, and which the access validators refuse, is refused on every
+endpoint ([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
 
 Resolvers and access validators added by type (`UseResolver<TResolver>()`, `ValidateTenantAccess<TValidator>()`) are
 created in the request's service scope, so they can depend on a scoped `DbContext`. The store is read through

@@ -6,7 +6,7 @@ How `app.UseTenantry()` treats requests: whether they need a tenant, the status 
 
 A rejected request gets the status code and, when an `IProblemDetailsService` is registered (`builder.Services.AddProblemDetails()`), a problem details body; otherwise an empty body. The body never repeats the identifier the request sent. [`TenantResolutionOptions<TKey>.OnRejected`](tenantry-aspnetcore-tenantresolutionoptions.md) can write another response.
 
-Only an endpoint that needs a tenant rejects a request. On any other endpoint, a request whose identifier names no tenant, or names a tenant it may not use, continues without a tenant.
+An endpoint that needs a tenant rejects a request without a usable one. On any other endpoint, a request whose identifier names no tenant, or names a tenant it may not use, continues without a tenant, unless `app.UseTenantResolution()` made that tenant current during authentication and the request is signed in: then it is rejected with [`TenantResolutionOptions<TKey>.AccessDeniedStatusCode`](tenantry-aspnetcore-tenantresolutionoptions.md).
 
 ```csharp
 public sealed class TenantResolutionOptions<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>
