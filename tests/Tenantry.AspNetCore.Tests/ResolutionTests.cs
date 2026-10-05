@@ -556,7 +556,7 @@ public sealed class ResolutionTests
     }
 
     [Fact]
-    public async Task ARefusedRequestsLog_NamesASignedInUserWithoutANameByItsSubject_AndNeverAsAnonymous()
+    public async Task ARefusedRequestsLog_NamesASignedInUserWithoutANameByItsIdentifier_AndNeverAsAnonymous()
     {
         var (app, logs) = await StartWithLogsAsync<string>(
             tenant => tenant
@@ -573,7 +573,7 @@ public sealed class ResolutionTests
         await using var _ = app;
         using var client = app.GetTestClient();
 
-        foreach (var user in new[] { null, "-", "user-1" })
+        foreach (var user in new[] { null, "-", "user-1", "id:user-2" })
         {
             using HttpRequestMessage request = new(HttpMethod.Get, "/required");
             request.Headers.Add("X-Tenant-Id", "globex");
@@ -589,7 +589,8 @@ public sealed class ResolutionTests
         logs.For(1005).Select(e => e.Message).Should().SatisfyRespectively(
             anonymous => anonymous.Should().Contain("by user '(anonymous)'"),
             unnamed => unnamed.Should().Contain("by user '(unnamed)'"),
-            subject => subject.Should().Contain("by user 'user-1'"));
+            subject => subject.Should().Contain("by user 'user-1'"),
+            identifier => identifier.Should().Contain("by user 'user-2'"));
     }
 
     [Fact]
@@ -947,7 +948,8 @@ public sealed class ResolutionTests
             ValueTask.FromResult(membership.Allows(tenant));
     }
 
-    // Signs in a user only for a request with an X-User header: with its value as the sub claim, or no claim for "-".
+    // Signs in a user only for a request with an X-User header: with its value as the sub claim, after "id:" as the name
+    // identifier claim, or no claim for "-".
     private sealed class HeaderUser(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
@@ -963,7 +965,14 @@ public sealed class ResolutionTests
                 return Task.FromResult(AuthenticateResult.NoResult());
             }
 
-            Claim[] claims = value == "-" ? [] : [new Claim("sub", value.ToString())];
+            var name = value.ToString();
+            Claim[] claims = name switch
+            {
+                "-" => [],
+                _ when name.StartsWith("id:", StringComparison.Ordinal) =>
+                    [new Claim(ClaimTypes.NameIdentifier, name["id:".Length..])],
+                _ => [new Claim("sub", name)],
+            };
             ClaimsPrincipal user = new(new ClaimsIdentity(claims, Name));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(user, Name)));
         }
