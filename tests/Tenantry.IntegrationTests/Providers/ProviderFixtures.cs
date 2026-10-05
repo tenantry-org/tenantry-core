@@ -68,7 +68,25 @@ internal static partial class DatabaseContainers
     public static IDatabaseContainer PostgreSql { get; } = new PostgreSqlBuilder(ContainerImages.PostgreSql).Build();
 
     /// <summary>Starts every container the first time it is called; waits for <paramref name="container"/>.</summary>
-    public static Task StartedAsync(IDatabaseContainer container) => Started.Value[container];
+    public static async Task StartedAsync(IDatabaseContainer container)
+    {
+        try
+        {
+            await Started.Value[container];
+        }
+        catch
+        {
+            // xUnit creates no further fixture once one fails, so none would dispose the containers started for them:
+            // once every start has finished, successful or not, dispose them all. A fixture xUnit did create disposes
+            // its container again, which Testcontainers allows.
+            await Task.WhenAll(Started.Value.Select(async started =>
+            {
+                await Task.WhenAny(started.Value);
+                await started.Key.DisposeAsync();
+            }));
+            throw;
+        }
+    }
 
     private static Dictionary<IDatabaseContainer, Task> StartAll()
     {
