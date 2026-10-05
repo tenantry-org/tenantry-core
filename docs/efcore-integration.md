@@ -295,9 +295,10 @@ The guard cannot see SQL you run on `Database.GetDbConnection()`. A streaming or
 tenant changed keeps reading from its database, whose rows belong to the tenant current when it started. Use SQLite
 in-memory tenant databases only in tests: deleting one runs no command the guard can check.
 
-Do not read the connection string yourself in an `AddDbContextPool` or `AddPooledDbContextFactory` callback: it runs
-once, and EF Core keeps a pooled context's connection string between leases, so every lease would use the first
-tenant's database.
+Do not read the connection string yourself in the options callback of `AddDbContextPool`, `AddPooledDbContextFactory`
+or `AddDbContextFactory`, or of `AddDbContext` with `optionsLifetime: ServiceLifetime.Singleton`: each keeps its options
+as a singleton and runs the callback once, so every context, for every tenant, would use the first tenant's database.
+Use `AddDbContextPerTenantDatabase`.
 
 `UseConnectionStrings` also registers `ITenantConnectionStringProvider<TKey>`, which returns a given tenant's
 connection string (`Get(tenant)`, `GetAsync(tenant)`) for code that visits tenants without making each one current,
