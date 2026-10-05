@@ -120,9 +120,9 @@ then check the attached one with `gh attestation verify` and NuGet.org's with `d
 with a prerelease suffix makes a GitHub prerelease, and only the highest released version is marked as the latest
 GitHub release. [RELEASING.md](RELEASING.md) has the steps.
 
-`master` never releases a stable version. Each push to it publishes the library packages, not the templates package,
-to NuGet.org as a prerelease (`0.7.0-alpha.0.126`) once Build & Test and the Windows build have passed, with no
-approval, through the `prerelease` environment (only `master` can deploy to it). Prereleases exist to build Tenantry
+`master` never releases a stable version. Each push to it publishes the library packages, not the templates package, to
+NuGet.org as a prerelease (`0.7.0-alpha.0.126`) once both `build-test.yml` jobs and the Windows build have passed, with
+no approval, through the `prerelease` environment (only `master` can deploy to it). Prereleases exist to build Tenantry
 Pro and for early testers, with no support or compatibility promise
 ([Prereleases from master](RELEASING.md#prereleases-from-master)).
 
