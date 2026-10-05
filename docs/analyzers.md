@@ -107,9 +107,11 @@ filter, which keeps the tenant filter: `IgnoreQueryFilters(["SoftDelete"])`. A c
 when a name among them is the tenant filter's, `TenantryQueryFilters.Tenant`. On EF Core 8 and 9, which cannot name a
 filter, read the tenant-owned rows in a query of their own, without `IgnoreQueryFilters()`.
 
-The rule looks at one expression: the chain of calls `IgnoreQueryFilters()` is in, before and after it, with the queries
-passed in it to a `Join`, `GroupJoin`, `Union`, `Concat`, `Intersect` or `Except`, through casts. EF Core ignores the
-filters for the whole query wherever the call is, so all of them count. In each call it looks at the type arguments of a
+The rule looks at one expression: the calls on the query `IgnoreQueryFilters()` is in, before and after it, and the
+other queries passed to them (a `Join`'s or `GroupJoin`'s inner query, the other query of a `Union`, `Concat`,
+`Intersect` or `Except`), through casts. EF Core ignores the filters for the whole query wherever the call is, so all of
+them count. A call that returns no query, such as `Count()` or `First()`, ends the chain, and a value it computes passed
+as an argument, as in `Take(db.Orders.Count())`, is a query of its own. In each call it looks at the type arguments of a
 call that returns a query, at the navigations an `Include` string names, and at the navigations and queries in the
 lambdas EF Core translates.
 

@@ -84,7 +84,8 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
     // The calls that make up the query in the one expression the call is in, which EF Core ignores the filters for
     // wherever the call is: the call; the calls before it in each query it takes (the query it is called on, a Join's
     // inner query, the other query of a Union, Concat, Intersect or Except); and the calls after it that take its result.
-    // Through casts, and nothing across statements.
+    // Only a query passes from one call to the next: a value computed from a query, such as Count(), passed as an
+    // argument, is a query of its own, run before. Through casts, and nothing across statements.
     private static IEnumerable<IInvocationOperation> Query(IInvocationOperation start, KnownTypes types)
     {
         var seen = new HashSet<IOperation>();
@@ -102,11 +103,14 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
 
             foreach (var argument in call.Arguments)
             {
-                if (WithoutConversions(argument.Value) is IInvocationOperation before && TakesQuery(before, types))
+                if (WithoutConversions(argument.Value) is IInvocationOperation before && IsQuery(before.Type, types) &&
+                    TakesQuery(before, types))
+                {
                     pending.Push(before);
+                }
             }
 
-            if (Consumer(call) is { } after && TakesQuery(after, types))
+            if (IsQuery(call.Type, types) && Consumer(call) is { } after && TakesQuery(after, types))
                 pending.Push(after);
         }
     }

@@ -160,6 +160,16 @@ public sealed class QueryTests
                 public static Task<Dictionary<int, Purchase?>> First(AppDbContext db) =>
                     db.Categories.IgnoreQueryFilters().ToDictionaryAsync(c => c.Id, c => c.Purchases.FirstOrDefault());
 
+                // A value computed from another query, which runs on its own before this one.
+                public static List<Country> Taken(AppDbContext db) =>
+                    db.Countries.IgnoreQueryFilters().Take(db.Orders.Where(o => o.Id > 0).Count()).ToList();
+
+                public static List<Order> TakenFromAnIgnoringQuery(AppDbContext db) =>
+                    db.Orders.OrderBy(o => o.Id).Take(db.Categories.IgnoreQueryFilters().Count()).ToList();
+
+                public static bool Contained(AppDbContext db) =>
+                    db.Categories.IgnoreQueryFilters().Contains(db.Purchases.Select(p => p.Category!).First());
+
                 // A list in memory, sent to the database as values.
                 public static List<Category> Bought(AppDbContext db, List<Purchase> mine) =>
                     db.Categories.IgnoreQueryFilters().Where(c => mine.Any(p => p.CategoryId == c.Id)).ToList();
