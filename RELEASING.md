@@ -141,6 +141,9 @@ dotnet nuget verify --all nuget/tenantry.core.0.8.0.nupkg
 `dotnet nuget verify --all` checks NuGet.org's signature on its copy and prints its content hash, the SHA-512 of the
 package before NuGet.org signed it, which is the line `openssl` prints.
 
+The GitHub release is a second public download point for the packages. Its copies carry no NuGet.org repository
+signature, and unlisting a version on NuGet.org does not remove them; deleting the release's package assets does.
+
 Before anything is built, the workflow checks that no package already has the version on NuGet.org
 (`scripts/check-unpublished.sh`), and the push refuses a duplicate rather than skipping it. So a tag moved or pushed
 again for a released version fails, instead of creating a GitHub release whose checksums do not match the published
