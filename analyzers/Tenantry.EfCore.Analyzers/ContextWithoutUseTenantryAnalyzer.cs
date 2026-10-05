@@ -18,12 +18,13 @@ namespace Tenantry.EfCore.Analyzers;
 /// To keep false reports out, it reports a registration only when it sees everything its options do: they are a lambda,
 /// or a method of the compilation's that cannot be overridden, that neither calls <c>UseTenantry()</c> nor hands an
 /// options builder to code that could, nor assigns one anywhere. Code that could is a delegate, an interface, virtual or
-/// unsealed override method, a local function or lambda, a constructor or method of an assembly that references
-/// Tenantry.EfCore (directly or through others) or of another project's reference assembly, or a property of the
-/// application's read on the builder (a C# 14 extension property); a method of the application's, a C# 14 extension
-/// method called on the builder among them, instead counts when it does any of this itself, decided once every method
-/// is seen. A registration without options, or with a delegate it cannot see into, is not reported. Generated code
-/// counts for what it does, and nothing in it is reported.
+/// unsealed override method, a local function or lambda, a method the compiler declares (a C# 14 extension member
+/// called in static form), a constructor or method of an assembly that references Tenantry.EfCore (directly or through
+/// others) or of another project's reference assembly, or a property of such an assembly or of the application's read
+/// on the builder (a C# 14 extension property, or a builder subclass's); a method of the application's, a C# 14
+/// extension method called on the builder among them, instead counts when it does any of this itself, decided once
+/// every method is seen. A registration without options, or with a delegate it cannot see into, is not reported.
+/// Generated code counts for what it does, and nothing in it is reported.
 /// </para>
 /// <para>
 /// From EF Core 9, a context declared in another assembly is not reported: a registration or
@@ -68,7 +69,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 operation => Collect(operation, types, state),
                 OperationKind.Invocation,
                 OperationKind.ObjectCreation,
-                OperationKind.SimpleAssignment);
+                OperationKind.SimpleAssignment,
+                OperationKind.PropertyReference);
             start.RegisterCompilationEndAction(end => Report(end, types, state));
         });
     }
@@ -124,12 +126,16 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 Judge(call, local, types, state);
                 break;
 
-            // A method of the application's that cannot be overridden.
+            // A method of the application's that cannot be overridden, and that the compiler did not declare.
             case IDelegateCreationOperation
             {
                 Target: IMethodReferenceOperation
                 {
-                    Method: { MethodKind: MethodKind.Ordinary, IsVirtual: false, IsAbstract: false, IsOverride: false } optionsMethod,
+                    Method:
+                    {
+                        MethodKind: MethodKind.Ordinary, IsVirtual: false, IsAbstract: false, IsOverride: false,
+                        IsImplicitlyDeclared: false,
+                    } optionsMethod,
                 },
             }
                 when SymbolEqualityComparer.Default.Equals(optionsMethod.ContainingAssembly, state.Compilation.Assembly):
@@ -178,10 +184,14 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 if (call.IsVirtual && (method.IsAbstract || method.IsVirtual || (method.IsOverride && !method.IsSealed)))
                     return (true, null);
 
-                // A method of the application's, judged once every method is seen; a local function or a lambda is
-                // taken to apply it.
+                // A method of the application's, judged once every method is seen; a local function, a lambda or a
+                // method the compiler declares (a C# 14 extension member called in static form) is taken to apply it.
                 if (SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, state.Compilation.Assembly))
-                    return method.MethodKind == MethodKind.Ordinary ? (false, Key(method)) : (true, null);
+                {
+                    return method is { MethodKind: MethodKind.Ordinary, IsImplicitlyDeclared: false }
+                        ? (false, Key(method))
+                        : (true, null);
+                }
 
                 return (ReachesTenantryEfCore(method.ContainingAssembly, state), null);
 
@@ -192,7 +202,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
             case ISimpleAssignmentOperation assignment when IsBuilder(assignment.Value, types):
                 return (true, null);
 
-            // A property of the application's on the builder, such as a C# 14 extension property, is taken to apply it.
+            // A property on the builder, of the application's or of an assembly that can reach Tenantry.EfCore, such as a
+            // C# 14 extension property, is taken to apply it.
             case IPropertyReferenceOperation reference when OnBuilder(reference.Instance, reference.Property, types, state):
                 return (true, null);
 
@@ -419,9 +430,12 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    // Whether the member is the application's, called or read on an options builder.
+    // Whether the member, called or read on an options builder, is the application's or of an assembly that can reach
+    // Tenantry.EfCore (EF Core's own members are neither).
     private static bool OnBuilder(IOperation? instance, ISymbol member, KnownTypes types, State state) =>
-        IsBuilder(instance, types) && SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, state.Compilation.Assembly);
+        IsBuilder(instance, types) &&
+        (SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, state.Compilation.Assembly) ||
+         ReachesTenantryEfCore(member.ContainingAssembly, state));
 
     // Whether the value is an options builder (DbContextOptionsBuilder<TContext> too), as it is or before a conversion.
     private static bool IsBuilder(IOperation? value, KnownTypes types)

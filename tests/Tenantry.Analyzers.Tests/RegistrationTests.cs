@@ -732,6 +732,67 @@ public sealed class RegistrationTests
                     services.AddDbContext<AppDbContext>(options => ((IsolatingOptionsBuilder)options).WithTenantry());
                     services.AddDbContext<ReportsDbContext>(options => ((IsolatingOptionsBuilder)options).Isolated.EnableDetailedErrors());
                     {|TNY1004:services.AddDbContext<BillingDbContext>(options => ((IsolatingOptionsBuilder)options).WithLogging())|};
+
+                    // The property read in a method of the application's rather than in the options
+                    services.AddDbContext<AuditDbContext>(ReadIsolated);
+                    services.AddDbContext<LedgerDbContext>(options => ReadIsolated(options));
+                }
+
+                private static void ReadIsolated(DbContextOptionsBuilder options) =>
+                    ((IsolatingOptionsBuilder)options).Isolated.EnableDetailedErrors();
+            }
+            """);
+
+    // As above, with the members in a package: one that references Tenantry.EfCore could call UseTenantry().
+    [Fact]
+    public Task AMemberOfAPackageOnTheBuilder_IsTakenToCallUseTenantry_WhenThePackageReferencesTenantryEfCore() =>
+        Verify.AnalyzerWithLibrariesAsync<ContextWithoutUseTenantryAnalyzer>(
+            Model + """
+                public static class Startup
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddDbContext<AppDbContext>(options => ((IsolatingOptionsBuilder)options).WithTenantry());
+                        services.AddDbContext<ReportsDbContext>(options => ((IsolatingOptionsBuilder)options).Isolated.EnableDetailedErrors());
+                        {|TNY1004:services.AddDbContext<BillingDbContext>(options => ((LoggingOptionsBuilder)options).WithLogging())|};
+                        {|TNY1004:services.AddDbContext<AuditDbContext>(options => ((LoggingOptionsBuilder)options).Logged.EnableDetailedErrors())|};
+                    }
+                }
+                """,
+            [
+                new("Iso", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public class IsolatingOptionsBuilder(DbContextOptions options) : DbContextOptionsBuilder(options)
+                    {
+                        public DbContextOptionsBuilder WithTenantry() => this.UseTenantry();
+
+                        public DbContextOptionsBuilder Isolated => this.UseTenantry();
+                    }
+                    """),
+                new("Logging", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public class LoggingOptionsBuilder(DbContextOptions options) : DbContextOptionsBuilder(options)
+                    {
+                        public DbContextOptionsBuilder WithLogging() => EnableSensitiveDataLogging();
+
+                        public DbContextOptionsBuilder Logged => EnableSensitiveDataLogging();
+                    }
+                    """, ReferencesTenantry: false),
+            ]);
+
+    // A C# 14 extension member called in static form calls a method the compiler declares, as a record's Deconstruct is.
+    [Fact]
+    public Task ABuilderHandedToAMethodTheCompilerDeclares_IsTakenToCallUseTenantry() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public record OptionsHolder(DbContextOptionsBuilder Options);
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services, OptionsHolder holder)
+                {
+                    services.AddDbContext<AppDbContext>(options => holder.Deconstruct(out options));
                 }
             }
             """);
