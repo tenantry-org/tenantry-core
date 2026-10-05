@@ -25,7 +25,14 @@ internal sealed class KnownTypes
         EntityTypeConfiguration = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.IEntityTypeConfiguration`1");
         Queryable = compilation.GetTypeByMetadataName("System.Linq.IQueryable");
         Expression = compilation.GetTypeByMetadataName("System.Linq.Expressions.Expression`1");
+        DbContextOptionsBuilder = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.DbContextOptionsBuilder");
+        ServiceCollectionExtensions =
+            compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.EntityFrameworkServiceCollectionExtensions");
     }
+
+    public INamedTypeSymbol? DbContextOptionsBuilder { get; }
+
+    public INamedTypeSymbol? ServiceCollectionExtensions { get; }
 
     public INamedTypeSymbol? Queryable { get; }
 

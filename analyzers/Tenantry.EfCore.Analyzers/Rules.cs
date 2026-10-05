@@ -47,6 +47,20 @@ internal static class Rules
                      "query filter and save checks do not apply to them.",
         helpLinkUri: HelpBase + "tny1003");
 
+    public static readonly DiagnosticDescriptor ContextWithoutUseTenantry = new(
+        "TNY1004",
+        "A DbContext with tenant-owned entities is registered without UseTenantry()",
+        "'{0}' has tenant-owned entities, and this registration does not call UseTenantry(), so no tenant filter, " +
+        "TenantId stamping or write check applies to them and every tenant reads every tenant's rows; call " +
+        "UseTenantry() on its options",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "UseTenantry() on a context's options is what isolates its tenant-owned entities. Without it, " +
+                     "nothing fails or logs at run time.",
+        helpLinkUri: HelpBase + "tny1004",
+        customTags: WellKnownDiagnosticTags.CompilationEnd);
+
     public static readonly DiagnosticDescriptor InlineTenantDescriptor = new(
         "TNY3001",
         "A tenant made current from a descriptor built in place",

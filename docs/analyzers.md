@@ -9,6 +9,7 @@ package to install. They add no runtime dependency: the compiler loads them, and
 | [TNY1001](#tny1001) | Tenantry.EfCore | Warning | An entity with a `TenantId` that does not implement `ITenantEntity<TKey>` |
 | [TNY1002](#tny1002) | Tenantry.EfCore | Warning | `IgnoreQueryFilters()` in a query that reads a tenant-owned entity |
 | [TNY1003](#tny1003) | Tenantry.EfCore | Info | Raw SQL on `Database`, which is not isolated |
+| [TNY1004](#tny1004) | Tenantry.EfCore | Warning | A context with tenant-owned entities registered without `UseTenantry()` |
 | [TNY2001](#tny2001) | Tenantry.AspNetCore | Warning | The tenant resolved from the request with no access validator |
 | [TNY3001](#tny3001) | Tenantry.EfCore | Info | `MakeCurrent` or `CreateScope` given a descriptor built in the call |
 | [TNY3002](#tny3002) | Tenantry.EfCore | Info | Blocking on `RunInScopeAsync` |
@@ -121,6 +122,37 @@ forms) map to no entity type, so no tenant filter applies to their SQL and no ch
 Use LINQ, or `FromSql` on a tenant-owned set, which EF Core filters. Otherwise add the tenant predicate yourself, with
 the current tenant's id from `ITenantContext<TKey>`. It is info by default, since raw SQL is often deliberate; see
 [What is and isn't isolated](efcore-integration.md#what-is-and-isnt-isolated).
+
+## TNY1004
+
+`AddDbContext`, `AddDbContextPool`, `AddDbContextFactory` or `AddPooledDbContextFactory` registers a context that has
+tenant-owned entities, and its options do not call `UseTenantry()`. `UseTenantry()` is what installs the tenant filter,
+the `TenantId` stamping and the write checks, so without it every tenant reads and changes every tenant's rows, and
+nothing fails or logs at run time.
+
+```csharp no-compile
+// TNY1004: AppDbContext has a DbSet<Order>, and Order implements ITenantEntity<Guid>.
+builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+```
+
+Add `.UseTenantry()` to the options. A context has tenant-owned entities when it, or a base context, has a
+`DbSet<T>` property of a type that implements `ITenantEntity<TKey>`; one whose tenant-owned types are mapped only in
+`OnModelCreating` is not seen. `AddDbContextPerTenantDatabase` applies `UseTenantry()` itself and is not reported.
+
+The rule reports a registration only when it sees everything the options do, so these are not reported:
+
+- options that hand the builder to other code that could call `UseTenantry()`: a method of the project's own, of a
+  library that references `Tenantry.EfCore`, a delegate, or an interface or virtual method;
+- options that are not a lambda or a method of the project's own (a delegate in a variable), and a registration
+  without options;
+- a context that overrides `OnConfiguring`, or whose base context does;
+- a context that another registration, or a `ConfigureDbContext<TContext>`, calls `UseTenantry()` for anywhere in the
+  project, since from EF Core 9 they add to the same options. A generic method that does so for its type parameter
+  turns the rule off for the project.
+
+It decides once the whole project is compiled, so `dotnet build` reports it, while an IDE may show it only after a
+build, or with analysis of the whole solution turned on. A test that registers a context without isolation on purpose
+can set `dotnet_diagnostic.TNY1004.severity = none` for its files.
 
 ## TNY2001
 

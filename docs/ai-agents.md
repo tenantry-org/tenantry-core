@@ -196,6 +196,9 @@ that the access validator refuses a caller, and the pipeline order ([Testing](te
   add filters or `TenantId` checks of your own to such types; make the type tenant-owned if its rows belong to one
   tenant. To have the model list every shared type, mark them `[SharedAcrossTenants]` and set `OnUnmarkedEntityType`
   ([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
+- A context registered without `UseTenantry()` isolates nothing: every tenant reads and writes all its tenant-owned
+  rows, and nothing fails at run time. Call `UseTenantry()` in the options of every registration of a context with
+  tenant-owned entities.
 - `Database.SqlQuery`, `SqlQueryRaw`, `ExecuteSql`, `ExecuteSqlRaw` and `ExecuteSqlInterpolated` are not isolated: no
   filter applies and no check sees what they change. Prefer LINQ or `FromSql` on a tenant-owned set, which EF Core
   filters; otherwise add the tenant predicate yourself

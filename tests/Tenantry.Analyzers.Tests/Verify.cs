@@ -23,11 +23,29 @@ internal static class Verify
             .Select(path => MetadataReference.CreateFromFile(path)),
     ];
 
-    public static async Task AnalyzerAsync<TAnalyzer>(string source, params DiagnosticResult[] expected)
+    public static Task AnalyzerAsync<TAnalyzer>(string source, params DiagnosticResult[] expected)
+        where TAnalyzer : DiagnosticAnalyzer, new() =>
+        AnalyzerWithLibraryAsync<TAnalyzer>(source, library: null, expected);
+
+    /// <summary>
+    /// As <see cref="AnalyzerAsync{TAnalyzer}"/>, with the test code referencing a library compiled from
+    /// <paramref name="library"/> against the same assemblies, as an application references another package.
+    /// </summary>
+    public static async Task AnalyzerWithLibraryAsync<TAnalyzer>(string source, string? library, params DiagnosticResult[] expected)
         where TAnalyzer : DiagnosticAnalyzer, new()
     {
         CSharpAnalyzerTest<TAnalyzer, DefaultVerifier> test = new() { TestCode = source, ReferenceAssemblies = None };
         test.TestState.AdditionalReferences.AddRange(References);
+
+        if (library is not null)
+        {
+            ProjectState project = new("Library", LanguageNames.CSharp, "Library", "cs") { ReferenceAssemblies = None };
+            project.Sources.Add(library);
+            project.AdditionalReferences.AddRange(References);
+            test.TestState.AdditionalProjects.Add("Library", project);
+            test.TestState.AdditionalProjectReferences.Add("Library");
+        }
+
         test.ExpectedDiagnostics.AddRange(expected);
         await test.RunAsync(TestContext.Current.CancellationToken);
     }
