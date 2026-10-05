@@ -159,8 +159,8 @@ the templates references the Tenantry packages of the same release (`--TenantryV
 Test job packs it into `./artifacts` with the libraries and writes its SBOM, and `scripts/smoke-templates.sh` installs
 that package, creates each template, and builds and runs it against the libraries. A release pushes it after the
 libraries, as the push takes the packages in name order; the prerelease job leaves it out. The consumer check runs
-without it: its application cannot reference a template package. It has no symbol package, and no assembly whose API
-pack could validate, so `TenantryPackageBaseline` does not apply to it.
+without it: its application cannot reference a template package. It has no symbol package, and pack does not
+validate it (only the `src/` projects enable package validation), so `TenantryPackageBaseline` does not apply to it.
 
 Before the first release that includes it, the maintainer does two things on NuGet.org:
 

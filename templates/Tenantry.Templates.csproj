@@ -5,7 +5,8 @@
     Tenantry.Templates; each template references the Tenantry packages of the version this package is, which pack
     writes into its template.json. build-test.yml packs it beside the src packages; scripts/smoke-templates.sh installs
     that package, creates each template, and builds and runs it against the packages of the same build. A release
-    publishes it with them; master's prereleases do not (RELEASING.md).
+    publishes it with them; master's prereleases do not (RELEASING.md). Pack does not validate it against
+    TenantryPackageBaseline: only src/ projects enable package validation.
   -->
   <PropertyGroup>
     <PackageId>Tenantry.Templates</PackageId>
@@ -23,8 +24,6 @@
     <NoDefaultExcludes>true</NoDefaultExcludes>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <MinVerTagPrefix>v</MinVerTagPrefix>
-    <!-- No assemblies, so no API to validate: TenantryPackageBaseline does not apply (eng/common/Build.targets) -->
-    <EnablePackageValidation>false</EnablePackageValidation>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://tenantry.dev</PackageProjectUrl>
