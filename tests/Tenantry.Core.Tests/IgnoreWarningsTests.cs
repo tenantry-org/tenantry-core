@@ -110,8 +110,8 @@ public sealed class IgnoreWarningsTests
         var act = () => services.AddTenantry<string>(tenant => tenant.IgnoreWarnings(TenantryWarnings.StringTenantIdCollation, eventId));
 
         act.Should().Throw<ArgumentException>()
-            .WithMessage($"Tenantry cannot ignore event {eventId}: of its events, 1000 to 2999 and 3001,*" +
-                "2007 and 3001 (TenantryWarnings)*OnMissingTenant*OnUnmarkedEntityType*")
+            .WithMessage($"Tenantry cannot ignore event {eventId}. Of Tenantry's own events (1000 to 2999, and 3001), " +
+                "IgnoreWarnings accepts only 2007 and 3001 (TenantryWarnings). Event 2002 *OnMissingTenant*OnUnmarkedEntityType*")
             .Which.ParamName.Should().Be("eventIds");
         services.AddTenantry<string>();
         using var sp = services.BuildServiceProvider();

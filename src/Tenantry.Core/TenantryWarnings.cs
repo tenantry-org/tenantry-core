@@ -51,9 +51,9 @@ public static class TenantryWarnings
             if (eventId is >= FirstEventId and <= LastEventId && !Ignorable.Contains(eventId))
             {
                 throw new ArgumentException(
-                    $"Tenantry cannot ignore event {eventId}: of its events, {FirstEventId} to {LastEventId} and " +
-                    $"{OrdinaryOptionsReadAsTenant}, IgnoreWarnings accepts only the warnings about configuration " +
-                    $"that may be deliberate, {string.Join(" and ", Ignorable)} (TenantryWarnings). " +
+                    $"Tenantry cannot ignore event {eventId}. Of Tenantry's own events ({FirstEventId} to " +
+                    $"{LastEventId}, and {OrdinaryOptionsReadAsTenant}), IgnoreWarnings accepts only " +
+                    $"{string.Join(" and ", Ignorable)} (TenantryWarnings). " +
                     "Event 2002 is turned off with EfCoreIsolationOptions.OnMissingTenant, and event 2006 with " +
                     "EfCoreIsolationOptions.OnUnmarkedEntityType.",
                     nameof(eventIds));
