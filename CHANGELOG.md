@@ -18,19 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK, though an older
   SDK can install the templates and create a project.
 - Docs: a second per-tenant database beside the one `AddDbContextPerTenantDatabase` connects, through `AddDbContext`
-  ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)); a test that fails on an
-  entity type that is neither tenant-owned nor marked shared
-  ([Entity types left unisolated](docs/testing.md#entity-types-left-unisolated)); and notes that
-  `AddDbContextFactory`, and `AddDbContext` with singleton options, keep the first tenant's connection string, that
-  `IMemoryCache` and third-party bulk libraries are not isolated, that with `app.UseTenantResolution()` a custom
-  resolver that reads the user finds none before authentication, and how to call or serve a service that names the
-  tenant in a header other than `tenantry-tenant-id`.
+  ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)); and notes that
+  `AddDbContextFactory` by default, and `AddDbContext` with singleton options, keep the first tenant's connection
+  string, that `IMemoryCache` and third-party bulk libraries are not isolated, that with `app.UseTenantResolution()` a
+  custom resolver that reads the user finds nothing before authentication, and how to call or serve a service that
+  names the tenant in a header other than `tenantry-tenant-id`.
 
 ### Fixed
 
 - `app.UseTenantry()` before `app.UseRouting()` logs event 1007 when routing chooses an endpoint whose route value
   `ResolveFromRouteValue` could not read. Before, it was logged only for an endpoint with `RequireTenant()` or
-  `AllowMissingTenant()`, so a request to `/{tenant}/orders` ran without a tenant and nothing was logged above Debug.
+  `AllowMissingTenant()`, so without `RequireTenantByDefault()` a request to `/{tenant}/orders` ran without a tenant
+  and nothing was logged above Debug.
 - Behaviour the docs misstated: with `app.UseTenantResolution()`, a signed-in request whose tenant was current
   during authentication, and which the access validators refuse, is refused on every endpoint, not only on those that
   require a tenant (the ASP.NET Core and access control guides, and the comments on `ITenantAccessValidator<TKey>`,
