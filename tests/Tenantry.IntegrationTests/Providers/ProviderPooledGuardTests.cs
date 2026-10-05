@@ -112,6 +112,11 @@ public abstract class ProviderPooledHiLoTests<TContext> : IAsyncLifetime
     {
         GC.SuppressFinalize(this);
 
+        // A fresh pool drops the databases: SQL Server takes about 3 seconds to end each session that a context in
+        // the test's pool still holds open.
+        await _services.DisposeAsync();
+        _services = BuildPool<TContext>(Fixture, _runId, "hilo", _acme, _globex);
+
         foreach (var tenant in new[] { _acme, _globex })
         {
             using (Ambient.MakeCurrent(tenant))
@@ -255,6 +260,12 @@ public abstract class ProviderPooledGuardTests(DatabaseFixture fixture) : IAsync
     public async ValueTask DisposeAsync()
     {
         GC.SuppressFinalize(this);
+
+        // A fresh pool drops the databases: SQL Server takes about 3 seconds to end each session that a context in
+        // the test's pool still holds open.
+        await _services.DisposeAsync();
+        _services = ProviderPooledHiLoTests<ProviderOrdersContext>.BuildPool<ProviderOrdersContext>(
+            fixture, _runId, "guard", _acme, _globex);
 
         foreach (var tenant in new[] { _acme, _globex })
         {
