@@ -18,13 +18,14 @@ Only the maintainer can push `v*` tags.
    scripts/cut-release.sh 0.7
    ```
 
-   It refuses unless `0.7` is `MinVerMinimumMajorMinor`, `release/0.7` and `v0.7.0` exist neither locally nor on
-   `origin`, `## [Unreleased]` has entries, and no `## [0.7.0]` or `## Release 0.7.0` section exists yet. It creates
-   `release/0.7` from `master`'s head, with one commit of its own, the one to tag: `## [Unreleased]` becomes
-   `## [0.7.0] - YYYY-MM-DD` (today, UTC) below a new, empty `## [Unreleased]`, and each analyzer rule moves from
-   `analyzers/*/AnalyzerReleases.Unshipped.md` to that folder's `AnalyzerReleases.Shipped.md`, under
-   `## Release 0.7.0`. On `master`, it cherry-picks that commit, then raises `MinVerMinimumMajorMinor` to `0.8` in a
-   second commit, so `master`'s prereleases are versioned above the branch's releases. It always raises the minor:
+   It refuses unless `0.7` is `MinVerMinimumMajorMinor`, CI passed on the push of `master`'s head (SonarCloud's quality
+   gate included, which release branches and tags skip; read with `gh`, signed in), `release/0.7` and `v0.7.0` exist
+   neither locally nor on `origin`, `## [Unreleased]` has entries, and no `## [0.7.0]` or `## Release 0.7.0` section
+   exists yet. It creates `release/0.7` from `master`'s head, with one commit of its own, the one to tag:
+   `## [Unreleased]` becomes `## [0.7.0] - YYYY-MM-DD` (today, UTC) below a new, empty `## [Unreleased]`, and each
+   analyzer rule moves from `analyzers/*/AnalyzerReleases.Unshipped.md` to that folder's `AnalyzerReleases.Shipped.md`,
+   under `## Release 0.7.0`. On `master`, it cherry-picks that commit, then raises `MinVerMinimumMajorMinor` to `0.8`
+   in a second commit, so `master`'s prereleases are versioned above the branch's releases. It always raises the minor:
    when the next release is a major, edit `MinVerMinimumMajorMinor` in that second commit by hand before pushing. It
    pushes and tags nothing, and prints the commands for the steps below and how to undo it.
 
@@ -73,7 +74,9 @@ joins the `## Release 0.7.0` table, which the analyzer accepts, rather than a se
 
 ## A patch
 
-1. Fix it on `master` first, in a pull request as usual, unless the code is gone there.
+1. Fix it on `master` first, in a pull request as usual, unless the code is gone there. Before cherry-picking the fix
+   to the release branch, check that `master`'s CI, SonarCloud included, has passed on it: release branches skip
+   SonarCloud.
 2. In a pull request into `release/X.Y`, which runs CI, cherry-pick the fix and add the patch's
    section to `CHANGELOG.md` (`## [0.7.1] - YYYY-MM-DD`). Add the same section to `master`'s `CHANGELOG.md`, placed by
    version among the other releases. The release's notes come from the branch's copy.

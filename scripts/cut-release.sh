@@ -5,7 +5,7 @@
 # cherry-pick of it, a commit of its own, so the tag is never on master's history (scripts/release-source.sh), and a
 # second commit raising MinVerMinimumMajorMinor to the next minor. It always raises the minor: when the next release is
 # a major, edit MinVerMinimumMajorMinor in that commit by hand before pushing. It never pushes or tags: it prints the
-# commands to do that (RELEASING.md). Usage, on master in a clean checkout:
+# commands to do that (RELEASING.md). Usage, on master in a clean checkout, with gh signed in:
 #
 #   scripts/cut-release.sh <X.Y>      e.g. scripts/cut-release.sh 0.7
 set -euo pipefail
@@ -39,6 +39,13 @@ absent_on_origin() {
 git fetch --quiet origin
 [[ "$(git rev-parse master)" == "$(git rev-parse refs/remotes/origin/master)" ]] ||
   fail "master is not origin/master: pull or push master first."
+# SonarCloud analyses master only, so the branch is cut from a commit whose CI run, quality gate included, passed.
+command -v gh > /dev/null || fail "gh, the GitHub CLI, is needed to check master's CI: install it, then gh auth login."
+head="$(git rev-parse master)"
+passed="$(gh run list --repo "$(git remote get-url origin)" --workflow ci.yml --branch master --event push \
+  --commit "$head" --status success --json databaseId --jq 'length')" ||
+  fail "gh could not read master's CI runs (above): run gh auth login, or try again."
+[[ "$passed" != 0 ]] || fail "CI has not passed on master's head, $head: wait for its push's run, or fix master first."
 ! git rev-parse --verify --quiet "refs/heads/$branch" > /dev/null || fail "$branch already exists locally."
 absent_on_origin "refs/heads/$branch" || fail "$branch already exists on origin, or origin could not be read."
 ! git rev-parse --verify --quiet "refs/tags/v$version" > /dev/null || fail "The tag v$version already exists locally."

@@ -5,9 +5,9 @@ on:
     inputs:
       run_sonar:
         description: >
-          Run SonarCloud analysis + quality gate. Disabled on release (tag) builds: SonarCloud
-          cannot analyze a tag ref — its CI auto-detection fails with "Not authorized or project
-          not found". The tagged commit already passed the Sonar gate on its release branch before tagging.
+          Run SonarCloud analysis + quality gate. ci.yml enables it for master and pull requests into
+          master only (it says why); release.yml never does, as what a release branch holds was
+          analysed on master.
         type: boolean
         default: true
     secrets:
