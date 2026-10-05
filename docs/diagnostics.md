@@ -5,9 +5,10 @@ were resolved. None of it needs setting up beyond your logging, tracing and metr
 
 ## Logs
 
-Tenantry logs under three categories: `Tenantry.AspNetCore` (the request middleware), `Tenantry.EfCore` (the isolation
-in your `DbContext`) and `Tenantry.Options` (options per tenant). Each message has an event id that does not change
-between versions, so you can alert on it. Alert on 2001 above all: a save that tried to write another tenant's row.
+Tenantry logs under four categories: `Tenantry.AspNetCore` (the request middleware), `Tenantry.AspNetCore.OutputCache`
+(output caching per tenant, event 1009), `Tenantry.EfCore` (the isolation in your `DbContext`) and `Tenantry.Options`
+(options per tenant). Each message has an event id that does not change between versions, so you can alert on it.
+Alert on 2001 above all: a save that tried to write another tenant's row.
 
 | Event id | Name | Level | When |
 |----------|------|-------|------|
