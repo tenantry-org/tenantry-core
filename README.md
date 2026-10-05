@@ -36,7 +36,7 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 - Built for .NET 10. .NET 8 and 9 are supported until 10 November 2027 ([compatibility](docs/compatibility.md)).
 
 [Tenantry.Pro](https://tenantry.dev), a subscription, adds schema per tenant, provisioning and migrations across
-tenant databases, and the tenant in background jobs and messages.
+tenant databases, offboarding, audit logging, and the tenant in background jobs and messages.
 
 ## Packages
 
