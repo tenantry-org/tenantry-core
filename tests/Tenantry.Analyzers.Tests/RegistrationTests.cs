@@ -487,6 +487,188 @@ public sealed class RegistrationTests
                     """, ReferencesTenantry: false),
             ]);
 
+    [Fact]
+    public Task AProjectReferencedAsAReferenceAssembly_IsTakenToApply_UnlessItIsTheFrameworks() =>
+        Verify.AnalyzerWithLibrariesAsync<ContextWithoutUseTenantryAnalyzer>(
+            Model + """
+                public static class Startup
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddDbContext<AppDbContext>(options => options.UseCompanyDefaults());
+                        services.AddDbContext<ReportsDbContext>(options => options.UseWrappedDefaults());
+                        services.AddDbContext<BillingDbContext>(options => options.UseNothing());
+                        {|TNY1004:services.AddDbContext<AuditDbContext>(options => options.UseFrameworkLike())|};
+                    }
+                }
+                """,
+            [
+                // dotnet build sees only the reference assembly, which no longer references Tenantry.EfCore.
+                new("Iso", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public static class Iso
+                    {
+                        public static DbContextOptionsBuilder UseCompanyDefaults(this DbContextOptionsBuilder options) =>
+                            options.EnableDetailedErrors().UseTenantry();
+                    }
+                    """, AsReferenceAssembly: true),
+                new("Wrapper", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public static class Wrapper
+                    {
+                        public static DbContextOptionsBuilder UseWrappedDefaults(this DbContextOptionsBuilder options) =>
+                            options.UseCompanyDefaults();
+                    }
+                    """, ReferencesTenantry: false, AsReferenceAssembly: true) { Uses = ["Iso"] },
+                // References Tenantry.EfCore and never applies it: it cannot be told apart from one that does.
+                new("Nothing", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public static class Nothing
+                    {
+                        public static DbContextOptionsBuilder UseNothing(this DbContextOptionsBuilder options) => options;
+                    }
+                    """, AsReferenceAssembly: true),
+                // The framework's reference assemblies carry the attribute too, and are still judged.
+                new("Microsoft.Contoso", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public static class FrameworkLike
+                    {
+                        public static DbContextOptionsBuilder UseFrameworkLike(this DbContextOptionsBuilder options) => options;
+                    }
+                    """, ReferencesTenantry: false, AsReferenceAssembly: true),
+            ]);
+
+    [Fact]
+    public Task AProjectThatReferencesTenantryEfCoreAndNeverAppliesIt_IsTakenToApply_AsACompilationToo() =>
+        Verify.AnalyzerWithLibrariesAsync<ContextWithoutUseTenantryAnalyzer>(
+            Model + """
+                public static class Startup
+                {
+                    public static void Register(IServiceCollection services) =>
+                        services.AddDbContext<AppDbContext>(options => options.UseNothing());
+                }
+                """,
+            [
+                new("Nothing", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public static class Nothing
+                    {
+                        public static DbContextOptionsBuilder UseNothing(this DbContextOptionsBuilder options) => options;
+                    }
+                    """),
+            ]);
+
+    [Fact]
+    public Task UseTenantryInGeneratedCode_Counts_AndARegistrationInGeneratedCodeIsNotReported() =>
+        Verify.AnalyzerWithFilesAsync<ContextWithoutUseTenantryAnalyzer>(
+            Model + """
+                public partial class GeneratedDbContext(DbContextOptions<GeneratedDbContext> options) : DbContext(options)
+                {
+                    public DbSet<Order> Orders => Set<Order>();
+                }
+
+                public static class Startup
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddDbContext<AppDbContext>(options => options.UseGeneratedDefaults());
+                        services.AddDbContext<GeneratedDbContext>(options => options.EnableSensitiveDataLogging());
+                        {|TNY1004:services.AddDbContext<ReportsDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    }
+                }
+                """,
+            [
+                ("Defaults.g.cs", """
+                    using Microsoft.EntityFrameworkCore;
+                    using Microsoft.Extensions.DependencyInjection;
+
+                    public static class GeneratedDefaults
+                    {
+                        public static DbContextOptionsBuilder UseGeneratedDefaults(this DbContextOptionsBuilder options) =>
+                            options.UseTenantry();
+
+                        public static void RegisterBilling(IServiceCollection services) =>
+                            services.AddDbContext<BillingDbContext>(options => options.EnableSensitiveDataLogging());
+                    }
+                    """),
+                ("GeneratedDbContext.Designer.cs", """
+                    // <auto-generated/>
+                    using Microsoft.EntityFrameworkCore;
+
+                    public partial class GeneratedDbContext
+                    {
+                        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) => optionsBuilder.UseTenantry();
+                    }
+                    """),
+            ]);
+
+    [Fact]
+    public Task OptionsGivenAsAVirtualAbstractOrInterfaceMethod_AreNotReported() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public interface IContextConfigurer
+            {
+                void Configure(DbContextOptionsBuilder options);
+            }
+
+            public abstract class ContextConfigurer
+            {
+                public abstract void Apply(DbContextOptionsBuilder options);
+
+                public virtual void Log(DbContextOptionsBuilder options)
+                {
+                }
+            }
+
+            public class LoggingConfigurer : ContextConfigurer
+            {
+                public override void Apply(DbContextOptionsBuilder options) => options.EnableSensitiveDataLogging();
+            }
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services, IContextConfigurer configurer, ContextConfigurer configuration, LoggingConfigurer logging)
+                {
+                    services.AddDbContext<AppDbContext>(configurer.Configure);
+                    services.AddDbContext<ReportsDbContext>(configuration.Apply);
+                    services.AddDbContext<BillingDbContext>(configuration.Log);
+                    services.AddDbContext<AuditDbContext>(logging.Apply);
+                }
+            }
+            """);
+
+    [Fact]
+    public Task APartialOrGenericMethodOfTheApplications_IsJudgedByItsCode() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public static partial class Isolation
+            {
+                public static partial void Isolate(DbContextOptionsBuilder options);
+
+                public static partial void Isolate(DbContextOptionsBuilder options) => options.UseTenantry();
+
+                public static partial void Log(DbContextOptionsBuilder options);
+
+                public static partial void Log(DbContextOptionsBuilder options) => options.EnableSensitiveDataLogging();
+
+                public static DbContextOptionsBuilder UseIsolation<TMarker>(this DbContextOptionsBuilder options) => options.UseTenantry();
+            }
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
+                {
+                    services.AddDbContext<AppDbContext>(options => Isolation.Isolate(options));
+                    services.AddDbContext<ReportsDbContext>(Isolation.Isolate);
+                    services.AddDbContext<BillingDbContext>(options => options.UseIsolation<int>());
+                    {|TNY1004:services.AddDbContext<AuditDbContext>(options => Isolation.Log(options))|};
+                }
+            }
+            """);
+
 #if NET9_0_OR_GREATER
     [Fact]
     public Task AnotherRegistrationOfTheSameContextWithUseTenantry_ClearsIt_FromEfCore9() =>
@@ -534,6 +716,12 @@ public sealed class RegistrationTests
 
                     services.AddDbContext<BillingDbContext>(options => options.EnableSensitiveDataLogging());
                     AddIsolatedBilling(services);
+
+                    // A local function runs where it is called, not where it is declared.
+                    AddIsolatedAudit();
+                    services.AddDbContext<AuditDbContext>(options => options.EnableSensitiveDataLogging());
+
+                    void AddIsolatedAudit() => services.AddDbContextFactory<AuditDbContext>(options => options.UseTenantry());
                 }
 
                 // Its order against the registration above is not known here.

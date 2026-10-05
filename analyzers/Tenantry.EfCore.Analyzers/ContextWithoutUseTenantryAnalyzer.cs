@@ -16,19 +16,21 @@ namespace Tenantry.EfCore.Analyzers;
 /// <remarks>
 /// <para>
 /// To keep false reports out, it reports a registration only when it sees everything its options do: they are a lambda,
-/// or a method of the compilation's, that neither calls <c>UseTenantry()</c> nor hands an options builder to code that
-/// could, nor assigns one anywhere. Code that could is a delegate, an interface, virtual or unsealed override method, a
-/// local function or lambda, a constructor or method of an assembly that references Tenantry.EfCore (directly or through
-/// others; a method of the application's instead counts when it does any of this itself, decided once every method is
-/// seen).
-/// A registration without options, or with a delegate it cannot see into, is not reported.
+/// or a method of the compilation's that cannot be overridden, that neither calls <c>UseTenantry()</c> nor hands an
+/// options builder to code that could, nor assigns one anywhere. Code that could is a delegate, an interface, virtual or
+/// unsealed override method, a local function or lambda, a constructor or method of an assembly that references
+/// Tenantry.EfCore (directly or through others) or of another project's reference assembly; a method of the
+/// application's instead counts when it does any of this itself, decided once every method is seen. A registration
+/// without options, or with a delegate it cannot see into, is not reported. Generated code counts for what it does, and
+/// nothing in it is reported.
 /// </para>
 /// <para>
 /// Nor is a context with an <c>OnConfiguring</c> in its hierarchy that it cannot see (in another assembly) or that may
 /// apply <c>UseTenantry()</c> by the same test. A call that may apply it for the same context, or for a type parameter
 /// the context satisfies, clears a registration: from EF Core 9, any registration or <c>ConfigureDbContext</c>, since
 /// their options add up; on EF Core 8, where only the first registration's options apply, one that is not later in the
-/// same method. So it reports at the end of the compilation, when every call has been seen.
+/// same body (a lambda's or local function's being its own). So it reports at the end of the compilation, when every call
+/// has been seen.
 /// </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -44,7 +46,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
 
     public override void Initialize(AnalysisContext context)
     {
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        // Generated code is read for what it does (a UseTenantry() helper, an OnConfiguring), and nothing in it is reported.
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze);
         context.EnableConcurrentExecution();
         context.RegisterCompilationStartAction(start =>
         {
@@ -71,11 +74,11 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
     {
         // What each method does with an options builder (its lambdas' and local functions' code included), for the options
         // methods and OnConfiguring judged at the end.
-        var owner = context.ContainingSymbol.OriginalDefinition;
+        var owner = context.ContainingSymbol is IMethodSymbol member ? Key(member) : context.ContainingSymbol.OriginalDefinition;
         var (applies, target) = HandOff(context.Operation, types, state);
 
         if (applies)
-            state.Applying.TryAdd(owner, 0);
+            state.DirectlyApplying.TryAdd(owner, 0);
         else if (target is not null)
             state.HandOffs.Add((owner, target));
 
@@ -118,12 +121,14 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 Judge(call, local, types, state);
                 break;
 
-            case IDelegateCreationOperation { Target: IMethodReferenceOperation { Method.MethodKind: MethodKind.Ordinary } reference }
-                when SymbolEqualityComparer.Default.Equals(reference.Method.ContainingAssembly, state.Compilation.Assembly):
-                call.Targets.Add(reference.Method.OriginalDefinition);
+            // A method of the application's that cannot be overridden.
+            case IDelegateCreationOperation { Target: IMethodReferenceOperation { Method: { MethodKind: MethodKind.Ordinary } optionsMethod } }
+                when SymbolEqualityComparer.Default.Equals(optionsMethod.ContainingAssembly, state.Compilation.Assembly) &&
+                     !optionsMethod.IsVirtual && !optionsMethod.IsAbstract && !optionsMethod.IsOverride:
+                call.Targets.Add(Key(optionsMethod));
                 break;
 
-            // A delegate it cannot see into.
+            // A delegate it cannot see into, or a method that may be overridden anywhere.
             default:
                 call.Applies = true;
                 break;
@@ -166,11 +171,7 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 // A method of the application's, judged once every method is seen; a local function or a lambda is
                 // taken to apply it.
                 if (SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, state.Compilation.Assembly))
-                {
-                    return method.MethodKind is MethodKind.Ordinary or MethodKind.ReducedExtension
-                        ? (false, (method.ReducedFrom ?? method).OriginalDefinition)
-                        : (true, null);
-                }
+                    return method.MethodKind == MethodKind.Ordinary ? (false, Key(method)) : (true, null);
 
                 return (ReachesTenantryEfCore(method.ContainingAssembly, state), null);
 
@@ -187,7 +188,9 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
     }
 
     // Whether code in the assembly can call UseTenantry(): it is Tenantry.EfCore, or references it, directly or through
-    // the assemblies it references. Decided once per assembly; an assembly found on a search that fails cannot either.
+    // the assemblies it references, or it is another project's reference assembly, which lists only the references its
+    // signatures use, as dotnet build compiles against. Decided once per assembly; an assembly found on a search that
+    // fails cannot either.
     private static bool ReachesTenantryEfCore(IAssemblySymbol? assembly, State state)
     {
         if (assembly is null)
@@ -207,7 +210,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
             if (!visited.Add(current))
                 continue;
 
-            if (current.Name == TenantryEfCore || (state.Reaches.TryGetValue(current, out known) && known))
+            if (current.Name == TenantryEfCore || (state.Reaches.TryGetValue(current, out known) && known) ||
+                IsProjectReferenceAssembly(current))
             {
                 state.Reaches.TryAdd(assembly, true);
                 return true;
@@ -228,6 +232,14 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
 
         return false;
     }
+
+    // A reference assembly that is not the framework's: the framework's reference packs carry the attribute too.
+    private static bool IsProjectReferenceAssembly(IAssemblySymbol assembly) =>
+        assembly.Name is not ("mscorlib" or "netstandard" or "System") &&
+        !assembly.Name.StartsWith("System.", StringComparison.Ordinal) &&
+        !assembly.Name.StartsWith("Microsoft.", StringComparison.Ordinal) &&
+        assembly.GetAttributes().Any(attribute =>
+            attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.ReferenceAssemblyAttribute");
 
     private static void Report(CompilationAnalysisContext context, KnownTypes types, State state)
     {
@@ -263,18 +275,15 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
     // a method that does, in turn.
     private static HashSet<ISymbol> Applying(State state)
     {
-        var applying = new HashSet<ISymbol>(state.Applying.Keys, SymbolEqualityComparer.Default);
+        var applying = new HashSet<ISymbol>(state.DirectlyApplying.Keys, SymbolEqualityComparer.Default);
         var callers = state.HandOffs.ToLookup(
             handOff => (ISymbol)handOff.Target, handOff => handOff.Owner, SymbolEqualityComparer.Default);
         var pending = new Stack<ISymbol>(applying);
 
         while (pending.Count > 0)
         {
-            foreach (var caller in callers[pending.Pop()])
-            {
-                if (applying.Add(caller))
-                    pending.Push(caller);
-            }
+            foreach (var caller in callers[pending.Pop()].Where(applying.Add))
+                pending.Push(caller);
         }
 
         return applying;
@@ -310,40 +319,16 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
     }
 
     // An OnConfiguring in the context's hierarchy that may apply UseTenantry(), or that it cannot see.
-    private static bool ConfiguresItself(INamedTypeSymbol contextType, KnownTypes types, State state, HashSet<ISymbol> applying)
-    {
-        foreach (var type in Hierarchy(contextType, types))
-        {
-            foreach (var member in type.GetMembers("OnConfiguring"))
-            {
-                if (!SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, state.Compilation.Assembly) ||
-                    applying.Contains(member.OriginalDefinition))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
+    private static bool ConfiguresItself(INamedTypeSymbol contextType, KnownTypes types, State state, HashSet<ISymbol> applying) =>
+        Hierarchy(contextType, types).SelectMany(type => type.GetMembers("OnConfiguring")).Any(member =>
+            !SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, state.Compilation.Assembly) ||
+            applying.Contains(member is IMethodSymbol method ? Key(method) : member.OriginalDefinition));
 
     // A DbSet<T> property of a tenant-owned type, or modelBuilder.Entity<T>() of one, in the context or a base context.
-    private static bool HasTenantOwned(INamedTypeSymbol contextType, KnownTypes types, State state)
-    {
-        foreach (var type in Hierarchy(contextType, types))
-        {
-            if (state.MapsTenantOwned.ContainsKey(type.OriginalDefinition))
-                return true;
-
-            foreach (var (_, entity) in types.DbSets(type))
-            {
-                if (KnownTypes.Implements(entity, types.TenantEntity))
-                    return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasTenantOwned(INamedTypeSymbol contextType, KnownTypes types, State state) =>
+        Hierarchy(contextType, types).Any(type =>
+            state.MapsTenantOwned.ContainsKey(type.OriginalDefinition) ||
+            types.DbSets(type).Any(set => KnownTypes.Implements(set.Entity, types.TenantEntity)));
 
     // The context type and its base types, up to DbContext.
     private static IEnumerable<INamedTypeSymbol> Hierarchy(INamedTypeSymbol contextType, KnownTypes types)
@@ -380,16 +365,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
         return parameter;
     }
 
-    private static IOperation? Options(IInvocationOperation invocation)
-    {
-        foreach (var argument in invocation.Arguments)
-        {
-            if (argument.Parameter?.Type.TypeKind == TypeKind.Delegate)
-                return argument.Value;
-        }
-
-        return null;
-    }
+    private static IOperation? Options(IInvocationOperation invocation) =>
+        invocation.Arguments.FirstOrDefault(argument => argument.Parameter?.Type.TypeKind == TypeKind.Delegate)?.Value;
 
     // A local function's declaration, in the same method as the call.
     private static ILocalFunctionOperation? LocalFunction(IOperation call, IMethodSymbol method)
@@ -399,13 +376,15 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
         while (root.Parent is not null)
             root = root.Parent;
 
-        foreach (var operation in root.Descendants())
-        {
-            if (operation is ILocalFunctionOperation local && SymbolEqualityComparer.Default.Equals(local.Symbol, method))
-                return local;
-        }
+        return root.Descendants().OfType<ILocalFunctionOperation>()
+            .FirstOrDefault(local => SymbolEqualityComparer.Default.Equals(local.Symbol, method));
+    }
 
-        return null;
+    // A method as both its calls and its own code name it: a generic method's definition, a partial method's declaration.
+    private static IMethodSymbol Key(IMethodSymbol method)
+    {
+        var definition = method.OriginalDefinition;
+        return definition.PartialDefinitionPart ?? definition;
     }
 
     private static bool HasBuilder(ImmutableArray<IArgumentOperation> arguments, KnownTypes types)
@@ -445,7 +424,10 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
 
         public SyntaxTree Tree { get; } = invocation.Syntax.SyntaxTree;
 
-        /// <summary>The method body the call is in, and where in it: on EF Core 8 the first registration counts.</summary>
+        /// <summary>
+        /// The body the call is in, a lambda's or local function's being its own, and where in it: on EF Core 8 the first
+        /// registration counts, and the order of calls in different bodies is not known.
+        /// </summary>
         public TextSpan Body { get; } = Root(invocation).Syntax.Span;
 
         public int Position { get; } = invocation.Syntax.SpanStart;
@@ -458,7 +440,7 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
 
         private static IOperation Root(IOperation operation)
         {
-            while (operation.Parent is not null)
+            while (operation.Parent is not null && operation is not (IAnonymousFunctionOperation or ILocalFunctionOperation))
                 operation = operation.Parent;
 
             return operation;
@@ -469,8 +451,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
     {
         public Compilation Compilation { get; } = compilation;
 
-        /// <summary>The methods whose code may apply UseTenantry() to an options builder.</summary>
-        public ConcurrentDictionary<ISymbol, byte> Applying { get; } = new(SymbolEqualityComparer.Default);
+        /// <summary>The methods whose own code may apply UseTenantry() to an options builder.</summary>
+        public ConcurrentDictionary<ISymbol, byte> DirectlyApplying { get; } = new(SymbolEqualityComparer.Default);
 
         /// <summary>The methods that hand a builder to a method of the application's, with that method.</summary>
         public ConcurrentBag<(ISymbol Owner, IMethodSymbol Target)> HandOffs { get; } = [];

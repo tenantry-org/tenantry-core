@@ -149,18 +149,22 @@ Add `.UseTenantry()` to the options. `AddDbContextPerTenantDatabase` applies `Us
 reported.
 
 A context has tenant-owned entities when it, or a base context, has a `DbSet<T>` property of a type that implements
-`ITenantEntity<TKey>`, or maps one with `modelBuilder.Entity<T>()` in one of its methods, as [TNY1001](#tny1001) sees
-them. A type mapped only in an `IEntityTypeConfiguration<T>` (or `ApplyConfigurationsFromAssembly`), or reached only
-through a navigation, is not seen.
+`ITenantEntity<TKey>`, or maps one with `modelBuilder.Entity<T>()` in one of its methods; a type parameter constrained
+to a tenant-owned type counts as one. Not seen: a type mapped only in an `IEntityTypeConfiguration<T>` (or
+`ApplyConfigurationsFromAssembly`), with `Entity(typeof(T))`, with `Entity<T>()` in a method of another class, or
+reached only through a navigation, and a generic base context that maps an unconstrained type parameter.
 
 The rule reports a registration only when it sees everything the options do, so these are not reported:
 
 - options that hand the builder to code that could call `UseTenantry()`, or store it in a field or property: a method
-  of the project's own that does so in turn, a library that references `Tenantry.EfCore` (directly or through another
-  library), a delegate, an interface, virtual or unsealed override method, a local function, or a constructor of the
-  project's own. A method of the project's own that does none of this does not count;
-- options that are not a lambda or a method of the project's own (a delegate in a variable), and a registration
-  without options;
+  of the project's own that does so in turn, another project of the solution, a package that references
+  `Tenantry.EfCore` (directly or through another package), a delegate, an interface, virtual or unsealed override
+  method, a local function, or a constructor of the project's own. A method of the project's own that does none of
+  this does not count, and neither does the framework;
+- options that are not a lambda or a method of the project's own (a delegate in a variable), a method that can be
+  overridden (a virtual, abstract or interface method), and a registration without options;
+- a registration in generated code, where nothing is reported; generated code still counts for the helpers and
+  `OnConfiguring` it holds;
 - a context with an `OnConfiguring`, of its own or a base context's, that calls `UseTenantry()` or hands the builder
   on as above, or that is in another assembly. One that only picks a provider or adds logging, as a scaffolded
   context's does, does not count;
@@ -168,7 +172,13 @@ The rule reports a registration only when it sees everything the options do, so 
   EF Core 9 they add to the same options. A generic method that does so for its type parameter counts for every context
   that meets the type parameter's constraints, every context when it is constrained only to `DbContext`. On EF Core 8,
   only a context's first registration's options apply, so another registration counts only when it is not later in
-  the same method.
+  the same method; a lambda's or local function's body is a method of its own here.
+
+The registrations in a method are all taken to run, in source order, so one on a branch that excludes another, after
+an early return, or in a callback that runs later still counts. A few false reports remain by design: the builder
+passed inside an array or a `params object[]`, through reflection, or as a method group to a framework or third-party
+method, and a package that does not reference `Tenantry.EfCore` calling back into the application's override of its
+virtual method. Suppress the warning there.
 
 It decides once the whole project is compiled, so `dotnet build` reports it, while Visual Studio and Rider may show it
 only after a build, or with analysis of the whole solution turned on. Where a context is meant to be unisolated, such
