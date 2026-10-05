@@ -147,8 +147,9 @@ again for a released version fails, instead of creating a GitHub release whose c
 packages. A dry run given a version checks it too.
 
 If a release stops part way, after some packages were pushed, rerunning it does not finish it, and a published package
-cannot be replaced. Rerunning the failed job fails at the push, as NuGet.org refuses a version a package has already;
-rerunning every job fails at the check that the version is unpublished. Release the next patch instead, from the same
+cannot be replaced. Rerunning the failed job fails at the push, as NuGet.org refuses a version a package has already,
+or, more than 7 days after the run, at the download of its packages, which GitHub has deleted by then; rerunning every
+job fails at the check that the version is unpublished. Release the next patch instead, from the same
 branch: add its `CHANGELOG.md` section, which says it replaces the incomplete release, and tag it. Unlist the
 incomplete version's packages on NuGet.org, so no one picks a set that does not match, unless the release stopped
 only at `Tenantry.Templates` ([The templates package](#the-templates-package)). `TenantryPackageBaseline` names the
@@ -182,7 +183,8 @@ gh release create "$tag" --repo tenantry-org/tenantry-core --verify-tag --title 
 ```
 
 If the workflow created the release but not all its files, upload the missing ones with `gh release upload "$tag"
-<files> --clobber` instead.
+<files> --clobber` instead. That works only while the repository's immutable releases setting is off, as it is now: an
+immutable release's files cannot be added to or replaced once it is published.
 
 ## Prereleases from master
 
