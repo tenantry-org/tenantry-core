@@ -23,7 +23,13 @@ internal sealed class KnownTypes
         PrimaryKeyAttribute = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.PrimaryKeyAttribute");
         KeyAttribute = compilation.GetTypeByMetadataName("System.ComponentModel.DataAnnotations.KeyAttribute");
         EntityTypeConfiguration = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.IEntityTypeConfiguration`1");
+        Queryable = compilation.GetTypeByMetadataName("System.Linq.IQueryable");
+        Expression = compilation.GetTypeByMetadataName("System.Linq.Expressions.Expression`1");
     }
+
+    public INamedTypeSymbol? Queryable { get; }
+
+    public INamedTypeSymbol? Expression { get; }
 
     public INamedTypeSymbol? EntityTypeConfiguration { get; }
 

@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   custom resolver that reads the user finds nothing before authentication, and how to call or serve a service that
   names the tenant in a header other than `tenantry-tenant-id`.
 
+### Changed
+
+- TNY1002 also reports `IgnoreQueryFilters()` on a query of a shared entity that brings in a tenant-owned one, through
+  an `Include` or `ThenInclude`, a `Select`, `SelectMany`, `Join` or `GroupJoin`, or a navigation in one of its lambdas,
+  in the same expression. `db.Categories.IgnoreQueryFilters().Include(c => c.Purchases)`, where `Category` is shared
+  and `Purchase` is tenant-owned, reads every tenant's purchases, and was not reported. A build that treats warnings
+  as errors fails on it. On EF Core 10, a call that names only filters other than `TenantryQueryFilters.Tenant` is
+  still not reported. See [TNY1002](docs/analyzers.md#tny1002).
+
 ### Fixed
 
 - `app.UseTenantry()` before `app.UseRouting()` logs event 1007 when routing chooses an endpoint whose route value

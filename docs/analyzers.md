@@ -7,7 +7,7 @@ package to install. They add no runtime dependency: the compiler loads them, and
 | Rule | Package | Default | Reports |
 |------|---------|---------|---------|
 | [TNY1001](#tny1001) | Tenantry.EfCore | Warning | An entity with a `TenantId` that does not implement `ITenantEntity<TKey>` |
-| [TNY1002](#tny1002) | Tenantry.EfCore | Warning | `IgnoreQueryFilters()` on a query of a tenant-owned entity |
+| [TNY1002](#tny1002) | Tenantry.EfCore | Warning | `IgnoreQueryFilters()` in a query that reads a tenant-owned entity |
 | [TNY1003](#tny1003) | Tenantry.EfCore | Info | Raw SQL on `Database`, which is not isolated |
 | [TNY2001](#tny2001) | Tenantry.AspNetCore | Warning | The tenant resolved from the request with no access validator |
 | [TNY3001](#tny3001) | Tenantry.EfCore | Info | `MakeCurrent` or `CreateScope` given a descriptor built in the call |
@@ -84,13 +84,34 @@ the same reason it has no code fix: Visual Studio and Rider offer fixes only for
 
 ## TNY1002
 
-`IgnoreQueryFilters()` on a query of a tenant-owned entity removes Tenantry's tenant filter, so the query reads every
-tenant's rows, and an `ExecuteUpdate` or `ExecuteDelete` after it changes them.
+`IgnoreQueryFilters()` removes Tenantry's tenant filter from the whole query, so a query that reads a tenant-owned
+entity reads every tenant's rows of it, and an `ExecuteUpdate` or `ExecuteDelete` after it changes them. The rule reports
+the call when the type the query reads is tenant-owned, and when the query brings a tenant-owned type in: an `Include`
+or `ThenInclude` of it, a `Select`, `SelectMany`, `Join` or `GroupJoin` of it, or a navigation to it or a query of it in
+one of the query's lambdas. A query of a shared entity with a filter of its own, such as a soft delete, is where this
+happens by accident:
+
+```csharp no-compile
+// Category is shared and has a soft-delete filter; Purchase is tenant-owned.
+var categories = await db.Categories
+    .IgnoreQueryFilters() // TNY1002: the included purchases are every tenant's
+    .Include(c => c.Purchases)
+    .ToListAsync();
+```
 
 If the query is meant to cross tenants (an admin report, maintenance), put it behind an authorization check of its own
 and suppress the warning there with the reason. If it is meant to ignore another filter only, on EF Core 10 name that
 filter, which keeps the tenant filter: `IgnoreQueryFilters(["SoftDelete"])`. A call that names filters is reported only
-when a name among them is the tenant filter's, `TenantryQueryFilters.Tenant`.
+when a name among them is the tenant filter's, `TenantryQueryFilters.Tenant`. On EF Core 8 and 9, which cannot name a
+filter, read the tenant-owned rows in a query of their own, without `IgnoreQueryFilters()`.
+
+The rule sees the calls on the query in the expression that calls `IgnoreQueryFilters()`, before and after it, up to the
+first that runs in memory (`AsEnumerable()`, `ToDictionaryAsync`'s selectors). EF Core ignores the filters for the whole
+query wherever the call is, so a `Join` that takes the query as its inner query counts too. A query kept in a variable
+or returned from a method, and extended elsewhere, is seen only as far as that expression goes, and a call in a
+subquery, inside another query's lambda, is checked against the subquery only. An `Include` path in a string is followed
+as far as its navigations are properties of the types it names, and an entity EF Core includes by itself
+(`AutoInclude()`) is not seen.
 
 ## TNY1003
 

@@ -23,14 +23,16 @@ internal static class Rules
 
     public static readonly DiagnosticDescriptor IgnoreQueryFilters = new(
         "TNY1002",
-        "A query on a tenant-owned entity ignores the tenant filter",
-        "This query on '{0}' ignores the tenant filter, so it reads every tenant's rows, and an ExecuteUpdate or " +
-        "ExecuteDelete after it changes them; if it is meant to cross tenants, suppress this warning there and say why",
+        "A query that reads a tenant-owned entity ignores the tenant filter",
+        "This query reads '{0}' and ignores the tenant filter, so it reads every tenant's '{0}' rows; if it is meant " +
+        "to cross tenants, suppress this warning there and say why",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "IgnoreQueryFilters() removes Tenantry's tenant filter from the query. Code that is meant to work " +
-                     "across tenants should be behind an authorization check of its own.",
+        description: "IgnoreQueryFilters() removes Tenantry's tenant filter from the whole query: the type it queries, " +
+                     "what it includes, joins and selects, and the navigations its lambdas read. An ExecuteUpdate or " +
+                     "ExecuteDelete after it changes every tenant's rows. Code that is meant to work across tenants " +
+                     "should be behind an authorization check of its own.",
         helpLinkUri: HelpBase + "tny1002");
 
     public static readonly DiagnosticDescriptor RawSql = new(

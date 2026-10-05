@@ -6,10 +6,19 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Tenantry.EfCore.Analyzers;
 
 /// <summary>
-/// TNY1002: <c>IgnoreQueryFilters()</c> on a query of a tenant-owned entity type. With filter names (EF Core 10), it
-/// is reported only when a name that is a constant equal to the tenant filter's is among them, so a query that ignores
-/// other filters and keeps the tenant's is not.
+/// TNY1002: <c>IgnoreQueryFilters()</c> in a query that reads a tenant-owned entity type, as the type it queries or as a
+/// type its calls bring in: an <c>Include</c> or <c>ThenInclude</c>, a <c>Select</c>, <c>SelectMany</c>, <c>Join</c> or
+/// <c>GroupJoin</c>, or a navigation or query in one of its lambdas. With filter names (EF Core 10), it is reported only
+/// when a name that is a constant equal to the tenant filter's is among them, so a query that ignores other filters and
+/// keeps the tenant's is not.
 /// </summary>
+/// <remarks>
+/// The query is the chain of calls on it in the expression that calls <c>IgnoreQueryFilters()</c>, before and after it,
+/// up to the first call that takes no query (<c>AsEnumerable()</c>, and what follows it, runs in memory), with the calls
+/// its result is passed to, such as a <c>Join</c> that takes it as the inner query: EF Core ignores the filters for the
+/// whole query wherever the call is. Calls on the query elsewhere, after it is kept in a variable or returned from a
+/// method, and a query whose lambda contains the call, are not seen.
+/// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
 {
@@ -27,7 +36,7 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         {
             var types = KnownTypes.For(start.Compilation);
 
-            if (types.TenantEntity is not null && types.QueryableExtensions is not null)
+            if (types.TenantEntity is not null && types.QueryableExtensions is not null && types.Queryable is not null)
                 start.RegisterOperationAction(operation => Analyze(operation, types), OperationKind.Invocation);
         });
     }
@@ -38,8 +47,7 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         var method = invocation.TargetMethod;
 
         if (method is not { Name: "IgnoreQueryFilters", IsGenericMethod: true, TypeArguments.Length: 1 } ||
-            !KnownTypes.IsDeclaredBy(method, types.QueryableExtensions) ||
-            !KnownTypes.Implements(method.TypeArguments[0], types.TenantEntity))
+            !KnownTypes.IsDeclaredBy(method, types.QueryableExtensions))
         {
             return;
         }
@@ -48,8 +56,15 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         if (invocation.Arguments.Length > 1 && !NamesTenantFilter(invocation.Arguments[1], context))
             return;
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            Rules.IgnoreQueryFilters, invocation.Syntax.GetLocation(), method.TypeArguments[0].Name));
+        foreach (var call in Chain(invocation, types))
+        {
+            if (TenantOwnedIn(call, types) is { } owned)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Rules.IgnoreQueryFilters, invocation.Syntax.GetLocation(), owned.Name));
+                return;
+            }
+        }
     }
 
     private static bool NamesTenantFilter(IArgumentOperation names, OperationAnalysisContext context)
@@ -66,5 +81,168 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    // The call, then the calls before it on the same query, then those after it: the extension methods on a query.
+    private static IEnumerable<IInvocationOperation> Chain(IInvocationOperation call, KnownTypes types)
+    {
+        yield return call;
+
+        for (var before = Source(call) as IInvocationOperation; before is not null && TakesQuery(before, types);
+             before = Source(before) as IInvocationOperation)
+        {
+            yield return before;
+        }
+
+        for (var after = Consumer(call); after is not null && TakesQuery(after, types); after = Consumer(after))
+            yield return after;
+    }
+
+    // What an extension method is called on: its first argument.
+    private static IOperation? Source(IInvocationOperation call) =>
+        Unwrap(call.Arguments.FirstOrDefault(argument => argument.Parameter?.Ordinal == 0)?.Value);
+
+    // The call the result of this one is passed to, if the expression goes on: the next call on the query, or one that
+    // joins it to another query, which the filters are ignored for too.
+    private static IInvocationOperation? Consumer(IOperation operation)
+    {
+        while (operation.Parent is IConversionOperation { IsImplicit: true } conversion)
+            operation = conversion;
+
+        return operation.Parent is IArgumentOperation { Parent: IInvocationOperation call } ? call : null;
+    }
+
+    // Whether the call is an extension method on a query, which EF Core translates, rather than on results in memory.
+    private static bool TakesQuery(IInvocationOperation call, KnownTypes types) =>
+        call.TargetMethod is { IsExtensionMethod: true, Parameters.Length: > 0 } method && IsQuery(method.Parameters[0].Type, types);
+
+    // The first tenant-owned type the call brings into the query: one of its type arguments (the type it queries, what
+    // an Include includes, what a Select selects, what a Join joins), a navigation an Include names in a string, or a
+    // navigation or a query in one of its lambdas.
+    private static ITypeSymbol? TenantOwnedIn(IInvocationOperation call, KnownTypes types)
+    {
+        var method = call.TargetMethod;
+
+        if (FirstTenantOwned(method.TypeArguments, types) is { } typeArgument)
+            return typeArgument;
+
+        foreach (var argument in call.Arguments)
+        {
+            if (argument.Parameter?.Type is not { } parameter)
+                continue;
+
+            // Include("Categories.Purchases"): the navigations it names.
+            if (parameter.SpecialType == SpecialType.System_String && method.Name == "Include" &&
+                KnownTypes.IsDeclaredBy(method, types.QueryableExtensions) &&
+                argument.Value.ConstantValue is { HasValue: true, Value: string path } &&
+                FirstTenantOwned(Navigations(method.TypeArguments[0], path), types) is { } navigation)
+            {
+                return navigation;
+            }
+
+            // A lambda EF Core translates: what it reads from its parameters, and the queries it runs.
+            if (!SymbolEqualityComparer.Default.Equals(parameter.OriginalDefinition, types.Expression))
+                continue;
+
+            foreach (var operation in argument.Value.DescendantsAndSelf())
+            {
+                if (operation.Type is { } type && (IsQuery(type, types) || FromLambdaParameter(operation)) &&
+                    TenantOwned(type, types) is { } owned)
+                {
+                    return owned;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // The type of each navigation along an Include path, from the type the query reads, as far as each is found.
+    private static IEnumerable<ITypeSymbol> Navigations(ITypeSymbol root, string path)
+    {
+        var type = root;
+
+        foreach (var name in path.Split('.'))
+        {
+            var property = Members(type, name).OfType<IPropertySymbol>().FirstOrDefault();
+
+            if (property is null)
+                yield break;
+
+            yield return property.Type;
+            type = ElementType(property.Type);
+        }
+    }
+
+    private static IEnumerable<ISymbol> Members(ITypeSymbol type, string name)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers(name))
+                yield return member;
+        }
+    }
+
+    // A collection navigation's element type, or the type itself.
+    private static ITypeSymbol ElementType(ITypeSymbol type)
+    {
+        if (type.SpecialType == SpecialType.System_String)
+            return type;
+
+        var enumerable = type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
+            ? type as INamedTypeSymbol
+            : type.AllInterfaces.FirstOrDefault(candidate =>
+                candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T);
+
+        return enumerable?.TypeArguments[0] ?? type;
+    }
+
+    // The tenant-owned type that type is, or holds as a type argument (a collection's, a query's).
+    private static ITypeSymbol? TenantOwned(ITypeSymbol type, KnownTypes types)
+    {
+        if (KnownTypes.Implements(type, types.TenantEntity))
+            return type;
+
+        return type is INamedTypeSymbol named ? FirstTenantOwned(named.TypeArguments, types) : null;
+    }
+
+    private static ITypeSymbol? FirstTenantOwned(IEnumerable<ITypeSymbol> candidates, KnownTypes types) =>
+        candidates.Select(type => TenantOwned(type, types)).FirstOrDefault(owned => owned is not null);
+
+    private static bool IsQuery(ITypeSymbol? type, KnownTypes types) =>
+        type is not null &&
+        (SymbolEqualityComparer.Default.Equals(type, types.Queryable) ||
+         type.AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, types.Queryable)));
+
+    // Whether the value is read from a lambda's parameter, through properties and fields, as a navigation is.
+    private static bool FromLambdaParameter(IOperation operation)
+    {
+        while (true)
+        {
+            switch (operation)
+            {
+                case IPropertyReferenceOperation { Instance: { } instance }:
+                    operation = instance;
+                    break;
+                case IFieldReferenceOperation { Instance: { } instance }:
+                    operation = instance;
+                    break;
+                case IConversionOperation conversion:
+                    operation = conversion.Operand;
+                    break;
+                case IParameterReferenceOperation reference:
+                    return reference.Parameter.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.AnonymousFunction };
+                default:
+                    return false;
+            }
+        }
+    }
+
+    private static IOperation? Unwrap(IOperation? operation)
+    {
+        while (operation is IConversionOperation { IsImplicit: true } conversion)
+            operation = conversion.Operand;
+
+        return operation;
     }
 }

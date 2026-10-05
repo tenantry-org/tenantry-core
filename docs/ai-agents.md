@@ -200,9 +200,9 @@ that the access validator refuses a caller, and the pipeline order ([Testing](te
   filter applies and no check sees what they change. Prefer LINQ or `FromSql` on a tenant-owned set, which EF Core
   filters; otherwise add the tenant predicate yourself
   ([What is and isn't isolated](efcore-integration.md#what-is-and-isnt-isolated)).
-- `IgnoreQueryFilters()` removes the tenant filter from that query, so it reads every tenant's rows, and
-  `ExecuteUpdate` or `ExecuteDelete` after it change them. Use it only in code meant to work across tenants, behind an
-  authorization check of its own.
+- `IgnoreQueryFilters()` removes the tenant filter from that whole query, so it reads every tenant's rows, its
+  `Include`s and joins of tenant-owned entities too, and `ExecuteUpdate` or `ExecuteDelete` after it change them. Use
+  it only in code meant to work across tenants, behind an authorization check of its own.
 - Resolving the tenant from a header, route value, query string, host or subdomain with no access validator lets any
   caller act as any tenant. Add `ValidateTenantAccessByClaim(...)` or `ValidateTenantAccess(...)` in the same
   `AddTenantry`.
