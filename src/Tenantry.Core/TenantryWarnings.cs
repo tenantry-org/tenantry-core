@@ -22,15 +22,16 @@ public static class TenantryWarnings
     /// </summary>
     public const int OrdinaryOptionsReadAsTenant = 3001;
 
-    // Tenantry's packages log events 1000 to 3999. Other packages, such as Tenantry.Pro, check their own ids.
+    // Tenantry's packages log events 1000 to 2999, and Tenantry.Options event 3001. Other ids are other packages',
+    // such as Tenantry.Pro's 3001 to 3408 and 4001 up, which check their own.
     private const int FirstEventId = 1000;
-    private const int LastEventId = 3999;
+    private const int LastEventId = 2999;
 
     private static readonly int[] Ignorable = [StringTenantIdCollation, OrdinaryOptionsReadAsTenant];
 
     /// <summary>
     /// Whether the application turned off the warning <paramref name="eventId"/> with <c>IgnoreWarnings</c>. A package
-    /// that logs warnings of its own reads it here.
+    /// that logs warnings of its own reads it here for its ids outside Tenantry's events, 1000 to 2999 and 3001.
     /// </summary>
     /// <param name="services">The application's services.</param>
     /// <param name="eventId">The warning's event id.</param>
@@ -50,8 +51,9 @@ public static class TenantryWarnings
             if (eventId is >= FirstEventId and <= LastEventId && !Ignorable.Contains(eventId))
             {
                 throw new ArgumentException(
-                    $"Tenantry cannot ignore event {eventId}: IgnoreWarnings accepts only the warnings about " +
-                    $"configuration that may be deliberate, {string.Join(" and ", Ignorable)} (TenantryWarnings). " +
+                    $"Tenantry cannot ignore event {eventId}: of its events, {FirstEventId} to {LastEventId} and " +
+                    $"{OrdinaryOptionsReadAsTenant}, IgnoreWarnings accepts only the warnings about configuration " +
+                    $"that may be deliberate, {string.Join(" and ", Ignorable)} (TenantryWarnings). " +
                     "Event 2002 is turned off with EfCoreIsolationOptions.OnMissingTenant, and event 2006 with " +
                     "EfCoreIsolationOptions.OnUnmarkedEntityType.",
                     nameof(eventIds));

@@ -34,7 +34,7 @@ Returns: `int`
 
 ### `IsIgnored(IServiceProvider, int)`
 
-Whether the application turned off the warning `eventId` with `IgnoreWarnings`. A package that logs warnings of its own reads it here.
+Whether the application turned off the warning `eventId` with `IgnoreWarnings`. A package that logs warnings of its own reads it here for its ids outside Tenantry's events, 1000 to 2999 and 3001.
 
 ```csharp
 public static bool IsIgnored(IServiceProvider services, int eventId)

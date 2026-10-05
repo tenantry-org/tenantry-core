@@ -109,7 +109,7 @@ Exceptions:
 
 - `ArgumentException`: An id is one of Tenantry's events that [`TenantryWarnings`](tenantry-tenantrywarnings.md) does not name.
 
-Each call adds to the ids of the others. Ids outside Tenantry's events, 1000 to 3999, are kept for the package that logs them, which reads them with [`TenantryWarnings.IsIgnored`](tenantry-tenantrywarnings.md).
+Each call adds to the ids of the others. Ids outside Tenantry's events, 1000 to 2999 and 3001, are kept for the package that logs them, which reads them with [`TenantryWarnings.IsIgnored`](tenantry-tenantrywarnings.md). An id applies only to the package that logs it: 3001 turns off the Tenantry.Options warning, not Tenantry.Pro's event 3001.
 
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant
