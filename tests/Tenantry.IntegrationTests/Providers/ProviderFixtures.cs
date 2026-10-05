@@ -59,7 +59,11 @@ internal static partial class DatabaseContainers
 {
     private static readonly Lazy<Dictionary<IDatabaseContainer, Task>> Started = new(StartAll);
 
-    public static IDatabaseContainer SqlServer { get; } = new MsSqlBuilder(ContainerImages.SqlServer).Build();
+    // At SQL Server's minimum of 2 GB, which the tests stay well within: otherwise it sizes itself to 80% of the
+    // memory Docker has, and a few runs at once exhaust it.
+    public static IDatabaseContainer SqlServer { get; } = new MsSqlBuilder(ContainerImages.SqlServer)
+        .WithEnvironment("MSSQL_MEMORY_LIMIT_MB", "2048")
+        .Build();
 
     public static IDatabaseContainer PostgreSql { get; } = new PostgreSqlBuilder(ContainerImages.PostgreSql).Build();
 
