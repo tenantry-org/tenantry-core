@@ -255,12 +255,10 @@ with an extension method that both `Program.cs` and the tests call.
 
 ### Entity types left unisolated
 
-An entity type that is neither tenant-owned nor marked as shared by every tenant is read and written by every tenant
-([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)).
-`TenantModel.FindUnisolatedEntityTypes` returns those types. It lists only the roots of inheritance hierarchies, and
-leaves out derived types, owned types and the join entity type of a many-to-many relationship that holds only its two
-foreign keys, which follow their hierarchy's root, their owner or the types they join. This test fails when a new
-entity type is one of them:
+`TenantModel.FindUnisolatedEntityTypes` lists the entity types that are neither tenant-owned nor marked as shared, whose
+rows every tenant reads and writes
+([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)). This test
+fails when a new entity type is one of them:
 
 ```csharp
 public sealed class ModelTests
@@ -268,7 +266,10 @@ public sealed class ModelTests
     [Fact]
     public void EveryEntityTypeIsTenantOwnedOrMarkedShared()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite("Data Source=:memory:").UseTenantry().Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite("Data Source=:memory:")
+            .UseTenantry()
+            .Options;
         using var db = new AppDbContext(options);
 
         Assert.Empty(TenantModel.FindUnisolatedEntityTypes(db.Model));

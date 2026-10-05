@@ -167,5 +167,5 @@ bodies instead; see [ASP.NET Core integration](aspnetcore-integration.md#status-
 - Resolve tenants from subdomains, routes or claims: [Tenant resolution](tenant-resolution.md).
 - Restrict which users may use which tenants: [Access control](access-control.md).
 - The isolation policy, admin queries and migrations: [EF Core integration](efcore-integration.md).
-- Test that each tenant reads and writes only its own data, from the first entity: [Testing](testing.md).
-- The build warnings for mistakes that leave tenant data unprotected: [Analyzers](analyzers.md).
+- Test that each tenant reads and writes only its own data: [Testing](testing.md).
+- Build-time checks for common Tenantry mistakes: [Analyzers](analyzers.md).

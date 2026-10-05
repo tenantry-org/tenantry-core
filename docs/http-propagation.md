@@ -5,10 +5,10 @@ sends the current tenant with an `HttpClient`'s or gRPC client's requests, in th
 (`TenantPropagation.HeaderName`), and `Tenantry.AspNetCore` reads it on the other side with
 `ResolveFromPropagationHeader`.
 
-The header name is fixed by design: it is the wire format between Tenantry services. For a service that expects
-another header, set that header from the current tenant in a small `DelegatingHandler` of your own on the calling
-client, and on a receiving Tenantry service read it with `ResolveFromHeader("X-Tenant-Id")`, which checks no caller,
-so pair it with an [access validator](access-control.md).
+The header name is fixed. To call a service that expects another header, set it from the current tenant in a
+`DelegatingHandler` of your own. To accept another header, use `ResolveFromHeader("X-Tenant-Id")`, which, unlike
+`ResolveFromPropagationHeader`, accepts it from any caller and looks it up as an identifier: add an
+[access validator](access-control.md).
 
 ```bash
 dotnet add package Tenantry.Http
