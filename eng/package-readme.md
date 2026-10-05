@@ -13,8 +13,8 @@ builder.Services.AddDbContext<AppDbContext>(options => options
     .UseTenantry());                            // how data is isolated
 
 app.UseAuthentication();
-// Authorization before UseTenantry(), so an anonymous caller gets 401, not 403. With app.UseTenantResolution(), it
-// comes after UseTenantry() instead.
+// Before UseTenantry(), so an anonymous caller gets 401, not 403. After it with app.UseTenantResolution(),
+// or when a policy reads the tenant.
 app.UseAuthorization();
 app.UseTenantry();
 ```
