@@ -17,9 +17,7 @@ namespace Tenantry.IntegrationTests.Providers;
 /// <summary>MySQL through Pomelo's provider on EF Core 8 and 9, and Oracle's on EF Core 10, which Pomelo does not support.</summary>
 public sealed class MySqlFixture : DatabaseFixture
 {
-    protected override IDatabaseContainer Container { get; } =
-        // Root, because the database-per-tenant tests create a database per tenant.
-        new MySqlBuilder(ContainerImages.MySql).WithUsername("root").Build();
+    protected override IDatabaseContainer Container => DatabaseContainers.MySql;
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
 #if NET10_0_OR_GREATER
@@ -39,3 +37,13 @@ public sealed class MySqlWriteIsolationTests(MySqlFixture fixture) : ProviderWri
 public sealed class MySqlPooledDatabasePerTenantTests(MySqlFixture fixture) : ProviderPooledDatabasePerTenantTests(fixture);
 
 public sealed class MySqlPooledGuardTests(MySqlFixture fixture) : ProviderPooledGuardTests(fixture);
+
+internal static partial class DatabaseContainers
+{
+    // Root, because the database-per-tenant tests create a database per tenant.
+    public static IDatabaseContainer MySql { get; } =
+        new MySqlBuilder(ContainerImages.MySql).WithUsername("root").Build();
+
+    static partial void AddMySql(List<(string Name, IDatabaseContainer Container)> containers) =>
+        containers.Add(("MySQL", MySql));
+}

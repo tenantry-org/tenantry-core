@@ -10,7 +10,7 @@ using Testcontainers.PostgreSql;
 [assembly: Trait("Category", "Integration")]
 
 // One container per database for each framework's test run, shared by every test class (MySQL's is in
-// MySqlProviderTests.cs).
+// MySqlProviderTests.cs). The containers start together (DatabaseContainers).
 [assembly: AssemblyFixture(typeof(Tenantry.IntegrationTests.Providers.SqlServerFixture))]
 [assembly: AssemblyFixture(typeof(Tenantry.IntegrationTests.Providers.PostgreSqlFixture))]
 
@@ -36,7 +36,7 @@ public abstract class DatabaseFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await Container.StartAsync();
+        await DatabaseContainers.StartedAsync(Container);
 
         var options = UseProvider(new DbContextOptionsBuilder<ProviderOrdersContext>());
         await using ProviderOrdersContext db = new((DbContextOptions<ProviderOrdersContext>)options.Options);
@@ -50,10 +50,50 @@ public abstract class DatabaseFixture : IAsyncLifetime
     }
 }
 
+/// <summary>
+/// The run's database containers, which start together when the first fixture initializes: xUnit initializes the
+/// assembly fixtures one after another, and each container takes seconds to accept connections. Each fixture waits
+/// only for its own container, and disposes it.
+/// </summary>
+internal static partial class DatabaseContainers
+{
+    private static readonly Lazy<Dictionary<IDatabaseContainer, Task>> Started = new(StartAll);
+
+    public static IDatabaseContainer SqlServer { get; } = new MsSqlBuilder(ContainerImages.SqlServer).Build();
+
+    public static IDatabaseContainer PostgreSql { get; } = new PostgreSqlBuilder(ContainerImages.PostgreSql).Build();
+
+    /// <summary>Starts every container the first time it is called; waits for <paramref name="container"/>.</summary>
+    public static Task StartedAsync(IDatabaseContainer container) => Started.Value[container];
+
+    private static Dictionary<IDatabaseContainer, Task> StartAll()
+    {
+        List<(string Name, IDatabaseContainer Container)> containers =
+            [("SQL Server", SqlServer), ("PostgreSQL", PostgreSql)];
+        AddMySql(containers);
+        return containers.ToDictionary(c => c.Container, c => StartAsync(c.Name, c.Container));
+    }
+
+    private static async Task StartAsync(string name, IDatabaseContainer container)
+    {
+        try
+        {
+            await container.StartAsync();
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"The {name} container ({container.Image.FullName}) did not start.", exception);
+        }
+    }
+
+    // MySqlProviderTests.cs adds MySQL's container; a framework without a MySQL provider leaves that file out.
+    static partial void AddMySql(List<(string Name, IDatabaseContainer Container)> containers);
+}
+
 public sealed class SqlServerFixture : DatabaseFixture
 {
-    protected override IDatabaseContainer Container { get; } =
-        new MsSqlBuilder(ContainerImages.SqlServer).Build();
+    protected override IDatabaseContainer Container => DatabaseContainers.SqlServer;
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
         options.UseSqlServer(ConnectionString);
@@ -64,8 +104,7 @@ public sealed class SqlServerFixture : DatabaseFixture
 
 public sealed class PostgreSqlFixture : DatabaseFixture
 {
-    protected override IDatabaseContainer Container { get; } =
-        new PostgreSqlBuilder(ContainerImages.PostgreSql).Build();
+    protected override IDatabaseContainer Container => DatabaseContainers.PostgreSql;
 
     public override DbContextOptionsBuilder UseProvider(DbContextOptionsBuilder options) =>
         options.UseNpgsql(ConnectionString);
