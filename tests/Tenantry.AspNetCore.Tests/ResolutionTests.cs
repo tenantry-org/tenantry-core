@@ -309,7 +309,7 @@ public sealed class ResolutionTests
         await using var _ = app;
         using var client = app.GetTestClient();
 
-        // An endpoint without a route value for the resolver costs nothing, and is not warned about.
+        // An endpoint without the route value the resolver reads is not warned about.
         (await client.GetStringAsync("/tenant", TestContext.Current.CancellationToken)).Should().Be("(none)");
         logs.For(1007).Should().BeEmpty();
 
