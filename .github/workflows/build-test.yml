@@ -29,6 +29,14 @@ jobs:
         with:
           fetch-depth: 0   # MinVer needs full history; SonarCloud needs it for SCM blame
 
+      - name: Pull the database images in the background
+        # The integration tests' database images (tests/Tenantry.IntegrationTests/Providers/compose.yml), pulled while
+        # the steps below check and build: otherwise the tests' first framework spends about 35 seconds pulling them.
+        # Nothing waits for this pull and its result does not matter: Testcontainers pulls any image still missing.
+        run: >
+          nohup docker compose -f tests/Tenantry.IntegrationTests/Providers/compose.yml pull --quiet
+          < /dev/null > "$RUNNER_TEMP/database-images.log" 2>&1 &
+
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
