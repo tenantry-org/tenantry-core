@@ -91,6 +91,9 @@ if [[ "$(git rev-parse master~1)" == "$release" ]] || git merge-base --is-ancest
 fi
 trap - ERR
 
+# The key the tag command names: git's configured signing key, or a placeholder to replace.
+key="$(git config --get user.signingkey || true)"
+key="${key:-<your signing key, such as ~/.ssh/id_ed25519.pub>}"
 title="Tenantry $version"
 [[ "$minor" == 0.* ]] && title="$title (beta)"
 cat <<EOF
@@ -100,8 +103,8 @@ Prepared $branch at $(git rev-parse --short "$release"), and two commits on mast
    git push origin $branch
 2. Push master:
    git push origin master
-3. Tag the branch's head, signed, and push the tag:
-   git -c gpg.format=ssh -c user.signingkey=~/.ssh/id_ed25519.pub \\
+3. Tag the branch's head, signed with your signing key's public key file, and push the tag:
+   git -c gpg.format=ssh -c user.signingkey=$key \\
      tag -s v$version -m "$title" origin/$branch
    git push origin v$version
 

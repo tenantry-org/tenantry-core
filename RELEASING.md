@@ -46,7 +46,8 @@ Only the maintainer can push `v*` tags.
 
 5. Rehearse (optional): Actions → Release → Run workflow on `release/X.Y`, with the tag as the version. It runs the
    release's checks, builds the same packages, and shows what a release would publish and its notes.
-6. Tag the branch's head, signed, and push the tag:
+6. Tag the branch's head, signed, and push the tag. The script prints the command with git's configured signing key
+   (`git config user.signingkey`, the path of an SSH public key); without one, name yours in place of the example:
 
    ```sh
    git -c gpg.format=ssh -c user.signingkey=~/.ssh/id_ed25519.pub \
