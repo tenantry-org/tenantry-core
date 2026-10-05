@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- TNY1001 counts a context whose `DbSet<T>` or `modelBuilder.Entity<T>()` is of a type parameter constrained to a
+  tenant-owned type as one with tenant-owned types, so the other types it maps with a `TenantId` are now reported. It
+  also reads generated code for its contexts, types and markers, so an `IsSharedAcrossTenants()` in a generated file
+  now counts; nothing in generated code is reported.
 - TNY1002 also reports `IgnoreQueryFilters()` on a query of a shared entity that brings in a tenant-owned one, through
   an `Include` or `ThenInclude`, a `Select`, `SelectMany`, `Join` or `GroupJoin`, the other query of a `Union`,
   `Concat`, `Intersect` or `Except`, or a navigation in one of its lambdas, also through casts, conditionals and a local

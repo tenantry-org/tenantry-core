@@ -78,33 +78,12 @@ internal sealed class KnownTypes
     /// Whether <paramref name="type"/> implements the generic interface <paramref name="definition"/>; a type parameter
     /// does when one of its constraints does.
     /// </summary>
-    public static bool Implements(ITypeSymbol type, INamedTypeSymbol? definition)
-    {
-        if (definition is null)
-            return false;
-
-        if (type is ITypeParameterSymbol parameter)
-        {
-            foreach (var constraint in parameter.ConstraintTypes)
-            {
-                if (Implements(constraint, definition))
-                    return true;
-            }
-
-            return false;
-        }
-
-        if (SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, definition))
-            return true;
-
-        foreach (var candidate in type.AllInterfaces)
-        {
-            if (SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, definition))
-                return true;
-        }
-
-        return false;
-    }
+    public static bool Implements(ITypeSymbol type, INamedTypeSymbol? definition) =>
+        definition is not null &&
+        (type is ITypeParameterSymbol parameter
+            ? parameter.ConstraintTypes.Any(constraint => Implements(constraint, definition))
+            : SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, definition) ||
+              type.AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, definition)));
 
     /// <summary>Whether <paramref name="type"/> derives from <paramref name="baseType"/>.</summary>
     public static bool DerivesFrom(ITypeSymbol type, INamedTypeSymbol? baseType)
@@ -135,17 +114,19 @@ internal sealed class KnownTypes
     }
 
     /// <summary>The <c>DbSet&lt;T&gt;</c> properties a type declares, with the entity type of each.</summary>
-    public IEnumerable<(IPropertySymbol Property, ITypeSymbol Entity)> DbSets(INamedTypeSymbol type)
-    {
-        foreach (var member in type.GetMembers())
-        {
-            if (member is IPropertySymbol { Type: INamedTypeSymbol { IsGenericType: true } set } property &&
-                SymbolEqualityComparer.Default.Equals(set.OriginalDefinition, DbSet))
-            {
-                yield return (property, set.TypeArguments[0]);
-            }
-        }
-    }
+    public IEnumerable<(IPropertySymbol Property, ITypeSymbol Entity)> DbSets(INamedTypeSymbol type) =>
+        type.GetMembers()
+            .OfType<IPropertySymbol>()
+            .Select(property => (property, Entity: DbSetEntity(property)))
+            .Where(set => set.Entity is not null)
+            .Select(set => (set.property, set.Entity!));
+
+    /// <summary>The entity type of a <c>DbSet&lt;T&gt;</c> property; none for another property.</summary>
+    public ITypeSymbol? DbSetEntity(IPropertySymbol property) =>
+        property.Type is INamedTypeSymbol { IsGenericType: true } set &&
+        SymbolEqualityComparer.Default.Equals(set.OriginalDefinition, DbSet)
+            ? set.TypeArguments[0]
+            : null;
 
     /// <summary>
     /// The context and entity type of a <c>modelBuilder.Entity&lt;T&gt;()</c> call in one of a context's methods, which maps

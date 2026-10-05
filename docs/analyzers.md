@@ -59,8 +59,9 @@ Implement `ITenantEntity<TKey>`, or derive from `TenantEntity<TKey>`. The messag
 What it looks at:
 
 - A context's types are those of its `DbSet<T>` properties, its base contexts' included, and of the
-  `modelBuilder.Entity<T>()` calls in its methods. A type mapped only in an `IEntityTypeConfiguration<T>`, or reached
-  only through a navigation, is not seen.
+  `modelBuilder.Entity<T>()` calls in its methods; a type parameter constrained to a tenant-owned type counts as one. A
+  type mapped only in an `IEntityTypeConfiguration<T>`, or reached only through a navigation, is not seen. Generated
+  code counts for its contexts, types and markers, and nothing is reported in it.
 - A context that maps no tenant-owned type is left alone: a database-per-tenant context, or one Tenantry does not
   isolate, has nothing to keep apart.
 - A type marked shared is not reported: `[SharedAcrossTenants]` on it or a base type, or `IsSharedAcrossTenants()`

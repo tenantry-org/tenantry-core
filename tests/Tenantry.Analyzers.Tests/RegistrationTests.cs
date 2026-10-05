@@ -314,7 +314,7 @@ public sealed class RegistrationTests
                         public static DbContextOptionsBuilder UseCompanyDefaults(this DbContextOptionsBuilder options) =>
                             options.EnableDetailedErrors().UseIso();
                     }
-                    """, ReferencesTenantry: false, "Iso"),
+                    """, ReferencesTenantry: false) { Uses = ["Iso"] },
                 // Reaches no Tenantry.EfCore: only an override the application can override in turn may call it.
                 new("Logging", """
                     using Microsoft.EntityFrameworkCore;

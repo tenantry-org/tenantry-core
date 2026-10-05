@@ -491,4 +491,78 @@ public sealed class TenantEntityTests
                 "Refund",
                 "its TenantId is a Guid?, which cannot be a tenant key: make it a non-nullable Guid, int, long or string " +
                 "and implement ITenantEntity<TKey>, or mark the type [SharedAcrossTenants] if every tenant shares it"));
+
+    [Fact]
+    public Task ATypeParameterConstrainedToATenantOwnedType_MakesAContextOneWithTenantOwnedTypes() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class Legacy
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class Archive
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class GenericDbContext<T>(DbContextOptions options) : DbContext(options) where T : class, ITenantEntity<Guid>
+            {
+                public DbSet<T> Items => Set<T>();
+                public DbSet<Legacy> {|TNY1001:Legacy|} => Set<Legacy>();
+            }
+
+            public class MappingDbContext<T>(DbContextOptions options) : DbContext(options) where T : Invoice
+            {
+                public DbSet<Archive> {|TNY1001:Archives|} => Set<Archive>();
+
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<T>();
+            }
+            """);
+
+    [Fact]
+    public Task GeneratedCode_CountsForItsMarkersAndMappings_AndNothingIsReportedInIt() =>
+        Verify.AnalyzerWithFilesAsync<TenantIdWithoutTenantEntityAnalyzer>(
+            Usings + """
+                public class Rate
+                {
+                    public int Id { get; set; }
+                    public Guid TenantId { get; set; }
+                }
+
+                public class Import
+                {
+                    public int Id { get; set; }
+                    public Guid TenantId { get; set; }
+                }
+
+                public class Order
+                {
+                    public int Id { get; set; }
+                    public Guid TenantId { get; set; }
+                }
+
+                public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+                {
+                    public DbSet<Rate> Rates => Set<Rate>();
+                    public DbSet<Order> {|TNY1001:Orders|} => Set<Order>();
+                }
+                """,
+            [
+                // Before the test file in source order, where a type is reported.
+                ("/0/AppDbContext.g.cs", """
+                    using Microsoft.EntityFrameworkCore;
+                    using Tenantry.EfCore;
+
+                    public partial class AppDbContext
+                    {
+                        public DbSet<Invoice> Invoices => Set<Invoice>();
+                        public DbSet<Import> Imports => Set<Import>();
+                        public DbSet<Order> MoreOrders => Set<Order>();
+
+                        protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<Rate>().IsSharedAcrossTenants();
+                    }
+                    """),
+            ]);
 }

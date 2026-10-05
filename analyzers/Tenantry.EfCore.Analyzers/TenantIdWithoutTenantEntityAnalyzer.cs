@@ -31,8 +31,8 @@ namespace Tenantry.EfCore.Analyzers;
 /// code, silences nothing.
 /// </para>
 /// <para>
-/// It reports each type once, where it is first mapped, at the end of the compilation, when every context and marker
-/// has been seen.
+/// It reports each type once, where it is first mapped outside generated code, at the end of the compilation, when every
+/// context and marker has been seen. Generated code counts for its contexts and markers.
 /// </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -45,7 +45,8 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
     public override void Initialize(AnalysisContext context)
     {
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        // Generated code is read for its contexts and markers, and nothing in it is reported.
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze);
         context.EnableConcurrentExecution();
         context.RegisterCompilationStartAction(start =>
         {
@@ -56,24 +57,31 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
             var state = new State();
 
-            start.RegisterSymbolAction(symbol => CollectDbSets(symbol, types, state), SymbolKind.NamedType);
+            start.RegisterSymbolAction(symbol => CollectContext(symbol, types, state), SymbolKind.NamedType);
+            start.RegisterSymbolAction(symbol => CollectDbSet(symbol, types, state), SymbolKind.Property);
             start.RegisterOperationAction(operation => CollectCall(operation, types, state), OperationKind.Invocation);
             start.RegisterOperationAction(operation => CollectConfiguration(operation, types, state), OperationKind.ObjectCreation);
             start.RegisterCompilationEndAction(end => Report(end, types, state));
         });
     }
 
-    private static void CollectDbSets(SymbolAnalysisContext context, KnownTypes types, State state)
+    private static void CollectContext(SymbolAnalysisContext context, KnownTypes types, State state)
     {
-        var type = (INamedTypeSymbol)context.Symbol;
+        if (KnownTypes.DerivesFrom((INamedTypeSymbol)context.Symbol, types.DbContext))
+            state.Contexts.TryAdd((INamedTypeSymbol)context.Symbol, 0);
+    }
 
-        if (!KnownTypes.DerivesFrom(type, types.DbContext))
-            return;
+    // Each DbSet<T> property by itself, so that one in a generated part of a partial context, and only that one, counts
+    // as generated.
+    private static void CollectDbSet(SymbolAnalysisContext context, KnownTypes types, State state)
+    {
+        var property = (IPropertySymbol)context.Symbol;
 
-        state.Contexts.TryAdd(type, 0);
-
-        foreach (var (property, entity) in types.DbSets(type))
-            state.Mapped.Add((type, entity, property.Locations.FirstOrDefault() ?? Location.None));
+        if (types.DbSetEntity(property) is { } entity && property.ContainingType is { } type &&
+            KnownTypes.DerivesFrom(type, types.DbContext))
+        {
+            state.Mapped.Add((type, entity, property.Locations.FirstOrDefault() ?? Location.None, context.IsGeneratedCode));
+        }
     }
 
     private static void CollectCall(OperationAnalysisContext context, KnownTypes types, State state)
@@ -86,7 +94,7 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
             state.Calls.Add((context.ContainingSymbol, method));
 
         if (types.MappedEntity(invocation, context.ContainingSymbol) is { } mapped)
-            state.Mapped.Add((mapped.Context, mapped.Entity, invocation.Syntax.GetLocation()));
+            state.Mapped.Add((mapped.Context, mapped.Entity, invocation.Syntax.GetLocation(), context.IsGeneratedCode));
 
         switch (method.Name)
         {
@@ -143,12 +151,12 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
         var byContext = state.Mapped.ToLookup(mapping => mapping.Context, SymbolEqualityComparer.Default);
 
         // A context maps its own types and its base contexts'.
-        IEnumerable<(ITypeSymbol Entity, Location Location)> MappedBy(INamedTypeSymbol contextType)
+        IEnumerable<(ITypeSymbol Entity, Location Location, bool Generated)> MappedBy(INamedTypeSymbol contextType)
         {
             for (var current = (INamedTypeSymbol?)contextType; current is not null; current = current.BaseType)
             {
                 foreach (var mapping in byContext[current])
-                    yield return (mapping.Entity, mapping.Location);
+                    yield return (mapping.Entity, mapping.Location, mapping.Generated);
             }
         }
 
@@ -164,12 +172,12 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
             if (!mapped.Any(mapping => KnownTypes.Implements(mapping.Entity, types.TenantEntity)))
                 continue;
 
-            foreach (var (entity, location) in mapped)
+            foreach (var (entity, location, generated) in mapped)
             {
-                if (state.MarkedShared.ContainsKey(entity) || !ShouldBeTenantOwned(entity, types))
+                if (generated || state.MarkedShared.ContainsKey(entity) || !ShouldBeTenantOwned(entity, types))
                     continue;
 
-                // Once per type, where it is first mapped (in source order, so the result does not depend on threads).
+                // Once per type, where it is first mapped outside generated code (in source order, so the result does not depend on threads).
                 if (!reported.TryGetValue(entity, out var first) || Precedes(location, first))
                     reported[entity] = location;
             }
@@ -365,7 +373,8 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
     {
         public ConcurrentDictionary<INamedTypeSymbol, byte> Contexts { get; } = new(SymbolEqualityComparer.Default);
 
-        public ConcurrentBag<(INamedTypeSymbol Context, ITypeSymbol Entity, Location Location)> Mapped { get; } = [];
+        /// <summary>The types each context maps, where, and whether that is in generated code, where nothing is reported.</summary>
+        public ConcurrentBag<(INamedTypeSymbol Context, ITypeSymbol Entity, Location Location, bool Generated)> Mapped { get; } = [];
 
         public ConcurrentDictionary<ITypeSymbol, byte> MarkedShared { get; } = new(SymbolEqualityComparer.Default);
 
