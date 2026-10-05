@@ -29,7 +29,7 @@ internal sealed class TenantEarlyResolutionMiddleware<TKey>(
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Already handled: app.UseTenantry() ran first, or the request is re-executed (an exception handler, say).
+        // Already handled: app.UseTenantry() ran first, or the request is re-executed, such as by an exception handler.
         if (context.Features.Get<TenantResolutionFeature>() is not null ||
             context.Features.Get<EarlyTenantResolution<TKey>>() is not null)
         {

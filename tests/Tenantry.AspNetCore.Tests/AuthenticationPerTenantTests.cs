@@ -345,7 +345,7 @@ public sealed class AuthenticationPerTenantTests
             {
                 a.UseTenantResolution();
                 a.UseAuthentication();
-                // Authorization added another way (a library's middleware, say), which the startup check does not see.
+                // Authorization added another way (such as a library's middleware) that the startup check does not see.
                 a.UseMiddleware<AuthorizationMiddleware>();
                 a.UseTenantry();
                 a.UseAuthorization();
