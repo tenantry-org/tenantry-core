@@ -72,14 +72,8 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
         state.Contexts.TryAdd(type, 0);
 
-        foreach (var member in type.GetMembers())
-        {
-            if (member is IPropertySymbol { Type: INamedTypeSymbol { IsGenericType: true } set } property &&
-                SymbolEqualityComparer.Default.Equals(set.OriginalDefinition, types.DbSet))
-            {
-                state.Mapped.Add((type, set.TypeArguments[0], property.Locations.FirstOrDefault() ?? Location.None));
-            }
-        }
+        foreach (var (property, entity) in types.DbSets(type))
+            state.Mapped.Add((type, entity, property.Locations.FirstOrDefault() ?? Location.None));
     }
 
     private static void CollectCall(OperationAnalysisContext context, KnownTypes types, State state)
@@ -91,15 +85,11 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
         if (method.OriginalDefinition.Locations.Any(location => location.IsInSource))
             state.Calls.Add((context.ContainingSymbol, method));
 
+        if (types.MappedEntity(invocation, context.ContainingSymbol) is { } mapped)
+            state.Mapped.Add((mapped.Context, mapped.Entity, invocation.Syntax.GetLocation()));
+
         switch (method.Name)
         {
-            case "Entity" when method is { IsGenericMethod: true, TypeArguments.Length: 1 } &&
-                               KnownTypes.IsDeclaredBy(method, types.ModelBuilder) &&
-                               context.ContainingSymbol.ContainingType is { } owner &&
-                               KnownTypes.DerivesFrom(owner, types.DbContext):
-                state.Mapped.Add((owner, method.TypeArguments[0], invocation.Syntax.GetLocation()));
-                break;
-
             case "IsSharedAcrossTenants" when KnownTypes.IsDeclaredBy(method, types.EntityTypeBuilderExtensions):
                 switch (MarkedType(invocation, types))
                 {

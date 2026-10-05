@@ -52,6 +52,21 @@ public sealed class RegistrationTests
             public DbSet<Order> Orders => Set<Order>();
         }
 
+        public class LedgerDbContext(DbContextOptions<LedgerDbContext> options) : DbContext(options)
+        {
+            public DbSet<Order> Orders => Set<Order>();
+        }
+
+        public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbContext(options)
+        {
+            public DbSet<Order> Orders => Set<Order>();
+        }
+
+        public class JournalDbContext(DbContextOptions<JournalDbContext> options) : DbContext(options)
+        {
+            public DbSet<Order> Orders => Set<Order>();
+        }
+
         """;
 
     [Fact]
@@ -132,6 +147,29 @@ public sealed class RegistrationTests
             """);
 
     [Fact]
+    public Task UseTenantryOnTheGenericBuilder_IsNotReported() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
+                {
+                    services.AddDbContext<AppDbContext>(options =>
+                    {
+                        var typed = (DbContextOptionsBuilder<AppDbContext>)options;
+                        typed.EnableSensitiveDataLogging().UseTenantry();
+                    });
+                    services.AddDbContext<ReportsDbContext>(Typed);
+                }
+
+                private static void Typed(DbContextOptionsBuilder options)
+                {
+                    if (options is DbContextOptionsBuilder<ReportsDbContext> typed)
+                        typed.UseTenantry();
+                }
+            }
+            """);
+
+    [Fact]
     public Task UseTenantryInANestedLambdaOrALocalFunction_IsNotReported() =>
         Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
             public static class Startup
@@ -155,7 +193,7 @@ public sealed class RegistrationTests
             """);
 
     [Fact]
-    public Task ABuilderHandedToOtherCode_IsNotReported() =>
+    public Task ABuilderHandedToCodeThatMayCallUseTenantry_IsNotReported() =>
         Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
             public interface IContextConfigurer
             {
@@ -172,21 +210,6 @@ public sealed class RegistrationTests
                 public DbContextOptionsBuilder Options { get; } = options;
             }
 
-            public class LedgerDbContext(DbContextOptions<LedgerDbContext> options) : DbContext(options)
-            {
-                public DbSet<Order> Orders => Set<Order>();
-            }
-
-            public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbContext(options)
-            {
-                public DbSet<Order> Orders => Set<Order>();
-            }
-
-            public class JournalDbContext(DbContextOptions<JournalDbContext> options) : DbContext(options)
-            {
-                public DbSet<Order> Orders => Set<Order>();
-            }
-
             public static class Startup
             {
                 public static void Register(
@@ -196,45 +219,132 @@ public sealed class RegistrationTests
                     IConfigureOptions<DbContextOptionsBuilder> configureOptions,
                     Holder holder)
                 {
-                    services.AddDbContext<AppDbContext>(options => options.EnableSensitiveDataLogging().UseOurDefaults());
+                    services.AddDbContext<AppDbContext>(options => options.EnableSensitiveDataLogging().UseOurIsolation());
                     services.AddDbContext<ReportsDbContext>(options => shared(options));
                     services.AddDbContext<BillingDbContext>(options => configurer.Configure(options));
                     services.AddDbContext<AuditDbContext>(options => holder.Options = options);
-                    services.AddDbContext<LedgerDbContext>(options => Remember(options));
+                    services.AddDbContext<LedgerDbContext>(options => ForwardAgain(options));
                     services.AddDbContext<ArchiveDbContext>(options => new Configurer(options));
                     services.AddDbContext<JournalDbContext>(options => configureOptions.Configure(options));
                 }
 
-                private static DbContextOptionsBuilder UseOurDefaults(this DbContextOptionsBuilder options) =>
-                    options.EnableDetailedErrors();
+                private static DbContextOptionsBuilder UseOurIsolation(this DbContextOptionsBuilder options) =>
+                    options.EnableDetailedErrors().UseTenantry();
 
-                private static void Remember(object options)
+                // Through other methods of the application's, in turn.
+                private static void ForwardAgain(DbContextOptionsBuilder options) => Forward(options);
+
+                private static void Forward(object options) => ((DbContextOptionsBuilder)options).UseOurIsolation();
+            }
+            """);
+
+    [Fact]
+    public Task ABuilderHandedToALocalFunction_IsNotReported() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
                 {
+                    services.AddDbContext<AppDbContext>(options => Configure(options));
+
+                    static void Configure(DbContextOptionsBuilder options) => options.EnableSensitiveDataLogging();
                 }
             }
             """);
 
     [Fact]
-    public Task ABuilderHandedToALibraryThatReferencesTenantryEfCore_IsNotReported_AndToOneThatDoesNotIs() =>
-        Verify.AnalyzerWithLibraryAsync<ContextWithoutUseTenantryAnalyzer>(
+    public Task ABuilderHandedToAMethodOfTheApplicationsThatDoesNotCallUseTenantry_IsReported() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
+                {
+                    {|TNY1004:services.AddDbContext<AppDbContext>(options => options.EnableSensitiveDataLogging().UseLogging())|};
+                    {|TNY1004:services.AddDbContext<ReportsDbContext>(options => Remember(options))|};
+                    {|TNY1004:services.AddDbContext<BillingDbContext>(options => Recurse(options, 3))|};
+                }
+
+                private static DbContextOptionsBuilder UseLogging(this DbContextOptionsBuilder options) =>
+                    options.EnableDetailedErrors();
+
+                private static void Remember(object options)
+                {
+                }
+
+                private static void Recurse(DbContextOptionsBuilder options, int depth)
+                {
+                    if (depth > 0)
+                        Recurse(options.EnableDetailedErrors(), depth - 1);
+                }
+            }
+            """);
+
+    [Fact]
+    public Task ABuilderHandedToALibrary_IsNotReported_OnlyWhereTheLibraryCanReachTenantryEfCore() =>
+        Verify.AnalyzerWithLibrariesAsync<ContextWithoutUseTenantryAnalyzer>(
             Model + """
                 public static class Startup
                 {
-                    public static void Register(IServiceCollection services)
+                    public static void Register(IServiceCollection services, Unsealed unsealed, Sealed @sealed)
                     {
-                        services.AddDbContext<AppDbContext>(options => options.UseOurIsolation());
-                        {|TNY1004:services.AddDbContext<ReportsDbContext>(options => Console.WriteLine(options))|};
+                        services.AddDbContext<AppDbContext>(options => options.UseIso());
+                        services.AddDbContext<ReportsDbContext>(options => options.UseCompanyDefaults());
+                        services.AddDbContext<BillingDbContext>(options => unsealed.Apply(options));
+                        {|TNY1004:services.AddDbContext<AuditDbContext>(options => @sealed.Apply(options))|};
+                        {|TNY1004:services.AddDbContext<LedgerDbContext>(options => options.UseLogging())|};
+                        {|TNY1004:services.AddDbContext<ArchiveDbContext>(options => Console.WriteLine(options))|};
                     }
                 }
                 """,
-            """
-            using Microsoft.EntityFrameworkCore;
+            [
+                new("Iso", """
+                    using Microsoft.EntityFrameworkCore;
 
-            public static class OurIsolation
-            {
-                public static DbContextOptionsBuilder UseOurIsolation(this DbContextOptionsBuilder options) => options.UseTenantry();
-            }
-            """);
+                    public static class Iso
+                    {
+                        public static DbContextOptionsBuilder UseIso(this DbContextOptionsBuilder options) => options.UseTenantry();
+                    }
+                    """),
+                // Calls Iso, without a reference to Tenantry.EfCore of its own.
+                new("Wrapper", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public static class Company
+                    {
+                        public static DbContextOptionsBuilder UseCompanyDefaults(this DbContextOptionsBuilder options) =>
+                            options.EnableDetailedErrors().UseIso();
+                    }
+                    """, ReferencesTenantry: false, "Iso"),
+                // Reaches no Tenantry.EfCore: only an override the application can override in turn may call it.
+                new("Logging", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public static class Logging
+                    {
+                        public static DbContextOptionsBuilder UseLogging(this DbContextOptionsBuilder options) =>
+                            options.EnableSensitiveDataLogging();
+                    }
+
+                    public abstract class Base
+                    {
+                        public abstract void Apply(DbContextOptionsBuilder options);
+                    }
+
+                    public class Unsealed : Base
+                    {
+                        public override void Apply(DbContextOptionsBuilder options)
+                        {
+                        }
+                    }
+
+                    public class Sealed : Base
+                    {
+                        public sealed override void Apply(DbContextOptionsBuilder options)
+                        {
+                        }
+                    }
+                    """, ReferencesTenantry: false),
+            ]);
 
     [Fact]
     public Task OptionsGivenAsAMethod_AreReportedOnlyWhenTheMethodDoesNotCallUseTenantry() =>
@@ -246,13 +356,25 @@ public sealed class RegistrationTests
                     {|TNY1004:services.AddDbContext<AppDbContext>(Logged)|};
                     services.AddDbContext<ReportsDbContext>(Isolated);
                     services.AddDbContext<BillingDbContext>(Local);
+                    {|TNY1004:services.AddDbContext<AuditDbContext>(LocalLogged)|};
+                    services.AddDbContext<LedgerDbContext>(IsolatedInALocalFunction);
 
                     void Local(DbContextOptionsBuilder options) => options.UseTenantry();
+
+                    // Judged by itself, though the method it is in calls UseTenantry().
+                    void LocalLogged(DbContextOptionsBuilder options) => options.EnableSensitiveDataLogging();
                 }
 
                 private static void Logged(DbContextOptionsBuilder options) => options.EnableSensitiveDataLogging();
 
                 private static void Isolated(DbContextOptionsBuilder options) => options.UseTenantry();
+
+                private static void IsolatedInALocalFunction(DbContextOptionsBuilder options)
+                {
+                    Isolate();
+
+                    void Isolate() => options.UseTenantry();
+                }
             }
             """);
 
@@ -286,29 +408,88 @@ public sealed class RegistrationTests
             """);
 
     [Fact]
-    public Task AContextThatOverridesOnConfiguring_OrDerivesFromOneThatDoes_IsNotReported() =>
-        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
-            public class ConfiguredDbContext(DbContextOptions options) : DbContext(options)
-            {
-                public DbSet<Order> Orders => Set<Order>();
-
-                protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) => optionsBuilder.UseTenantry();
-            }
-
-            public class DerivedDbContext(DbContextOptions<DerivedDbContext> options) : ConfiguredDbContext(options);
-
-            public static class Startup
-            {
-                public static void Register(IServiceCollection services)
+    public Task OnConfiguringThatMayCallUseTenantry_OrInAnotherAssembly_ClearsIt_AndOtherwiseDoesNot() =>
+        Verify.AnalyzerWithLibrariesAsync<ContextWithoutUseTenantryAnalyzer>(
+            Model + """
+                public class IsolatingDbContext(DbContextOptions options) : DbContext(options)
                 {
-                    services.AddDbContext<ConfiguredDbContext>(options => options.EnableSensitiveDataLogging());
-                    services.AddDbContext<DerivedDbContext>(options => options.EnableSensitiveDataLogging());
-                }
-            }
-            """);
+                    public DbSet<Order> Orders => Set<Order>();
 
+                    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) => optionsBuilder.UseTenantry();
+                }
+
+                public class DerivedDbContext(DbContextOptions<DerivedDbContext> options) : IsolatingDbContext(options);
+
+                public class ChainedDbContext(DbContextOptions<ChainedDbContext> options) : IsolatingDbContext(options)
+                {
+                    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                    {
+                        base.OnConfiguring(optionsBuilder);
+                        optionsBuilder.EnableDetailedErrors();
+                    }
+                }
+
+                // A scaffolded context: OnConfiguring picks the provider.
+                public class ScaffoldedDbContext(DbContextOptions<ScaffoldedDbContext> options) : DbContext(options)
+                {
+                    public DbSet<Order> Orders => Set<Order>();
+
+                    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                    {
+                        base.OnConfiguring(optionsBuilder);
+
+                        if (!optionsBuilder.IsConfigured)
+                            optionsBuilder.EnableSensitiveDataLogging();
+                    }
+                }
+
+                public class LoggingBaseDbContext(DbContextOptions options) : DbContext(options)
+                {
+                    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+                        optionsBuilder.EnableDetailedErrors();
+                }
+
+                public class LoggedDbContext(DbContextOptions<LoggedDbContext> options) : LoggingBaseDbContext(options)
+                {
+                    public DbSet<Order> Orders => Set<Order>();
+
+                    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) => base.OnConfiguring(optionsBuilder);
+                }
+
+                public class LibraryBasedDbContext(DbContextOptions<LibraryBasedDbContext> options) : LibraryDbContext(options)
+                {
+                    public DbSet<Order> Orders => Set<Order>();
+                }
+
+                public static class Startup
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddDbContext<IsolatingDbContext>(options => options.EnableSensitiveDataLogging());
+                        services.AddDbContext<DerivedDbContext>(options => options.EnableSensitiveDataLogging());
+                        services.AddDbContext<ChainedDbContext>(options => options.EnableSensitiveDataLogging());
+                        services.AddDbContext<LibraryBasedDbContext>(options => options.EnableSensitiveDataLogging());
+                        {|TNY1004:services.AddDbContext<ScaffoldedDbContext>(options => options.EnableSensitiveDataLogging())|};
+                        {|TNY1004:services.AddDbContext<LoggedDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    }
+                }
+                """,
+            [
+                new("Contexts", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public class LibraryDbContext(DbContextOptions options) : DbContext(options)
+                    {
+                        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                        {
+                        }
+                    }
+                    """, ReferencesTenantry: false),
+            ]);
+
+#if NET9_0_OR_GREATER
     [Fact]
-    public Task AnotherRegistrationOfTheSameContextWithUseTenantry_ClearsIt() =>
+    public Task AnotherRegistrationOfTheSameContextWithUseTenantry_ClearsIt_FromEfCore9() =>
         Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
             public static class Startup
             {
@@ -321,7 +502,6 @@ public sealed class RegistrationTests
             }
             """);
 
-#if NET9_0_OR_GREATER
     [Fact]
     public Task ConfigureDbContextWithUseTenantry_ClearsIt_AndWithoutDoesNot() =>
         Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
@@ -337,16 +517,67 @@ public sealed class RegistrationTests
                 }
             }
             """);
+#else
+    [Fact]
+    public Task OnEfCore8_OnlyAnEarlierRegistrationWithUseTenantry_OrOneElsewhere_ClearsIt() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
+                {
+                    // The first registration's options are the context's.
+                    {|TNY1004:services.AddDbContext<AppDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    services.AddDbContextFactory<AppDbContext>(options => options.UseTenantry());
+
+                    services.AddDbContextFactory<ReportsDbContext>(options => options.UseTenantry());
+                    services.AddDbContext<ReportsDbContext>(options => options.EnableSensitiveDataLogging());
+
+                    services.AddDbContext<BillingDbContext>(options => options.EnableSensitiveDataLogging());
+                    AddIsolatedBilling(services);
+                }
+
+                // Its order against the registration above is not known here.
+                private static void AddIsolatedBilling(IServiceCollection services) =>
+                    services.AddDbContextFactory<BillingDbContext>(options => options.UseTenantry());
+            }
+            """);
 #endif
 
     [Fact]
-    public Task AGenericRegistration_IsNotReported_AndOneThatCallsUseTenantryClearsEveryContext() =>
+    public Task AGenericRegistrationWithUseTenantry_ClearsTheContextsThatMeetItsConstraints() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public interface IIsolated
+            {
+            }
+
+            public class IsolatedDbContext(DbContextOptions<IsolatedDbContext> options) : DbContext(options), IIsolated
+            {
+                public DbSet<Order> Orders => Set<Order>();
+            }
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
+                {
+                    services.AddDbContext<IsolatedDbContext>(options => options.EnableSensitiveDataLogging());
+                    {|TNY1004:services.AddDbContext<AppDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    services.AddIsolation<IsolatedDbContext>();
+                }
+
+                private static void AddIsolation<TContext>(this IServiceCollection services) where TContext : DbContext, IIsolated =>
+                    services.AddDbContextFactory<TContext>(options => options.UseTenantry());
+            }
+            """);
+
+    [Fact]
+    public Task AGenericRegistrationWithUseTenantry_ConstrainedOnlyToDbContext_ClearsEveryContext() =>
         Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
             public static class Startup
             {
                 public static void Register(IServiceCollection services)
                 {
                     services.AddDbContext<AppDbContext>(options => options.EnableSensitiveDataLogging());
+                    services.AddDbContext<ReportsDbContext>(options => options.EnableSensitiveDataLogging());
                     services.AddUnisolated<AppDbContext>();
                     services.AddIsolation<AppDbContext>();
                 }
@@ -356,6 +587,27 @@ public sealed class RegistrationTests
 
                 private static void AddIsolation<TContext>(this IServiceCollection services) where TContext : DbContext =>
                     services.AddDbContextFactory<TContext>(options => options.UseTenantry());
+            }
+            """);
+
+    [Fact]
+    public Task AGenericFactoryRegistration_IsForItsContextType_NotItsFactorysTypeParameter() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public class AppDbContextFactory : IDbContextFactory<AppDbContext>
+            {
+                public AppDbContext CreateDbContext() => throw new NotSupportedException();
+            }
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
+                {
+                    {|TNY1004:services.AddDbContext<ReportsDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    services.AddFactory<AppDbContextFactory>();
+                }
+
+                private static void AddFactory<TFactory>(this IServiceCollection services) where TFactory : IDbContextFactory<AppDbContext> =>
+                    services.AddDbContextFactory<AppDbContext, TFactory>(options => options.UseTenantry());
             }
             """);
 
@@ -376,7 +628,7 @@ public sealed class RegistrationTests
             """);
 
     [Fact]
-    public Task ATenantOwnedSetOnABaseContext_OrOfADerivedEntity_IsReported() =>
+    public Task ATenantOwnedTypeOnABaseContext_OfADerivedEntity_OrMappedInOnModelCreating_IsReported() =>
         Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
             public abstract class Owned : ITenantEntity<Guid>
             {
@@ -393,19 +645,42 @@ public sealed class RegistrationTests
                 public DbSet<Order> Orders => Set<Order>();
             }
 
-            public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : BaseDbContext(options);
+            public class StoreDbContext(DbContextOptions<StoreDbContext> options) : BaseDbContext(options);
 
             public class PaymentsDbContext(DbContextOptions<PaymentsDbContext> options) : DbContext(options)
             {
                 public DbSet<Payment> Payments => Set<Payment>();
             }
 
+            public class MappedDbContext(DbContextOptions<MappedDbContext> options) : DbContext(options)
+            {
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<Order>();
+            }
+
+            public abstract class MappingBaseDbContext(DbContextOptions options) : DbContext(options)
+            {
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<Payment>();
+            }
+
+            public class InheritedDbContext(DbContextOptions<InheritedDbContext> options) : MappingBaseDbContext(options);
+
+            public abstract class GenericDbContext<TEntity>(DbContextOptions options) : DbContext(options)
+                where TEntity : class, ITenantEntity<Guid>
+            {
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<TEntity>();
+            }
+
+            public class PaymentLedgerDbContext(DbContextOptions<PaymentLedgerDbContext> options) : GenericDbContext<Payment>(options);
+
             public static class Startup
             {
                 public static void Register(IServiceCollection services)
                 {
-                    {|TNY1004:services.AddDbContext<ArchiveDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    {|TNY1004:services.AddDbContext<StoreDbContext>(options => options.EnableSensitiveDataLogging())|};
                     {|TNY1004:services.AddDbContext<PaymentsDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    {|TNY1004:services.AddDbContext<MappedDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    {|TNY1004:services.AddDbContext<InheritedDbContext>(options => options.EnableSensitiveDataLogging())|};
+                    {|TNY1004:services.AddDbContext<PaymentLedgerDbContext>(options => options.EnableSensitiveDataLogging())|};
                 }
             }
             """);
@@ -416,6 +691,8 @@ public sealed class RegistrationTests
             public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbContext(options)
             {
                 public DbSet<Country> Countries => Set<Country>();
+
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<Country>();
             }
 
             public static class Startup

@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Tenantry.EfCore.Analyzers;
 
@@ -10,21 +11,24 @@ namespace Tenantry.EfCore.Analyzers;
 /// TNY1004: <c>AddDbContext</c>, <c>AddDbContextPool</c>, <c>AddDbContextFactory</c> or
 /// <c>AddPooledDbContextFactory</c> for a context with tenant-owned entities, with options that do not call
 /// <c>UseTenantry()</c>. A context has tenant-owned entities when it, or a base context, has a <c>DbSet&lt;T&gt;</c>
-/// property of a type that implements <c>ITenantEntity&lt;TKey&gt;</c>.
+/// property of a tenant-owned type, or maps one with <c>modelBuilder.Entity&lt;T&gt;()</c> in one of its methods.
 /// </summary>
 /// <remarks>
 /// <para>
 /// To keep false reports out, it reports a registration only when it sees everything its options do: they are a lambda,
 /// or a method of the compilation's, that neither calls <c>UseTenantry()</c> nor hands an options builder to code that
-/// could (code of an assembly that references Tenantry.EfCore, the application's own included, or a delegate, interface
-/// or virtual method), nor assigns one anywhere. A registration without options, or with a delegate it cannot see into,
-/// is not reported.
+/// could, nor assigns one anywhere. Code that could is a delegate, an interface, virtual or unsealed override method, a
+/// local function or lambda, a constructor or method of an assembly that references Tenantry.EfCore (directly or through
+/// others; a method of the application's instead counts when it does any of this itself, decided once every method is
+/// seen).
+/// A registration without options, or with a delegate it cannot see into, is not reported.
 /// </para>
 /// <para>
-/// Nor is a context that overrides <c>OnConfiguring</c>, or whose base context does, or one that another registration or a
-/// <c>ConfigureDbContext</c> in the compilation may call <c>UseTenantry()</c> for: from EF Core 9, they add to the same
-/// options. Such a call for a context type it cannot tell, a generic method's type parameter, makes it report nothing.
-/// So it reports at the end of the compilation, when every call has been seen.
+/// Nor is a context with an <c>OnConfiguring</c> in its hierarchy that it cannot see (in another assembly) or that may
+/// apply <c>UseTenantry()</c> by the same test. A call that may apply it for the same context, or for a type parameter
+/// the context satisfies, clears a registration: from EF Core 9, any registration or <c>ConfigureDbContext</c>, since
+/// their options add up; on EF Core 8, where only the first registration's options apply, one that is not later in the
+/// same method. So it reports at the end of the compilation, when every call has been seen.
 /// </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -52,7 +56,7 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 return;
             }
 
-            var state = new State();
+            var state = new State(start.Compilation);
 
             start.RegisterOperationAction(
                 operation => Collect(operation, types, state),
@@ -65,121 +69,281 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
 
     private static void Collect(OperationAnalysisContext context, KnownTypes types, State state)
     {
-        // For options given as a method: the members whose code may apply UseTenantry().
-        if (MayApply(context.Operation, types))
-            state.Applying.TryAdd(context.ContainingSymbol.OriginalDefinition, 0);
+        // What each method does with an options builder (its lambdas' and local functions' code included), for the options
+        // methods and OnConfiguring judged at the end.
+        var owner = context.ContainingSymbol.OriginalDefinition;
+        var (applies, target) = HandOff(context.Operation, types, state);
 
-        if (context.Operation is not IInvocationOperation invocation ||
-            !KnownTypes.IsDeclaredBy(invocation.TargetMethod, types.ServiceCollectionExtensions))
-        {
+        if (applies)
+            state.Applying.TryAdd(owner, 0);
+        else if (target is not null)
+            state.HandOffs.Add((owner, target));
+
+        if (context.Operation is not IInvocationOperation invocation)
             return;
+
+        if (types.MappedEntity(invocation, context.ContainingSymbol) is { } mapped &&
+            KnownTypes.Implements(mapped.Entity, types.TenantEntity))
+        {
+            state.MapsTenantOwned.TryAdd(mapped.Context.OriginalDefinition, 0);
         }
 
         var method = invocation.TargetMethod;
+
+        if (!KnownTypes.IsDeclaredBy(method, types.ServiceCollectionExtensions))
+            return;
+
         var registration = Registrations.Contains(method.Name);
 
         if (!registration && method.Name != "ConfigureDbContext")
             return;
 
-        // AddDbContext<TContextService, TContextImplementation> registers its last type argument, and
-        // AddDbContextFactory<TContext, TFactory> its first.
-        var contextType = method.TypeArguments.LastOrDefault(type =>
-            type is ITypeParameterSymbol || KnownTypes.DerivesFrom(type, types.DbContext));
-        var options = invocation.Arguments
-            .FirstOrDefault(argument => argument.Parameter?.Type.TypeKind == TypeKind.Delegate)?.Value;
+        var contextType = ContextType(method, types);
+        var options = Options(invocation);
 
         // No options: the call applies nothing.
         if (contextType is null || options is null || options.ConstantValue is { HasValue: true, Value: null })
             return;
 
-        var location = registration ? invocation.Syntax.GetLocation() : null;
+        var call = new Call(contextType, registration ? invocation.Syntax.GetLocation() : null, invocation);
 
-        switch (Unwrap(options))
+        switch (KnownTypes.Unwrap(options))
         {
             case IDelegateCreationOperation { Target: IAnonymousFunctionOperation lambda }:
-                if (lambda.Descendants().Any(operation => MayApply(operation, types)))
-                    state.Configured.TryAdd(contextType, 0);
-                else if (location is not null)
-                    state.Unconfigured.Add((contextType, location));
-
+                Judge(call, lambda, types, state);
                 break;
 
-            case IDelegateCreationOperation { Target: IMethodReferenceOperation reference }
-                when SymbolEqualityComparer.Default.Equals(reference.Method.ContainingAssembly, context.Compilation.Assembly):
-                state.ByMethod.Add((contextType, reference.Method, location));
+            case IDelegateCreationOperation { Target: IMethodReferenceOperation { Method.MethodKind: MethodKind.LocalFunction } reference }
+                when LocalFunction(invocation, reference.Method) is { } local:
+                Judge(call, local, types, state);
+                break;
+
+            case IDelegateCreationOperation { Target: IMethodReferenceOperation { Method.MethodKind: MethodKind.Ordinary } reference }
+                when SymbolEqualityComparer.Default.Equals(reference.Method.ContainingAssembly, state.Compilation.Assembly):
+                call.Targets.Add(reference.Method.OriginalDefinition);
                 break;
 
             // A delegate it cannot see into.
             default:
-                state.Configured.TryAdd(contextType, 0);
+                call.Applies = true;
                 break;
         }
+
+        state.Calls.Add(call);
+    }
+
+    // What the options' code does with the builder.
+    private static void Judge(Call call, IOperation body, KnownTypes types, State state)
+    {
+        foreach (var operation in body.Descendants())
+        {
+            var (applies, target) = HandOff(operation, types, state);
+
+            if (applies)
+            {
+                call.Applies = true;
+                return;
+            }
+
+            if (target is not null)
+                call.Targets.Add(target);
+        }
+    }
+
+    // What the operation does with an options builder: hands it to code that may apply UseTenantry() (UseTenantry()
+    // itself among it), or to a method of the application's, decided once every method is seen, or to nothing that could.
+    private static (bool Applies, IMethodSymbol? Target) HandOff(IOperation operation, KnownTypes types, State state)
+    {
+        switch (operation)
+        {
+            case IInvocationOperation call when HasBuilder(call.Arguments, types):
+                var method = call.TargetMethod;
+
+                // A delegate's, an interface's or a virtual method: the code that runs may be the application's.
+                if (call.IsVirtual && (method.IsAbstract || method.IsVirtual || (method.IsOverride && !method.IsSealed)))
+                    return (true, null);
+
+                // A method of the application's, judged once every method is seen; a local function or a lambda is
+                // taken to apply it.
+                if (SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, state.Compilation.Assembly))
+                {
+                    return method.MethodKind is MethodKind.Ordinary or MethodKind.ReducedExtension
+                        ? (false, (method.ReducedFrom ?? method).OriginalDefinition)
+                        : (true, null);
+                }
+
+                return (ReachesTenantryEfCore(method.ContainingAssembly, state), null);
+
+            // A constructor of the application's, or of a library that can reach Tenantry.EfCore, may keep the builder.
+            case IObjectCreationOperation { Constructor: { } constructor } creation when HasBuilder(creation.Arguments, types):
+                return (ReachesTenantryEfCore(constructor.ContainingAssembly, state), null);
+
+            case ISimpleAssignmentOperation assignment when IsBuilder(assignment.Value, types):
+                return (true, null);
+
+            default:
+                return (false, null);
+        }
+    }
+
+    // Whether code in the assembly can call UseTenantry(): it is Tenantry.EfCore, or references it, directly or through
+    // the assemblies it references. Decided once per assembly; an assembly found on a search that fails cannot either.
+    private static bool ReachesTenantryEfCore(IAssemblySymbol? assembly, State state)
+    {
+        if (assembly is null)
+            return false;
+
+        if (state.Reaches.TryGetValue(assembly, out var known))
+            return known;
+
+        var visited = new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);
+        var pending = new Stack<IAssemblySymbol>();
+        pending.Push(assembly);
+
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+
+            if (!visited.Add(current))
+                continue;
+
+            if (current.Name == TenantryEfCore || (state.Reaches.TryGetValue(current, out known) && known))
+            {
+                state.Reaches.TryAdd(assembly, true);
+                return true;
+            }
+
+            if (state.Reaches.ContainsKey(current))
+                continue;
+
+            foreach (var module in current.Modules)
+            {
+                foreach (var referenced in module.ReferencedAssemblySymbols)
+                    pending.Push(referenced);
+            }
+        }
+
+        foreach (var current in visited)
+            state.Reaches.TryAdd(current, false);
+
+        return false;
     }
 
     private static void Report(CompilationAnalysisContext context, KnownTypes types, State state)
     {
-        foreach (var (contextType, options, location) in state.ByMethod)
+        var applying = Applying(state);
+        var configured = new List<Call>();
+        var unconfigured = new List<Call>();
+
+        foreach (var call in state.Calls)
         {
-            if (Applies(options, state))
-                state.Configured.TryAdd(contextType, 0);
-            else if (location is not null)
-                state.Unconfigured.Add((contextType, location));
+            if (call.Applies || call.Targets.Any(applying.Contains))
+                configured.Add(call);
+            else if (call.Location is not null)
+                unconfigured.Add(call);
         }
 
-        if (state.Configured.Keys.Any(type => type is ITypeParameterSymbol))
-            return;
+        // EF Core 9 and later add every registration's options up; EF Core 8 keeps the first's.
+        var addsUp = types.DbContextOptionsConfiguration is not null;
 
-        foreach (var (contextType, location) in state.Unconfigured)
+        foreach (var registration in unconfigured)
         {
-            if (contextType is INamedTypeSymbol named && !state.Configured.ContainsKey(named) &&
-                !DeclaresOnConfiguring(named, types) && HasTenantOwnedSet(named, types))
+            if (registration.Context is INamedTypeSymbol contextType &&
+                !configured.Any(other => Clears(other, registration, contextType, addsUp)) &&
+                !ConfiguresItself(contextType, types, state, applying) &&
+                HasTenantOwned(contextType, types, state))
             {
-                context.ReportDiagnostic(Diagnostic.Create(Rules.ContextWithoutUseTenantry, location, named.Name));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Rules.ContextWithoutUseTenantry, registration.Location, contextType.Name));
             }
         }
     }
 
-    // Whether the operation may apply UseTenantry() to an options builder: it passes one to UseTenantry() or to code that
-    // could call it, or stores one, where other code can reach it.
-    private static bool MayApply(IOperation operation, KnownTypes types) => operation switch
+    // The methods that may apply UseTenantry() to a builder: those that do it themselves, and those that hand a builder to
+    // a method that does, in turn.
+    private static HashSet<ISymbol> Applying(State state)
     {
-        IInvocationOperation call =>
-            call.Arguments.Any(argument => IsBuilder(argument.Value, types)) && MayCallUseTenantry(call.TargetMethod),
-        IObjectCreationOperation { Constructor: { } constructor } creation =>
-            creation.Arguments.Any(argument => IsBuilder(argument.Value, types)) && MayCallUseTenantry(constructor),
-        ISimpleAssignmentOperation assignment => IsBuilder(assignment.Value, types),
-        _ => false,
-    };
+        var applying = new HashSet<ISymbol>(state.Applying.Keys, SymbolEqualityComparer.Default);
+        var callers = state.HandOffs.ToLookup(
+            handOff => (ISymbol)handOff.Target, handOff => handOff.Owner, SymbolEqualityComparer.Default);
+        var pending = new Stack<ISymbol>(applying);
 
-    // Tenantry.EfCore's own methods (UseTenantry()), those of an assembly that references it (the application's own
-    // included), and a method whose code an application can supply: a delegate's, an interface's, a virtual one.
-    private static bool MayCallUseTenantry(IMethodSymbol method) =>
-        method.IsAbstract || method.IsVirtual ||
-        (method.ContainingAssembly is { } assembly &&
-         (assembly.Name == TenantryEfCore ||
-          assembly.Modules.Any(module => module.ReferencedAssemblies.Any(reference => reference.Name == TenantryEfCore))));
-
-    // Whether the options method, or the member it is local to, may apply UseTenantry().
-    private static bool Applies(IMethodSymbol method, State state)
-    {
-        for (ISymbol? current = method; current is IMethodSymbol; current = current.ContainingSymbol)
+        while (pending.Count > 0)
         {
-            if (state.Applying.ContainsKey(current.OriginalDefinition))
-                return true;
+            foreach (var caller in callers[pending.Pop()])
+            {
+                if (applying.Add(caller))
+                    pending.Push(caller);
+            }
+        }
+
+        return applying;
+    }
+
+    // Whether a call that may apply UseTenantry() covers the registration: one for its context type, or for a type
+    // parameter it satisfies, that is not on EF Core 8 later in the same method.
+    private static bool Clears(Call other, Call registration, INamedTypeSymbol contextType, bool addsUp) =>
+        (other.Context is ITypeParameterSymbol parameter
+            ? Satisfies(contextType, parameter)
+            : SymbolEqualityComparer.Default.Equals(other.Context, contextType)) &&
+        (addsUp || other.Tree != registration.Tree || other.Body != registration.Body || other.Position < registration.Position);
+
+    // Whether the context type meets the type parameter's constraints, taking one it cannot tell (generic) as met.
+    private static bool Satisfies(INamedTypeSymbol contextType, ITypeParameterSymbol parameter)
+    {
+        foreach (var constraint in parameter.ConstraintTypes)
+        {
+            if (constraint is ITypeParameterSymbol)
+                continue;
+
+            var met = contextType.AllInterfaces.Any(candidate =>
+                SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, constraint.OriginalDefinition));
+
+            for (var current = (INamedTypeSymbol?)contextType; !met && current is not null; current = current.BaseType)
+                met = SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, constraint.OriginalDefinition);
+
+            if (!met)
+                return false;
+        }
+
+        return true;
+    }
+
+    // An OnConfiguring in the context's hierarchy that may apply UseTenantry(), or that it cannot see.
+    private static bool ConfiguresItself(INamedTypeSymbol contextType, KnownTypes types, State state, HashSet<ISymbol> applying)
+    {
+        foreach (var type in Hierarchy(contextType, types))
+        {
+            foreach (var member in type.GetMembers("OnConfiguring"))
+            {
+                if (!SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, state.Compilation.Assembly) ||
+                    applying.Contains(member.OriginalDefinition))
+                {
+                    return true;
+                }
+            }
         }
 
         return false;
     }
 
-    // An OnConfiguring of its own, which can configure anything, UseTenantry() included.
-    private static bool DeclaresOnConfiguring(INamedTypeSymbol contextType, KnownTypes types) =>
-        Hierarchy(contextType, types).Any(type => !type.GetMembers("OnConfiguring").IsEmpty);
+    // A DbSet<T> property of a tenant-owned type, or modelBuilder.Entity<T>() of one, in the context or a base context.
+    private static bool HasTenantOwned(INamedTypeSymbol contextType, KnownTypes types, State state)
+    {
+        foreach (var type in Hierarchy(contextType, types))
+        {
+            if (state.MapsTenantOwned.ContainsKey(type.OriginalDefinition))
+                return true;
 
-    private static bool HasTenantOwnedSet(INamedTypeSymbol contextType, KnownTypes types) =>
-        Hierarchy(contextType, types).SelectMany(type => type.GetMembers()).Any(member =>
-            member is IPropertySymbol { Type: INamedTypeSymbol { IsGenericType: true } set } &&
-            SymbolEqualityComparer.Default.Equals(set.OriginalDefinition, types.DbSet) &&
-            KnownTypes.Implements(set.TypeArguments[0], types.TenantEntity));
+            foreach (var (_, entity) in types.DbSets(type))
+            {
+                if (KnownTypes.Implements(entity, types.TenantEntity))
+                    return true;
+            }
+        }
+
+        return false;
+    }
 
     // The context type and its base types, up to DbContext.
     private static IEnumerable<INamedTypeSymbol> Hierarchy(INamedTypeSymbol contextType, KnownTypes types)
@@ -192,38 +356,132 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // Whether the value is an options builder, as it is or before a conversion (to object, or a cast).
-    private static bool IsBuilder(IOperation? value, KnownTypes types)
+    // The context a call registers or configures: AddDbContext<TContextService, TContextImplementation>'s last type
+    // argument, AddDbContextFactory<TContext, TFactory>'s first; in a generic method, a type parameter constrained to a
+    // context, when no type argument is a context type.
+    private static ITypeSymbol? ContextType(IMethodSymbol method, KnownTypes types)
     {
-        for (; value is not null; value = (value as IConversionOperation)?.Operand)
+        ITypeSymbol? parameter = null;
+
+        for (var i = method.TypeArguments.Length - 1; i >= 0; i--)
         {
-            if (SymbolEqualityComparer.Default.Equals(value.Type, types.DbContextOptionsBuilder))
+            switch (method.TypeArguments[i])
+            {
+                case INamedTypeSymbol type when KnownTypes.DerivesFrom(type, types.DbContext):
+                    return type;
+                case ITypeParameterSymbol candidate when parameter is null && candidate.ConstraintTypes.Any(constraint =>
+                    SymbolEqualityComparer.Default.Equals(constraint, types.DbContext) ||
+                    KnownTypes.DerivesFrom(constraint, types.DbContext)):
+                    parameter = candidate;
+                    break;
+            }
+        }
+
+        return parameter;
+    }
+
+    private static IOperation? Options(IInvocationOperation invocation)
+    {
+        foreach (var argument in invocation.Arguments)
+        {
+            if (argument.Parameter?.Type.TypeKind == TypeKind.Delegate)
+                return argument.Value;
+        }
+
+        return null;
+    }
+
+    // A local function's declaration, in the same method as the call.
+    private static ILocalFunctionOperation? LocalFunction(IOperation call, IMethodSymbol method)
+    {
+        var root = call;
+
+        while (root.Parent is not null)
+            root = root.Parent;
+
+        foreach (var operation in root.Descendants())
+        {
+            if (operation is ILocalFunctionOperation local && SymbolEqualityComparer.Default.Equals(local.Symbol, method))
+                return local;
+        }
+
+        return null;
+    }
+
+    private static bool HasBuilder(ImmutableArray<IArgumentOperation> arguments, KnownTypes types)
+    {
+        foreach (var argument in arguments)
+        {
+            if (IsBuilder(argument.Value, types))
                 return true;
         }
 
         return false;
     }
 
-    private static IOperation? Unwrap(IOperation? operation)
+    // Whether the value is an options builder (DbContextOptionsBuilder<TContext> too), as it is or before a conversion.
+    private static bool IsBuilder(IOperation? value, KnownTypes types)
     {
-        while (operation is IConversionOperation { IsImplicit: true } conversion)
-            operation = conversion.Operand;
+        for (; value is not null; value = (value as IConversionOperation)?.Operand)
+        {
+            if (value.Type is { } type &&
+                (SymbolEqualityComparer.Default.Equals(type, types.DbContextOptionsBuilder) ||
+                 KnownTypes.DerivesFrom(type, types.DbContextOptionsBuilder)))
+            {
+                return true;
+            }
+        }
 
-        return operation;
+        return false;
     }
 
-    private sealed class State
+    /// <summary>A registration or ConfigureDbContext, and what its options do.</summary>
+    private sealed class Call(ITypeSymbol context, Location? location, IOperation invocation)
     {
-        /// <summary>The members whose code may apply UseTenantry() to an options builder.</summary>
+        public ITypeSymbol Context { get; } = context;
+
+        /// <summary>A registration's location; none for ConfigureDbContext, which is not reported.</summary>
+        public Location? Location { get; } = location;
+
+        public SyntaxTree Tree { get; } = invocation.Syntax.SyntaxTree;
+
+        /// <summary>The method body the call is in, and where in it: on EF Core 8 the first registration counts.</summary>
+        public TextSpan Body { get; } = Root(invocation).Syntax.Span;
+
+        public int Position { get; } = invocation.Syntax.SpanStart;
+
+        /// <summary>Whether its options may apply UseTenantry().</summary>
+        public bool Applies { get; set; }
+
+        /// <summary>The application's methods its options hand a builder to, which may apply it in turn.</summary>
+        public List<IMethodSymbol> Targets { get; } = [];
+
+        private static IOperation Root(IOperation operation)
+        {
+            while (operation.Parent is not null)
+                operation = operation.Parent;
+
+            return operation;
+        }
+    }
+
+    private sealed class State(Compilation compilation)
+    {
+        public Compilation Compilation { get; } = compilation;
+
+        /// <summary>The methods whose code may apply UseTenantry() to an options builder.</summary>
         public ConcurrentDictionary<ISymbol, byte> Applying { get; } = new(SymbolEqualityComparer.Default);
 
-        /// <summary>The context types a registration or ConfigureDbContext may call UseTenantry() for.</summary>
-        public ConcurrentDictionary<ITypeSymbol, byte> Configured { get; } = new(SymbolEqualityComparer.Default);
+        /// <summary>The methods that hand a builder to a method of the application's, with that method.</summary>
+        public ConcurrentBag<(ISymbol Owner, IMethodSymbol Target)> HandOffs { get; } = [];
 
-        /// <summary>The registrations whose options are seen not to call UseTenantry().</summary>
-        public ConcurrentBag<(ITypeSymbol Context, Location Location)> Unconfigured { get; } = [];
+        /// <summary>The registrations and ConfigureDbContext calls.</summary>
+        public ConcurrentBag<Call> Calls { get; } = [];
 
-        /// <summary>The calls whose options are a method of the compilation's, with the registration's location.</summary>
-        public ConcurrentBag<(ITypeSymbol Context, IMethodSymbol Options, Location? Location)> ByMethod { get; } = [];
+        /// <summary>The contexts whose methods map a tenant-owned type with modelBuilder.Entity&lt;T&gt;().</summary>
+        public ConcurrentDictionary<ITypeSymbol, byte> MapsTenantOwned { get; } = new(SymbolEqualityComparer.Default);
+
+        /// <summary>Whether each assembly can call UseTenantry().</summary>
+        public ConcurrentDictionary<IAssemblySymbol, bool> Reaches { get; } = new(SymbolEqualityComparer.Default);
     }
 }

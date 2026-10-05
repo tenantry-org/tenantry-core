@@ -17,12 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names with `RunInScopeAsync`. The projects reference the Tenantry packages of the templates' version;
   `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK, though an older
   SDK can install the templates and create a project.
-- TNY1004, a warning in `Tenantry.EfCore`: a context with tenant-owned entities registered with `AddDbContext`,
-  `AddDbContextPool`, `AddDbContextFactory` or `AddPooledDbContextFactory` whose options do not call `UseTenantry()`,
-  so none of its tenant-owned entities is isolated. A build that treats warnings as errors fails on it. It reports
-  nothing where the options hand the builder to other code, the context overrides `OnConfiguring`, or another
-  registration or `ConfigureDbContext` of the context calls `UseTenantry()`. See
-  [TNY1004](docs/analyzers.md#tny1004).
+- TNY1004, a warning in `Tenantry.EfCore`: a context with tenant-owned entities (a `DbSet<T>` or
+  `modelBuilder.Entity<T>()` of a tenant-owned type) registered with `AddDbContext`, `AddDbContextPool`,
+  `AddDbContextFactory` or `AddPooledDbContextFactory` whose options do not call `UseTenantry()`, so none of its
+  tenant-owned entities is isolated. A build that treats warnings as errors fails on it. It reports nothing where the
+  options hand the builder to code that could call `UseTenantry()`, an `OnConfiguring` of the context could, or
+  another registration or `ConfigureDbContext` of the context calls it (on EF Core 8, an earlier registration or one
+  in another method). See [TNY1004](docs/analyzers.md#tny1004).
 - Docs: a second per-tenant database beside the one `AddDbContextPerTenantDatabase` connects, through `AddDbContext`
   ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)); and notes that
   `AddDbContextFactory` by default, and `AddDbContext` with singleton options, keep the first tenant's connection

@@ -135,24 +135,36 @@ nothing fails or logs at run time.
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 ```
 
-Add `.UseTenantry()` to the options. A context has tenant-owned entities when it, or a base context, has a
-`DbSet<T>` property of a type that implements `ITenantEntity<TKey>`; one whose tenant-owned types are mapped only in
-`OnModelCreating` is not seen. `AddDbContextPerTenantDatabase` applies `UseTenantry()` itself and is not reported.
+Add `.UseTenantry()` to the options. `AddDbContextPerTenantDatabase` applies `UseTenantry()` itself and is not
+reported.
+
+A context has tenant-owned entities when it, or a base context, has a `DbSet<T>` property of a type that implements
+`ITenantEntity<TKey>`, or maps one with `modelBuilder.Entity<T>()` in one of its methods, as [TNY1001](#tny1001) sees
+them. A type mapped only in an `IEntityTypeConfiguration<T>` (or `ApplyConfigurationsFromAssembly`), or reached only
+through a navigation, is not seen.
 
 The rule reports a registration only when it sees everything the options do, so these are not reported:
 
-- options that hand the builder to other code that could call `UseTenantry()`: a method of the project's own, of a
-  library that references `Tenantry.EfCore`, a delegate, or an interface or virtual method;
+- options that hand the builder to code that could call `UseTenantry()`, or store it in a field or property: a method
+  of the project's own that does so in turn, a library that references `Tenantry.EfCore` (directly or through another
+  library), a delegate, an interface, virtual or unsealed override method, a local function, or a constructor of the
+  project's own. A method of the project's own that does none of this does not count;
 - options that are not a lambda or a method of the project's own (a delegate in a variable), and a registration
   without options;
-- a context that overrides `OnConfiguring`, or whose base context does;
-- a context that another registration, or a `ConfigureDbContext<TContext>`, calls `UseTenantry()` for anywhere in the
-  project, since from EF Core 9 they add to the same options. A generic method that does so for its type parameter
-  turns the rule off for the project.
+- a context with an `OnConfiguring`, of its own or a base context's, that calls `UseTenantry()` or hands the builder
+  on as above, or that is in another assembly. One that only picks a provider or adds logging, as a scaffolded
+  context's does, does not count;
+- a context that another registration, or a `ConfigureDbContext<TContext>`, calls `UseTenantry()` for, since from
+  EF Core 9 they add to the same options. A generic method that does so for its type parameter counts for every context
+  that meets the type parameter's constraints, every context when it is constrained only to `DbContext`. On EF Core 8,
+  only a context's first registration's options apply, so another registration counts only when it is not later in
+  the same method.
 
-It decides once the whole project is compiled, so `dotnet build` reports it, while an IDE may show it only after a
-build, or with analysis of the whole solution turned on. A test that registers a context without isolation on purpose
-can set `dotnet_diagnostic.TNY1004.severity = none` for its files.
+It decides once the whole project is compiled, so `dotnet build` reports it, while Visual Studio and Rider may show it
+only after a build, or with analysis of the whole solution turned on. Where a context is meant to be unisolated, such
+as a test that registers one on purpose, suppress it there with `#pragma warning disable TNY1004`,
+`[SuppressMessage("Tenantry", "TNY1004", Justification = "...")]`, or `dotnet_diagnostic.TNY1004.severity = none` in
+`.editorconfig` for those files.
 
 ## TNY2001
 

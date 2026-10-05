@@ -43,7 +43,7 @@ public sealed class TenantScopeAnalyzer : DiagnosticAnalyzer
         {
             case "MakeCurrent" when KnownTypes.IsDeclaredBy(method, types.TenantContextSetter):
             case "CreateScope" when KnownTypes.IsDeclaredBy(method, types.TenantScopeFactory):
-                if (invocation.Arguments.Length == 1 && Unwrap(invocation.Arguments[0].Value) is IObjectCreationOperation)
+                if (invocation.Arguments.Length == 1 && KnownTypes.Unwrap(invocation.Arguments[0].Value) is IObjectCreationOperation)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         Rules.InlineTenantDescriptor, invocation.Arguments[0].Syntax.GetLocation(), method.Name));
@@ -70,18 +70,10 @@ public sealed class TenantScopeAnalyzer : DiagnosticAnalyzer
     }
 
     private static bool IsRunInScope(IOperation? operation, KnownTypes types) =>
-        Unwrap(operation) is IInvocationOperation { TargetMethod.Name: "RunInScopeAsync" } call &&
+        KnownTypes.Unwrap(operation) is IInvocationOperation { TargetMethod.Name: "RunInScopeAsync" } call &&
         KnownTypes.IsDeclaredBy(call.TargetMethod, types.TenantScopeFactory);
 
     // RunInScopeAsync(...).ConfigureAwait(...) is still RunInScopeAsync's task.
     private static IOperation? Unconfigured(IOperation? operation) =>
-        Unwrap(operation) is IInvocationOperation { TargetMethod.Name: "ConfigureAwait", Instance: { } task } ? task : operation;
-
-    private static IOperation? Unwrap(IOperation? operation)
-    {
-        while (operation is IConversionOperation { IsImplicit: true } conversion)
-            operation = conversion.Operand;
-
-        return operation;
-    }
+        KnownTypes.Unwrap(operation) is IInvocationOperation { TargetMethod.Name: "ConfigureAwait", Instance: { } task } ? task : operation;
 }
