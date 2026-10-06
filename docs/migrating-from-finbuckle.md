@@ -4,6 +4,12 @@ This guide moves an ASP.NET Core application with EF Core from Finbuckle.MultiTe
 through the numbered steps in order; the sections after them list the behaviour that changes and what Tenantry does
 not have.
 
+The `tenantry-migrate-from-finbuckle` skill in the [Tenantry agent
+skills](https://github.com/tenantry-org/tenantry-agent-skills) takes a coding agent through these steps. In Claude Code,
+install it with `claude plugin marketplace add tenantry-org/tenantry-agent-skills`, then
+`claude plugin install tenantry@tenantry-agent-skills`. Other agents that read skill folders or AGENTS.md can use it
+too.
+
 ## How the concepts map
 
 | Finbuckle.MultiTenant | Tenantry |

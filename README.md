@@ -13,6 +13,9 @@ Tenantry keeps each tenant's data apart in EF Core, either in a shared database,
 `TenantId` that every query and save is scoped to, or in a database per tenant. You choose the key type, how tenants
 are resolved and where they are stored.
 
+Tenantry Core is Apache-2.0 and free for commercial use. If you are moving from Finbuckle.MultiTenant, see
+[how the two compare](https://tenantry.dev/compare) and the [migration guide](docs/migrating-from-finbuckle.md).
+
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")   // where the tenant comes from
@@ -36,8 +39,8 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 - One `AddTenantry` serves ASP.NET Core, console apps, workers and desktop apps.
 - Built for .NET 10. .NET 8 and 9 are supported until 10 November 2027 ([compatibility](docs/compatibility.md)).
 
-[Tenantry.Pro](https://tenantry.dev), a subscription, adds schema per tenant, provisioning and migrations across
-tenant databases, offboarding, audit logging, and the tenant in background jobs and messages.
+[Tenantry Pro](https://tenantry.dev/pro), a paid subscription, adds schema per tenant, provisioning and migrations
+across tenant databases, offboarding, audit logging, and the tenant in background jobs and messages.
 
 ## Packages
 
@@ -71,8 +74,8 @@ dotnet add package Tenantry.Caching
 dotnet add package Tenantry.Options
 ```
 
-Tenantry is in beta until 1.0: releases are numbered 0.x, and a minor release (0.4 to 0.5) can change the
-API, with the steps to update in the [changelog](CHANGELOG.md).
+Tenantry is in beta until 1.0: releases are numbered 0.x, and a minor release can change the API, with the steps to
+update in the [changelog](CHANGELOG.md).
 
 ## Quick start (ASP.NET Core)
 
@@ -169,8 +172,12 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and i
 | [Tenant resolution](docs/tenant-resolution.md) | Header, subdomain, host, route, claim, query-string, and custom resolvers; slugs and custom domains |
 | [Authentication per tenant](docs/authentication-per-tenant.md) | JWT bearer, OpenID Connect and cookie settings per tenant |
 | [Access control](docs/access-control.md) | Requiring tenants, access validators, claim-based validation |
+| [Calling other services](docs/http-propagation.md) | Sending the tenant with `HttpClient` and gRPC calls, and reading it in the called service |
+| [Caching per tenant](docs/caching.md) | `HybridCache`, `IDistributedCache` and output cache entries per tenant |
+| [Options per tenant](docs/per-tenant-options.md) | `IOptionsSnapshot<T>` and `IOptionsMonitor<T>` values per tenant |
+| [ASP.NET Core Identity](docs/aspnetcore-identity.md) | Users per tenant in a shared database, and sign-in cookies tied to their tenant |
 | [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
-| [Owned and multi-table entities](docs/efcore-advanced.md) | How owned entities and split tables are checked, all-or-nothing saves, unsupported models |
+| [Owned and multi-table entities](docs/efcore-advanced.md) | How owned entities, split tables and many-to-many join rows are checked, all-or-nothing saves, unsupported models |
 | [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantry` in console apps, workers, and background jobs |
 | [Testing](docs/testing.md) | Tests with Tenantry's real services: scopes, `WebApplicationFactory`, EF Core isolation |
 | [Diagnostics](docs/diagnostics.md) | Log event ids, the `tenant.id` trace tag and log scope, the resolution metric |
@@ -180,6 +187,8 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and i
 | [Migrating from Finbuckle.MultiTenant](docs/migrating-from-finbuckle.md) | Finbuckle's concepts and EF Core setup in Tenantry, and what changes |
 | [Analyzers](docs/analyzers.md) | The build warnings for code that leaves tenant data unprotected, and how to configure them |
 | [For AI coding agents](docs/ai-agents.md) | Steps for an agent adding Tenantry, an isolation test, common mistakes, rules for AGENTS.md |
+
+The [documentation index](docs/README.md) also links the API reference.
 
 ## Samples
 

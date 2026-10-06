@@ -4,6 +4,11 @@ This page is for a coding agent adding Tenantry to an application, and for the d
 the steps in order, write the test in [Verify isolation](#verify-isolation), and check the list of
 [mistakes](#mistakes-and-the-correct-form). The other guides have the detail behind each step.
 
+The [Tenantry agent skills](https://github.com/tenantry-org/tenantry-agent-skills) give an agent these steps as
+skills. In Claude Code, install them with `claude plugin marketplace add tenantry-org/tenantry-agent-skills`, then
+`claude plugin install tenantry@tenantry-agent-skills`. Other agents that read skill folders or AGENTS.md can use them
+too.
+
 ## When to use Tenantry
 
 Use it when one deployment of a .NET application serves several customers (tenants) whose data must be kept apart in

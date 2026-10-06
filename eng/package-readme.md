@@ -1,5 +1,5 @@
-Part of Tenantry, multi-tenancy for ASP.NET Core and EF Core. A coding agent adding Tenantry to an application should
-follow [the guide for AI coding agents](https://tenantry.dev/docs/core/ai-agents).
+Tenantry is multi-tenancy for ASP.NET Core and EF Core: one call on your `DbContext` filters queries and checks saves
+by tenant. It is Apache-2.0 and free for commercial use.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -37,6 +37,7 @@ Tenantry is in beta until 1.0: a 0.x minor release can change the API, and the c
 [Docs](https://tenantry.dev/docs/core) ·
 [Changelog](https://github.com/tenantry-org/tenantry-core/blob/master/CHANGELOG.md) ·
 [Source](https://github.com/tenantry-org/tenantry-core) ·
-[Tenantry Pro](https://tenantry.dev)
+[For AI coding agents](https://tenantry.dev/docs/core/ai-agents) ·
+[Tenantry Pro](https://tenantry.dev/pro)
 
 Licensed under the Apache License 2.0.
