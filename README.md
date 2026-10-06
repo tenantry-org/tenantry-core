@@ -109,7 +109,7 @@ var app = builder.Build();
 app.UseAuthentication();
 app.UseTenantry();
 
-app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.CurrentTenant!.Name))
+app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.RequiredTenant.Name))
    .RequireTenant();          // 400 without a tenant, 403 for one the user may not use
 
 app.Run();

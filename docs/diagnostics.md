@@ -7,8 +7,9 @@ were resolved. None of it needs setting up beyond your logging, tracing and metr
 
 Tenantry logs under four categories: `Tenantry.AspNetCore` (the request middleware), `Tenantry.AspNetCore.OutputCache`
 (output caching per tenant, event 1009), `Tenantry.EfCore` (the isolation in your `DbContext`) and `Tenantry.Options`
-(options per tenant). Event ids do not change between versions, so you can alert on them; above all on 2001, a save
-that tried to write another tenant's row.
+(options per tenant). Tenantry's event ids are 1000 to 2999, and Tenantry.Pro's are 3000 and above, so an id names
+one event. An id changes only in a release whose changelog says so, so you can alert on them: above all on 2001, a
+save that tried to write another tenant's row.
 
 | Event id | Name | Level | When |
 |----------|------|-------|------|
@@ -35,7 +36,7 @@ that tried to write another tenant's row.
 | 2005 | `SaveInTransaction` | Debug | A save whose rows rely on another of its statements' tenant check runs in a transaction although `AutoTransactionBehavior` is `Never` (`OnSaveWithoutTransaction = UseTransaction`). |
 | 2006 | `UnmarkedEntityTypes` | Warning | A context's model has entity types that are neither tenant-owned nor marked as shared across tenants, and the application set `OnUnmarkedEntityType = Warn` (the default, `Allow`, logs nothing). Logged once for each model EF Core builds: usually once per context type, and again if EF Core drops the model from its cache. |
 | 2007 | `StringTenantIdCollation` | Warning | On SQL Server or MySQL, a context's model has `string` tenant ids in tables where neither the `TenantId` column, the table nor the model sets a collation, so the database's default, which ignores case, compares them ([String tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)). Logged once for each model EF Core builds, also in `dotnet ef` commands that start the application's host. |
-| 3001 | `OrdinaryOptionsReadAsTenant` | Warning | `IOptions<T>` of a type configured per tenant was read while a tenant is current. It gives the ordinary value, so the code most likely wants `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. Logged once per options type. |
+| 2008 | `OrdinaryOptionsReadAsTenant` | Warning | `IOptions<T>` of a type configured per tenant was read while a tenant is current. It gives the ordinary value, so the code most likely wants `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. Logged once per options type. |
 
 While a request's tenant is current, a log scope with one property, `TenantId`, is open, so every entry the request
 writes carries it in a logging provider that records scopes: Serilog's, or the console's and OpenTelemetry's with
@@ -69,12 +70,9 @@ builder.Services.AddTenantry<string>(tenant => tenant
     .IgnoreWarnings(TenantryWarnings.StringTenantIdCollation));
 ```
 
-It accepts only 2007 (`TenantryWarnings.StringTenantIdCollation`) and 3001
-(`TenantryWarnings.OrdinaryOptionsReadAsTenant`), and throws for Tenantry's other events, 1000 to 2999. Events 2002
-and 2006 have their own switches, `OnMissingTenant` and `OnUnmarkedEntityType`. Each call adds to the ids of the
-others. Other ids are left to the package that logs them, and take effect only when that package reads them with
-`TenantryWarnings.IsIgnored`. None does yet: Tenantry.Pro's events are filtered by their logging category. An id
-applies only to the package that logs it: 3001 turns off the `Tenantry.Options` warning, not Tenantry.Pro's event 3001.
+It accepts only 2007 (`TenantryWarnings.StringTenantIdCollation`) and 2008
+(`TenantryWarnings.OrdinaryOptionsReadAsTenant`), and throws for any other id. Events 2002 and 2006 have their own
+switches, `OnMissingTenant` and `OnUnmarkedEntityType`. Each call adds to the ids of the others.
 
 ## Traces
 

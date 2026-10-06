@@ -203,7 +203,7 @@ app.MapGet("/admin/stats", async (AppDbContext db) =>
 app.MapGet("/me", (ITenantContext<string> ctx) => Results.Json(new
 {
     TenantId = ctx.CurrentTenantId,
-    TenantName = ctx.CurrentTenant!.Name
+    TenantName = ctx.RequiredTenant.Name
 }));
 
 Console.WriteLine("""

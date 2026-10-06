@@ -252,7 +252,7 @@ internal sealed class TenantOptionsManager<[DynamicallyAccessedMembers(Dynamical
 /// The <see cref="IOptions{TOptions}"/> of an options type configured per tenant: the ordinary value, built once with no
 /// tenant current, as Microsoft's is. A singleton that reads <c>Value</c> in its constructor keeps it for its lifetime,
 /// so this value is never a tenant's: the tenant's comes from <see cref="IOptionsSnapshot{TOptions}"/> and
-/// <see cref="IOptionsMonitor{TOptions}"/>. The first read while a tenant is current logs a warning (event 3001), since
+/// <see cref="IOptionsMonitor{TOptions}"/>. The first read while a tenant is current logs a warning (event 2008), since
 /// the code that reads it most likely expects the tenant's value.
 /// </summary>
 internal sealed class TenantFreeOptions<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(

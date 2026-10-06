@@ -48,6 +48,26 @@ bool HasTenant { get; }
 
 Value: `bool`
 
+### `RequiredTenant`
+
+The current tenant, for code that must not run without one.
+
+```csharp
+ITenantDescriptor<TKey> RequiredTenant { get; }
+```
+
+Value: [`ITenantDescriptor<TKey>`](tenantry-itenantdescriptor-1.md)
+
+Exceptions:
+
+- [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md): No tenant is current.
+
+A default interface member: a mock of [`ITenantContext<TKey>`](tenantry-itenantcontext.md) (NSubstitute, Moq) intercepts it, as it does [`ITenantContext<TKey>.GetCurrentTenant<TTenant>`](tenantry-itenantcontext.md), and does not read [`ITenantContext<TKey>.CurrentTenant`](tenantry-itenantcontext.md) unless it is configured to.
+
+```csharp
+app.MapGet("/me", (ITenantContext<Guid> tenants) => tenants.RequiredTenant.Name).RequireTenant();
+```
+
 ## Methods
 
 ### `GetCurrentTenant<TTenant>()`

@@ -10,7 +10,7 @@ internal static partial class TenantOptionsLog
 {
     public const string Category = "Tenantry.Options";
 
-    [LoggerMessage(3001, LogLevel.Warning,
+    [LoggerMessage(2008, LogLevel.Warning,
         "IOptions<{OptionsType}> was read while tenant {TenantId} is current. It gives the ordinary value, not the " +
         "tenant's: read IOptionsSnapshot or IOptionsMonitor of the same type for the tenant's value. " +
         "Logged once per options type",

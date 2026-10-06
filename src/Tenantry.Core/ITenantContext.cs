@@ -20,6 +20,26 @@ public interface ITenantContext<TKey>
     ITenantDescriptor<TKey>? CurrentTenant { get; }
 
     /// <summary>
+    /// The current tenant, for code that must not run without one.
+    /// </summary>
+    /// <remarks>
+    /// A default interface member: a mock of <see cref="ITenantContext{TKey}"/> (NSubstitute, Moq) intercepts it, as it
+    /// does <see cref="GetCurrentTenant{TTenant}"/>, and does not read <see cref="CurrentTenant"/> unless it is
+    /// configured to.
+    /// </remarks>
+    /// <exception cref="TenantNotResolvedException">No tenant is current.</exception>
+    /// <example>
+    /// <code>
+    /// app.MapGet("/me", (ITenantContext&lt;Guid&gt; tenants) =&gt; tenants.RequiredTenant.Name).RequireTenant();
+    /// </code>
+    /// </example>
+    ITenantDescriptor<TKey> RequiredTenant =>
+        CurrentTenant
+        ?? throw new TenantNotResolvedException(
+            "No tenant is current. Read the tenant during a request (after app.UseTenantry()) or inside a scope " +
+            "from ITenantScopeFactory.");
+
+    /// <summary>
     /// Returns <c>true</c> if a tenant has been resolved for the current scope.
     /// </summary>
     bool HasTenant { get; }

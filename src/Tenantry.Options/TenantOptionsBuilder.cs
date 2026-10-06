@@ -23,7 +23,7 @@ namespace Tenantry.Options;
 /// constructor. Read <c>IOptionsSnapshot&lt;TOptions&gt;</c>, which is scoped, in request code, and in a singleton
 /// hold <c>IOptionsMonitor&lt;TOptions&gt;</c> and read <c>CurrentValue</c> each time, not once in the constructor.
 /// The first read of <c>IOptions&lt;TOptions&gt;</c> while a tenant is
-/// current logs a warning, event 3001 in the category <c>Tenantry.Options</c>.
+/// current logs a warning, event 2008 in the category <c>Tenantry.Options</c>.
 /// </para>
 /// <para>
 /// Each tenant's value is built on first use and cached until <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/>
@@ -188,7 +188,7 @@ public sealed class TenantOptionsBuilder<TKey>
         services.TryAddSingleton<IOptionsMonitorCache<TOptions>>(sp => sp.GetRequiredService<TenantOptionsCache<TOptions>>());
 
         // IOptions<TOptions> stays the ordinary value: a singleton that reads it once must not keep a tenant's. Its
-        // only message is event 3001, so an application that ignores that gives it no logger.
+        // only message is event 2008, so an application that ignores that gives it no logger.
         services.TryAddSingleton<IOptions<TOptions>>(sp => new TenantFreeOptions<TOptions>(
             sp.GetRequiredService<IOptionsFactory<TOptions>>(),
             sp.GetRequiredService<ICurrentTenantId>(),

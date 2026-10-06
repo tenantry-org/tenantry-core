@@ -55,7 +55,7 @@ app.MapGet("/orders", (ITenantContext<string> ctx) =>
 
 app.MapGet("/me", (ITenantContext<string> ctx) =>
         ctx.HasTenant
-            ? Results.Ok(new TenantResponse(ctx.CurrentTenantId!, ctx.CurrentTenant!.Name))
+            ? Results.Ok(new TenantResponse(ctx.CurrentTenantId!, ctx.RequiredTenant.Name))
             : Results.NotFound())
     .AllowMissingTenant();
 

@@ -67,7 +67,7 @@ public sealed class PerTenantOptionsTests
             _ = options.Value;
 
         loggers.Entries.Should().ContainSingle().Which.Should().Match<(string Category, int EventId, string Message)>(e =>
-            e.Category == "Tenantry.Options" && e.EventId == 3001 &&
+            e.Category == "Tenantry.Options" && e.EventId == 2008 &&
             e.Message.Contains("IOptions<BrandingOptions> was read while tenant acme is current"));
     }
 

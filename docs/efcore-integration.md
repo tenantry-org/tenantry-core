@@ -335,8 +335,7 @@ context with `AddDbContext` and build the connection string from the current ten
 ```csharp
 builder.Services.AddDbContext<ReportingDbContext>((sp, options) =>
 {
-    var tenant = sp.GetRequiredService<ITenantContext<string>>().CurrentTenant
-        ?? throw new TenantNotResolvedException("No tenant is current, so there is no reporting database.");
+    var tenant = sp.GetRequiredService<ITenantContext<string>>().RequiredTenant;
     options.UseSqlServer($"Server=reports;Database=reports_{tenant.TenantId};Integrated Security=true").UseTenantry();
 });
 

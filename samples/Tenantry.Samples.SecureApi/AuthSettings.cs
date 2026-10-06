@@ -12,7 +12,7 @@ namespace Tenantry.Samples.SecureApi;
 public sealed class AuthSettings
 {
     /// <summary>The claim that lists the tenants a caller may select.</summary>
-    public const string TenantClaim = "tenant";
+    public const string TenantClaim = "tenant_id";
 
     public string Issuer { get; init; } = string.Empty;
 

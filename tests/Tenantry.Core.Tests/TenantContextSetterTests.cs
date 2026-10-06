@@ -29,6 +29,21 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
+    public void RequiredTenant_ReturnsTheCurrentTenant_AndThrowsWithoutOne()
+    {
+        var tenantContext = BuildSetter();
+        TenantDescriptor<string> descriptor = new() { TenantId = "acme", Name = "Acme Corp" };
+
+        using (tenantContext.MakeCurrent(descriptor))
+        {
+            tenantContext.RequiredTenant.Should().BeSameAs(descriptor);
+        }
+
+        FluentActions.Invoking(() => tenantContext.RequiredTenant).Should().Throw<TenantNotResolvedException>()
+            .WithMessage("No tenant is current.*ITenantScopeFactory.");
+    }
+
+    [Fact]
     public void MakeCurrent_WhenNested_ShadowsOuterThenRestoresOnDispose()
     {
         var tenantContext = BuildSetter();

@@ -89,7 +89,7 @@ public sealed class PropagationEndToEndTests
 
         var app = builder.Build();
         app.UseTenantry();
-        app.MapGet("/tenant", (ITenantContext<Guid> tenant) => tenant.CurrentTenant!.Name).RequireTenant();
+        app.MapGet("/tenant", (ITenantContext<Guid> tenant) => tenant.RequiredTenant.Name).RequireTenant();
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;
     }

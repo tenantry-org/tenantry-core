@@ -17,22 +17,16 @@ public static class TenantryWarnings
     public const int StringTenantIdCollation = 2007;
 
     /// <summary>
-    /// Event 3001, from Tenantry.Options: <c>IOptions&lt;T&gt;</c> of a type configured per tenant was read while a
+    /// Event 2008, from Tenantry.Options: <c>IOptions&lt;T&gt;</c> of a type configured per tenant was read while a
     /// tenant is current, and gave the ordinary value.
     /// </summary>
-    public const int OrdinaryOptionsReadAsTenant = 3001;
-
-    // Tenantry's packages log events 1000 to 2999, and Tenantry.Options event 3001. An id another package logs takes
-    // effect only when that package reads IsIgnored, and none does yet: Tenantry.Pro's events are filtered by their
-    // logging category.
-    private const int FirstEventId = 1000;
-    private const int LastEventId = 2999;
+    public const int OrdinaryOptionsReadAsTenant = 2008;
 
     private static readonly int[] Ignorable = [StringTenantIdCollation, OrdinaryOptionsReadAsTenant];
 
     /// <summary>
-    /// Whether the application turned off the warning <paramref name="eventId"/> with <c>IgnoreWarnings</c>. A package
-    /// that logs warnings of its own reads it here for its ids outside Tenantry's events, 1000 to 2999 and 3001.
+    /// Whether the application turned off the warning <paramref name="eventId"/> with <c>IgnoreWarnings</c>. Tenantry's
+    /// packages read it before they log one of the warnings this class names.
     /// </summary>
     /// <param name="services">The application's services.</param>
     /// <param name="eventId">The warning's event id.</param>
@@ -44,16 +38,15 @@ public static class TenantryWarnings
         return services.GetService<Ignored>()?.EventIds.Contains(eventId) == true;
     }
 
-    /// <summary>Registers <paramref name="eventIds"/> as ignored, after refusing Tenantry's other events.</summary>
+    /// <summary>Registers <paramref name="eventIds"/> as ignored, after refusing any id this class does not name.</summary>
     internal static void Ignore(IServiceCollection services, int[] eventIds)
     {
         foreach (var eventId in eventIds)
         {
-            if (eventId is >= FirstEventId and <= LastEventId && !Ignorable.Contains(eventId))
+            if (!Ignorable.Contains(eventId))
             {
                 throw new ArgumentException(
-                    $"Tenantry cannot ignore event {eventId}. Of Tenantry's own events ({FirstEventId} to " +
-                    $"{LastEventId}, and {OrdinaryOptionsReadAsTenant}), IgnoreWarnings accepts only " +
+                    $"Tenantry cannot ignore event {eventId}. IgnoreWarnings accepts only " +
                     $"{string.Join(" and ", Ignorable)} (TenantryWarnings). " +
                     "Event 2002 is turned off with EfCoreIsolationOptions.OnMissingTenant, and event 2006 with " +
                     "EfCoreIsolationOptions.OnUnmarkedEntityType.",

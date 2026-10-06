@@ -178,11 +178,12 @@ Inject `ITenantContext<TKey>` anywhere. On an endpoint that requires a tenant (`
 `RequireTenantByDefault()`), a request without one is refused before the handler runs:
 
 ```csharp
-app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.CurrentTenant!.Name))
+app.MapGet("/me", (ITenantContext<Guid> ctx) => Results.Ok(ctx.RequiredTenant.Name))
     .RequireTenant();
 ```
 
-Check `HasTenant` only on an endpoint that does not require a tenant. Read `CurrentTenantId` for work outside EF Core,
+`RequiredTenant` returns the current tenant, and throws `TenantNotResolvedException` when there is none. Check
+`HasTenant` only on an endpoint that does not require a tenant. Read `CurrentTenantId` for work outside EF Core,
 which applies the tenant for you.
 
 ## MVC / controllers

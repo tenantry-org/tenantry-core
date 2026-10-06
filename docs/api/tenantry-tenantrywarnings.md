@@ -12,10 +12,10 @@ public static class TenantryWarnings
 
 ### `OrdinaryOptionsReadAsTenant`
 
-Event 3001, from Tenantry.Options: `IOptions<T>` of a type configured per tenant was read while a tenant is current, and gave the ordinary value.
+Event 2008, from Tenantry.Options: `IOptions<T>` of a type configured per tenant was read while a tenant is current, and gave the ordinary value.
 
 ```csharp
-public const int OrdinaryOptionsReadAsTenant = 3001
+public const int OrdinaryOptionsReadAsTenant = 2008
 ```
 
 Returns: `int`
@@ -34,7 +34,7 @@ Returns: `int`
 
 ### `IsIgnored(IServiceProvider, int)`
 
-Whether the application turned off the warning `eventId` with `IgnoreWarnings`. A package that logs warnings of its own reads it here for its ids outside Tenantry's events, 1000 to 2999 and 3001.
+Whether the application turned off the warning `eventId` with `IgnoreWarnings`. Tenantry's packages read it before they log one of the warnings this class names.
 
 ```csharp
 public static bool IsIgnored(IServiceProvider services, int eventId)

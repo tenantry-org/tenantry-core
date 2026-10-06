@@ -104,6 +104,7 @@ The current tenant, read-only. Inject it into endpoints and services:
 public interface ITenantContext<TKey>
 {
     ITenantDescriptor<TKey>? CurrentTenant { get; }  // null if none resolved
+    ITenantDescriptor<TKey> RequiredTenant { get; }  // CurrentTenant, or throws TenantNotResolvedException
     bool HasTenant { get; }                          // true if a tenant is active
     TKey? CurrentTenantId { get; }                   // CurrentTenant?.TenantId, or default(TKey)
     TTenant? GetCurrentTenant<TTenant>()             // CurrentTenant?.As<TTenant>()
@@ -113,7 +114,7 @@ public interface ITenantContext<TKey>
 
 Without a tenant, `CurrentTenantId` is `default(TKey)`: `null` for `string` keys, but `Guid.Empty` or `0` for
 value-type keys, as `TKey?` on an unconstrained generic is not nullable for them. Check `HasTenant` to tell "no
-tenant" apart.
+tenant" apart, or read `RequiredTenant` where a tenant must be current.
 
 ## `ITenantContextSetter<TKey>`
 
@@ -192,9 +193,9 @@ hold and, like `MakeCurrent`, checks nothing ([Non-HTTP hosts](non-http-hosts.md
 
 | Exception | Package | Thrown when |
 |-----------|---------|-------------|
-| `TenantNotResolvedException` | `Tenantry.Core` | Code that needs a current tenant runs without one (an EF Core write, `CurrentTenantConnectionString`). |
+| `TenantNotResolvedException` | `Tenantry.Core` | Code that needs a current tenant runs without one (an EF Core write, `CurrentTenantConnectionString`, `RequiredTenant`). |
 | `TenantNotFoundException` | `Tenantry.Core` | A tenant id is not in the store (`RunInScopeAsync`). It derives from `TenantNotResolvedException` and carries the `TenantId`, so a queue consumer can drop a message for a tenant that no longer exists. |
-| `TenantInactiveException` | `Tenantry.Core` | `RunInScopeAsync` names a tenant that `ValidateTenantActivity` refuses. It derives from `TenantNotResolvedException` and carries the `TenantId`. |
+| `TenantInactiveException` | `Tenantry.Core` | `RunInScopeAsync` names a tenant that `ValidateTenantActivity` refuses. It derives from `TenantNotResolvedException` and carries the `TenantId`, of the application's key type. |
 | `TenantIsolationViolationException` | `Tenantry.EfCore` | EF Core would read or write across tenants; `Kind` says which check failed. See [EF Core integration](efcore-integration.md). |
 
 ## Registration

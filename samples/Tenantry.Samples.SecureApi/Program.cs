@@ -2,7 +2,7 @@
 //
 // 1. Callers authenticate with a JWT bearer token. Anonymous requests get 401.
 // 2. The caller selects a tenant with the X-Tenant-Id header. Tenantry checks it against the token's
-//    "tenant" claims, so a caller can only select tenants they belong to (403 otherwise).
+//    "tenant_id" claims, so a caller can only select tenants they belong to (403 otherwise).
 // 3. Every endpoint requires a tenant unless it opts out (400 without one). EF Core reads and writes are
 //    isolated to the selected tenant, and tenant-owned writes without a tenant are rejected.
 //
@@ -46,7 +46,7 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        // Keep claim names as issued ("sub", "tenant") instead of mapping them to long URIs.
+        // Keep claim names as issued ("sub", "tenant_id") instead of mapping them to long URIs.
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new()
         {

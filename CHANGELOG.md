@@ -7,12 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading from 0.7
+
+- Tenantry.Options' warning `OrdinaryOptionsReadAsTenant` is now event 2008, where it was 3001, so Tenantry's events
+  are 1000 to 2999 and Tenantry.Pro's are 3000 and above. Change a log alert or filter on event 3001 in the category
+  `Tenantry.Options` to 2008. `TenantryWarnings.OrdinaryOptionsReadAsTenant` is 2008, so an `IgnoreWarnings` call that
+  names it needs no change. Tenantry.Pro 0.8 uses this numbering.
+- `TenantInactiveException.TenantId` holds the tenant's id as the application's key type, as
+  `TenantNotFoundException.TenantId` does. It held the id as text, so with a `Guid` or `int` key, cast it to that type
+  rather than to `string`.
+- An `ITenantActivityValidator<TKey>` registered as scoped or transient makes `ITenantActivity<TKey>` throw
+  `InvalidOperationException` when it is first resolved, which `RunInScopeAsync` and the request middleware do. Such a
+  validator was resolved once, from the root provider, and shared by every request. Register it as a singleton with
+  `tenant.ValidateTenantActivity<TValidator>()`, and have it create a scope for any scoped service it needs.
+
 ### Added
 
 - `Tenantry.Templates`, `dotnet new` templates for applications that use Tenantry, published with each release.
   Install them with `dotnet new install Tenantry.Templates`, then create a project with
   `dotnet new tenantry-api -n Orders.Api`, an ASP.NET Core API with EF Core that takes the tenant from the
-  `X-Tenant-Id` header and checks it against the caller's JWT `tenant` claims, or
+  `X-Tenant-Id` header and checks it against the caller's JWT `tenant_id` claims, or
   `dotnet new tenantry-worker -n Orders.Worker`, a worker service with EF Core that runs each message as the tenant it
   names with `RunInScopeAsync`. The projects reference the Tenantry packages of the templates' version;
   `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK, though an older
@@ -26,10 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registration or one in another method); and, on EF Core 9 and later, for a context declared in another project,
   whose own registrations it cannot see. See [TNY1004](docs/analyzers.md#tny1004).
 - `tenant.IgnoreWarnings(…)`, which stops the warnings that report configuration that may be deliberate, named in
-  `TenantryWarnings`: 2007 and 3001. It throws for Tenantry's other events, 1000 to 2999. Other ids are kept for the
-  package that logs them, and take effect only when that package reads them with `TenantryWarnings.IsIgnored`; none
-  does yet, as Tenantry.Pro's events are filtered by their logging category. See
+  `TenantryWarnings`: 2007 and 2008. It throws for any other id. See
   [Turning off a warning](docs/diagnostics.md#turning-off-a-warning).
+- `ITenantContext<TKey>.RequiredTenant` (Tenantry.Core), the current tenant, which throws
+  `TenantNotResolvedException` when none is current, for code that must not run without one. Use it where code wrote
+  `CurrentTenant!`, which throws a `NullReferenceException` without a tenant.
+- `tenant.ValidateTenantActivity<TValidator>()` (Tenantry.Core) adds an `ITenantActivityValidator<TKey>` of your own
+  as a singleton, for a suspension check that needs services. See
+  [Suspended and inactive tenants](docs/tenant-stores.md#suspended-and-inactive-tenants).
 - Warning 2007, `StringTenantIdCollation`, in `Tenantry.EfCore`: with `string` tenant ids on SQL Server or MySQL, a
   model with tenant-owned tables where neither the `TenantId` column, the table nor the model sets a collation is
   logged once as it is built, naming those tables. The database's default collation there ignores case, so tenants
@@ -47,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `SecureApi` sample reads the tenants a caller may use from its token's `tenant_id` claims, the name
+  `ResolveFromClaim` and the docs use. It read `tenant` claims.
 - `UseTenantry()` on an HTTP or gRPC client now refuses a request to the client's service that already carries the
   `tenantry-tenant-id` header while no tenant is current (`InvalidOperationException`), as it did for a header naming
   another tenant while one is current. Before, such a header was sent unchanged. An untrusted client could set it on

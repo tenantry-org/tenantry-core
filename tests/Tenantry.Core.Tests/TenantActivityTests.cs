@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Tenantry.Core.Tests;
 
@@ -50,6 +51,67 @@ public sealed class TenantActivityTests
         ran.Should().BeFalse();
 
         (await scopes.RunInScopeAsync("acme", (scope, _) => Task.FromResult(scope.Tenant.TenantId), TestContext.Current.CancellationToken)).Should().Be("acme");
+    }
+
+    [Fact]
+    public async Task TheExceptionCarriesTheIdAsTheKeyType()
+    {
+        TenantDescriptor<Guid> suspended = new() { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000002"), Name = "Suspended Ltd" };
+        ServiceCollection services = new();
+        services.AddTenantry<Guid>(tenant => tenant.UseInMemoryStore([suspended]).ValidateTenantActivity(_ => false));
+        await using var provider = services.BuildServiceProvider();
+        var activity = provider.GetRequiredService<ITenantActivity<Guid>>();
+
+        await activity.Awaiting(a => a.ThrowIfInactiveAsync(suspended, TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<TenantInactiveException>().Where(e => e.TenantId is Guid && (Guid)e.TenantId == suspended.TenantId);
+    }
+
+    [Fact]
+    public async Task AValidatorType_IsASingleton_ConsultedWithTheOthers()
+    {
+        await using var services = Build(tenant =>
+        {
+            tenant.UseInMemoryStore([Acme, Suspended]).ValidateTenantActivity(_ => true);
+            tenant.ValidateTenantActivity<NotSuspended>();
+            tenant.ValidateTenantActivity<NotSuspended>();
+        });
+        var activity = services.GetRequiredService<ITenantActivity<string>>();
+
+        (await activity.IsActiveAsync(Acme, TestContext.Current.CancellationToken)).Should().BeTrue();
+        (await activity.IsActiveAsync(Suspended, TestContext.Current.CancellationToken)).Should().BeFalse();
+        services.GetServices<ITenantActivityValidator<string>>().OfType<NotSuspended>().Should().ContainSingle("a type added twice is registered once");
+        services.GetRequiredService<ITenantActivity<string>>().Should().BeSameAs(activity);
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public void AValidatorThatIsNotASingleton_IsRefused_NamingIt(ServiceLifetime lifetime)
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]));
+        services.Add(new ServiceDescriptor(typeof(ITenantActivityValidator<string>), typeof(NotSuspended), lifetime));
+        using var provider = services.BuildServiceProvider();
+
+        FluentActions.Invoking(() => provider.GetRequiredService<ITenantActivity<string>>())
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage($"*ITenantActivityValidator<String> NotSuspended is registered as {lifetime.ToString().ToLowerInvariant()}*ValidateTenantActivity<TValidator>()*");
+    }
+
+    [Fact]
+    public void AValidatorTypeOfAnotherKeyType_IsRefused()
+    {
+        ServiceCollection services = new();
+
+        FluentActions.Invoking(() => services.AddTenantry<Guid>(tenant => tenant.ValidateTenantActivity<NotSuspended>()))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("NotSuspended does not implement ITenantActivityValidator<Guid>*");
+    }
+
+    private sealed class NotSuspended : ITenantActivityValidator<string>
+    {
+        public ValueTask<bool> IsActiveAsync(ITenantDescriptor<string> tenant, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(tenant.TenantId != "suspended");
     }
 
     private static ServiceProvider Build(Action<ITenantBuilder<string>> configure)

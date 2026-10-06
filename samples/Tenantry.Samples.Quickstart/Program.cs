@@ -63,7 +63,7 @@ app.MapGet("/orders", (ITenantContext<string> ctx) =>
 // Show the resolved tenant for the current request, allow to execute if tenant is unresolved
 app.MapGet("/me", (ITenantContext<string> ctx) =>
     ctx.HasTenant
-        ? Results.Ok(new { TenantId = ctx.CurrentTenantId, ctx.CurrentTenant!.Name })
+        ? Results.Ok(new { TenantId = ctx.CurrentTenantId, ctx.RequiredTenant.Name })
         : Results.NotFound("No tenant resolved."))
     .AllowMissingTenant();
 

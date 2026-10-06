@@ -6,10 +6,11 @@ namespace Tenantry;
 /// </summary>
 /// <typeparam name="TKey">The tenant identifier type.</typeparam>
 /// <remarks>
-/// Register one with <c>tenant.ValidateTenantActivity(…)</c>, or as a singleton
-/// <see cref="ITenantActivityValidator{TKey}"/>. Every registered validator must allow a tenant.
-/// <see cref="ITenantActivity{TKey}"/> asks them. It is a singleton, so a validator must not depend on scoped services;
-/// read what it needs from the tenant, which the store returns.
+/// Register one with <c>tenant.ValidateTenantActivity&lt;TValidator&gt;()</c>, which makes it a singleton. Every
+/// registered validator must allow a tenant. <see cref="ITenantActivity{TKey}"/> asks them. It is a singleton, so a
+/// validator must not depend on scoped services: read what it needs from the tenant, which the store returns, or create
+/// a scope inside the validator. <see cref="ITenantActivity{TKey}"/> throws <see cref="InvalidOperationException"/>
+/// when first resolved if a validator is registered as scoped or transient.
 /// </remarks>
 public interface ITenantActivityValidator<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>

@@ -69,7 +69,7 @@ If `IOptions<T>` gave the tenant's value, this singleton would keep the settings
 apply them to every other tenant, and library code you do not own does the same. So `IOptions<T>` always gives the
 ordinary value, built with no tenant current, so a tenant's settings never reach code that keeps a value; code that
 should see the tenant's settings reads `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. The first time `IOptions<T>` is
-read while a tenant is current, Tenantry logs a warning (event 3001, [Diagnostics](diagnostics.md#logs)) naming the
+read while a tenant is current, Tenantry logs a warning (event 2008, [Diagnostics](diagnostics.md#logs)) naming the
 options type, since that code most likely expects the tenant's value; where it does not, turn the warning off with
 [`IgnoreWarnings`](diagnostics.md#turning-off-a-warning).
 

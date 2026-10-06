@@ -6,7 +6,7 @@ namespace Tenantry.Core.Tests;
 
 /// <summary>
 /// <c>IgnoreWarnings</c> turns off the warnings about configuration that may be deliberate, and refuses every other
-/// Tenantry event, 1000 to 2999. Other ids are left to the package that logs them.
+/// id.
 /// </summary>
 public sealed class IgnoreWarningsTests
 {
@@ -17,8 +17,8 @@ public sealed class IgnoreWarningsTests
             TenantryWarnings.StringTenantIdCollation, TenantryWarnings.OrdinaryOptionsReadAsTenant));
 
         TenantryWarnings.IsIgnored(sp, 2007).Should().BeTrue();
-        TenantryWarnings.IsIgnored(sp, 3001).Should().BeTrue();
-        TenantryWarnings.IsIgnored(sp, 4402).Should().BeFalse();
+        TenantryWarnings.IsIgnored(sp, 2008).Should().BeTrue();
+        TenantryWarnings.IsIgnored(sp, 2006).Should().BeFalse();
     }
 
     [Fact]
@@ -64,32 +64,12 @@ public sealed class IgnoreWarningsTests
     public void EveryCall_AddsToTheIgnoredWarnings_AlsoInAnotherAddTenantry()
     {
         ServiceCollection services = new();
-        services.AddTenantry<string>(tenant => tenant
-            .IgnoreWarnings(TenantryWarnings.StringTenantIdCollation)
-            .IgnoreWarnings(4403));
+        services.AddTenantry<string>(tenant => tenant.IgnoreWarnings(TenantryWarnings.StringTenantIdCollation));
         services.AddTenantry<string>(tenant => tenant.IgnoreWarnings(TenantryWarnings.OrdinaryOptionsReadAsTenant));
         using var sp = services.BuildServiceProvider();
 
         TenantryWarnings.IsIgnored(sp, 2007).Should().BeTrue();
-        TenantryWarnings.IsIgnored(sp, 3001).Should().BeTrue();
-        TenantryWarnings.IsIgnored(sp, 4403).Should().BeTrue();
-    }
-
-    [Theory]
-    [InlineData(3002)] // the 3000s other than 3001, such as Tenantry.Pro's 3002 to 3408
-    [InlineData(3301)]
-    [InlineData(3408)]
-    [InlineData(3000)]
-    [InlineData(3999)]
-    [InlineData(4402)]
-    [InlineData(4999)]
-    [InlineData(999)]
-    [InlineData(0)]
-    public void AnIdOutsideTenantrysEvents_IsAcceptedForThePackageThatLogsIt(int eventId)
-    {
-        using var sp = Build(tenant => tenant.IgnoreWarnings(eventId));
-
-        TenantryWarnings.IsIgnored(sp, eventId).Should().BeTrue();
+        TenantryWarnings.IsIgnored(sp, 2008).Should().BeTrue();
     }
 
     [Theory]
@@ -101,17 +81,20 @@ public sealed class IgnoreWarningsTests
     [InlineData(2002)] // a write without a tenant
     [InlineData(2003)] // a write that matched no row
     [InlineData(2006)] // turned off with OnUnmarkedEntityType
-    [InlineData(1000)]
-    [InlineData(2999)]
-    public void AnyOtherTenantryEvent_IsRefused_NamingIt(int eventId)
+    [InlineData(3001)] // Tenantry.Pro's events, 3000 and above
+    [InlineData(3002)]
+    [InlineData(4402)]
+    [InlineData(999)]
+    [InlineData(0)]
+    public void AnyOtherId_IsRefused_NamingIt(int eventId)
     {
         ServiceCollection services = new();
 
         var act = () => services.AddTenantry<string>(tenant => tenant.IgnoreWarnings(TenantryWarnings.StringTenantIdCollation, eventId));
 
         act.Should().Throw<ArgumentException>()
-            .WithMessage($"Tenantry cannot ignore event {eventId}. Of Tenantry's own events (1000 to 2999, and 3001), " +
-                "IgnoreWarnings accepts only 2007 and 3001 (TenantryWarnings). Event 2002 *OnMissingTenant*OnUnmarkedEntityType*")
+            .WithMessage($"Tenantry cannot ignore event {eventId}. IgnoreWarnings accepts only 2007 and 2008 " +
+                "(TenantryWarnings). Event 2002 *OnMissingTenant*OnUnmarkedEntityType*")
             .Which.ParamName.Should().Be("eventIds");
         services.AddTenantry<string>();
         using var sp = services.BuildServiceProvider();
