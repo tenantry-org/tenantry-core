@@ -12,11 +12,18 @@ the pieces fit together; this reference is for the details of each type and memb
 | [`TenantryApplicationBuilderExtensions`](microsoft-aspnetcore-builder-tenantryapplicationbuilderextensions.md) | class | Adds Tenantry's tenant resolution to the request pipeline. |
 | [`TenantryEndpointConventionBuilderExtensions`](microsoft-aspnetcore-builder-tenantryendpointconventionbuilderextensions.md) | class | Extension methods for applying Tenantry endpoint metadata. |
 
+### `Microsoft.AspNetCore.SignalR`
+
+| Type | Kind | Summary |
+|------|------|---------|
+| [`TenantryHubOptionsExtensions`](microsoft-aspnetcore-signalr-tenantryhuboptionsextensions.md) | class | Tenantry's check of each SignalR hub method call. |
+
 ### `Microsoft.Extensions.DependencyInjection`
 
 | Type | Kind | Summary |
 |------|------|---------|
 | [`TenantryAspNetCoreTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryaspnetcoretenantbuilderextensions.md) | class | Tenantry's ASP.NET Core features on [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): how a request is resolved to a tenant, whether endpoints need one, and who may use it. `app.UseTenantry()` applies them to requests. |
+| [`TenantryServerSideBlazorBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryserversideblazorbuilderextensions.md) | class | Tenantry's check of each Blazor Server circuit's activity. |
 
 ### `Tenantry.AspNetCore`
 

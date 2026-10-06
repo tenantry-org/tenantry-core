@@ -67,6 +67,8 @@ public sealed class TenantList : List<ITenantDescriptor<Guid>>, IEnumerable<ITen
 
 public sealed record Message(Guid TenantId, string Description);
 
+public sealed class ChatHub : Microsoft.AspNetCore.SignalR.Hub;
+
 /// <summary>The application's entry point, as <c>WebApplicationFactory&lt;Program&gt;</c> names it.</summary>
 public partial class Program;
 

@@ -10,6 +10,7 @@
   the [events](#events) raised when a request's tenant is made current or a request is rejected;
 
 and `app.UseTenantry()`, the resolution middleware, which also checks the registration when the application starts.
+For hubs and circuits, see [SignalR and Blazor Server](#signalr-and-blazor-server).
 [Diagnostics](diagnostics.md) describes its logs, traces and metrics.
 
 ## Registration
@@ -190,3 +191,43 @@ which applies the tenant for you.
 
 Everything above applies to controllers too. The endpoint metadata is `[RequireTenant]` and `[AllowMissingTenant]` on
 controllers, and `.RequireTenant()` and `.AllowMissingTenant()` on minimal APIs ([Access control](access-control.md)).
+
+## SignalR and Blazor Server
+
+A SignalR connection takes its tenant from the request that opened it, which `UseTenantry()` resolves like any other.
+The tenant then stays current for every hub method call on the connection, and for a Blazor Server circuit, which runs
+over one. The negotiate request and the later requests of a long-polling connection do not change it.
+
+Resolve the tenant from the host, a subdomain, a claim, or a route value in the hub's path
+(`app.MapHub<ChatHub>("/{tenant}/chat")`), not from a header: a browser cannot set headers on a WebSocket or
+Server-Sent Events connection. Blazor Server's connection is to `/_blazor`, with no tenant in the path, so a Blazor
+Server app resolves from the host, a subdomain or a claim.
+
+The middleware checks the tenant once, when the connection opens. To stop a tenant that is suspended or deleted while
+its connections are open, add Tenantry's check to your hubs:
+
+```csharp
+using Microsoft.AspNetCore.SignalR;
+
+builder.Services.AddSignalR(options => options.AddTenantry());
+```
+
+In an app with Blazor Server, add the check to each of your own hubs instead, and check the circuits too. The options of
+every hub also reach Blazor's own hub, where a refused call leaves the circuit open but not responding:
+
+```csharp
+builder.Services.AddSignalR()
+    .AddHubOptions<ChatHub>(options => options.AddTenantry());
+
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents()
+    .AddTenantry();
+```
+
+Before each hub method call, and each event, JavaScript interop call or navigation of a circuit, Tenantry looks the
+tenant up again, through the cache with [`CacheTenants`](tenant-stores.md#caching), and checks that it is
+[active](tenant-stores.md#suspended-and-inactive-tenants). A hub method call for a tenant the store no longer has fails
+with `TenantNotFoundException`, and one for a tenant an activity validator refuses fails with
+`TenantInactiveException`. The method does not run, and the connection stays open. A circuit ends instead. With
+`CacheTenants`, a change reaches open connections once the cached tenant expires or `ITenantInvalidator` removes it.
+The descriptor that is current does not change: a connection sees other changes to its tenant when it reconnects.
