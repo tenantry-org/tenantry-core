@@ -22,6 +22,8 @@ jobs:
     name: Regenerate lock files
     if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/nuget/')
     runs-on: ubuntu-latest
+    # Well above a normal run, so a hung step fails the job instead of holding the runner for GitHub's default 6 hours
+    timeout-minutes: 15
     outputs:
       changed: ${{ steps.collect.outputs.changed }}
 
@@ -68,6 +70,7 @@ jobs:
     needs: regenerate
     if: needs.regenerate.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write   # push the lock files to Dependabot's branch
       actions: write    # start CI on the new commit

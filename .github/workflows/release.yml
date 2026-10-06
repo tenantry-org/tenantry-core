@@ -27,6 +27,8 @@ jobs:
   source:
     name: Tag is on its release branch
     runs-on: ubuntu-latest
+    # Well above a normal run, so a hung step fails the job instead of holding the runner for GitHub's default 6 hours
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: read   # the tagged commit's CI runs
@@ -130,6 +132,7 @@ jobs:
     needs: [source, ci]
     if: github.event_name == 'push'
     environment: release   # manual-approval gate + OIDC scoped to this environment (see repo settings)
+    timeout-minutes: 30    # the wait for approval is not counted
     permissions:
       id-token: write      # GitHub OIDC tokens, for NuGet.org's trusted publishing and the provenance attestation
       contents: write      # needed for creating the release
@@ -233,6 +236,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: ci
     if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 10
 
     steps:
       - name: Checkout

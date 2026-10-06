@@ -25,6 +25,8 @@ jobs:
   latest:
     name: Latest in every range
     runs-on: ubuntu-latest
+    # Well above a normal run, so a hung step fails the job instead of holding the runner for GitHub's default 6 hours
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -55,6 +57,7 @@ jobs:
   newest-servers:
     name: Newest database servers (${{ matrix.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -98,6 +101,7 @@ jobs:
     needs: [latest, newest-servers]
     if: failure() && github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       issues: write
 

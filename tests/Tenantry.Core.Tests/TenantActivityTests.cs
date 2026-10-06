@@ -93,7 +93,7 @@ public sealed class TenantActivityTests
         services.Add(new ServiceDescriptor(typeof(ITenantActivityValidator<string>), typeof(NotSuspended), lifetime));
         using var provider = services.BuildServiceProvider();
 
-        FluentActions.Invoking(() => provider.GetRequiredService<ITenantActivity<string>>())
+        provider.Invoking(p => p.GetRequiredService<ITenantActivity<string>>())
             .Should().Throw<InvalidOperationException>()
             .WithMessage($"*ITenantActivityValidator<String> NotSuspended is registered as {lifetime.ToString().ToLowerInvariant()}*ValidateTenantActivity<TValidator>()*");
     }

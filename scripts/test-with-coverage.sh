@@ -3,7 +3,8 @@
 # (dotnet-tools.json) wraps `dotnet test` and writes a single report for all the test projects and target frameworks,
 # coverage/coverage.xml, in the Visual Studio XML format that SonarCloud and ReportGenerator read. It instruments this
 # repository's own assemblies, the src and analyzers projects', where the test projects load them
-# (eng/common/coverage.settings.xml).
+# (eng/common/coverage.settings.xml). Each test application stops after 20 minutes (Microsoft Testing Platform's
+# --timeout), so a hung test fails the run instead of holding the CI job until its own limit.
 # Arguments go to `dotnet test`. Usage:
 #
 #   scripts/test-with-coverage.sh [dotnet test options]
@@ -37,4 +38,4 @@ cd "$repo"
 dotnet tool restore >/dev/null
 dotnet dotnet-coverage collect --settings "$repo/eng/common/coverage.settings.xml" "${instrument[@]}" \
   --output-format xml --output "$repo/coverage/coverage.xml" \
-  -- dotnet test --solution "${solutions[0]}" -c Release --no-build "$@"
+  -- dotnet test --solution "${solutions[0]}" -c Release --no-build --timeout 20m "$@"

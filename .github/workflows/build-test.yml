@@ -22,6 +22,8 @@ jobs:
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
+    # Well above a normal run, so a hung step fails the job instead of holding the runner for GitHub's default 6 hours
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -57,8 +59,8 @@ jobs:
           java-version: 17
 
       - name: Restore tools
-        # The versions dotnet-tools.json pins (the Sonar scanner, ReportGenerator, CycloneDX, docfx, dotnet-coverage),
-        # so a new release of a tool never changes a build, a release build included
+        # The versions dotnet-tools.json pins (the Sonar scanner, ReportGenerator, CycloneDX, docfx, dotnet-coverage,
+        # ReSharper's command-line tools), so a new release of a tool never changes a build, a release build included
         run: dotnet tool restore
 
       - name: Restore
@@ -177,13 +179,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # The checks that need neither the tests nor the packages, beside the job above to shorten the run: the workflows,
-  # the Dependabot configuration, the documentation's names and links, formatting, the API reference and the Native
-  # AOT publish. A caller's job that needs this workflow waits for both jobs (ci.yml's prerelease, release.yml's
-  # publish), and the packages come only from the job above.
+  # The checks that need neither the tests nor the packages, beside the job above to shorten the run: the workflows and
+  # scripts, the Dependabot configuration, the documentation's names and links, formatting, ReSharper's inspections, the
+  # API reference and the Native AOT publish. A caller's job that needs this workflow waits for both jobs (ci.yml's
+  # prerelease, release.yml's publish), and the packages come only from the job above.
   checks:
     name: Checks and Native AOT
     runs-on: ubuntu-latest
+    timeout-minutes: 30   # ReSharper's inspections take several minutes of it
 
     steps:
       - name: Checkout
@@ -217,6 +220,10 @@ jobs:
         with:
           version: 1.7.12   # a new actionlint release never changes a build
 
+      - name: Check the scripts
+        # actionlint covers only the workflows' run blocks; this runs shellcheck on the scripts they call
+        run: shellcheck -S warning scripts/*.sh
+
       - name: Check the Dependabot configuration
         # Its list of banded packages (version ranges, per-framework versions) must match the project files
         run: dotnet run scripts/check-dependabot.cs
@@ -236,6 +243,23 @@ jobs:
       - name: Check formatting
         # .editorconfig; fix locally with `dotnet format Tenantry.slnx`
         run: dotnet format Tenantry.slnx --verify-no-changes --no-restore
+
+      - name: Check for ReSharper warnings
+        # Rider's inspections, with its solution-wide analysis and the settings in .editorconfig. inspectcode builds the
+        # solution first, as nothing above has. Any warning fails the step: fix it, or suppress it with a comment that
+        # says why.
+        run: |
+          dotnet tool restore
+          dotnet jb inspectcode Tenantry.slnx --severity=WARNING --swea --format=Sarif -o=artifacts/inspect.sarif \
+            --verbosity=WARN
+          jq -r '.runs[].results[] | .locations[0].physicalLocation as $at
+            | "::error file=\($at.artifactLocation.uri // ""),line=\($at.region.startLine // 1)::"
+              + "\(.ruleId): \(.message.text)"' artifacts/inspect.sarif
+          count="$(jq '[.runs[].results[]] | length' artifacts/inspect.sarif)"
+          if [ "$count" != "0" ]; then
+            echo "::error::ReSharper reports $count warnings (above): Rider must show none"
+            exit 1
+          fi
 
       - name: Check the API reference
         # docs/api is generated from the XML documentation comments; a change to the public API or its comments

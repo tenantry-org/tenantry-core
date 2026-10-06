@@ -46,20 +46,22 @@ builds on Windows.
 CI runs these steps (`.github/workflows/build-test.yml`) on every push to `master` or a `release/X.Y` branch and every
 pull request into them, and the release workflow runs them again on the tagged commit. One job restores, builds, tests
 and packs, in that order; a second job beside it runs the checks that need neither the tests nor the packages: the
-workflow, Dependabot, name and link checks, the lock files, formatting, the API reference and Native AOT. Each runs
-locally with the same command, from the repository root. `dotnet tool restore` installs the tools `dotnet-tools.json`
-pins (docfx, dotnet-coverage, ReportGenerator, the Sonar scanner and CycloneDX); the scripts that need them restore them
-too.
+workflow, script, Dependabot, name and link checks, the lock files, formatting, ReSharper's inspections, the API
+reference and Native AOT. Each runs locally with the same command, from the repository root. `dotnet tool restore`
+installs the tools `dotnet-tools.json` pins (docfx, dotnet-coverage, ReportGenerator, the Sonar scanner, CycloneDX and
+ReSharper's command-line tools); the scripts that need them restore them too.
 
 | Check | Command | When it fails |
 |-------|---------|---------------|
 | Every action is pinned to a commit | The `grep` in `build-test.yml` | Pin the action to a full commit SHA, with its version in a comment (`uses: owner/repo@<sha> # vX.Y.Z`) |
 | The workflows are valid | `actionlint` (the `Lint the workflows` step in `build-test.yml`), which also runs shellcheck on each `run:` block | Fix what it reports |
+| The scripts are valid | `shellcheck -S warning scripts/*.sh` | Fix what it reports, or disable that check on its line with a comment that says why |
 | Dependabot's list of banded packages matches the project files | `dotnet run scripts/check-dependabot.cs` | Update the list in `.github/dependabot.yml` |
 | No API or package that no longer exists is named in the README, docs, samples or `src/` | `dotnet run scripts/check-removed-names.cs` | Use the name it gives; the removed names are in `eng/common/removed-names.txt` |
 | Every link reaches a file, page and heading | `dotnet run scripts/check-doc-links.cs` | Fix the link it names. Links in `docs/` are checked as tenantry.dev serves them: another page as `page.md#heading`, any other file through `../` |
 | The lock files are up to date | `dotnet restore Tenantry.slnx --locked-mode` | `dotnet restore Tenantry.slnx`, then commit the lock files |
 | Formatting | `dotnet format Tenantry.slnx --verify-no-changes --no-restore` | `dotnet format Tenantry.slnx` |
+| Rider shows no warnings | `dotnet jb inspectcode Tenantry.slnx --severity=WARNING --swea --format=Sarif -o=artifacts/inspect.sarif`, which builds the solution first and writes each warning to `artifacts/inspect.sarif` | CI fails on any warning. Fix it, or suppress it with a comment that says why. Rider's settings are in `.editorconfig` |
 | Every published floor is tested | `dotnet run scripts/check-dependency-floors.cs` | A version range's minimum must be a version some test project resolves |
 | The build has no warnings | `dotnet build Tenantry.slnx -c Release --no-restore` | Warnings are errors, trim (`IL2xxx`) and AOT (`IL3xxx`) warnings in `src/` included |
 | The samples start | `bash scripts/smoke-samples.sh` | After the Release build |
