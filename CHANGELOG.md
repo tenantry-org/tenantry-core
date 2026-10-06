@@ -67,7 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   string, that `IMemoryCache` and third-party bulk libraries are not isolated, that with `app.UseTenantResolution()` a
   custom resolver that reads the user finds nothing before authentication, and how to call or serve a service that
   names the tenant in a header other than `tenantry-tenant-id`. The tenant stores guide and `ITenantInvalidator<TKey>`
-  now say to invalidate both tenants when an identifier moves from one to the other.
+  now say to invalidate both tenants when an identifier moves from one to the other. With a database per tenant, the
+  EF Core guide now shows how to create and migrate every tenant's database, which `dotnet ef database update` cannot
+  do ([Creating and migrating tenant databases](docs/efcore-integration.md#creating-and-migrating-tenant-databases)).
 
 ### Changed
 
@@ -117,15 +119,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RunInScopeAsync` with an empty string id said `'' is the default value of String`, which is not true of an empty
   string. It now says the id is reserved for "no tenant", as `ITenantInvalidator<TKey>` does, and so does the error for
   a tenant descriptor with such an id.
+- The `SaveWithoutTransaction` refusal's message names the join rows of a many-to-many relationship among the rows
+  another statement checks, as the docs do. It named only owned entities in their own table and entities mapped to
+  more than one table.
 - Events 1005 and 1012 name a signed-in user without a name claim by its name identifier or `sub` claim, or as
   `(unnamed)`. Before, they logged it as `(anonymous)`, as for a request with no user.
 - Behaviour the docs misstated: with `app.UseTenantResolution()`, a signed-in request whose tenant was current
   during authentication, and which the access validators refuse, is refused on every endpoint, not only on those that
   require a tenant (the ASP.NET Core and access control guides, and the comments on `ITenantAccessValidator<TKey>`,
-  `ValidateTenantAccess` and `TenantResolutionOptions<TKey>`); a cancelled `ITenantInvalidator<TKey>` call stops
-  before the next handler, and several handler failures are thrown as an `AggregateException`; SQL Server's default
-  collation ignores case but not accents; and event 1009 is logged under a fourth category,
-  `Tenantry.AspNetCore.OutputCache`.
+  `ValidateTenantAccess` and `TenantResolutionOptions<TKey>`), and `OnRejected` runs for that refusal too; a
+  cancelled `ITenantInvalidator<TKey>` call stops before the next handler, and several handler failures are thrown as
+  an `AggregateException`; SQL Server's default collation ignores case but not accents; and event 1009 is logged under
+  a fourth category, `Tenantry.AspNetCore.OutputCache`.
 
 ## [0.7.0] - 2026-10-05
 

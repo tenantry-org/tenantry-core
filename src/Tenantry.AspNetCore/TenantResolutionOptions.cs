@@ -68,9 +68,10 @@ public sealed class TenantResolutionOptions<TKey>
     public Func<TenantResolvedContext<TKey>, Task>? OnResolved { get; set; }
 
     /// <summary>
-    /// Called when an endpoint that needs a tenant rejects a request, before Tenantry writes its response. Call
-    /// <see cref="TenantRejectedContext{TKey}.HandleResponse"/> after writing your own response (a redirect, or
-    /// an error page), or change <see cref="TenantRejectedContext{TKey}.StatusCode"/> and leave the response to
+    /// Called before Tenantry writes a rejection: on an endpoint that needs a tenant, and, with
+    /// <c>app.UseTenantResolution()</c>, on any endpoint for a signed-in user whose tenant the access validators
+    /// refuse. Call <see cref="TenantRejectedContext{TKey}.HandleResponse"/> after writing your own response (a
+    /// redirect, or an error page), or change <see cref="TenantRejectedContext{TKey}.StatusCode"/> and leave the response to
     /// Tenantry.
     /// </summary>
     public Func<TenantRejectedContext<TKey>, Task>? OnRejected { get; set; }

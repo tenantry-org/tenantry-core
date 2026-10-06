@@ -325,6 +325,43 @@ leases, and a context used as another tenant after opening its connection or tra
 bulk updates and deletes, creating, migrating and deleting the database, and HiLo keys (SQL Server, PostgreSQL). The
 [`DatabasePerTenant` sample](../samples/Tenantry.Samples.DatabasePerTenant) gives each tenant its own SQLite file.
 
+### Creating and migrating tenant databases
+
+`dotnet ef database update` cannot apply your migrations to the tenant databases: it updates one database, and a
+context registered with `AddDbContextPerTenantDatabase` cannot be created without a current tenant. Apply them from
+the application instead, once for each tenant, for example as a step of each deployment before the new version serves
+requests:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+
+// Inject ITenantLookup<TKey> tenants and ITenantScopeFactory<TKey> scopes.
+foreach (var tenant in await tenants.GetAllTenantsAsync(cancellationToken))
+{
+    await using var scope = scopes.CreateScope(tenant);
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync(cancellationToken);
+}
+```
+
+The loop leaves four things to you:
+
+- Creating databases only on purpose. `MigrateAsync` creates a database that does not exist, if the connection may
+  create databases. A tenant whose connection string is wrong, or whose database was dropped while it stays in the
+  store, then gets a new, empty database that its requests reach. Create each tenant's database when you add the
+  tenant, and skip and report one whose database is missing (`Database.CanConnectAsync`).
+- Keeping suspended tenants in the store, so that it migrates them too. `CreateScope` does not check whether a tenant
+  is active, and a tenant that misses a migration breaks when it is reactivated
+  ([Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
+- Going on after a failure. As written, one tenant's failure ends the loop before the tenants after it. Catch each
+  tenant's failure, go on with the rest, and fail the deployment at the end.
+- Running it once. Two instances running it at the same time both migrate every database, and can race on the same
+  one. Run it from one place, such as a deployment job, not as every instance starts.
+
+Tenantry.Pro runs this as a deployment step (`migrate-tenants`) with per-tenant reports, concurrency and failure
+limits, and creates the database when a tenant is provisioned
+([Tenant migrations](https://tenantry.dev/docs/pro/migration-orchestration)).
+
 ### A second database per tenant
 
 `UseConnectionStrings` gives each tenant one connection string, so every context `AddDbContextPerTenantDatabase`
@@ -486,7 +523,8 @@ dotnet ef database update
   `ITenantModelContributor`, which runs only with those services, build them in the factory and pass them with
   `UseApplicationServiceProvider`.
 - A context registered with `AddDbContextPerTenantDatabase` needs such a factory, as it cannot be created without a
-  current tenant.
+  current tenant. To apply its migrations to every tenant's database, see
+  [Creating and migrating tenant databases](#creating-and-migrating-tenant-databases).
 
 The [`EfCoreWeb` sample](../samples/Tenantry.Samples.EfCoreWeb) uses real migrations, a database-backed tenant store,
 tenanted and global entities, relationships between them, and an admin endpoint.

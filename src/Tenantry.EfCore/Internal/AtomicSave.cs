@@ -183,10 +183,11 @@ internal sealed class AtomicSave
                     TenantIsolationViolationKind.SaveWithoutTransaction,
                     contextName,
                     $"'{contextName}' is saving without a transaction (Database.AutoTransactionBehavior is Never) " +
-                    "owned entities in a table of their own, or entities mapped to more than one table, whose tenant " +
-                    "another of the save's statements checks: if that check failed, the rest would stay written. " +
-                    "Nothing was sent, as EfCoreIsolationOptions.OnSaveWithoutTransaction is Reject. Save them in a " +
-                    "transaction, or set OnSaveWithoutTransaction to UseTransaction.");
+                    "owned entities in a table of their own, entities mapped to more than one table, or the join " +
+                    "rows of a many-to-many relationship, whose tenant another of the save's statements checks: if " +
+                    "that check failed, the rest would stay written. Nothing was sent, as " +
+                    "EfCoreIsolationOptions.OnSaveWithoutTransaction is Reject. Save them in a transaction, or set " +
+                    "OnSaveWithoutTransaction to UseTransaction.");
             }
 
             // EF Core reads the setting once the SavingChanges interceptors have run, and then begins, commits or

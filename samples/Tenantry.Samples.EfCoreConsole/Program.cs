@@ -1,18 +1,16 @@
 // Tenantry EF Core console sample: multi-tenancy without ASP.NET Core.
 //
-// This sample shows how AddTenantry wires up the full tenant-isolation
-// infrastructure for a non-HTTP host (console app, worker service, desktop UI, CLI…).
-// There is no middleware and no request: YOU make a tenant current manually
-// with ITenantContextSetter<TKey>.MakeCurrent(...) around the work that should run as a tenant.
+// With no request to resolve a tenant from, this sample makes a tenant current with
+// ITenantContextSetter<TKey>.MakeCurrent around the work that runs as it.
 // MakeCurrent does not look the tenant up or check that it is active; work that starts from an id
 // goes through ITenantScopeFactory.RunInScopeAsync, which does both.
 //
 // It demonstrates:
 //   1. Registering Tenantry with AddTenantry (no AspNetCore package) and isolating a DbContext with UseTenantry().
 //   2. Stamping TenantId automatically on insert.
-//   3. Reads being transparently filtered to the active tenant.
+//   3. Reads filtered to the current tenant.
 //   4. Nested scopes (an inner tenant shadows the outer one, restored on dispose).
-//   5. Write isolation catching a cross-tenant write before it hits the database.
+//   5. A write for another tenant refused before it is sent.
 //   6. Fail-closed behaviour when no tenant is current.
 //   7. Bypassing isolation deliberately for admin/reporting with IgnoreQueryFilters().
 //   8. A worker-style sweep: every tenant in its own DI scope, with ITenantScopeFactory.
