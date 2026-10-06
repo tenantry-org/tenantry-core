@@ -97,43 +97,30 @@ reach every tenant's join rows (the join entity has no query filter). Change joi
 
 ## Saves that succeed or fail as a whole
 
-Rows checked through another statement are safe only if the whole save is undone when the check fails. EF Core
-usually ensures this with a transaction, but not in every setup, so for these saves:
+Rows checked through another statement are safe only if the whole save is undone when the check fails. With EF Core's
+defaults you need do nothing, and the same holds in a transaction you begin with `Database.BeginTransaction` that can
+use savepoints: EF Core rolls a failed save back to a savepoint it creates first, and Tenantry turns savepoints on for
+the save if you turned them off (`AutoSavepointsEnabled = false`). Other setups need care:
 
-- The failed check cannot be suppressed. An interceptor of yours that suppresses concurrency failures
-  (`ThrowingConcurrencyException`), such as "last write wins" or EF Core's sample that ignores rows already deleted,
-  still works for other entities, but Tenantry throws a failed check that other rows depend on before any interceptor
-  added with `AddInterceptors` sees it, wherever yours is registered: it hears of every save's end, command and
-  transaction through interceptors of EF Core's internal service provider, which EF Core runs before those. Its refusal
-  of a commit (below) also comes before your `TransactionCommitting` hooks.
-- With `Database.AutoTransactionBehavior` set to `Never`, EF Core still runs the save in a transaction of its own, and
-  the setting goes back to `Never` when the save ends (event 2005, at `Debug`). Other saves still run without one. If
-  your database or connection pooler cannot run transactions, set `OnSaveWithoutTransaction` to `Reject`: such a save
-  then throws `TenantIsolationViolationException` of kind `SaveWithoutTransaction` before anything is sent.
-  - Hand a transaction you began through ADO.NET to EF Core with `Database.UseTransaction`, or EF Core cannot begin
-    its own and the save fails.
-  - If a `SavingChanges` interceptor registered after Tenantry's stops the save, or an interceptor registered before
-    Tenantry's turns its failure into another exception, the setting stays `WhenNeeded` until a later save of the
-    context ends with nothing left to save. The same goes for `AutoSavepointsEnabled`, which stays `true`.
-- In your own transaction, EF Core rolls a failed save back to a savepoint it creates first, and Tenantry turns
-  savepoints on for the save if you turned them off (`AutoSavepointsEnabled = false`). A transaction without savepoints,
-  such as SQL Server with multiple active result sets (MARS), is rolled back instead of committed once such a save has
-  run in it, if any save in it failed after sending a statement, or if EF Core could not roll back to its savepoint (any
-  failed operation on the transaction counts as that, except a commit, a rollback, and creating or releasing a
-  savepoint). `Commit` then throws `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004).
-  - Any failure counts, of any save in the transaction. EF Core does not say which save a failure is for when one save
-    runs inside another, and a save can fail before EF Core reads the check (on a duplicate key, for example), so
-    Tenantry cannot know whether the check held, and a forged write looks like a real conflict.
-  - So does a save that an interceptor fails after it succeeded, by throwing from `SavedChanges`.
-  - So does a concurrency conflict on any row, once the save sent statements, even one an interceptor of yours
-    suppresses: Tenantry hears of it before your interceptor decides.
-  - A save stopped before it sent anything, by Tenantry or by an interceptor's `SavingChanges`, does not count.
-  - So code that catches a failed save and goes on in the same transaction (after a unique key or foreign key
-    violation, or to retry a concurrency conflict) is refused at the commit. A transaction with savepoints avoids it:
-    turn MARS off, or begin the transaction with `Database.BeginTransaction` rather than a `TransactionScope`.
+- With `Database.AutoTransactionBehavior` set to `Never`, EF Core still runs these saves in a transaction of its own,
+  and the setting goes back to `Never` when the save ends (event 2005, at `Debug`). Other saves still run without one.
+  Hand a transaction you began through ADO.NET to EF Core with `Database.UseTransaction`, or EF Core cannot begin its
+  own and the save fails. If your database or connection pooler cannot run transactions, set `OnSaveWithoutTransaction`
+  to `Reject`: such a save then throws `TenantIsolationViolationException` of kind `SaveWithoutTransaction` before
+  anything is sent.
+- In a transaction without savepoints, such as SQL Server with multiple active result sets (MARS), do not catch a
+  failed save and carry on (after a unique or foreign key violation, or to retry a concurrency conflict). Once a save
+  with such rows has run in it, the transaction is rolled back instead of committed if any save in it failed after
+  sending a statement or EF Core could not roll back to its savepoint. `Commit` then throws
+  `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004). Turn MARS off to avoid it.
 - In a `TransactionScope`, or a transaction the connection was enlisted in, EF Core creates no savepoint. The same
   failures roll the transaction back when it completes, so disposing the completed scope throws
-  `TransactionAbortedException`.
+  `TransactionAbortedException`. Begin the transaction with `Database.BeginTransaction` instead.
+
+For these rollbacks, a failure counts even when an interceptor of yours suppresses it, as with a concurrency
+conflict, or throws it from `SavedChanges` after the save succeeded. A save stopped before it sent anything does not
+count. An interceptor of yours cannot suppress a failed tenant check in any setup: Tenantry throws it before any
+interceptor added with `AddInterceptors` sees it. Such an interceptor still works for other entities.
 
 Not covered:
 

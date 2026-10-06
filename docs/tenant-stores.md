@@ -120,9 +120,8 @@ the tenant. Tenantry then refuses an inactive tenant:
 - `RunInScopeAsync` throws `TenantInactiveException`, a `TenantNotResolvedException`.
 - Tenantry.Pro's background services, schedulers and message integrations skip it.
 
-`CreateScope` and `ITenantContextSetter.MakeCurrent` do not check: they take a tenant you already hold and trust it, for
-work such as migrations that must reach suspended tenants. When you loop over tenants for work of your own, ask
-`ITenantActivity<TKey>`:
+`CreateScope` and `ITenantContextSetter.MakeCurrent` do not check, so migrations and other work that must reach
+suspended tenants can use them. When you loop over tenants for work of your own, ask `ITenantActivity<TKey>`:
 
 ```csharp
 foreach (var t in await tenants.GetAllTenantsAsync(ct))

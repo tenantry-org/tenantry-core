@@ -27,12 +27,15 @@ namespace Tenantry.Options;
 /// </para>
 /// <para>
 /// Each tenant's value is built on first use and cached until <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/>
-/// clears it, so invalidate a tenant after changing its settings. With a store, the value is built from
-/// the store's copy of the tenant, read once per value built, not from the copy that is current; a value for an id the
-/// store does not hold is built from the current copy on every read and not kept. A change to the configuration the
-/// options are bound to clears every tenant's value. Validation (<c>Validate</c>, <c>IValidateOptions</c>) runs on each
-/// tenant's value when it is built, and <c>ValidateOnStart</c> validates the ordinary one. The tenant's steps run after
-/// every <c>Configure</c> and before every <c>PostConfigure</c>, in the order they are added.
+/// clears it, so invalidate a tenant after changing its settings. With a store, the value is built from the store's
+/// copy of the tenant, read once per value built, not from the copy that is current; a value for an id the store does
+/// not hold is built from the current copy on every read and not kept. When the store answers with a tenant whose id
+/// differs from the one asked for, as a store that matches ids without regard to case can, the value is built from the
+/// store's copy and not kept either, since invalidating the store's id would not clear it. Without a store, the value
+/// is built from the current copy and kept. A change to the configuration the options are bound to clears every
+/// tenant's value. Validation (<c>Validate</c>, <c>IValidateOptions</c>) runs on each tenant's value when it is built,
+/// and <c>ValidateOnStart</c> validates the ordinary one. The tenant's steps run after every <c>Configure</c> and
+/// before every <c>PostConfigure</c>, in the order they are added.
 /// </para>
 /// </remarks>
 /// <typeparam name="TKey">The tenant identifier type.</typeparam>

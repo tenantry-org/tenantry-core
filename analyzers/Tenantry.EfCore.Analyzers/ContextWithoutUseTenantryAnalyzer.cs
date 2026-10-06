@@ -36,6 +36,15 @@ namespace Tenantry.EfCore.Analyzers;
 /// same body (a lambda's or local function's being its own). So it reports at the end of the compilation, when every call
 /// has been seen.
 /// </para>
+/// <para>
+/// Every registration in a body is taken to run, in source order, so one on a branch that excludes another, after an
+/// early return, or in a callback that runs later still counts. Known false reports: the builder passed or stored
+/// inside an array, a tuple or a <c>params object[]</c>, through reflection, or as a method group to a framework or
+/// third-party method, and a package that does not reference Tenantry.EfCore calling back into the application's
+/// override of its virtual method. A type mapped only with <c>Entity(typeof(T))</c>, with <c>Entity&lt;T&gt;()</c> in
+/// another class, or as a generic base context's unconstrained type parameter is not seen; a type parameter constrained
+/// to a tenant-owned type counts as one.
+/// </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer

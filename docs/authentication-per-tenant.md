@@ -80,18 +80,18 @@ Between the two, the tenant is current but not yet checked against the user:
   renew or reissue a cookie with claims taken from the current tenant either, even one the caller may use: a cookie
   that is valid on several tenants carries those claims to the others.
 - If the validators refuse a tenant that was current during authentication, and the request has a signed-in user (an
-  authenticated identity, or any claims), the request is refused with the access-denied response, whether or not its
-  endpoint requires a tenant: the user was authenticated as a tenant it may not use. Tenantry signs out every scheme
-  that signs out locally: each cookie scheme, Identity's external and two-factor cookies included, so no handler renews
-  the user and a `SessionStore` drops the session. That covers a cookie under a remote default scheme, such as OpenID
-  Connect set up by `AddMicrosoftIdentityWebApp`. Remote schemes are not signed out, as that would start a sign-out at
-  the identity provider, nor are policy schemes, which forward to the others; JWT bearer has nothing to sign out. A
-  sign-out that fails is logged (event 1015) and the others still run. Every such scheme is signed out each time, even
-  one the user never signed in with, so your `OnSigningOut` handlers run on these refusals too: do not treat them as a
-  logout the user asked for. The response then carries none of the cookies set after `app.UseTenantResolution()`, the
-  sign-outs' deletions included, nor a sign-out's redirect. A caller with no identity and no claims, such as an
-  anonymous one, is treated as without early resolution: the tenant is not current, and an endpoint that does not
-  require one runs.
+  authenticated identity, or any claims), the request gets the access-denied response on every endpoint: the user was
+  authenticated as a tenant it may not use.
+- On that refusal, Tenantry signs out each scheme that signs out locally, which means each cookie scheme, Identity's
+  external and two-factor cookies included, so nothing renews the user and a `SessionStore` drops the session. That
+  covers the cookie under a remote default scheme, such as OpenID Connect set up by `AddMicrosoftIdentityWebApp`. Remote
+  schemes are not signed out, as that would start a sign-out at the identity provider, nor are policy schemes; JWT
+  bearer has nothing to sign out. A sign-out that fails logs event 1015, and the others still run. Each such scheme is
+  signed out every time, even one the user never signed in with, so your `OnSigningOut` handlers run on these refusals
+  too: do not treat them as a logout the user asked for. The response sets none of the cookies set after
+  `app.UseTenantResolution()`, the sign-outs' deletions included, and no sign-out redirect.
+- A caller with no identity and no claims, such as an anonymous one, is handled as without early resolution: the
+  tenant is not current, an endpoint that requires one is rejected, and one that does not runs.
 - Middleware before `app.UseTenantResolution()` must not store `HttpContext.User` as the response starts: its
   `OnStarting` callbacks run after Tenantry's, so they see the refused user.
 - An endpoint the request reaches without passing `app.UseTenantry()`, such as one in a pipeline branch, does not run:

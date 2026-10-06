@@ -44,11 +44,10 @@ take them in their constructor. Choose by what you have:
 | `tenantContext.MakeCurrent(tenant)` | You already loaded the tenant and a scope already exists: custom middleware, or a framework that opened the scope, such as a message consumer | None | None |
 
 `CreateScope` and `MakeCurrent` trust the descriptor they are given, so a descriptor the store does not hold becomes
-current like any other: shared-database queries are filtered by its id and new rows are stamped with it.
-[Per-tenant options](per-tenant-options.md#when-settings-change) are the exception: they are built from the store's
-copy when the store holds the id. Pass them only a tenant you already hold, and run work that starts from an id with
-`RunInScopeAsync`. It takes the work as a callback because a scope opened inside an asynchronous lookup would not be
-current for the code that awaited it ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
+current like any other: shared-database queries are filtered by its id and new rows are stamped with it. Pass them only
+a tenant you already hold, and run work that starts from an id with `RunInScopeAsync`. It takes the work as a callback
+because a scope opened inside an asynchronous lookup would not be current for the code that awaited it
+([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
 
 `IServiceProvider.CreateScope()` and `CreateAsyncScope()` are .NET's plain DI scopes and set no tenant.
 

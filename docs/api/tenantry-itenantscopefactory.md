@@ -39,9 +39,7 @@ Exceptions:
 
 - `ArgumentException`: The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".
 
-The tenant is not looked up in the store or checked with [`ITenantActivity<TKey>`](tenantry-itenantactivity.md): the descriptor becomes current as it is, even when the store does not hold its id, the tenant is inactive, or its other fields differ from the store's, and shared-database queries and saves use its id, so a descriptor the store does not hold leaves rows owned by an id the store does not know. Per-tenant options from Tenantry.Options are the exception: they are built from the store's copy when the store holds the id.
-
-Pass a tenant you already hold: one read from [`ITenantLookup<TKey>`](tenantry-itenantlookup.md) while iterating the store, or one being onboarded before its store row exists. Reaching inactive tenants suits provisioning and migrations; for other work, check [`ITenantActivity<TKey>`](tenantry-itenantactivity.md) first. For an id from outside the application, such as a queue message or a command-line argument, use [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md), which looks the tenant up and refuses a missing or inactive one.
+Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from outside the application, use [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md), which does both.
 
 ### `RunInScopeAsync(TKey, Func<ITenantScope<TKey>, CancellationToken, Task>, CancellationToken)`
 

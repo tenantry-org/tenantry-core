@@ -23,19 +23,8 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
     /// <param name="tenant">The tenant to make current.</param>
     /// <returns>A handle that restores the previously current tenant on disposal.</returns>
     /// <remarks>
-    /// <para>
-    /// The tenant is not looked up in the store or checked with <see cref="ITenantActivity{TKey}"/>: the descriptor
-    /// becomes current as it is, even when the store does not hold its id, the tenant is inactive, or its other fields
-    /// differ from the store's, and shared-database queries and saves use its id, so a descriptor the store does not
-    /// hold leaves rows owned by an id the store does not know. Per-tenant options from Tenantry.Options are the
-    /// exception: they are built from the store's copy when the store holds the id.
-    /// </para>
-    /// <para>
-    /// Pass a tenant you already hold: one that request resolution found, one read from
-    /// <see cref="ITenantLookup{TKey}"/>, or one being onboarded before its store row exists. For an id from outside
-    /// the application, such as a queue message or a command-line argument, use
-    /// <c>ITenantScopeFactory.RunInScopeAsync</c>, which looks the tenant up and refuses a missing or inactive one.
-    /// </para>
+    /// Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from
+    /// outside the application, use <c>ITenantScopeFactory.RunInScopeAsync</c>, which does both.
     /// </remarks>
     /// <exception cref="ArgumentException">
     /// The tenant's id is the key type's default value (<see cref="Guid.Empty"/>, <c>0</c>) or an empty string,

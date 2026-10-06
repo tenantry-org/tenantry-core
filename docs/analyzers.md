@@ -155,52 +155,32 @@ Add `.UseTenantry()` to the options. `AddDbContextPerTenantDatabase` applies `Us
 reported.
 
 A context has tenant-owned entities when it, or a base context, has a `DbSet<T>` of one or maps one with
-`modelBuilder.Entity<T>()` in its methods (a type parameter constrained to a tenant-owned type counts). Not seen: a type
-mapped only in an `IEntityTypeConfiguration<T>` (or `ApplyConfigurationsFromAssembly`), with `Entity(typeof(T))` or with
-`Entity<T>()` in another class, or reached only through a navigation, and a generic base context that maps an
-unconstrained type parameter.
+`modelBuilder.Entity<T>()` in its methods. A type mapped only in an `IEntityTypeConfiguration<T>`, or reached only
+through a navigation, is not seen.
 
-The rule reports a registration only when it sees everything the options do, so these are not reported:
+The rule reports a registration only when it can see everything the options do. It stays silent when:
 
-- options that hand the builder to code that could call `UseTenantry()`, or store it in a field or property: a method
-  of the project's own that does so in turn (a C# 14 extension method called on the builder too), another project of
-  the solution, a package that references `Tenantry.EfCore` (directly or through another package), a delegate, an
-  interface, virtual or unsealed override method, a local function, a constructor of the project's own, or a C# 14
-  extension member called in static form (`Isolation.WithTenantry(options)`). A property read on the builder, of the
-  project's own, of another project of the solution, or of a package that references `Tenantry.EfCore`, counts too: an
-  extension property, or a property of a builder subclass. A method of the project's own that does none of this does not
-  count, and neither does the framework;
-- options that are not a lambda or a method of the project's own (a delegate in a variable), a method that can be
-  overridden (a virtual, abstract or interface method), and a registration without options;
-- a registration made through a generic method of the project's own (`AddDbContext<TContext>` inside a method generic
-  in `TContext`), whose context type the rule cannot tell;
-- a registration in generated code, where nothing is reported; generated code still counts for the helpers and
-  `OnConfiguring` it holds;
-- a context with an `OnConfiguring`, of its own or a base context's, that calls `UseTenantry()` or hands the builder
-  on as above, or that is in another assembly. One that only picks a provider or adds logging, as a scaffolded
-  context's does, does not count;
-- a context that another registration, or a `ConfigureDbContext<TContext>`, in the same project calls `UseTenantry()`
-  for, since from EF Core 9 they add to the same options. A generic method that does so for its type parameter counts
-  for every context that meets the type parameter's constraints, every context when it is constrained only to
-  `DbContext`. On EF Core 8, only a context's first registration's options apply, so another registration counts only
-  when it is not later in the same method; a lambda's or local function's body is a method of its own here;
-- on EF Core 9 and later, a context declared in another project, since a registration or `ConfigureDbContext<TContext>`
-  in that project, which the rule cannot see, may have applied `UseTenantry()`.
+- the options are not a lambda or a method of the project's own that cannot be overridden;
+- the options store the builder in a field or property, or pass it to code that could call `UseTenantry()`: a helper of
+  the project's own that does either, a delegate, a method that can be overridden, another project of the solution, or
+  a package that references `Tenantry.EfCore`;
+- the context, or a base context, has an `OnConfiguring` that calls `UseTenantry()`, passes the builder on in the same
+  way, or is in another assembly;
+- another registration of the context, or a `ConfigureDbContext<TContext>`, in the same project calls `UseTenantry()`
+  (on EF Core 8, not one later in the same method, as EF Core 8 uses only a context's first options);
+- on EF Core 9 and later, the context is declared in another project, whose own registration may call `UseTenantry()`.
+
+A registration without options, in generated code, or in a generic method whose context type the rule cannot tell, is
+not reported either.
 
 A context declared in the same project is still reported when only a library's `ConfigureDbContext<TContext>` helper
-applies `UseTenantry()`, as the rule cannot see into it: suppress the warning there, or add `.UseTenantry()` to the
-registration, which is harmless, as `UseTenantry()` returns at once when the options already have it. On EF Core 8, a
-test project's second registration of the context is reported too. If the test removes the application's options
-(`services.RemoveAll<DbContextOptions<AppDbContext>>()`), the context gets only the test registration's options;
-without the removal, EF Core 8 keeps the application's. Add `.UseTenantry()` to the test registration, or set
-`dotnet_diagnostic.TNY1004.severity = none` for the test project.
+applies `UseTenantry()`. Add `.UseTenantry()` to the registration too, which is harmless, as `UseTenantry()` returns at
+once when the options already have it. On EF Core 8, a test project's second registration of the context is reported:
+add `.UseTenantry()` to it, or set `dotnet_diagnostic.TNY1004.severity = none` for the test project.
 
-The registrations in a method are all taken to run, in source order, so one on a branch that excludes another, after an
-early return, or in a callback that runs later still counts. A few false reports remain by design: the builder passed or
-stored inside an array, a tuple or a `params object[]`, through reflection, or as a method group to a framework or
-third-party method, and a package that does not reference `Tenantry.EfCore` calling back into the application's override
-of its virtual method. Suppress the warning there, as where a context is meant to be unisolated, such as in a test that
-registers one on purpose ([Configuring the rules](#configuring-the-rules)).
+The rule still reports options that pass or store the builder inside an array, a tuple or a `params object[]`, through
+reflection, or as a method group to a framework or third-party method. Suppress the warning there, and where a context
+is meant to be unisolated, as in a test that registers one on purpose ([Configuring the rules](#configuring-the-rules)).
 
 ## TNY2001
 

@@ -134,12 +134,11 @@ app.UseAuthorization();
 app.UseTenantry();
 ```
 
-`UseTenantry()` goes after `UseAuthentication()`, and, without `UseTenantResolution()`, after `UseAuthorization()`
-unless a policy needs the tenant. Finbuckle's claim strategy authenticated the request itself; `ResolveFromClaim` reads
-`HttpContext.User`, which the authentication middleware sets
-([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). If your authentication settings differ per tenant
-(Finbuckle's `WithPerTenantAuthentication()`), also call `UseTenantResolution()` before `UseAuthentication()`, where
-`UseMultiTenant()` was (step 6), and move `UseAuthorization()` after `UseTenantry()`:
+Finbuckle's claim strategy authenticated the request itself; `ResolveFromClaim` reads `HttpContext.User`, which the
+authentication middleware sets, so `UseTenantry()` goes after `UseAuthentication()`
+([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering) has the full rule). If your authentication settings
+differ per tenant (Finbuckle's `WithPerTenantAuthentication()`), also call `UseTenantResolution()` before
+`UseAuthentication()`, where `UseMultiTenant()` was (step 6), and move `UseAuthorization()` after `UseTenantry()`:
 
 ```csharp
 app.UseTenantResolution();

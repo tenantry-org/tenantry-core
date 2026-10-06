@@ -27,11 +27,8 @@ the tenant and keeps caches and options per tenant, but nothing keeps your data 
 5. Register Tenantry with a resolver, a store and an access validator. A resolver that reads the request (a header,
    a route value, the query string, the host or subdomain) lets any caller name any tenant, so check the tenant
    against the authenticated user.
-6. Add `app.UseTenantry()` after `app.UseAuthentication()`, and before the endpoints. Without
-   `app.UseTenantResolution()`, put it after `app.UseAuthorization()` too, so an anonymous caller gets 401 rather than
-   403, unless an authorization policy needs the tenant: then put it before `app.UseAuthorization()`. With
-   `app.UseTenantResolution()` (authentication settings per tenant), `app.UseAuthorization()` always comes after
-   `app.UseTenantry()`.
+6. Add `app.UseTenantry()` after `app.UseAuthentication()` and `app.UseAuthorization()`, and before the endpoints, as
+   below. [Pipeline ordering](aspnetcore-integration.md#pipeline-ordering) has the exceptions.
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -208,9 +205,9 @@ refuses a caller, and the pipeline order ([Testing](testing.md)).
 - Resolving the tenant from a header, route value, query string, host or subdomain with no access validator lets any
   caller act as any tenant. Add `ValidateTenantAccessByClaim(...)` or `ValidateTenantAccess(...)` in the same
   `AddTenantry`.
-- `MakeCurrent` and `CreateScope` trust the descriptor they are given: they do not look it up or check that the tenant
-  is active. Do not pass them a `TenantDescriptor` built from an id that came from outside; pass the id to
-  `RunInScopeAsync`, or look the tenant up with `ITenantLookup<TKey>` first.
+- Do not pass `MakeCurrent` or `CreateScope` a `TenantDescriptor` built from an id that came from outside, as neither
+  looks the tenant up or checks that it is active. Pass the id to `RunInScopeAsync`
+  ([Running work as a tenant](non-http-hosts.md#running-work-as-a-tenant)).
 - A context from `AddDbContextPerTenantDatabase` is connected to one tenant's database, and a query or save with it
   after the current tenant changes throws `TenantIsolationViolationException`. Resolve a new context in each tenant's
   scope.

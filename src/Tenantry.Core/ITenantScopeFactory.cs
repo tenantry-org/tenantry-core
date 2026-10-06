@@ -41,20 +41,8 @@ public interface ITenantScopeFactory<TKey>
     /// </summary>
     /// <param name="tenant">The tenant to activate.</param>
     /// <remarks>
-    /// <para>
-    /// The tenant is not looked up in the store or checked with <see cref="ITenantActivity{TKey}"/>: the descriptor
-    /// becomes current as it is, even when the store does not hold its id, the tenant is inactive, or its other fields
-    /// differ from the store's, and shared-database queries and saves use its id, so a descriptor the store does not
-    /// hold leaves rows owned by an id the store does not know. Per-tenant options from Tenantry.Options are the
-    /// exception: they are built from the store's copy when the store holds the id.
-    /// </para>
-    /// <para>
-    /// Pass a tenant you already hold: one read from <see cref="ITenantLookup{TKey}"/> while iterating the store, or
-    /// one being onboarded before its store row exists. Reaching inactive tenants suits provisioning and migrations;
-    /// for other work, check <see cref="ITenantActivity{TKey}"/> first. For an id from outside the application, such
-    /// as a queue message or a command-line argument, use <see cref="RunInScopeAsync"/>, which looks the tenant up and
-    /// refuses a missing or inactive one.
-    /// </para>
+    /// Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from
+    /// outside the application, use <see cref="RunInScopeAsync"/>, which does both.
     /// </remarks>
     /// <exception cref="ArgumentException">The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".</exception>
     /// <returns>

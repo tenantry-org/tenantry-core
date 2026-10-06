@@ -100,13 +100,10 @@ Each tenant's value is built on first use and cached. To rebuild it after a tena
 tenant: `ITenantInvalidator<TKey>.InvalidateAsync(tenantId)` clears its options with everything else Tenantry keeps for
 it ([Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)), and `InvalidateAllAsync()` clears every tenant's.
 
-A value is built from the tenant as the store has it, not from the copy that is current where the options are read.
-After an invalidation, a request resolved before it, which still carries the old copy, gets the new settings, and a copy
-made current with `MakeCurrent` or `CreateScope` whose fields differ from the store's cannot change a tenant's value.
-For an id the store does not hold, the value is built from the current copy on every read and not kept. When the store
-answers with a tenant whose id differs from the one asked for (a store that matches ids without regard to case), the
-value is built from the store's copy and not kept either, since invalidating the store's id would not clear it. Without
-a store, the value is built from the current copy and kept.
+A tenant's options are built from the store's copy of the tenant, so after an invalidation a request resolved before
+it gets the new settings, and a descriptor passed to `MakeCurrent` or `CreateScope` cannot change them. For an id the
+store does not hold, they are built from the current descriptor on each read and not kept. Without a store, they are
+built from the descriptor current at the first read and kept until the tenant is invalidated.
 
 Building a value reads the store once, blocking, since options have no asynchronous configuration. Use
 [`CacheTenants`](tenant-stores.md#caching) so that the read is usually answered from memory. When a synchronization

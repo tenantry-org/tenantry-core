@@ -142,11 +142,8 @@ In ASP.NET Core the middleware calls `MakeCurrent` once the tenant is resolved. 
 `ITenantScopeFactory<TKey>` makes a tenant current together with a new DI scope, which is what most code wants; call
 `MakeCurrent` yourself only when you need no new scope.
 
-`MakeCurrent` trusts the descriptor it is given: it does not look the tenant up in the store or check whether it is
-active, so a descriptor the store does not hold becomes current like any other, and shared-database queries are
-filtered by its id and new rows stamped with it. Pass it a tenant you already hold, and run work that starts from an id
-with `ITenantScopeFactory.RunInScopeAsync`, which refuses a missing or inactive tenant
-([Non-HTTP hosts](non-http-hosts.md#running-work-as-a-tenant) has a table for choosing between them).
+`MakeCurrent` does not look the tenant up or check that it is active, so pass it a tenant you already hold
+([Running work as a tenant](non-http-hosts.md#running-work-as-a-tenant)).
 
 `MakeNoTenantCurrent()` does the opposite: code inside it sees no tenant, and disposing it restores the tenant that
 was current. The middleware uses it for the rest of a request whose tenant the access validators refused.

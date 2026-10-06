@@ -4,9 +4,8 @@
 // infrastructure for a non-HTTP host (console app, worker service, desktop UI, CLI…).
 // There is no middleware and no request: YOU make a tenant current manually
 // with ITenantContextSetter<TKey>.MakeCurrent(...) around the work that should run as a tenant.
-// MakeCurrent and ITenantScopeFactory.CreateScope trust the descriptor they are given: they do not look it
-// up in the store or check whether it is active. Work that starts from an id, such as a queue
-// message, goes through ITenantScopeFactory.RunInScopeAsync, which does both.
+// MakeCurrent does not look the tenant up or check that it is active; work that starts from an id
+// goes through ITenantScopeFactory.RunInScopeAsync, which does both.
 //
 // It demonstrates:
 //   1. Registering Tenantry with AddTenantry (no AspNetCore package) and isolating a DbContext with UseTenantry().

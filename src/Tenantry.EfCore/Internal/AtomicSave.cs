@@ -68,13 +68,18 @@ namespace Tenantry.EfCore.Internal;
 /// notice before Tenantry's sees it; and a <see cref="DbUpdateConcurrencyException"/> thrown by application code from
 /// a <c>SavedChanges</c> hook or handler, which EF Core reports only through the <c>SaveChangesFailed</c> event, after
 /// every statement of the save ran and Tenantry confirmed it. That one is safe: the save's checks all held, and a
-/// handler that keeps the notice from Tenantry only keeps the confirmation standing, which is then right.
+/// handler that keeps the notice from Tenantry only keeps the confirmation standing, which is then right. As Tenantry's
+/// interceptors run first, a failed check is thrown, and a commit refused, before the application's interceptors and
+/// <c>TransactionCommitting</c> hooks run, wherever they are registered.
 /// </para>
 /// <para>
 /// A save sets back the settings it changed when it ends. A save that ended without Tenantry hearing of it (another
 /// interceptor stopped or failed it first), or that a notice which may not have been its own took off the list, is set
 /// back by a later save's end once nothing is left to save, as a save still running would then send nothing. Until
-/// then its setting stays. A new lease of a pooled context starts afresh.
+/// then its setting stays: a <c>SavingChanges</c> interceptor registered after Tenantry's that stops the save, or one
+/// registered before it that turns the save's failure into another exception, leaves <c>AutoTransactionBehavior</c> at
+/// <c>WhenNeeded</c> and <c>AutoSavepointsEnabled</c> at <c>true</c> until then. A new lease of a pooled context starts
+/// afresh.
 /// </para>
 /// </remarks>
 internal sealed class AtomicSave

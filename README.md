@@ -149,10 +149,8 @@ foreach (var tenant in await tenants.GetAllTenantsAsync(cancellationToken))
 }
 ```
 
-`CreateScope` trusts the descriptor it is given: it does not look it up or check whether it is active, so pass it only
-a tenant you already hold.
-
-See the [`EfCoreConsole` sample](samples/Tenantry.Samples.EfCoreConsole) and [Non-HTTP hosts](docs/non-http-hosts.md).
+See the [`EfCoreConsole` sample](samples/Tenantry.Samples.EfCoreConsole) and
+[Non-HTTP hosts](docs/non-http-hosts.md#running-work-as-a-tenant).
 
 ## AOT & trimming
 
