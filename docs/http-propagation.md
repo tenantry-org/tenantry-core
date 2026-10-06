@@ -46,7 +46,9 @@ builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = inven
     .UseTenantry(inventory);
 ```
 
-A client created with neither, or without `AddHttpPropagation()`, fails when it is created, saying what to add.
+A client with neither, or an application without `AddHttpPropagation()`, stops the host as it starts
+(`InvalidOperationException`), saying what to add. In a service provider built without a host, the client fails when it
+is created.
 
 ### Which requests carry it
 
@@ -56,7 +58,7 @@ A client created with neither, or without `AddHttpPropagation()`, fails when it 
 - A request that already carries the header with another tenant's id, while a tenant is current, throws
   `InvalidOperationException`, which catches a header forwarded from the incoming request or set in
   `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.MakeCurrent`. With
-  no current tenant, a header you set is sent as it is.
+  no current tenant, a request that already carries the header throws too.
 - Only requests to the scheme, host and port of the address passed to `UseTenantry`, or else of the registration's
   `BaseAddress`, get the header. A request with an absolute address elsewhere goes without it.
 - `HttpClient` follows a redirect inside its primary handler with the request's headers, so a service that redirects

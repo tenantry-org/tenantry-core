@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -84,6 +85,42 @@ public sealed class TenantModelCheckTests : IDisposable
 
         (await db.Items.CountAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0, "no tenant is current");
         (await db.Items.IgnoreQueryFilters().SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).TenantId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task IntTenantKeys_InAViolation_AreFormattedWithTheInvariantCulture()
+    {
+        // As the log scope and traces format them, so a violation can be matched to them.
+        ServiceCollection services = new();
+        services.AddTenantry<int>();
+        services.AddDbContext<IntKeyContext>(options => options.UseSqlite(_connection).UseTenantry());
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        var tenants = provider.GetRequiredService<ITenantContextSetter<int>>();
+        await using var scope = provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IntKeyContext>();
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        culture.NumberFormat.NegativeSign = "~";
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = culture;
+
+        try
+        {
+            using (tenants.MakeCurrent(new TenantDescriptor<int> { TenantId = -5, Name = "minus five" }))
+            {
+                db.Items.Add(new IntItem { TenantId = -7 });
+
+                var thrown = await db.Awaiting(d => d.SaveChangesAsync(TestContext.Current.CancellationToken))
+                    .Should().ThrowAsync<TenantIsolationViolationException>()
+                    .WithMessage("*names tenant '-7', but the current tenant is '-5'*");
+                thrown.Which.OffendingTenantId.Should().Be("-7");
+                thrown.Which.ExpectedTenantId.Should().Be("-5");
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]

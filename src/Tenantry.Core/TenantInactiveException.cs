@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Tenantry;
 
 /// <summary>
@@ -12,9 +14,9 @@ namespace Tenantry;
 public sealed class TenantInactiveException : TenantNotResolvedException
 {
     /// <summary>Initialises a new instance for the tenant that was refused.</summary>
-    /// <param name="tenantId">The tenant's id.</param>
+    /// <param name="tenantId">The tenant's id, which the message formats with the invariant culture.</param>
     public TenantInactiveException(object tenantId)
-        : base($"Tenant '{tenantId}' is not active, so no work runs for it.")
+        : base(string.Create(CultureInfo.InvariantCulture, $"Tenant '{tenantId}' is not active, so no work runs for it."))
     {
         ArgumentNullException.ThrowIfNull(tenantId);
 

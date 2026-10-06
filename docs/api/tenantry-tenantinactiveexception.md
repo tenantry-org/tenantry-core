@@ -26,7 +26,7 @@ public TenantInactiveException(object tenantId)
 
 Parameters:
 
-- `tenantId` `object`: The tenant's id.
+- `tenantId` `object`: The tenant's id, which the message formats with the invariant culture.
 
 ### `TenantInactiveException(object, string)`
 

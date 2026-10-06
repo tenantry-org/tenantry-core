@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Http;
-using Microsoft.Extensions.Options;
 using Tenantry;
 using Tenantry.Http.Internal;
 
@@ -18,10 +16,10 @@ public static class TenantryHttpClientBuilderExtensions
     /// <remarks>
     /// <para>
     /// Requires <c>tenant.AddHttpPropagation()</c> in <c>AddTenantry</c>. A request that already carries the header
-    /// with another tenant's id (forwarded from an incoming request, or from the client's <c>DefaultRequestHeaders</c>)
-    /// throws
-    /// <see cref="InvalidOperationException"/>. With no tenant current, the request goes as the caller built it, and
-    /// the receiving service decides what a missing header means, for example with <c>RequireTenant()</c>.
+    /// (forwarded from an incoming request, or from the client's <c>DefaultRequestHeaders</c>) throws
+    /// <see cref="InvalidOperationException"/>, unless it names the current tenant. With no tenant current, the request
+    /// goes without the header, and the receiving service decides what that means, for example with
+    /// <c>RequireTenant()</c>.
     /// </para>
     /// <para>
     /// The header goes only to the scheme, host and port of <paramref name="serviceAddress"/>, or else of the base
@@ -39,11 +37,11 @@ public static class TenantryHttpClientBuilderExtensions
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="InvalidOperationException">
     /// <paramref name="builder"/> is <c>ConfigureHttpClientDefaults</c>'s, which configures every client, third-party
-    /// SDKs' included. The client is created without <c>tenant.AddHttpPropagation()</c>, or with neither
-    /// <paramref name="serviceAddress"/> nor an absolute <c>BaseAddress</c> in its registration (thrown when it is
-    /// created).
-    /// A request sent while a tenant is current already carries the header with another tenant's id, or the tenant's
-    /// id is not printable ASCII without a space at either end (thrown when the request is sent).
+    /// SDKs' included. The application has no <c>tenant.AddHttpPropagation()</c>, or the client has neither
+    /// <paramref name="serviceAddress"/> nor an absolute <c>BaseAddress</c> in its registration (thrown as the host
+    /// starts, or, in a service provider built without a host, when the client is created).
+    /// A request already carries the header with an id other than the current tenant's, or with no tenant current, or
+    /// the tenant's id is not printable ASCII without a space at either end (thrown when the request is sent).
     /// </exception>
     /// <exception cref="ArgumentException"><paramref name="serviceAddress"/> is not absolute.</exception>
     /// <example>
@@ -76,12 +74,10 @@ public static class TenantryHttpClientBuilderExtensions
                 "the clients of your own services: builder.Services.AddHttpClient<BillingClient>(…).UseTenantry().");
         }
 
+        PropagationCheck.Register(builder.Services, name, serviceAddress);
+
         // Read when the factory builds the client's handlers, not added to HttpClientActions: gRPC's client factory
         // refuses those (before Grpc.Net.ClientFactory 2.64) or warns about them each time it creates a client.
-        return builder.AddHttpMessageHandler(sp => new TenantPropagationHandler(
-            sp.GetService<ITenantHeaderSource>() ?? throw new InvalidOperationException(
-                $"The HTTP client '{name}' calls UseTenantry(), but Tenantry is not set up to send tenants: add " +
-                "tenant.AddHttpPropagation() in AddTenantry."),
-            PropagationTarget.Of(name, sp.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get(name), serviceAddress)));
+        return builder.AddHttpMessageHandler(sp => TenantPropagationHandler.Create(sp, name, serviceAddress));
     }
 }

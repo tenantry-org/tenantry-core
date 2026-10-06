@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using Tenantry.EfCore.Internal;
 
@@ -503,7 +504,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
     [InlineData(ServiceLifetime.Transient, true)]
     [InlineData(ServiceLifetime.Scoped, false)]
     [InlineData(ServiceLifetime.Transient, false)]
-    public void AConnectionStringProviderThatIsNotASingleton_FailsOnTheFirstContext_WithGuidance(
+    public void AConnectionStringProviderThatIsNotASingleton_FailsOnTheFirstContext_WithoutAHost(
         ServiceLifetime lifetime,
         bool beforeAddTenantry)
     {
@@ -532,6 +533,39 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         built.Invoking(sp => sp.GetRequiredService<IDbContextFactory<PooledNotesContext>>())
             .Should().Throw<InvalidOperationException>()
             .WithMessage($"*PooledNotesContext*ITenantConnectionStringProvider<String> is registered as {lifetime.ToString().ToLowerInvariant()}*singleton*");
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public async Task AConnectionStringProviderThatIsNotASingleton_StopsTheHost_WithGuidance(ServiceLifetime lifetime)
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddTenantry<string>(tenant => tenant
+            .DecorateConnectionStrings((_, inner) => inner)
+            .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled));
+        builder.Services.Add(ServiceDescriptor.Describe(
+            typeof(ITenantConnectionStringProvider<string>),
+            _ => Substitute.For<ITenantConnectionStringProvider<string>>(),
+            lifetime));
+        using var host = builder.Build();
+
+        await host.Awaiting(h => h.StartAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage($"*PooledNotesContext*ITenantConnectionStringProvider<String> is registered as {lifetime.ToString().ToLowerInvariant()}*singleton*");
+    }
+
+    [Fact]
+    public async Task TheHostStarts_WithASingletonConnectionStringProvider()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddSingleton(Substitute.For<ITenantConnectionStringProvider<string>>());
+        builder.Services.AddTenantry<string>(tenant => tenant
+            .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled));
+        using var host = builder.Build();
+
+        await host.StartAsync(TestContext.Current.CancellationToken);
+        await host.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]

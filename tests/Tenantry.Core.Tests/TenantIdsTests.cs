@@ -19,6 +19,15 @@ public sealed class TenantIdsTests
     }
 
     [Fact]
+    public void TheMessagesOfTenantNotFoundAndTenantInactive_FormatTheIdWithTheInvariantCulture()
+    {
+        using var _ = UseCultureWithNegativeSign("~");
+
+        new TenantNotFoundException(-5).Message.Should().Be("Tenant '-5' was not found in the tenant store.");
+        new TenantInactiveException(-5).Message.Should().Be("Tenant '-5' is not active, so no work runs for it.");
+    }
+
+    [Fact]
     public void Format_WritesAGuidInItsDFormat_AndAStringAsItIs()
     {
         var id = Guid.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff");

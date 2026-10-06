@@ -97,8 +97,8 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// No <see cref="ITenantConnectionStringProvider{TKey}"/> is registered yet, or <typeparamref name="TContext"/> is
-    /// already registered this way. The first context created throws it when the registered provider is scoped or
-    /// transient.
+    /// already registered this way. When the registered provider is scoped or transient, the host throws it as it
+    /// starts, or, in a service provider built without a host, the first context created does.
     /// </exception>
     /// <example>
     /// <code>
@@ -126,6 +126,9 @@ public static class TenantryEfCoreTenantBuilderExtensions
         builder.Add(new TenantDatabaseRegistration<TContext>(configure, pooled, poolSize));
         return builder;
     }
+
+    // The options type of the startup check, one named after each context type.
+    private sealed class TenantDatabaseCheck;
 
     private sealed class TenantDatabaseRegistration<[DynamicallyAccessedMembers(ContextMembers)] TContext>(
         Action<IServiceProvider, DbContextOptionsBuilder> configure,
@@ -155,6 +158,15 @@ public static class TenantryEfCoreTenantBuilderExtensions
                     $"AddDbContextPerTenantDatabase<{typeof(TContext).Name}> was already called. Register each context type once.");
             }
 
+            // Checked as the host starts, and again when the first context is created, for a service provider built
+            // without a host.
+            services.AddOptions<TenantDatabaseCheck>(typeof(TContext).FullName)
+                .Validate(_ =>
+                {
+                    RequireSingletonConnectionStrings<TKey>(services);
+                    return true;
+                })
+                .ValidateOnStart();
             services.AddSingleton(sp =>
             {
                 RequireSingletonConnectionStrings<TKey>(services);
@@ -166,7 +178,7 @@ public static class TenantryEfCoreTenantBuilderExtensions
         }
 
         // The contexts' factory and the guard are singletons, which would keep one scoped or transient provider, and
-        // what it depends on, for the application's lifetime. It is checked when the first context is created, so that a
+        // what it depends on, for the application's lifetime. It is checked once the services are built, so that a
         // registration made after AddTenantry counts.
         private static void RequireSingletonConnectionStrings<TKey>(IServiceCollection services)
             where TKey : IEquatable<TKey>, IParsable<TKey>

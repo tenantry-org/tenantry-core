@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-Clears everything Tenantry keeps for a tenant when the tenant changes: its cached copy (with `CacheTenants`) and what each [`ITenantInvalidationHandler<TKey>`](tenantry-itenantinvalidationhandler.md) keeps, such as Tenantry.Caching's entries, cached responses and Tenantry.Options' values. Call it when a tenant is suspended, renamed or deleted, or its identifiers or settings change.
+Clears everything Tenantry keeps for a tenant when the tenant changes: its cached copy (with `CacheTenants`) and what each [`ITenantInvalidationHandler<TKey>`](tenantry-itenantinvalidationhandler.md) keeps, such as Tenantry.Caching's entries, cached responses and Tenantry.Options' values. Call it when a tenant is suspended, renamed or deleted, or its identifiers or settings change. When an identifier moves from one tenant to another, invalidate both.
 
 `AddTenantry` registers it as a singleton. What it clears is in memory in each instance of the application, or in a cache it shares. To clear the other instances' copies too, register a handler that publishes the invalidation to them with `BroadcastInvalidations`, and have each instance apply what it receives with [`ITenantInvalidator<TKey>.InvalidateLocallyAsync`](tenantry-itenantinvalidator.md) or [`ITenantInvalidator<TKey>.InvalidateAllLocallyAsync`](tenantry-itenantinvalidator.md).
 

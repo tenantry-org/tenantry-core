@@ -35,7 +35,7 @@ Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same builder, witho
 
 Exceptions:
 
-- `InvalidOperationException`: No [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) is registered yet, or `TContext` is already registered this way. The first context created throws it when the registered provider is scoped or transient.
+- `InvalidOperationException`: No [`ITenantConnectionStringProvider<TKey>`](tenantry-itenantconnectionstringprovider.md) is registered yet, or `TContext` is already registered this way. When the registered provider is scoped or transient, the host throws it as it starts, or, in a service provider built without a host, the first context created does.
 
 Use it instead of `AddDbContext` and `AddDbContextPool`: it sets each context's connection string when the context, or a pooled context's lease, is handed out, which EF Core has no hook for. It registers a scoped `TContext` and a singleton `IDbContextFactory<TContext>`. A context that is not pooled gets the other services its constructor needs, and its application service provider, from its scope (the scoped context) or the root provider (the factory's). Creating a context without a current tenant throws [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md), so `dotnet ef` needs an `IDesignTimeDbContextFactory`.
 

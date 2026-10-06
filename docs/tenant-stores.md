@@ -158,7 +158,7 @@ injects `ITenantStore<TKey>` itself reads the store.
 
 When a tenant changes (it is suspended, renamed or deleted, or its slug changes), invalidate it with
 `ITenantInvalidator<TKey>`, or it is served as it was until its entry expires: `ValidateTenantActivity` checks
-the cached descriptor.
+the cached descriptor. When an identifier moves from one tenant to another, invalidate both.
 
 ```csharp
 app.MapPost("/admin/tenants/{id}/suspend", async (string id, AppDbContext db, ITenantInvalidator<string> tenants, CancellationToken ct) =>

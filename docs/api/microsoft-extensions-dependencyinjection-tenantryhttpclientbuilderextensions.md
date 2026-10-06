@@ -27,10 +27,10 @@ Returns: `IHttpClientBuilder`: The same `builder` for chaining.
 
 Exceptions:
 
-- `InvalidOperationException`: `builder` is `ConfigureHttpClientDefaults`'s, which configures every client, third-party SDKs' included. The client is created without `tenant.AddHttpPropagation()`, or with neither `serviceAddress` nor an absolute `BaseAddress` in its registration (thrown when it is created). A request sent while a tenant is current already carries the header with another tenant's id, or the tenant's id is not printable ASCII without a space at either end (thrown when the request is sent).
+- `InvalidOperationException`: `builder` is `ConfigureHttpClientDefaults`'s, which configures every client, third-party SDKs' included. The application has no `tenant.AddHttpPropagation()`, or the client has neither `serviceAddress` nor an absolute `BaseAddress` in its registration (thrown as the host starts, or, in a service provider built without a host, when the client is created). A request already carries the header with an id other than the current tenant's, or with no tenant current, or the tenant's id is not printable ASCII without a space at either end (thrown when the request is sent).
 - `ArgumentException`: `serviceAddress` is not absolute.
 
-Requires `tenant.AddHttpPropagation()` in `AddTenantry`. A request that already carries the header with another tenant's id (forwarded from an incoming request, or from the client's `DefaultRequestHeaders`) throws `InvalidOperationException`. With no tenant current, the request goes as the caller built it, and the receiving service decides what a missing header means, for example with `RequireTenant()`.
+Requires `tenant.AddHttpPropagation()` in `AddTenantry`. A request that already carries the header (forwarded from an incoming request, or from the client's `DefaultRequestHeaders`) throws `InvalidOperationException`, unless it names the current tenant. With no tenant current, the request goes without the header, and the receiving service decides what that means, for example with `RequireTenant()`.
 
 The header goes only to the scheme, host and port of `serviceAddress`, or else of the base address set in the client's registration (`AddHttpClient(c => c.BaseAddress = …)`), not to an absolute address elsewhere. A redirect the client follows keeps it. The id must be printable ASCII with no space at either end.
 

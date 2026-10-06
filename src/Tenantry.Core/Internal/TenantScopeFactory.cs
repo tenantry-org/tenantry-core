@@ -62,19 +62,7 @@ internal sealed class TenantScopeFactory<TKey>(
         Func<ITenantScope<TKey>, CancellationToken, Task<TResult>> work,
         CancellationToken cancellationToken = default)
     {
-        if (tenantId is null)
-        {
-            throw new ArgumentNullException(nameof(tenantId));
-        }
-
-        if (TenantIds.IsReserved(tenantId))
-        {
-            throw new ArgumentException(
-                $"'{tenantId}' is the default value of {typeof(TKey).Name}, which Tenantry reserves for \"no tenant\", " +
-                "so no tenant has it.",
-                nameof(tenantId));
-        }
-
+        TenantIds.ThrowIfReserved(tenantId, nameof(tenantId));
         ArgumentNullException.ThrowIfNull(work);
         cancellationToken.ThrowIfCancellationRequested();
 

@@ -26,7 +26,7 @@ public TenantNotFoundException(object tenantId)
 
 Parameters:
 
-- `tenantId` `object`: The id that was looked up.
+- `tenantId` `object`: The id that was looked up, which the message formats with the invariant culture.
 
 ### `TenantNotFoundException(object, string)`
 

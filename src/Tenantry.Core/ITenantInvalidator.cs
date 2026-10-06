@@ -4,7 +4,7 @@ namespace Tenantry;
 /// Clears everything Tenantry keeps for a tenant when the tenant changes: its cached copy (with
 /// <c>CacheTenants</c>) and what each <see cref="ITenantInvalidationHandler{TKey}"/> keeps, such as Tenantry.Caching's
 /// entries, cached responses and Tenantry.Options' values. Call it when a tenant is suspended, renamed or deleted, or
-/// its identifiers or settings change.
+/// its identifiers or settings change. When an identifier moves from one tenant to another, invalidate both.
 /// </summary>
 /// <typeparam name="TKey">
 /// The tenant identifier type. See <see cref="ITenantDescriptor{TKey}"/> for constraints.

@@ -171,7 +171,8 @@ internal sealed class TenantInvalidator<TKey>(TenantStoreCache<TKey>? cache, Ten
 
     private ValueTask Invalidate(TKey tenantId, bool broadcast, CancellationToken cancellationToken)
     {
-        TenantInvalidationHandlers<TKey>.ThrowIfReserved(tenantId);
+        // No tenant has an id reserved for "no tenant", and a handler could read an empty one as every tenant.
+        TenantIds.ThrowIfReserved(tenantId, nameof(tenantId));
         cache?.Remove(tenantId);
         return handlers.InvalidateAsync(tenantId, broadcast, cancellationToken);
     }

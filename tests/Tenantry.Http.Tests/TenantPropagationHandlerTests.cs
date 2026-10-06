@@ -1,6 +1,7 @@
 using System.Globalization;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 using Tenantry.Tests.Shared;
@@ -72,24 +73,51 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
-    public async Task AHeaderTheCallerSet_IsSent_WhenItNamesTheCurrentTenant_OrNoTenantIsCurrent()
+    public async Task AHeaderTheCallerSet_IsSent_WhenItNamesTheCurrentTenant()
     {
         var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing);
         await using var _ = provider;
-        var client = Client(provider);
 
         using (MakeCurrent(provider, "acme"))
         {
             using HttpRequestMessage same = new(HttpMethod.Get, "/invoices");
             same.Headers.Add(TenantPropagation.HeaderName, "acme");
-            await client.SendAsync(same, TestContext.Current.CancellationToken);
+            await Client(provider).SendAsync(same, TestContext.Current.CancellationToken);
         }
 
-        using HttpRequestMessage noTenant = new(HttpMethod.Get, "/invoices");
-        noTenant.Headers.Add(TenantPropagation.HeaderName, "globex");
-        await client.SendAsync(noTenant, TestContext.Current.CancellationToken);
+        recorder.TenantHeaders.Should().Equal("acme");
+    }
 
-        recorder.TenantHeaders.Should().Equal("acme", "globex");
+    [Fact]
+    public async Task AHeaderTheCallerSet_IsRefused_WhenNoTenantIsCurrent()
+    {
+        // A header an untrusted client sent, forwarded by header propagation from an endpoint that allows a missing
+        // tenant, must not call the service as the tenant it names.
+        var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing);
+        await using var _ = provider;
+        using HttpRequestMessage request = new(HttpMethod.Get, "/invoices");
+        request.Headers.Add(TenantPropagation.HeaderName, "globex");
+
+        // The assertion awaits the call, so the request is not used after it is disposed.
+        // ReSharper disable once AccessToDisposedClosure
+        await FluentActions.Awaiting(() => Client(provider).SendAsync(request, TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*'globex'*no tenant is current*MakeCurrent*");
+
+        recorder.TenantHeaders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AHeaderTheCallerSet_IsSentUnchecked_ToAnotherService()
+    {
+        // The header goes only to the client's own service; a request elsewhere is the caller's.
+        var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing);
+        await using var _ = provider;
+        using HttpRequestMessage request = new(HttpMethod.Get, "https://payments.example.com/charge");
+        request.Headers.Add(TenantPropagation.HeaderName, "globex");
+
+        await Client(provider).SendAsync(request, TestContext.Current.CancellationToken);
+
+        recorder.TenantHeaders.Should().Equal("globex");
     }
 
     [Fact]
@@ -127,7 +155,7 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
-    public void AClientWithoutABaseAddress_IsRefusedWhenItIsCreated()
+    public void AClientWithoutABaseAddress_IsRefusedWhenItIsCreated_WithoutAHost()
     {
         var (provider, _) = Build<string>();
         using var _ = provider;
@@ -135,6 +163,44 @@ public sealed class TenantPropagationHandlerTests
         FluentActions.Invoking(() => Client(provider))
             .Should().Throw<InvalidOperationException>()
             .WithMessage("The HTTP client 'billing' calls UseTenantry(), but its registration sets no absolute BaseAddress*UseTenantry(address)*");
+    }
+
+    [Fact]
+    public async Task AClientWithoutABaseAddress_StopsTheHost()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
+        builder.Services.AddHttpClient("billing").UseTenantry();
+        using var host = builder.Build();
+
+        await host.Awaiting(h => h.StartAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("The HTTP client 'billing' calls UseTenantry(), but its registration sets no absolute BaseAddress*");
+    }
+
+    [Fact]
+    public async Task AClientThatUsesTenantry_WithoutAddHttpPropagation_StopsTheHost()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]));
+        builder.Services.AddHttpClient("billing", c => c.BaseAddress = Billing).UseTenantry();
+        using var host = builder.Build();
+
+        await host.Awaiting(h => h.StartAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*tenant.AddHttpPropagation()*");
+    }
+
+    [Fact]
+    public async Task TheHostStarts_WithClientsThatCanSendTheTenant_WhereverTheirAddressIsSet()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
+        builder.Services.AddHttpClient("billing").UseTenantry().ConfigureHttpClient(c => c.BaseAddress = Billing);
+        builder.Services.AddHttpClient("inventory").UseTenantry(new Uri("https://inventory.internal"));
+        using var host = builder.Build();
+
+        await host.StartAsync(TestContext.Current.CancellationToken);
+        await host.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -216,7 +282,7 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
-    public async Task AClientThatUsesTenantry_WithoutAddHttpPropagation_FailsWhenItIsCreated_NamingTheCallToAdd()
+    public async Task AClientThatUsesTenantry_WithoutAddHttpPropagation_FailsWhenItIsCreated_WithoutAHost()
     {
         ServiceCollection services = new();
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]));

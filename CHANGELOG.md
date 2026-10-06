@@ -42,10 +42,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AddDbContextFactory` by default, and `AddDbContext` with singleton options, keep the first tenant's connection
   string, that `IMemoryCache` and third-party bulk libraries are not isolated, that with `app.UseTenantResolution()` a
   custom resolver that reads the user finds nothing before authentication, and how to call or serve a service that
-  names the tenant in a header other than `tenantry-tenant-id`.
+  names the tenant in a header other than `tenantry-tenant-id`. The tenant stores guide and `ITenantInvalidator<TKey>`
+  now say to invalidate both tenants when an identifier moves from one to the other.
 
 ### Changed
 
+- `UseTenantry()` on an HTTP or gRPC client now refuses a request to the client's service that already carries the
+  `tenantry-tenant-id` header while no tenant is current (`InvalidOperationException`), as it did for a header naming
+  another tenant while one is current. Before, such a header was sent unchanged. An untrusted client could set it on
+  a request to an endpoint that allows a missing tenant, and header propagation would forward it to a service that
+  trusts this one, which then acted for the tenant it named. To call as a tenant, make it current with `MakeCurrent`
+  or `RunInScopeAsync` rather than setting the header.
+  See [Which requests carry it](docs/http-propagation.md#which-requests-carry-it).
+- Two registration errors now stop the host as it starts, rather than failing the first request or job that meets
+  them: an HTTP or gRPC client with `UseTenantry()` in an application without `AddHttpPropagation()`, or with no
+  address to send the tenant to; and `AddDbContextPerTenantDatabase` with an `ITenantConnectionStringProvider<TKey>`
+  registered as scoped or transient. A service provider built without a host still reports them on first use.
 - TNY1001 counts a context whose `DbSet<T>` or `modelBuilder.Entity<T>()` is of a type parameter constrained to a
   tenant-owned type as one with tenant-owned types, so the other types it maps with a `TenantId` are now reported. It
   also reads generated code for its contexts, types and markers, so an `IsSharedAcrossTenants()` in a generated file
@@ -72,6 +84,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tenant: with no tenant's settings, or with the tenant a later resolver named.
 - Events 1007 and 1008 are also logged when a resolver that could not read its value yet (`ResolveFromRouteValue`
   before routing, `ResolveFromClaim` before authentication) was followed by one that named a tenant, which then won.
+- `TenantIsolationViolationException`'s `ExpectedTenantId`, `OffendingTenantId` and message, events 2001 and 2003,
+  and the messages of `TenantNotFoundException` and `TenantInactiveException` format tenant ids with the invariant
+  culture, as the `TenantId` log scope and the `tenant.id` tag do. Before, they used the current culture, so a negative
+  number, or a strongly typed id that formats by culture, could read differently there.
+- `RunInScopeAsync` with an empty string id said `'' is the default value of String`, which is not true of an empty
+  string. It now says the id is reserved for "no tenant", as `ITenantInvalidator<TKey>` does, and so does the error for
+  a tenant descriptor with such an id.
 - Events 1005 and 1012 name a signed-in user without a name claim by its name identifier or `sub` claim, or as
   `(unnamed)`. Before, they logged it as `(anonymous)`, as for a request with no user.
 - Behaviour the docs misstated: with `app.UseTenantResolution()`, a signed-in request whose tenant was current

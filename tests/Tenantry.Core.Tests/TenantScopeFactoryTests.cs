@@ -208,7 +208,8 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     {
         var act = () => Scopes.RunInScopeAsync("", (_, _) => Task.CompletedTask);
 
-        await act.Should().ThrowAsync<ArgumentException>().WithParameterName("tenantId");
+        await act.Should().ThrowAsync<ArgumentException>().WithParameterName("tenantId")
+            .WithMessage("'' is reserved for \"no tenant\" (the String default value, or an empty string), so no tenant has it.*");
         _store.Lookups.Should().Be(0);
     }
 
@@ -217,7 +218,8 @@ public sealed class TenantScopeFactoryTests : IAsyncLifetime
     {
         var act = () => Scopes.CreateScope(new TenantDescriptor<string> { TenantId = "", Name = "Unnamed" });
 
-        act.Should().Throw<ArgumentException>().WithMessage("*reserves*").WithParameterName("tenant");
+        act.Should().Throw<ArgumentException>().WithParameterName("tenant")
+            .WithMessage("Tenant 'Unnamed' has the id '', which Tenantry reserves for \"no tenant\" (the String default value, or an empty string).*");
         Ambient.HasTenant.Should().BeFalse();
     }
 

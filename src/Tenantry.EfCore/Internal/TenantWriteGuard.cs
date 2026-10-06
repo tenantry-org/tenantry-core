@@ -181,7 +181,7 @@ internal sealed class TenantWriteGuard<TKey>
         }
 
         var tenantContext = services.GetService<ITenantContext<TKey>>();
-        var tenantId = tenantContext is { HasTenant: true } ? tenantContext.CurrentTenantId?.ToString() : null;
+        var tenantId = tenantContext is { HasTenant: true, CurrentTenantId: { } current } ? TenantIds.Format(current) : null;
 
         foreach (var entry in eventData.Entries.Where(entry => entry.Entity is ITenantEntity<TKey>))
         {
@@ -385,8 +385,9 @@ internal sealed class TenantWriteGuard<TKey>
             Violation(
                 entry,
                 Display(entity.TenantId),
-                $"A new '{entry.Entity.GetType().Name}' names tenant '{entity.TenantId}', but the current tenant is " +
-                $"'{_tenantId}'. Leave TenantId unset on new entities: they are saved for the current tenant.");
+                $"A new '{entry.Entity.GetType().Name}' names tenant '{Display(entity.TenantId)}', but the current " +
+                $"tenant is '{TenantIds.Format(_tenantId)}'. Leave TenantId unset on new entities: they are saved for the " +
+                "current tenant.");
         }
 
         if (entry.Metadata.IsOwned())
@@ -675,8 +676,8 @@ internal sealed class TenantWriteGuard<TKey>
             entry,
             offendingTenantId: null,
             $"Tenant isolation violation on entity '{typeName}': no row with its key is stored for the current tenant " +
-            $"'{_tenantId}'. SaveChanges was aborted before anything was written. Change an entity, or the entities it " +
-            "owns, only while its own tenant is current.");
+            $"'{TenantIds.Format(_tenantId)}'. SaveChanges was aborted before anything was written. Change an entity, or " +
+            "the entities it owns, only while its own tenant is current.");
     }
 
     // An ownership's principal: the tracked entry with the dependent's foreign key values in the key the ownership
@@ -732,7 +733,8 @@ internal sealed class TenantWriteGuard<TKey>
         return entityType;
     }
 
-    private static string Display(TKey? tenantId) => tenantId?.ToString() ?? "<null>";
+    // Formatted as Tenantry formats ids everywhere else (log scopes, traces), so a violation can be matched to them.
+    private static string Display(TKey? tenantId) => tenantId is null ? "<null>" : TenantIds.Format(tenantId);
 
     // An entry's type name: its entity type's for a shared-type entity, such as a join entity EF Core creates, whose
     // CLR type is a dictionary.
@@ -743,7 +745,7 @@ internal sealed class TenantWriteGuard<TKey>
     private void Violation(EntityEntry entry, string? offendingTenantId, string? message = null)
     {
         var typeName = Name(entry);
-        var expected = _tenantId.ToString();
+        var expected = TenantIds.Format(_tenantId);
 
         TenantIsolationLog.IsolationViolation(_logger, typeName, offendingTenantId, expected);
 

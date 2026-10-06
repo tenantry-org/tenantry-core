@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Tenantry;
 
 /// <summary>
@@ -14,9 +16,9 @@ public sealed class TenantNotFoundException : TenantNotResolvedException
     /// <summary>
     /// Initialises a new instance for the tenant id that was not found.
     /// </summary>
-    /// <param name="tenantId">The id that was looked up.</param>
+    /// <param name="tenantId">The id that was looked up, which the message formats with the invariant culture.</param>
     public TenantNotFoundException(object tenantId)
-        : base($"Tenant '{tenantId}' was not found in the tenant store.")
+        : base(string.Create(CultureInfo.InvariantCulture, $"Tenant '{tenantId}' was not found in the tenant store."))
     {
         ArgumentNullException.ThrowIfNull(tenantId);
 

@@ -22,21 +22,6 @@ internal sealed class TenantInvalidationHandlers<TKey>(IServiceProvider services
     public ValueTask InvalidateAllAsync(bool broadcast, CancellationToken cancellationToken) =>
         RunEachAsync(handler => handler.InvalidateAllAsync(cancellationToken), broadcast, cancellationToken);
 
-    // No tenant has an id reserved for "no tenant", and a handler could read an empty one as every tenant.
-    public static void ThrowIfReserved(TKey tenantId)
-    {
-        if (tenantId is null)
-            throw new ArgumentNullException(nameof(tenantId));
-
-        if (TenantIds.IsReserved(tenantId))
-        {
-            throw new ArgumentException(
-                $"'{tenantId}' is reserved for \"no tenant\" (the {typeof(TKey).Name} default value, or an empty string), " +
-                "so no tenant has it to invalidate.",
-                nameof(tenantId));
-        }
-    }
-
     private async ValueTask RunEachAsync(
         Func<ITenantInvalidationHandler<TKey>, ValueTask> run,
         bool broadcast,

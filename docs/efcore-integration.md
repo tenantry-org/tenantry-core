@@ -273,8 +273,9 @@ opens a connection, below.)
 
 - It registers a scoped `AppDbContext` and an `IDbContextFactory<AppDbContext>`; use it instead of `AddDbContext`,
   `AddDbContextPool` or `AddPooledDbContextFactory`. Call `UseConnectionStrings` first, or it throws. The factory is a
-  singleton, so the first context created throws when an `ITenantConnectionStringProvider<TKey>` of your own is
-  registered as scoped or transient. Like `UseResolver<T>()`, it returns the builder without its key
+  singleton, so the host does not start when an `ITenantConnectionStringProvider<TKey>` of your own is registered as
+  scoped or transient (`InvalidOperationException`). In a service provider built without a host, the first context
+  created throws instead. Like `UseResolver<T>()`, it returns the builder without its key
   type ([Registration](core-concepts.md#registration)).
 - It applies `UseTenantry()` before your configuration (see [Write isolation](#write-isolation-the-interceptor)).
 - `pooled: true` pools contexts as `AddDbContextPool` does, so the context needs a constructor that takes only its

@@ -67,16 +67,34 @@ public static class TenantIds
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         tenantId is null or string { Length: 0 } || EqualityComparer<TKey>.Default.Equals(tenantId, default!);
 
+    /// <summary>Throws for an id that no tenant can have, as an argument named <paramref name="paramName"/>.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="tenantId"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="tenantId"/> is reserved for "no tenant".</exception>
+    internal static void ThrowIfReserved<TKey>(TKey tenantId, string paramName)
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        if (tenantId is null)
+            throw new ArgumentNullException(paramName);
+
+        if (IsReserved(tenantId))
+        {
+            throw new ArgumentException(
+                $"'{Format(tenantId)}' is reserved for \"no tenant\" ({Reserved<TKey>()}), so no tenant has it.",
+                paramName);
+        }
+    }
+
     internal static void ThrowIfReserved<TKey>(ITenantDescriptor<TKey> tenant, string paramName)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         if (IsReserved(tenant.TenantId))
         {
             throw new ArgumentException(
-                $"Tenant '{tenant.Name}' has the id '{tenant.TenantId}', the default value of {typeof(TKey).Name}, which " +
-                "Tenantry reserves for \"no tenant\". Give every tenant an id other than the default (Guid.Empty, 0) " +
-                "or an empty string.",
+                $"Tenant '{tenant.Name}' has the id '{tenant.TenantId}', which Tenantry reserves for \"no tenant\" " +
+                $"({Reserved<TKey>()}). Give every tenant another id.",
                 paramName);
         }
     }
+
+    private static string Reserved<TKey>() => $"the {typeof(TKey).Name} default value, or an empty string";
 }

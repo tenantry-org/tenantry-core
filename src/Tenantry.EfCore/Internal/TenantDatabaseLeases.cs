@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -119,7 +120,7 @@ internal sealed class TenantDatabaseGuard<TKey>(
         }
 
         var contextType = context.GetType().Name;
-        var currentTenantId = tenantContext.HasTenant ? tenantContext.CurrentTenantId?.ToString() : null;
+        var currentTenantId = tenantContext is { HasTenant: true, CurrentTenantId: { } current } ? TenantIds.Format(current) : null;
 
         if (!TenantDatabaseLeases.TryGet(context, out var lease) || lease.Number != context.ContextId.Lease)
         {
@@ -132,7 +133,8 @@ internal sealed class TenantDatabaseGuard<TKey>(
                 expectedTenantId: currentTenantId);
         }
 
-        var leaseTenantId = lease.TenantId?.ToString();
+        // The lease keeps the id as an object, so this formats it as TenantIds.Format does.
+        var leaseTenantId = lease.TenantId is null ? null : string.Create(CultureInfo.InvariantCulture, $"{lease.TenantId}");
 
         if (!ReferenceEquals(context.Database.GetDbConnection(), lease.Connection)
             || !string.Equals(context.Database.GetConnectionString(), lease.ConnectionString, StringComparison.Ordinal))
@@ -140,7 +142,7 @@ internal sealed class TenantDatabaseGuard<TKey>(
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
-                $"This '{contextType}''s connection was changed after it was connected to tenant '{lease.TenantId}''s " +
+                $"This '{contextType}''s connection was changed after it was connected to tenant '{leaseTenantId}''s " +
                 "database. Do not call SetConnectionString or SetDbConnection on a context from AddDbContextPerTenantDatabase. " +
                 "If no code of yours does, the EF Core provider replaced the connection itself, which " +
                 "AddDbContextPerTenantDatabase does not support; the providers it is tested with are listed in Compatibility.",
@@ -153,8 +155,8 @@ internal sealed class TenantDatabaseGuard<TKey>(
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
-                $"This '{contextType}' is connected to tenant '{lease.TenantId}''s database, but the current tenant is " +
-                $"'{currentTenantId ?? "(none)"}'. Use a context created while the tenant you are working as is current.",
+                $"This '{contextType}' is connected to tenant '{leaseTenantId}''s database, but the current tenant " +
+                $"is '{currentTenantId ?? "(none)"}'. Use a context created while the tenant you are working as is current.",
                 leaseTenantId,
                 currentTenantId);
         }
