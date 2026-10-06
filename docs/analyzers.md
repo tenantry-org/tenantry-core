@@ -15,7 +15,8 @@ the compiler loads them, and they are not copied to the output.
 | [TNY3002](#tny3002) | Tenantry.EfCore | Info | Blocking on `RunInScopeAsync` |
 
 The first digit of a rule's number is its area: 1 for EF Core isolation, 2 for resolution and access, 3 for tenant
-scopes. Each rule reports only what it can be sure of, so code it cannot see into is left alone. The tenant scope
+scopes. Each rule reports what it can be sure of and leaves alone most code it cannot see into; the sections on
+[TNY1001](#tny1001), [TNY1004](#tny1004) and [TNY2001](#tny2001) name the cases they report anyway. The tenant scope
 rules are about `Tenantry.Core`'s API, and come with `Tenantry.EfCore`, which every application that keeps tenant data
 in EF Core references.
 
@@ -194,11 +195,11 @@ test project's second registration of the context is reported too. If the test r
 without the removal, EF Core 8 keeps the application's. Add `.UseTenantry()` to the test registration, or set
 `dotnet_diagnostic.TNY1004.severity = none` for the test project.
 
-The registrations in a method are all taken to run, in source order, so one on a branch that excludes another, after
-an early return, or in a callback that runs later still counts. A few false reports remain by design: the builder
-passed inside an array or a `params object[]`, through reflection, or as a method group to a framework or third-party
-method, and a package that does not reference `Tenantry.EfCore` calling back into the application's override of its
-virtual method. Suppress the warning there, as where a context is meant to be unisolated, such as in a test that
+The registrations in a method are all taken to run, in source order, so one on a branch that excludes another, after an
+early return, or in a callback that runs later still counts. A few false reports remain by design: the builder passed or
+stored inside an array, a tuple or a `params object[]`, through reflection, or as a method group to a framework or
+third-party method, and a package that does not reference `Tenantry.EfCore` calling back into the application's override
+of its virtual method. Suppress the warning there, as where a context is meant to be unisolated, such as in a test that
 registers one on purpose ([Configuring the rules](#configuring-the-rules)).
 
 ## TNY2001

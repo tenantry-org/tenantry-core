@@ -205,6 +205,11 @@ public sealed class RegistrationTests
                 public DbContextOptionsBuilder? Options { get; set; }
             }
 
+            public class HeldDbContext(DbContextOptions<HeldDbContext> options) : DbContext(options)
+            {
+                public DbSet<Order> Orders => Set<Order>();
+            }
+
             public class Configurer(DbContextOptionsBuilder options)
             {
                 public DbContextOptionsBuilder Options { get; } = options;
@@ -223,6 +228,7 @@ public sealed class RegistrationTests
                     services.AddDbContext<ReportsDbContext>(options => shared(options));
                     services.AddDbContext<BillingDbContext>(options => configurer.Configure(options));
                     services.AddDbContext<AuditDbContext>(options => holder.Options = options);
+                    services.AddDbContext<HeldDbContext>(options => holder.Options ??= options);
                     services.AddDbContext<LedgerDbContext>(options => ForwardAgain(options));
                     services.AddDbContext<ArchiveDbContext>(options => new Configurer(options));
                     services.AddDbContext<JournalDbContext>(options => configureOptions.Configure(options));
@@ -275,6 +281,35 @@ public sealed class RegistrationTests
                 {
                     if (depth > 0)
                         Recurse(options.EnableDetailedErrors(), depth - 1);
+                }
+            }
+            """);
+
+    [Fact]
+    public Task ABuilderAssignedToADiscard_IsReported() =>
+        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
+            public class DiscardingDbContext(DbContextOptions<DiscardingDbContext> options) : DbContext(options)
+            {
+                public DbSet<Order> Orders => Set<Order>();
+
+                protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                {
+                    _ = optionsBuilder.EnableSensitiveDataLogging();
+                }
+            }
+
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services)
+                {
+                    {|TNY1004:services.AddDbContext<AppDbContext>(options => { _ = options.EnableSensitiveDataLogging(); })|};
+                    {|TNY1004:services.AddDbContext<ReportsDbContext>(options => Configure(options))|};
+                    {|TNY1004:services.AddDbContext<DiscardingDbContext>(options => options.EnableSensitiveDataLogging())|};
+                }
+
+                private static void Configure(DbContextOptionsBuilder options)
+                {
+                    _ = options.EnableSensitiveDataLogging();
                 }
             }
             """);

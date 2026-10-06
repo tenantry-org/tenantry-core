@@ -17,14 +17,14 @@ namespace Tenantry.EfCore.Analyzers;
 /// <para>
 /// To keep false reports out, it reports a registration only when it sees everything its options do: they are a lambda,
 /// or a method of the compilation's that cannot be overridden, that neither calls <c>UseTenantry()</c> nor hands an
-/// options builder to code that could, nor assigns one anywhere. Code that could is a delegate, an interface, virtual or
-/// unsealed override method, a local function or lambda, a method the compiler declares (a C# 14 extension member
-/// called in static form), a constructor or method of an assembly that references Tenantry.EfCore (directly or through
-/// others) or of another project's reference assembly, or a property of such an assembly or of the application's read
-/// on the builder (a C# 14 extension property, or a builder subclass's); a method of the application's, a C# 14
-/// extension method called on the builder among them, instead counts when it does any of this itself, decided once
-/// every method is seen. A registration without options, or with a delegate it cannot see into, is not reported.
-/// Generated code counts for what it does, and nothing in it is reported.
+/// options builder to code that could, nor assigns one to anything but a discard. Code that could is a delegate, an
+/// interface, virtual or unsealed override method, a local function or lambda, a method the compiler declares (a C# 14
+/// extension member called in static form), a constructor or method of an assembly that references Tenantry.EfCore
+/// (directly or through others) or of another project's reference assembly, or a property of such an assembly or of the
+/// application's read on the builder (a C# 14 extension property, or a builder subclass's); a method of the
+/// application's, a C# 14 extension method called on the builder among them, instead counts when it does any of this
+/// itself, decided once every method is seen. A registration without options, or with a delegate it cannot see into, is
+/// not reported. Generated code counts for what it does, and nothing in it is reported.
 /// </para>
 /// <para>
 /// From EF Core 9, a context declared in another assembly is not reported: a registration or
@@ -70,6 +70,7 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
                 OperationKind.Invocation,
                 OperationKind.ObjectCreation,
                 OperationKind.SimpleAssignment,
+                OperationKind.CoalesceAssignment,
                 OperationKind.PropertyReference);
             start.RegisterCompilationEndAction(end => Report(end, types, state));
         });
@@ -201,7 +202,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
             case IObjectCreationOperation { Constructor: { } constructor } creation when HasBuilder(creation.Arguments, types):
                 return (ReachesTenantryEfCore(constructor.ContainingAssembly, state), null);
 
-            case ISimpleAssignmentOperation assignment when IsBuilder(assignment.Value, types):
+            // The builder kept in a field, property or variable, which other code may read; a discard keeps nothing.
+            case IAssignmentOperation { Target: not IDiscardOperation } assignment when IsBuilder(assignment.Value, types):
                 return (true, null);
 
             // A property on the builder, of the application's or of an assembly that can reach Tenantry.EfCore, such as a
