@@ -80,11 +80,8 @@ the cherry-pick in step 4 above, so push `master` before its tag, as for a new m
 
 1. Fix it on `master` first, in a pull request as usual, unless the code is gone there. Before cherry-picking the fix
    to the release branch, check that it passed `master`'s CI, SonarCloud included, as release branches skip SonarCloud.
-2. A tag runs the `release.yml` of the tagged commit. `release/0.7` was cut before `release.yml` checked a patch's
-   `TenantryPackageBaseline` and its changelog section on `master`, and before it attached the packages, so the first
-   0.7 patch brings them first, in a pull request into `release/0.7`: `.github/workflows/release.yml` from `master` with
-   `scripts/newest-release.sh`, which it calls, `TenantryPackageBaseline` raised to `0.7.0`, and both
-   `src/*/CompatibilitySuppressions.xml` deleted. Branches cut from `master` from 0.8 on have them already.
+2. A tag runs the `release.yml` of the tagged commit. Before the first patch of `release/0.7`, see
+   [Patching release/0.7](#patching-release07).
 3. In a pull request into `release/X.Y`, which runs CI, cherry-pick the fix and add the patch's section to
    `CHANGELOG.md` (`## [0.7.1] - YYYY-MM-DD`). Add the same section to `master`'s `CHANGELOG.md`, placed by
    version among the other releases. The release's notes come from the branch's copy.
@@ -94,9 +91,9 @@ the cherry-pick in step 4 above, so push `master` before its tag, as for a new m
    server version in the patch, or note it in its `CHANGELOG.md` section, before tagging.
 5. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.7.*'`), that `git log
    v0.7.0..origin/release/0.7` holds only what the patch should, that `TenantryPackageBaseline` names the line's last
-   release, and that the `CHANGELOG.md` section is there, and on `master`. With the `release.yml` of step 2, the
-   workflow checks the section on both branches, and refuses a patch whose `TenantryPackageBaseline` is not a release
-   of its own minor. Then tag the branch's head and push the tag, as for a new minor.
+   release, and that the `CHANGELOG.md` section is there, and on `master`. The workflow checks the section on both
+   branches, and refuses a patch whose `TenantryPackageBaseline` is not a release of its own minor. Then tag the
+   branch's head and push the tag, as for a new minor.
 
 Tag the head of a push to `release/X.Y`: CI runs once for each push, on its last commit, so a commit in the middle of
 a push of several has no run of its own, and its tag is refused.
@@ -105,28 +102,39 @@ A minor older than the latest gets only security fixes ([security policy](.githu
 its patch's section has a `### Security` heading, and its security advisory is published once the packages are on
 NuGet.org.
 
+### Patching release/0.7
+
+`release/0.7` was cut before `release.yml` checked a patch's `TenantryPackageBaseline` and its changelog section on
+`master`, and before it attached the packages to the GitHub release. Its first patch brings these first, in a pull
+request into `release/0.7`:
+
+- `.github/workflows/release.yml` from `master`, with `scripts/newest-release.sh`, which it calls;
+- `TenantryPackageBaseline` raised to `0.7.0`;
+- both `src/*/CompatibilitySuppressions.xml` deleted.
+
+`release/0.7` packs no templates package, so its releases publish the six library packages only. Branches cut from
+`master` from 0.8 on have all of this already.
+
 ## The release
 
 1. The workflow checks that the tag is a release tag on its branch's history, that CI passed on the push to
-   `release/X.Y` that put the commit there, and that it has notes, on its branch and, with `master`'s `release.yml`
-   ([A patch](#a-patch), step 2), on `master`. A tag on a commit `master` contains, on another minor's branch, or on an
-   unmerged branch fails before anything is built (`scripts/release-source.sh`).
+   `release/X.Y` that put the commit there, and that it has notes, on its branch and on `master`. A tag on a commit
+   `master` contains, on another minor's branch, or on an unmerged branch fails before anything is built
+   (`scripts/release-source.sh`).
 2. It reruns CI's build and test workflow on the tagged commit, without SonarCloud, the package checks included, then
-   waits for approval in the `release` environment. Once approved, it pushes the six library packages and their symbol
-   packages to NuGet.org, then `Tenantry.Templates` ([The templates package](#the-templates-package)), and creates the
-   GitHub release, a prerelease for a tag with a prerelease suffix, marked as the latest only if no higher version is
-   released.
+   waits for approval in the `release` environment. Once approved, it pushes `Tenantry.Templates`
+   ([The templates package](#the-templates-package)), then the six library packages and their symbol packages, to
+   NuGet.org, and creates the GitHub release, a prerelease for a tag with a prerelease suffix, marked as the latest
+   only if no higher version is released. For a release without a prerelease suffix, it then tells the agent skills
+   about it ([After a minor release](#after-a-minor-release)).
 3. NuGet.org validates and indexes the packages in a few minutes; they are available once
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be unlisted
    afterwards, but never deleted or replaced.
 
 The GitHub release attaches the packages as the workflow built them, which its checksums (`SHA256SUMS`) and build
 provenance attestations are for. NuGet.org adds its repository signature to each package it serves, so its copy
-hashes differently and has no attestation of its own. A tag runs the `release.yml` of the tagged commit, so only a
-release branch whose `release.yml` attaches the packages gives releases that do: those cut from `master` from 0.8 on,
-and `release/0.7` once a patch brings `master`'s `release.yml` to it ([A patch](#a-patch)). 0.7.0 and earlier releases
-attach only the checksums and SBOMs. To check a package, download each copy into its own folder, since the two file
-names differ only in case:
+hashes differently and has no attestation of its own. 0.7.0 and earlier releases attach only the checksums and SBOMs.
+To check a package, download each copy into its own folder, since the two file names differ only in case:
 
 ```sh
 mkdir github nuget
@@ -150,24 +158,28 @@ Before anything is built, the workflow checks that no package already has the ve
 again for a released version fails instead of creating a GitHub release whose checksums do not match the published
 packages. A dry run given a version checks it too.
 
-If a release stops part way, after some packages were pushed, rerunning it does not finish it, and a published package
-cannot be replaced. Rerunning the failed job fails at the push, as NuGet.org refuses a version a package has already,
-or, more than 7 days after the run, at the download of its packages, which GitHub has deleted by then; rerunning every
-job fails at the check that the version is unpublished. Release the next patch instead, from the same branch: add its
-`CHANGELOG.md` section, which says it replaces the incomplete release, and tag it. Unlist the incomplete version's
-packages on NuGet.org, so no one picks a set that does not match, unless the release stopped only at
-`Tenantry.Templates` ([The templates package](#the-templates-package)). `TenantryPackageBaseline` names the last release
-whose six library packages were all published, which is the incomplete one only in that case: pack looks for each
-library package at the baseline version, and would fail for one never published at it. An incomplete `X.Y.0` is the
-exception, as the workflow refuses a patch whose baseline is in an older minor: set `TenantryPackageBaseline` to
-`X.Y.0`, and in the project file of each library package `X.Y.0` lacks, to the previous release. A package `X.Y.0` has
-deletes its `CompatibilitySuppressions.xml`, or pack fails with "Unnecessary suppressions found"; one it lacks keeps its
-file. Once the replacement patch is released, remove those project-file baselines, as `TenantryPackageBaseline` moves to
-the patch.
+If the push stops before any package is published, as when NuGet.org refuses `Tenantry.Templates`, which goes first,
+fix the cause and rerun the failed job within 7 days. If it stops after some packages were pushed, a published package
+cannot be replaced:
+
+1. Do not rerun it. Rerunning the failed job fails at the push, as NuGet.org refuses a version a package has already,
+   or, more than 7 days after the run, at the download of its packages, which GitHub has deleted by then. Rerunning
+   every job fails at the check that the version is unpublished.
+2. Release the next patch from the same branch: add its `CHANGELOG.md` section, which says it replaces the incomplete
+   release, and tag it.
+3. Unlist the incomplete version's packages on NuGet.org, so no one picks a set that does not match.
+4. Set `TenantryPackageBaseline` to the last release whose six library packages were all published: pack looks for
+   each library package at the baseline version, and would fail for one never published at it. An incomplete `X.Y.0`
+   is the exception, as the workflow refuses a patch whose baseline is in an older minor: set
+   `TenantryPackageBaseline` to `X.Y.0`, and in the project file of each library package `X.Y.0` lacks, to the
+   previous release. A package `X.Y.0` has deletes its `CompatibilitySuppressions.xml`, or pack fails with
+   "Unnecessary suppressions found"; one it lacks keeps its file. Once the replacement patch is released, remove those
+   project-file baselines, as `TenantryPackageBaseline` moves to the patch.
 
 If every package was pushed and only the GitHub release is missing, create it by hand from the run's packages, which
-it attested before the push, within the 7 days GitHub keeps them. In a checkout of `master` with the tags fetched,
-using the run's id from its URL, give it the files and marks the workflow would have:
+it attested before the push, within the 7 days GitHub keeps them. The agent skills' Monday run picks the release up
+without the event the workflow's last step would have sent. In a checkout of `master` with the tags fetched, using the
+run's id from its URL, give it the files and marks the workflow would have:
 
 ```sh
 tag=v0.7.1
@@ -231,10 +243,11 @@ them; rerunning every job builds them again.
 the library packages. Pack writes that version into each template's `template.json`, so an application created from
 the templates references the Tenantry packages of the same release (`--TenantryVersion` picks another). The Build &
 Test job packs it into `./artifacts` with the libraries and writes its SBOM, and `scripts/smoke-templates.sh` installs
-that package, creates each template, and builds and runs it against the libraries. A release pushes it after the
-libraries, as the push takes the packages in name order; the prerelease job leaves it out. The consumer check runs
-without it: its application cannot reference a template package. It has no symbol package, and pack does not
-validate it (only the `src/` projects enable package validation), so `TenantryPackageBaseline` does not apply to it.
+that package, creates each template, and builds and runs it against the libraries. A release pushes it before the
+libraries, so a refusal of it stops the release before anything is published; the prerelease job leaves it out. The
+consumer check runs without it: its application cannot reference a template package. It has no symbol package, and
+pack does not validate it (only the `src/` projects enable package validation), so `TenantryPackageBaseline` does not
+apply to it.
 
 Before the first release that includes it, the maintainer does two things on NuGet.org:
 
@@ -248,11 +261,9 @@ Before the first release that includes it, the maintainer does two things on NuG
    edited once created. Whether a pattern can name a package id NuGet.org does not have yet is not confirmed, so check
    that the UI shows `Tenantry.Templates` covered.
 
-If the second is missed, the release pushes the six library packages and their symbol packages, then fails on
-`Tenantry.Templates`, before the GitHub release is created. Do not rerun it: as for any release that stops part way
-([The release](#the-release)), fix the policy and release the next patch. The six library packages already published
-are a complete set, so they need not be unlisted, and `TenantryPackageBaseline` moves to that version, as after any
-release: all six exist at it, and pack never validates `Tenantry.Templates`.
+If the second is missed, NuGet.org refuses `Tenantry.Templates`, the first package the release pushes, and the run
+fails with nothing published. Fix the policy, then rerun the failed job within 7 days, which pushes every package
+([The release](#the-release)).
 
 ## Repository settings
 
@@ -273,6 +284,12 @@ existing packages, and name the six packages one by one rather than by a glob: `
 `Tenantry.AspNetCore`, `Tenantry.Options`, `Tenantry.Http` and `Tenantry.Caching`. Both workflows log in with the
 NuGet.org user name in the `NUGET_USER` repository secret.
 
+The release's last step tells the agent skills about a release with the `SKILLS_DISPATCH_TOKEN` repository secret. The
+maintainer creates it: a fine-grained personal access token with `tenantry-org` as its resource owner, access to the
+`tenantry-agent-skills` repository only, and the Contents read and write permission, which sending a
+`repository_dispatch` event needs. Renew it before it expires. Without it, the step skips with a notice, so a
+release never fails on it.
+
 ## After any release
 
 - On the release branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, once
@@ -287,5 +304,11 @@ NuGet.org user name in the `NUGET_USER` repository secret.
 
 - Tenantry.Pro depends on Tenantry up to the next minor in 0.x (`[0.y.0, 0.(y+1).0)`), so each minor release of
   Tenantry is followed by a Tenantry.Pro release built against it, from its own release checklist.
+- Move the agent skills (`tenantry-org/tenantry-agent-skills`) to the release. Once NuGet.org lists the new
+  `Tenantry.Core`, the release workflow sends that repository a `tenantry-release` event, with
+  `{"package": "core", "version": "X.Y.Z"}`, and its `update-version` workflow opens a pull request that moves the
+  skills to the release; its Monday run does the same if the event does not arrive. In that pull request, add the
+  names Tenantry.Pro's release removes (its `eng/removed-names.txt`) to `scripts/removed-names.txt`, fix what the
+  checks report, and merge it. A patch opens such a pull request too; merge it once its checks pass.
 - The site shows a new minor's docs once Tenantry.Pro has released it too. The home page's code sample follows the
   README's: update it on the site if the README's changed.

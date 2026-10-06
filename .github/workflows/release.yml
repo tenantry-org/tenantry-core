@@ -200,9 +200,22 @@ jobs:
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         # No --skip-duplicate: a version already there fails the push rather than being skipped (RELEASING.md says what
-        # to do when a release stops part way). The glob pushes in name order, so Tenantry.Templates goes after the
-        # libraries, and a future package whose name sorts after it would be pushed after it.
-        run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+        # to do when a release stops part way). Tenantry.Templates goes first: if NuGet.org's trusted publishing policy
+        # does not cover it, the run fails with nothing published, and rerunning the failed job once the policy is fixed
+        # completes the release. A release branch whose CI packs no templates package (release/0.7) pushes the
+        # libraries only. Each .nupkg is pushed with the .snupkg beside it.
+        run: |
+          packages=()
+          for package in ./artifacts/*.nupkg; do
+            if [[ "$(basename "$package")" == Tenantry.Templates.[0-9]* ]]; then
+              packages=("$package" "${packages[@]}")
+            else
+              packages+=("$package")
+            fi
+          done
+          for package in "${packages[@]}"; do
+            dotnet nuget push "$package" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+          done
 
       - name: Find whether this is the newest release
         # GitHub shows one release as Latest: only the newest (scripts/newest-release.sh), decided now, so a rerun after
@@ -231,6 +244,42 @@ jobs:
             ./artifacts/SHA256SUMS
             ./artifacts/sbom/*.cdx.json
 
+      - name: Tell the agent skills about the release
+        # tenantry-org/tenantry-agent-skills moves its skills to the newest stable Tenantry.Core that NuGet.org lists
+        # (its update-version.yml), so the event waits until NuGet.org lists this version. A prerelease is not sent.
+        # The release is complete by now, so a missing SKILLS_DISPATCH_TOKEN (RELEASING.md, Repository settings), a
+        # version not yet listed or a refused event is reported without failing the run; the skills' Monday run picks
+        # the release up instead.
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ secrets.SKILLS_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::SKILLS_DISPATCH_TOKEN is not set, so the agent skills were not told about $GITHUB_REF_NAME."
+            exit 0
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          listed=false
+          deadline=$((SECONDS + 900))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            if curl -fsSL --max-time 30 https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json \
+              | jq -e --arg version "$version" '.versions | index($version) != null' > /dev/null; then
+              listed=true
+              break
+            fi
+            sleep 30
+          done
+          if [ "$listed" = false ]; then
+            echo "::notice::NuGet.org does not list Tenantry.Core $version after 15 minutes, so the agent skills were" \
+              "not told; their Monday run picks the release up."
+            exit 0
+          fi
+          if ! gh api --method POST repos/tenantry-org/tenantry-agent-skills/dispatches -f event_type=tenantry-release \
+            -f 'client_payload[package]=core' -f "client_payload[version]=$version"; then
+            echo "::warning::The agent skills repository refused the tenantry-release event: check SKILLS_DISPATCH_TOKEN" \
+              "(RELEASING.md, Repository settings). Their Monday run picks the release up."
+          fi
+
   dry-run:
     name: Dry run (nothing is published)
     runs-on: ubuntu-latest
@@ -255,10 +304,11 @@ jobs:
             echo "$(basename "$package")  (version $version)"
           done
           ls ./artifacts/sbom
-          echo "A release would attest each package's provenance, push each .nupkg to NuGet.org, with any .snupkg"
-          echo "beside it to the NuGet.org symbol server, and create a GitHub release with its CHANGELOG.md section as"
-          echo "notes and the packages, their checksums and SBOMs attached, marked as the latest release only if no"
-          echo "higher release is tagged when it is created (scripts/newest-release.sh)."
+          echo "A release would attest each package's provenance, push each .nupkg to NuGet.org, Tenantry.Templates"
+          echo "first, with any .snupkg beside it to the NuGet.org symbol server, and create a GitHub release with its"
+          echo "CHANGELOG.md section as notes and the packages, their checksums and SBOMs attached, marked as the latest"
+          echo "release only if no higher release is tagged when it is created (scripts/newest-release.sh). For a"
+          echo "release without a prerelease suffix, it would then send tenantry-agent-skills a tenantry-release event."
 
       - name: Show the release notes
         if: inputs.version != ''
