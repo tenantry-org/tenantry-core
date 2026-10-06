@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Prints the newest release among the tag names on standard input: the highest release version by version sort, or
 # nothing when there is none. Release versions only (vX.Y.Z, no prerelease part, no leading zeros), so a prerelease or a
-# stray tag is never the newest. Only the newest release is GitHub's Latest (release.yml): a patch to an older minor, or
-# a prerelease, does not take that from a newer release. release.yml decides when it creates the release, so a rerun
-# after a newer release is tagged does not either. Usage:
+# stray tag is never the newest. Only the newest release is GitHub's Latest (release.yml), and in Tenantry Pro has its
+# docs on tenantry-pro-docs' master (scripts/publish-docs.sh): a patch to an older minor, or a prerelease, takes neither
+# from a newer release. Each decides when it runs, so a rerun after a newer release is tagged does not either. Usage:
 #
 #   git tag --list | scripts/newest-release.sh
 set -euo pipefail
