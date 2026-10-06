@@ -27,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whose own registrations it cannot see. See [TNY1004](docs/analyzers.md#tny1004).
 - `tenant.IgnoreWarnings(…)`, which stops the warnings that report configuration that may be deliberate, named in
   `TenantryWarnings`: 2007 and 3001. It throws for Tenantry's other events, 1000 to 2999. Other ids are kept for the
-  package that logs them, which reads them with `TenantryWarnings.IsIgnored`. See
+  package that logs them, and take effect only when that package reads them with `TenantryWarnings.IsIgnored`; none
+  does yet, as Tenantry.Pro's events are filtered by their logging category. See
   [Turning off a warning](docs/diagnostics.md#turning-off-a-warning).
 - Warning 2007, `StringTenantIdCollation`, in `Tenantry.EfCore`: with `string` tenant ids on SQL Server or MySQL, a
   model with tenant-owned tables where neither the `TenantId` column, the table nor the model sets a collation is

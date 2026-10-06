@@ -72,7 +72,8 @@ builder.Services.AddTenantry<string>(tenant => tenant
 It accepts only 2007 (`TenantryWarnings.StringTenantIdCollation`) and 3001
 (`TenantryWarnings.OrdinaryOptionsReadAsTenant`), and throws for Tenantry's other events, 1000 to 2999. Events 2002
 and 2006 have their own switches, `OnMissingTenant` and `OnUnmarkedEntityType`. Each call adds to the ids of the
-others. Other ids are left to the package that logs them, which reads them with `TenantryWarnings.IsIgnored`. An id
+others. Other ids are left to the package that logs them, and take effect only when that package reads them with
+`TenantryWarnings.IsIgnored`. None does yet: Tenantry.Pro's events are filtered by their logging category. An id
 applies only to the package that logs it: 3001 turns off the `Tenantry.Options` warning, not Tenantry.Pro's event 3001.
 
 ## Traces

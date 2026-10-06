@@ -22,8 +22,9 @@ public static class TenantryWarnings
     /// </summary>
     public const int OrdinaryOptionsReadAsTenant = 3001;
 
-    // Tenantry's packages log events 1000 to 2999, and Tenantry.Options event 3001. Other ids are other packages',
-    // such as Tenantry.Pro's 3001 to 3408 and 4001 up, which check their own.
+    // Tenantry's packages log events 1000 to 2999, and Tenantry.Options event 3001. An id another package logs takes
+    // effect only when that package reads IsIgnored, and none does yet: Tenantry.Pro's events are filtered by their
+    // logging category.
     private const int FirstEventId = 1000;
     private const int LastEventId = 2999;
 
