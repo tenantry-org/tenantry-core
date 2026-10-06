@@ -439,7 +439,9 @@ tenant.
 
 An entity type that does not implement `ITenantEntity<TKey>`, and is not owned by one that does, is shared by every
 tenant: queries read all its rows, and saves write them without a tenant check. That is by design, for reference data,
-a product catalogue or the tenant registry.
+a product catalogue or the tenant registry. The one exception is Tenantry.Pro's mixed mode, where a `Shared` tenant's
+context with an unmarked type is refused
+([Mixed mode](https://tenantry.dev/docs/pro/mixed-mode#shared-tenants)).
 
 To catch a type left without `ITenantEntity<TKey>` by mistake, mark the shared types, with the attribute or in
 `OnModelCreating`, and set `OnUnmarkedEntityType` so that `UseTenantry()` checks the rest:
