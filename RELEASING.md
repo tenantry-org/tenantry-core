@@ -307,8 +307,8 @@ release never fails on it.
 - Move the agent skills (`tenantry-org/tenantry-agent-skills`) to the release. Once NuGet.org lists the new
   `Tenantry.Core`, the release workflow sends that repository a `tenantry-release` event, with
   `{"package": "core", "version": "X.Y.Z"}`, and its `update-version` workflow opens a pull request that moves the
-  skills to the release; its Monday run does the same if the event does not arrive. In that pull request, add the
-  names Tenantry.Pro's release removes (its `eng/removed-names.txt`) to `scripts/removed-names.txt`, fix what the
-  checks report, and merge it. A patch needs no change to the skills.
+  skills to the release, Tenantry.Pro's pins included; its Monday run does the same if the event does not arrive.
+  Leave that pull request open until Tenantry.Pro's `X.Y.0` is released. Pro's release checklist (step 10) adds Pro's
+  removed names to that pull request and merges it. A patch needs no change to the skills.
 - The site shows a new minor's docs once Tenantry.Pro has released it too. The home page's code sample follows the
   README's: update it on the site if the README's changed.
