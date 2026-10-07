@@ -5,6 +5,7 @@ using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Options;
 
 namespace Tenantry.AspNetCore.Tests;
 
@@ -34,20 +35,29 @@ public sealed class SignalRTests
     public async Task OverLongPolling_AHubMethodRunsAsTheTenantOfTheFirstPoll_AfterThatRequestHasEnded()
     {
         await using var app = await StartAsync(new Tenants(), filter: false);
-        var token = await NegotiateAsync(app, "acme");
+
+        (await InvokeOverLongPollingAsync(app, "Tenant")).GetString().Should().Be("acme");
+    }
+
+    [Fact]
+    public async Task OverLongPolling_AHubMethodKeepsTheConnectionsTenant_AfterAScopeItOpenedCloses()
+    {
+        await using var app = await StartAsync(new Tenants(), filter: false);
+
+        (await InvokeOverLongPollingAsync(app, "TenantAfterScope")).GetString().Should().Be("acme");
+    }
+
+    [Fact]
+    public async Task OverLongPolling_AHubMethodThatFirstReadsPerTenantOptions_GetsTheTenantsValue_AsARequestDoesAfterIt()
+    {
+        // The store returns the instance the request made current, as the in-memory store does, so building the value
+        // reads the store without making another instance current.
+        await using var app = await StartAsync(new Tenants(), filter: false);
+
+        (await InvokeOverLongPollingAsync(app, "Setting")).GetString().Should().Be("acme");
+
         using var client = app.GetTestClient();
-
-        // The first poll starts the connection and returns at once. The sends and polls after it name another tenant.
-        using (var firstPoll = await client.GetAsync($"/hub?id={token}&tenant=acme", Ct))
-        {
-            firstPoll.EnsureSuccessStatusCode();
-        }
-
-        await SendAsync(client, $"/hub?id={token}&tenant=globex", Handshake + Invocation("1", "Tenant"));
-
-        var result = await PollForCompletionAsync(client, $"/hub?id={token}&tenant=globex", "1");
-
-        result.GetProperty("result").GetString().Should().Be("acme");
+        (await client.GetStringAsync("/setting?tenant=acme", Ct)).Should().Be("acme", "the value kept for acme is acme's");
     }
 
     [Fact]
@@ -178,7 +188,8 @@ public sealed class SignalRTests
             }
 
             tenant.UseStore(_ => tenants)
-                .ValidateTenantActivity(t => !t.As<AppTenant>().Suspended);
+                .ValidateTenantActivity(t => !t.As<AppTenant>().Suspended)
+                .ConfigurePerTenant(perTenant => perTenant.Configure<Settings>((settings, t) => settings.Tenant = t.TenantId));
 
             if (cache)
             {
@@ -203,6 +214,7 @@ public sealed class SignalRTests
         var app = builder.Build();
         app.UseTenantry();
         app.MapHub<TenantHub>(route ? "/{tenant}/hub" : "/hub");
+        app.MapGet("/setting", (IOptionsSnapshot<Settings> settings) => settings.Value.Tenant);
         await app.StartAsync(Ct);
         return app;
     }
@@ -214,6 +226,26 @@ public sealed class SignalRTests
         response.EnsureSuccessStatusCode();
         using var negotiation = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
         return negotiation.RootElement.GetProperty("connectionToken").GetString()!;
+    }
+
+    // Opens a long-polling connection as acme, then sends the call and polls for its result naming globex: the call runs
+    // in the flow of the first poll, which has ended by then.
+    private static async Task<JsonElement> InvokeOverLongPollingAsync(WebApplication app, string target)
+    {
+        var token = await NegotiateAsync(app, "acme");
+        using var client = app.GetTestClient();
+
+        // The first poll starts the connection and returns at once.
+        using (var firstPoll = await client.GetAsync($"/hub?id={token}&tenant=acme", Ct))
+        {
+            firstPoll.EnsureSuccessStatusCode();
+        }
+
+        await SendAsync(client, $"/hub?id={token}&tenant=globex", Handshake + Invocation("1", target));
+
+        var completion = await PollForCompletionAsync(client, $"/hub?id={token}&tenant=globex", "1");
+        completion.TryGetProperty("error", out var error).Should().BeFalse(error.ToString());
+        return completion.GetProperty("result");
     }
 
     private static string Handshake => """{"protocol":"json","version":1}""" + RecordSeparator;
@@ -246,13 +278,34 @@ public sealed class SignalRTests
         }
     }
 
-    public sealed class TenantHub(ITenantContext<string> tenant, Tenants tenants) : Hub
+    public sealed class TenantHub(
+        ITenantContext<string> tenant,
+        Tenants tenants,
+        ITenantScopeFactory<string> scopes,
+        IOptionsMonitor<Settings> settings) : Hub
     {
         public string? Tenant()
         {
             tenants.CallRun();
             return tenant.CurrentTenantId;
         }
+
+        public string? TenantAfterScope()
+        {
+            using (scopes.CreateScope(new TenantDescriptor<string> { TenantId = "globex", Name = "Globex" }))
+            {
+            }
+
+            return tenant.CurrentTenantId;
+        }
+
+        public string? Setting() => settings.CurrentValue.Tenant;
+    }
+
+    /// <summary>Options set per tenant.</summary>
+    public sealed class Settings
+    {
+        public string? Tenant { get; set; }
     }
 
     public sealed class PlainHub : Hub

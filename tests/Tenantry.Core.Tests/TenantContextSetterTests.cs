@@ -198,6 +198,64 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
+    public async Task AFlowWhoseFirstScopeAnotherFlowClosed_KeepsItsTenant_WhenAScopeItOpenedCloses()
+    {
+        var tenantContext = BuildSetter();
+
+        var tenants = await RunAfterTheScopeItStartedInCloses(tenantContext, () =>
+        {
+            using (tenantContext.MakeCurrent(Tenant("globex")))
+            {
+            }
+
+            var afterScope = tenantContext.CurrentTenantId;
+
+            using (tenantContext.MakeNoTenantCurrent())
+            {
+            }
+
+            return [afterScope, tenantContext.CurrentTenantId];
+        });
+
+        tenants.Should().Equal("acme", "acme");
+    }
+
+    [Fact]
+    public async Task AFlowWhoseFirstScopeAnotherFlowClosed_KeepsItsTenant_WhenItDisposesAScopeAgain()
+    {
+        var tenantContext = BuildSetter();
+
+        var tenants = await RunAfterTheScopeItStartedInCloses(tenantContext, () =>
+        {
+            var inner = tenantContext.MakeCurrent(Tenant("globex"));
+            inner.Dispose();
+            inner.Dispose();
+
+            return [tenantContext.CurrentTenantId];
+        });
+
+        tenants.Should().Equal("acme");
+    }
+
+    [Fact]
+    public async Task AFlowWhoseFirstScopeAnotherFlowClosed_StillSkipsAScopeClosedAfterTheOneInsideItOpened()
+    {
+        var tenantContext = BuildSetter();
+
+        var tenants = await RunAfterTheScopeItStartedInCloses(tenantContext, () =>
+        {
+            var outer = tenantContext.MakeCurrent(Tenant("globex"));
+            var inner = tenantContext.MakeCurrent(Tenant("initech"));
+            outer.Dispose();
+            inner.Dispose();
+
+            return [tenantContext.CurrentTenantId];
+        });
+
+        tenants.Should().Equal("acme");
+    }
+
+    [Fact]
     public void MakeCurrent_TenantWithTheKeyTypesDefaultId_ThrowsAndLeavesNoTenant()
     {
         var strings = BuildSetter();
@@ -275,6 +333,28 @@ public sealed class TenantContextSetterTests
         ServiceCollection services = new();
         services.AddTenantry<TKey>();
         return services.BuildServiceProvider().GetRequiredService<ITenantContextSetter<TKey>>();
+    }
+
+    // Starts a flow inside a scope for acme and closes the scope from this flow before the work runs, as a long-polling
+    // SignalR connection runs its hub calls in the flow of a request that has ended.
+    private static async Task<string?[]> RunAfterTheScopeItStartedInCloses(
+        ITenantContextSetter<string> tenantContext,
+        Func<string?[]> work)
+    {
+        TaskCompletionSource closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<string?[]> flow;
+
+        using (tenantContext.MakeCurrent(Tenant("acme")))
+        {
+            flow = Task.Run(async () =>
+            {
+                await closed.Task;
+                return work();
+            }, TestContext.Current.CancellationToken);
+        }
+
+        closed.SetResult();
+        return await flow;
     }
 
     private static TenantDescriptor<string> Tenant(string id) => new() { TenantId = id, Name = id };

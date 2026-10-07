@@ -174,6 +174,9 @@ concurrent requests never see each other's tenant.
   disposed, capture the tenant id and run the work by id (see [Non-HTTP hosts](non-http-hosts.md)).
 - Disposing the innermost scope restores the nearest one still open. Disposing any other, out of order or from
   another async flow, closes it without changing the current tenant, and only in the flow that disposes it.
+- A flow that runs on after another flow closed the scope it started in keeps that scope's tenant, and disposing a
+  scope it opened restores it. The hub calls of a long-polling SignalR connection run this way, in the flow of the
+  request that opened the connection.
 
 EF Core's query filter reads this tenant on every query through the context that runs it, so one compiled query
 serves every tenant ([How the query filter stays correct](efcore-integration.md#how-the-query-filter-stays-correct)).

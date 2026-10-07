@@ -14,7 +14,8 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
     // The ambient value is the innermost open scope. Each scope links to the one it shadows, so closing
-    // scopes in any order (or from another async flow) restores the nearest scope that is still open.
+    // scopes in any order (or from another async flow) restores the nearest scope that is still open, or the
+    // scope the flow started in when another flow closed that one first.
     private static readonly AsyncLocal<Frame?> CurrentFrame = new();
 
     /// <inheritdoc />
@@ -34,7 +35,9 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
     /// closes it; the innermost scope stays active, and when it closes the nearest scope that is still open
     /// is restored. Disposal restores the tenant only in the flow that disposes: if a child task disposes a
     /// handle it inherited, the caller keeps that tenant until it disposes the handle too, which then
-    /// restores the caller's previous tenant. Further disposals change nothing.
+    /// restores the caller's previous tenant. Further disposals change nothing. A flow that runs on after
+    /// another flow closed the scope it started in keeps that scope's tenant, and closing a scope it opened
+    /// restores it.
     /// </remarks>
     public IDisposable MakeCurrent(ITenantDescriptor<TKey> tenant)
     {
@@ -60,6 +63,11 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
     // A frame with no tenant is one MakeNoTenantCurrent opened.
     private sealed class Frame(ITenantDescriptor<TKey>? tenant, Frame? parent) : IDisposable
     {
+        // A parent already closed when this frame opened is the scope this flow started in, which another flow closed
+        // (a long-polling SignalR connection runs its hub calls in the flow of a request that has ended). Closing this
+        // frame restores it, so the flow keeps its tenant.
+        private readonly bool _parentWasClosed = parent is { IsDisposed: true };
+
         private int _disposed;
 
         public ITenantDescriptor<TKey>? Tenant { get; } = tenant;
@@ -71,27 +79,42 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
         public void Dispose()
         {
             // Closing is shared by every flow, but the ambient value belongs to each flow. So every call, even a
-            // repeat, restores the calling flow if its innermost scope is closed: this one, or one another flow
-            // closed (for example a child task that disposed a handle it inherited).
+            // repeat, restores the calling flow if its innermost scope is closed and this scope is that one or encloses
+            // it: the innermost scope may be one another flow closed (for example a child task that disposed a handle
+            // it inherited).
             Volatile.Write(ref _disposed, 1);
 
             var current = CurrentFrame.Value;
 
-            if (current is not { IsDisposed: true })
+            if (current is not { IsDisposed: true } || !current.IsWithin(this))
             {
-                // No scope, or the innermost scope is still open: it stays active, and this scope is skipped
-                // when it closes.
+                // No scope, the innermost scope is still open (it stays active, and this scope is skipped when it
+                // closes), or this scope is not one of the calling flow's.
                 return;
             }
 
-            var restored = current.Parent;
+            // Scopes closed after the scope inside them opened are skipped; one closed before is restored.
+            var closed = current;
 
-            while (restored is { IsDisposed: true })
+            while (closed is { _parentWasClosed: false, Parent: { IsDisposed: true } parent })
             {
-                restored = restored.Parent;
+                closed = parent;
             }
 
-            CurrentFrame.Value = restored;
+            CurrentFrame.Value = closed.Parent;
+        }
+
+        private bool IsWithin(Frame scope)
+        {
+            for (var frame = this; frame is not null; frame = frame.Parent)
+            {
+                if (ReferenceEquals(frame, scope))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }
