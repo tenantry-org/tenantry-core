@@ -70,6 +70,8 @@ public Func<TenantResolvedContext<TKey>, Task>? OnResolved { get; set; }
 
 Value: `Func<TenantResolvedContext<TKey>, Task>`
 
+Changes the handler makes to ambient state, such as `CultureInfo.CurrentCulture` or an `AsyncLocal<T>`, reach the rest of the pipeline only if it is not an `async` method: set them and return `Task.CompletedTask`. An `async` handler's changes are undone when it returns, even those made before its first `await`.
+
 ### `RequireTenantByDefault`
 
 Whether an endpoint without `RequireTenant()` or `AllowMissingTenant()` needs a tenant. Default [false](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool).

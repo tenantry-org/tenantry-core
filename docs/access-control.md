@@ -23,7 +23,8 @@ builder.Services.AddTenantry<Guid>(tenant =>
 With this on, a request that does not resolve a tenant gets `400 Bad Request`, and one whose tenant is unknown or
 refused is rejected too ([status codes](aspnetcore-integration.md#status-codes)). Individual endpoints opt out with
 `AllowMissingTenant()`. On an endpoint that does not require a tenant, a request whose tenant is unknown or refused
-continues without one (with `app.UseTenantResolution()`, see the exception [below](#validating-tenant-access)).
+continues without one ([The middleware](aspnetcore-integration.md#the-middleware)), with one exception
+[below](#validating-tenant-access).
 
 ### Per-endpoint
 
@@ -57,12 +58,13 @@ Endpoint metadata overrides `RequireTenantByDefault()`. Give an endpoint one of 
 A tenant that is in the store is not necessarily one the caller may use: a user of Acme should not be able to send
 `X-Tenant-Id: globex`. Access validators run after the tenant is found in the store. If one refuses, an endpoint that
 requires a tenant responds `403 Forbidden`, and any other endpoint runs without a tenant, never with the refused one.
-With `app.UseTenantResolution()`, the tenant is already current during authentication, before the validators run, and a
-signed-in request whose tenant they refuse gets `403 Forbidden` on every endpoint ([Authentication per
-tenant](authentication-per-tenant.md#how-the-two-steps-work)).
 
-Once any validator is configured, a request for a tenant that does not exist gets the same response as one for a
-tenant the caller may not use, so an authenticated user of one tenant cannot discover which others exist.
+With `app.UseTenantResolution()`, the tenant is already current during authentication, before the validators run. A
+signed-in request whose tenant they refuse then gets `403 Forbidden` on every endpoint
+([Authentication per tenant](authentication-per-tenant.md#how-the-two-steps-work)).
+
+Once any validator is configured, a request for a tenant that does not exist gets the response of one the caller may
+not use ([Status codes](aspnetcore-integration.md#status-codes)).
 
 ### Claim-based validation
 
@@ -72,13 +74,14 @@ When the caller's token lists the tenants it may use:
 tenant.ValidateTenantAccessByClaim("tenant_id");
 ```
 
-This passes when any `tenant_id` claim on `HttpContext.User` matches the resolved tenant. It supports:
+This passes when any `tenant_id` claim on `HttpContext.User` matches the resolved tenant's id. It supports:
 
 - repeated claims, each holding one id (`tenant_id: acme`, `tenant_id: globex`), and
 - one claim holding a JSON array (`tenant_id: ["acme","globex"]`, or numbers `[1,2]` for numeric keys).
 
-Each value is parsed as `TKey`, with the invariant culture, and compared with the resolved tenant's id, so the claims
-list tenant ids, not other identifiers such as slugs. `UseTenantry()` must run after `UseAuthentication()`.
+The claims hold tenant ids, not other identifiers such as slugs
+([`ValidateTenantAccessByClaim`](api/microsoft-extensions-dependencyinjection-tenantryaspnetcoretenantbuilderextensions.md)).
+`UseTenantry()` must run [after `UseAuthentication()`](aspnetcore-integration.md#pipeline-ordering).
 
 ### Custom validators
 
@@ -141,7 +144,7 @@ tenant.ValidateTenantAccess((http, t) =>
     || (http.Request.Headers.ContainsKey("X-Admin") && IsInternal(http))); // … OR an internal admin
 ```
 
-That validator still combines with any others by AND. `HasClaim` compares the claim value as a string; it does not
+That validator still combines with any others by AND. `HasClaim` compares the claim value as a string, so it does not
 read the JSON-array form that `ValidateTenantAccessByClaim` accepts.
 
 ### Suspended tenants

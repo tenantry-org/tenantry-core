@@ -143,7 +143,7 @@ Parameters:
 
 Returns: [`TenantOptionsBuilder<TKey>`](tenantry-options-tenantoptionsbuilder.md): This builder, for more options types.
 
-The steps run before every `PostConfigure`, so an authentication handler's post-configuration (which builds JWT bearer's and OpenID Connect's metadata manager from `Authority`) sees the tenant's values. For authentication, the tenant must be current before the authentication middleware runs: see `app.UseTenantResolution()`.
+The steps run after every `Configure` and before every `PostConfigure`, so an authentication handler's post-configuration (which builds JWT bearer's and OpenID Connect's metadata manager from `Authority`, and the scheme's data protector) sees the tenant's values. For authentication, the tenant must be current before the authentication middleware runs: see `app.UseTenantResolution()`.
 
 ```csharp
 tenant.ConfigurePerTenant(perTenant => perTenant

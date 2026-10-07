@@ -71,10 +71,10 @@ public sealed class TenantOptionsBuilder<TKey>
     /// example, which its handler reads with <c>IOptionsMonitor&lt;TOptions&gt;.Get(scheme)</c>.
     /// </summary>
     /// <remarks>
-    /// The steps run before every <c>PostConfigure</c>, so an authentication handler's post-configuration (which builds
-    /// JWT bearer's and OpenID Connect's metadata manager from <c>Authority</c>) sees the tenant's values. For
-    /// authentication, the tenant must be current before the authentication middleware runs: see
-    /// <c>app.UseTenantResolution()</c>.
+    /// The steps run after every <c>Configure</c> and before every <c>PostConfigure</c>, so an authentication handler's
+    /// post-configuration (which builds JWT bearer's and OpenID Connect's metadata manager from <c>Authority</c>, and
+    /// the scheme's data protector) sees the tenant's values. For authentication, the tenant must be current before the
+    /// authentication middleware runs: see <c>app.UseTenantResolution()</c>.
     /// </remarks>
     /// <typeparam name="TOptions">The options type.</typeparam>
     /// <param name="name">The options' name, such as an authentication scheme's.</param>

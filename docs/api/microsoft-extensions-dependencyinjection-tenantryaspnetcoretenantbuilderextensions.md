@@ -340,6 +340,8 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
+The request passes when any claim of the type matches. Each value, or each string or number in a JSON array (`["acme","globex"]`, or `[1,2]` for numeric keys), is parsed as `TKey` with the invariant culture ([`TenantIds.TryParse<TKey>`](tenantry-tenantids.md)) and compared with the resolved tenant's id, so the claims list tenant ids, not other identifiers such as slugs. Call `app.UseTenantry()` after `app.UseAuthentication()`, so the user is known.
+
 ### `ValidateTenantAccess<TValidator>(ITenantBuilder)`
 
 Adds an access validator of type `TValidator`. Every validator must allow a request before its tenant is made current.

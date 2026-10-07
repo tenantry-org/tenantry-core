@@ -96,11 +96,8 @@ users. Resolve the tenant from the request (its host or route), not from a claim
 
 ## Pipeline order
 
-The cookie handler checks a signed-in user's security stamp against the store during authentication, every
-`SecurityStampValidatorOptions.ValidationInterval` (30 minutes by default), so the tenant must be current before
-authentication: with no tenant, the tenant-owned user is not found and the user is signed out. Resolve it with
-`app.UseTenantResolution()`, and authorize after `app.UseTenantry()`, so no policy sees a tenant the validator has not
-checked ([Authentication per tenant](authentication-per-tenant.md)):
+Resolve the tenant with `app.UseTenantResolution()`, before authentication, and authorize after `app.UseTenantry()`,
+so no policy sees a tenant the validator has not checked ([Authentication per tenant](authentication-per-tenant.md)):
 
 ```csharp
 app.UseTenantResolution();
@@ -109,14 +106,18 @@ app.UseTenantry();
 app.UseAuthorization();
 ```
 
-During authentication the tenant is current but not yet checked against the user, so cookie events such as
-`OnValidatePrincipal` and `SecurityStampValidatorOptions.OnRefreshingPrincipal`, and claims transformations, must not
-grant claims, roles or permissions from it, write as it, or renew or reissue the cookie with claims taken from it
+The tenant must be current during authentication because the cookie handler then checks a signed-in user's security
+stamp against the store, every `SecurityStampValidatorOptions.ValidationInterval` (30 minutes by default). With no
+tenant, the tenant-owned user is not found and the user is signed out.
+
+During authentication the tenant is not yet checked against the user. Cookie events such as `OnValidatePrincipal`
+and `SecurityStampValidatorOptions.OnRefreshingPrincipal`, and claims transformations, must not grant claims, roles or
+permissions from it. They must not write as it, or renew or reissue the cookie with claims taken from it
 ([How the two steps work](authentication-per-tenant.md#how-the-two-steps-work)).
 
 Name Identity's four cookie schemes per tenant whenever your tenants' hosts share cookies. Each tenant's handlers then
-read, check, renew and delete only that tenant's cookies, so a user of one tenant is anonymous on another: its sign-in
-page works, and their own session is untouched.
+read, check, renew and delete only that tenant's cookies. A user of one tenant is then anonymous on another: its
+sign-in page works, and their own session is untouched.
 
 ```csharp
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -144,20 +145,20 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     }));
 ```
 
-Without it, a user signed in to one tenant who visits another, with a cookie shared across subdomains, gets one of two
-outcomes:
+Without it, a user signed in to one tenant who visits another, with a cookie shared across subdomains, must sign out
+before using the other tenant. That request goes one of two ways:
 
-- When the security stamp is checked on that request (every `ValidationInterval`), the tenant's users do not include
-  them, so Identity rejects the cookie and deletes it: the request runs anonymous, and the user is signed out of
-  their own tenant too.
+- When the security stamp is checked on it (every `ValidationInterval`), the tenant's users do not include them, so
+  Identity rejects the cookie and deletes it. The request runs anonymous, and the user is signed out of their own
+  tenant too.
 - Otherwise the validator refuses the tenant for a signed-in user, so the whole request is refused (`403`), sign-in
-  page and other `AllowMissingTenant()` pages included. Tenantry signs Identity's cookies out on that request
-  (application, external and two-factor) and the response sets no cookie, so the browser keeps its cookies and the
-  user stays signed in to their own tenant, unless the cookie's ticket is kept in a `SessionStore`: that session is
-  removed, and the user is signed out.
+  page and other `AllowMissingTenant()` pages included. Tenantry
+  [signs Identity's cookies out](authentication-per-tenant.md#what-a-refusal-signs-out) and the response sets no
+  cookie, so the browser keeps its cookies and the user stays signed in to their own tenant. With the ticket in a
+  `SessionStore`, that session is removed instead, and the user is signed out.
 
-Either way the user must sign out before using another tenant. Static files can go before
-`app.UseTenantResolution()`; a sign-in page cannot, since it needs the tenant's cookie settings.
+Static files can go before `app.UseTenantResolution()`. A sign-in page cannot, since it needs the tenant's cookie
+settings.
 
 ## See also
 

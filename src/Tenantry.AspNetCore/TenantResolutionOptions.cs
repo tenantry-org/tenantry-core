@@ -65,6 +65,12 @@ public sealed class TenantResolutionOptions<TKey>
     /// Called when a request's tenant is made current, before the rest of the pipeline runs, for example to add the
     /// tenant to your own telemetry. To refuse a tenant, use an access validator.
     /// </summary>
+    /// <remarks>
+    /// Changes the handler makes to ambient state, such as <c>CultureInfo.CurrentCulture</c> or an
+    /// <see cref="System.Threading.AsyncLocal{T}"/>, reach the rest of the pipeline only if it is not an <c>async</c>
+    /// method: set them and return <c>Task.CompletedTask</c>. An <c>async</c> handler's changes are undone when it
+    /// returns, even those made before its first <c>await</c>.
+    /// </remarks>
     public Func<TenantResolvedContext<TKey>, Task>? OnResolved { get; set; }
 
     /// <summary>

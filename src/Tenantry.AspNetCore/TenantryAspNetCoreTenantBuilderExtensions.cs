@@ -352,6 +352,13 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// Validates tenant access by matching the resolved tenant against claims on the current request principal.
     /// Supports repeated claims with single tenant ids and JSON array claim values.
     /// </summary>
+    /// <remarks>
+    /// The request passes when any claim of the type matches. Each value, or each string or number in a JSON array
+    /// (<c>["acme","globex"]</c>, or <c>[1,2]</c> for numeric keys), is parsed as <typeparamref name="TKey"/> with the
+    /// invariant culture (<see cref="TenantIds.TryParse{TKey}"/>) and compared with the resolved tenant's id, so the
+    /// claims list tenant ids, not other identifiers such as slugs. Call <c>app.UseTenantry()</c> after
+    /// <c>app.UseAuthentication()</c>, so the user is known.
+    /// </remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="claimType">The type of the claims that list the tenant identifiers the principal may use. A request for any other tenant is refused.</param>
