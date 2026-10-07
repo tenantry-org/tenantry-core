@@ -40,7 +40,8 @@ save that tried to write another tenant's row.
 
 While a request's tenant is current, a log scope with one property, `TenantId`, is open, so every entry the request
 writes carries it in a logging provider that records scopes: Serilog's, or the console's and OpenTelemetry's with
-`IncludeScopes`. Tenantry.Pro's jobs and messages open the same scope.
+`IncludeScopes`. Tenantry.Pro's jobs and messages open the same scope. `RunInScopeAsync` and `CreateScope` open none,
+so open it yourself around work you run with them, as below.
 
 ```csharp
 builder.Logging.AddJsonConsole(o => o.IncludeScopes = true);

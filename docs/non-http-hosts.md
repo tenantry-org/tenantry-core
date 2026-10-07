@@ -70,11 +70,22 @@ If the store has no such tenant, for example for a message queued before the ten
 `ValidateTenantActivity`, it throws `TenantInactiveException` for a suspended tenant without running the work. An
 overload takes work that returns a value.
 
-To hold the scope yourself, look the tenant up first and call `CreateScope`, checking `ITenantActivity<TKey>` too if
-your app suspends tenants:
+`RunInScopeAsync` and `CreateScope` open no log scope, so entries the work writes, EF Core's included, carry no
+`TenantId`. To add it, open one around the call ([Logs](diagnostics.md#logs)):
 
 ```csharp
-var tenant = await tenants.GetTenantAsync(tenantId, ct) ?? throw new InvalidOperationException("Unknown tenant");
+using (logger.BeginScope(TenantTelemetry.CreateLogScope(message.TenantId)))
+{
+    await scopes.RunInScopeAsync(message.TenantId, (scope, ct) => HandleAsync(scope, message, ct), cancellationToken);
+}
+```
+
+To hold the scope yourself, do what `RunInScopeAsync` does: look the tenant up, check it is active, then call
+`CreateScope`. `activity` is `ITenantActivity<TKey>`:
+
+```csharp
+var tenant = await tenants.GetTenantAsync(tenantId, ct) ?? throw new TenantNotFoundException(tenantId);
+await activity.ThrowIfInactiveAsync(tenant, ct);
 await using var scope = scopes.CreateScope(tenant);
 ```
 

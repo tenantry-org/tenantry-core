@@ -50,13 +50,12 @@ provider built without a host, the client fails when it is created.
 
 ### Which requests carry it
 
-- While a tenant is current, the request carries the tenant's id, formatted with the invariant culture
-  (`TenantIds.Format`). With no tenant, the request goes without the header, and the called service decides what that
-  means, for example with `RequireTenant()`.
-- A request that already carries the header with another tenant's id, while a tenant is current, throws
-  `InvalidOperationException`, which catches a header forwarded from the incoming request or set in
-  `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.MakeCurrent`. With
-  no current tenant, a request that already carries the header throws too.
+- While a tenant is current, the request carries its id, formatted with the invariant culture (`TenantIds.Format`).
+  With none, it carries no header, and the called service decides what that means, for example with
+  `RequireTenant()`.
+- A request that already carries the header, forwarded from the incoming request or set in `DefaultRequestHeaders`,
+  throws `InvalidOperationException` unless it names the current tenant, so it always throws with no tenant current.
+  To call as another tenant, make it current with `MakeCurrent` or `RunInScopeAsync`.
 - Call `UseTenantry()` after `AddHeaderPropagation()` and after any handler that sets headers: a handler added after it
   sets headers Tenantry does not see.
 - Only requests to the scheme, host and port of the address passed to `UseTenantry`, or else of the registration's

@@ -116,10 +116,11 @@ response of your own in [`OnRejected`](#events).
   that reads `ITenantContext<TKey>`. To refuse a tenant, use an [access
   validator](access-control.md#validating-tenant-access).
 - `OnRejected` runs before Tenantry writes a rejection: on an endpoint that requires a tenant, and, with
-  `app.UseTenantResolution()`, on any endpoint for a signed-in user whose tenant the access validators refuse. It is
-  told the `Reason` (`Missing`, `NotFound`, `AccessDenied` or `Inactive`), the `StatusCode` Tenantry would send, the
-  `Identifier` the request sent and, for `AccessDenied` and `Inactive`, the refused `Tenant`. Change `StatusCode`, or
-  write your own response and call `HandleResponse()`, so Tenantry writes none:
+  `app.UseTenantResolution()`, on any endpoint for a signed-in user whose tenant was current during authentication and
+  which the access validators refuse. It is told the `Reason` (`Missing`, `NotFound`, `AccessDenied` or `Inactive`),
+  the `StatusCode` Tenantry would send, the `Identifier` the request sent and, for `AccessDenied` and `Inactive`, the
+  refused `Tenant`. Change `StatusCode`, or write your own response and call `HandleResponse()`, so Tenantry writes
+  none:
 
 ```csharp
 using Tenantry.AspNetCore;

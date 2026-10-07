@@ -13,6 +13,11 @@ public sealed partial class OrderWorker(WorkQueue queue, ITenantScopeFactory<str
     {
         await foreach (var message in queue.ReadAllAsync(stoppingToken))
         {
+            // RunInScopeAsync opens no log scope, so this one adds TenantId to every entry written for the message,
+            // EF Core's included, where the logging provider records scopes. The messages name the tenant too, for the
+            // console logger, which leaves scopes out by default.
+            using var logScope = logger.BeginScope(TenantTelemetry.CreateLogScope(message.TenantId));
+
             try
             {
                 await scopes.RunInScopeAsync(message.TenantId, async (scope, ct) =>

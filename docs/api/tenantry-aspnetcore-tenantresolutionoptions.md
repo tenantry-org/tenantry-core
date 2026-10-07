@@ -52,7 +52,7 @@ Value: `int`
 
 ### `OnRejected`
 
-Called before Tenantry writes a rejection: on an endpoint that needs a tenant, and, with `app.UseTenantResolution()`, on any endpoint for a signed-in user whose tenant the access validators refuse. Call [`TenantRejectedContext<TKey>.HandleResponse`](tenantry-aspnetcore-tenantrejectedcontext.md) after writing your own response (a redirect, or an error page), or change [`TenantRejectedContext<TKey>.StatusCode`](tenantry-aspnetcore-tenantrejectedcontext.md) and leave the response to Tenantry.
+Called before Tenantry writes a rejection: on an endpoint that needs a tenant, and, with `app.UseTenantResolution()`, on any endpoint for a signed-in user whose tenant was current during authentication and which the access validators refuse. Call [`TenantRejectedContext<TKey>.HandleResponse`](tenantry-aspnetcore-tenantrejectedcontext.md) after writing your own response (a redirect, or an error page), or change [`TenantRejectedContext<TKey>.StatusCode`](tenantry-aspnetcore-tenantrejectedcontext.md) and leave the response to Tenantry.
 
 ```csharp
 public Func<TenantRejectedContext<TKey>, Task>? OnRejected { get; set; }

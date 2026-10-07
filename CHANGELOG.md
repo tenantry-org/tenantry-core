@@ -9,41 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.7
 
-- Three analyzer changes can fail a build that treats warnings as errors ([Analyzers](docs/analyzers.md)). TNY1004, a
-  new warning, reports a context with tenant-owned entities registered without `UseTenantry()`: add `.UseTenantry()` to
-  its options. TNY1002 now also reports `IgnoreQueryFilters()` on a query that includes, joins or selects a
-  tenant-owned entity: fix the query, or suppress the warning where reading every tenant's rows is intended. TNY1001
-  now also reads generated code and contexts that map a type parameter constrained to a tenant-owned type, so it can
-  report a type with a `TenantId` it skipped before: implement `ITenantEntity<TKey>`, or mark the type shared.
-- An `ITenantActivityValidator<TKey>` registered as scoped or transient makes `ITenantActivity<TKey>` throw
-  `InvalidOperationException` when it is first resolved, which `RunInScopeAsync` and the request middleware do. Such a
-  validator was resolved once, from the root provider, and shared by every request. Register it as a singleton with
-  `tenant.ValidateTenantActivity<TValidator>()`, and have it create a scope for any scoped service it needs.
-- An HTTP or gRPC client with `UseTenantry()` and no address to send the tenant to, and an
-  `ITenantConnectionStringProvider<TKey>` registered as scoped or transient for `AddDbContextPerTenantDatabase`, now
-  stop the host as it starts. Fix the registration the error names.
-- `tenant.AddHttpPropagation()` is removed: `UseTenantry()` on each client is the one call. Delete
-  `.AddHttpPropagation()` from `AddTenantry`.
-- `ResolveFromClaim` finds no tenant for a user with more than one claim of its type, and the next resolver runs. It
-  took the first. For tokens that list the tenants a caller may use, resolve the tenant another way, from a header or
-  the host, and check it with `ValidateTenantAccessByClaim`.
-- Code that set the `tenantry-tenant-id` header itself, on a client with `UseTenantry()` and no tenant current, now
-  gets `InvalidOperationException`. Make the tenant current with `MakeCurrent` or `RunInScopeAsync` instead.
-- Tenantry.Options' warning `OrdinaryOptionsReadAsTenant` is now event 2008, where it was 3001, so Tenantry's events
-  are 1000 to 2999 and Tenantry.Pro's are 3000 and above. Change a log alert or filter on event 3001 in the category
-  `Tenantry.Options` to 2008. `TenantryWarnings.OrdinaryOptionsReadAsTenant` is 2008, so an `IgnoreWarnings` call that
-  names it needs no change. Tenantry.Pro 0.8 uses this numbering.
-- Warning 2007 (`StringTenantIdCollation`) is new: with `string` tenant ids on SQL Server or MySQL, it is logged
-  once for a model whose tenant-owned tables leave `TenantId` to the database's default collation, which ignores case.
-  Set a collation that compares case on those columns, or, if your ids cannot collide, turn the warning off with
-  `IgnoreWarnings(TenantryWarnings.StringTenantIdCollation)`
+- TNY1004 is a new warning, and TNY1001 and TNY1002 report more code, so a build that treats warnings as errors can fail
+  ([Analyzers](docs/analyzers.md)). Add `.UseTenantry()` to the options TNY1004 names, fix or suppress the query
+  TNY1002 names, and make the type TNY1001 names tenant-owned (`ITenantEntity<TKey>`) or mark it shared.
+- An `ITenantActivityValidator<TKey>` registered as scoped or transient is now refused. Register it as a singleton with
+  `tenant.ValidateTenantActivity<TValidator>()`, and have it create a scope for any scoped service it needs
+  ([Suspended and inactive tenants](docs/tenant-stores.md#suspended-and-inactive-tenants)).
+- A class of your own that implements `ITenantBuilder<TKey>` adds `ValidateTenantActivity<TValidator>()`.
+- An HTTP or gRPC client with `UseTenantry()` and no address, or a scoped or transient
+  `ITenantConnectionStringProvider<TKey>` for `AddDbContextPerTenantDatabase`, now stops the host as it starts. Fix the
+  registration the error names.
+- Delete `.AddHttpPropagation()` from `AddTenantry`: `UseTenantry()` on each client is the whole setup
+  ([Sending the tenant](docs/http-propagation.md#sending-the-tenant)).
+- Where a user's token lists several tenants in claims of the type `ResolveFromClaim` reads, resolve the tenant from a
+  header or the host instead, and check it with `ValidateTenantAccessByClaim`
+  ([Claim-based validation](docs/access-control.md#claim-based-validation)).
+- Stop setting or forwarding the `tenantry-tenant-id` header on a client with `UseTenantry()` while no tenant is
+  current: to call as a tenant, make it current with `MakeCurrent` or `RunInScopeAsync`
+  ([Which requests carry it](docs/http-propagation.md#which-requests-carry-it)).
+- Change a log alert or filter on event 3001 in the category `Tenantry.Options` to event 2008. Tenantry.Pro 0.8 uses
+  this numbering.
+- With `string` tenant ids on SQL Server or MySQL, warning 2007 can now be logged: set a collation that compares case
+  on `TenantId`, or turn the warning off
   ([String tenant ids](docs/efcore-integration.md#string-tenant-ids-and-the-databases-collation)).
-- `TenantInactiveException.TenantId` holds the tenant's id as the application's key type, as
-  `TenantNotFoundException.TenantId` does. It held the id as text, so with a `Guid` or `int` key, cast it to that type
-  rather than to `string`.
-- The `SecureApi` sample, like the new `tenantry-api` template, reads the tenants a caller may use from `tenant_id`
-  claims, where it read `tenant` claims. An application built from the sample that takes this change needs tokens with
-  `tenant_id` claims.
+- With a key type other than `string`, cast `TenantInactiveException.TenantId` to that type, as for
+  `TenantNotFoundException.TenantId`, not to `string`.
+- An application built from the `SecureApi` sample needs tokens with `tenant_id` claims, where the sample read `tenant`
+  claims.
 
 ### Added
 
@@ -59,15 +51,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `dotnet new tenantry-api -n Orders.Api`, an ASP.NET Core API with EF Core that takes the tenant from the
   `X-Tenant-Id` header and checks it against the caller's JWT `tenant_id` claims, or
   `dotnet new tenantry-worker -n Orders.Worker`, a worker service with EF Core that runs each message as the tenant it
-  names with `RunInScopeAsync`. The projects reference the Tenantry packages of the templates' version;
-  `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK, though an older
-  SDK can install the templates and create a project.
+  names with `RunInScopeAsync`, in a `TenantId` log scope. The projects reference the Tenantry packages of the
+  templates' version; `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK,
+  though an older SDK can install the templates and create a project.
 - TNY1004, a warning in `Tenantry.EfCore`: a context with tenant-owned entities registered with `AddDbContext`,
   `AddDbContextPool`, `AddDbContextFactory` or `AddPooledDbContextFactory` whose options do not call `UseTenantry()`,
   so none of its tenant-owned entities is isolated. It reports nothing where code it cannot see could call
   `UseTenantry()`. See [TNY1004](docs/analyzers.md#tny1004).
 - `tenant.IgnoreWarnings(…)`, which stops the warnings that report configuration that may be deliberate, named in
-  `TenantryWarnings`: 2007 and 2008. It throws for any other id. See
+  `TenantryWarnings`: 2007 and 2008. It throws for any other id. Tenantry's packages read
+  `TenantryWarnings.IsIgnored` before they log one. See
   [Turning off a warning](docs/diagnostics.md#turning-off-a-warning).
 - `ITenantContext<TKey>.RequiredTenant` (Tenantry.Core), the current tenant, which throws
   `TenantNotResolvedException` when none is current, for code that must not run without one. Use it where code wrote
@@ -87,21 +80,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)); and notes that
   `AddDbContextFactory` by default, and `AddDbContext` with singleton options, keep the first tenant's connection
   string, that `IMemoryCache` and third-party bulk libraries are not isolated, that with `app.UseTenantResolution()` a
-  custom resolver that reads the user finds nothing before authentication, and how to call or serve a service that
-  names the tenant in a header other than `tenantry-tenant-id`. The tenant stores guide and `ITenantInvalidator<TKey>`
-  now say to invalidate both tenants when an identifier moves from one to the other. With a database per tenant, the
-  EF Core guide now shows how to create and migrate every tenant's database, which `dotnet ef database update` cannot
-  do ([Creating and migrating tenant databases](docs/efcore-integration.md#creating-and-migrating-tenant-databases)).
-  Four corrections: with `app.UseTenantResolution()`, a signed-in request whose tenant was current during
+  custom resolver that reads the user finds nothing before authentication, that `RunInScopeAsync` and `CreateScope`
+  open no `TenantId` log scope ([Non-HTTP hosts](docs/non-http-hosts.md#when-you-have-a-tenant-id)), and how to call
+  or serve a service that names the tenant in a header other than `tenantry-tenant-id`. The tenant stores guide and
+  `ITenantInvalidator<TKey>` now say to invalidate both tenants when an identifier moves from one to the other. With a
+  database per tenant, the EF Core guide now shows how to create and migrate every tenant's database, which
+  `dotnet ef database update` cannot do
+  ([Creating and migrating tenant databases](docs/efcore-integration.md#creating-and-migrating-tenant-databases)).
+  Five corrections: with `app.UseTenantResolution()`, a signed-in request whose tenant was current during
   authentication and which the access validators refuse is refused on every endpoint, and `OnRejected` runs for it; a
   cancelled `ITenantInvalidator<TKey>` call stops before the next handler, and several handler failures are thrown as
-  an `AggregateException`; SQL Server's default collation ignores case but not accents; and event 1009 is logged under
-  a fourth category, `Tenantry.AspNetCore.OutputCache`.
+  an `AggregateException`; SQL Server's default collation ignores case but not accents; event 1009 is logged under a
+  fourth category, `Tenantry.AspNetCore.OutputCache`; and the example that holds the scope itself throws
+  `TenantNotFoundException` for a missing tenant and checks that the tenant is active, as `RunInScopeAsync` does.
 
 ### Changed
 
-- The `SecureApi` sample reads the tenants a caller may use from its token's `tenant_id` claims, the name
-  `ResolveFromClaim` and the docs use. It read `tenant` claims.
+- An `ITenantActivityValidator<TKey>` registered as scoped or transient makes `ITenantActivity<TKey>` throw
+  `InvalidOperationException` when it is first resolved, which `RunInScopeAsync` and the request middleware do. Such a
+  validator was resolved once, from the root provider, and shared by every request.
 - `UseTenantry()` on an HTTP or gRPC client now refuses a request to the client's service that already carries the
   `tenantry-tenant-id` header while no tenant is current (`InvalidOperationException`), as it did for a header naming
   another tenant while one is current. Before, such a header was sent unchanged. It checks the headers set before it
@@ -118,6 +115,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them: an HTTP or gRPC client with `UseTenantry()` and no address to send the tenant to; and
   `AddDbContextPerTenantDatabase` with an `ITenantConnectionStringProvider<TKey>` registered as scoped or transient. A
   service provider built without a host still reports them on first use.
+- Tenantry.Options' warning `OrdinaryOptionsReadAsTenant` is event 2008, where it was 3001, so Tenantry's events are
+  1000 to 2999 and Tenantry.Pro's are 3000 and above.
+- `TenantInactiveException.TenantId` holds the tenant's id as the application's key type, as
+  `TenantNotFoundException.TenantId` does. It held the id as a string.
 - TNY1001 counts a context whose `DbSet<T>` or `modelBuilder.Entity<T>()` is of a type parameter constrained to a
   tenant-owned type as one with tenant-owned types, so the other types it maps with a `TenantId` are now reported. It
   also reads generated code for its contexts, types and markers, so an `IsSharedAcrossTenants()` in a generated file
@@ -156,9 +157,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   more than one table.
 - Events 1005 and 1012 name a signed-in user without a name claim by its name identifier or `sub` claim, or as
   `(unnamed)`. Before, they logged it as `(anonymous)`, as for a request with no user.
-- A project from the `tenantry-api` template and the `SecureApi` sample start in Development with `dotnet run`, on the
-  port their `curl` examples use: each has a launch profile. Before, they started in Production and stopped at once,
-  as no `Auth:SigningKey` was set.
+- The `SecureApi` sample starts in Development with `dotnet run`, on the port its `curl` examples use, as a project
+  from the `tenantry-api` template does: each has a launch profile. Before, the sample started in Production and
+  stopped at once, as no `Auth:SigningKey` was set.
 
 ## [0.7.0] - 2026-10-05
 
