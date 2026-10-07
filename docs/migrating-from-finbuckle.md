@@ -327,9 +327,9 @@ type is not tenant-owned ([the list](efcore-advanced.md#models-that-cannot-be-is
 
 ## What Tenantry does not have
 
-- Tenantry builds in only the in-memory store, and an application has one store. Finbuckle's configuration,
-  distributed cache, HTTP remote and echo stores have no equivalent, and neither have its methods that add, update and
-  remove tenants. Write an `ITenantStore<TKey>` as in step 3.
+- Tenantry ships no tenant stores (the in-memory store is for development and samples), and an application has one
+  store. Finbuckle's configuration, distributed cache, HTTP remote and echo stores have no equivalent, and neither have
+  its methods that add, update and remove tenants. Write an `ITenantStore<TKey>` as in step 3: two methods.
 - There is no base path, session, static or remote authentication callback resolver. Write an `ITenantResolver`
   ([Custom resolvers](tenant-resolution.md#custom-resolvers)). For a tenant in the path, use a route template with
   `{tenant}` and `ResolveFromRouteValue()`; nothing rewrites `PathBase`.
