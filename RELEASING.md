@@ -15,16 +15,16 @@ Only the maintainer can push `v*` tags.
    the branch:
 
    ```sh
-   scripts/cut-release.sh 0.7
+   scripts/cut-release.sh 0.8
    ```
 
-   It refuses unless `0.7` is `MinVerMinimumMajorMinor`, CI passed on the push of `master`'s head (SonarCloud's quality
-   gate included, which release branches and tags skip; read with `gh`, signed in), `release/0.7` and `v0.7.0` exist
-   neither locally nor on `origin`, `## [Unreleased]` has entries, and no `## [0.7.0]` or `## Release 0.7.0` section
-   exists yet. It creates `release/0.7` from `master`'s head, with one commit of its own, the one to tag:
-   `## [Unreleased]` becomes `## [0.7.0] - YYYY-MM-DD` (today, UTC) below a new, empty `## [Unreleased]`, and each
+   It refuses unless `0.8` is `MinVerMinimumMajorMinor`, CI passed on the push of `master`'s head (SonarCloud's quality
+   gate included, which release branches and tags skip; read with `gh`, signed in), `release/0.8` and `v0.8.0` exist
+   neither locally nor on `origin`, `## [Unreleased]` has entries, and no `## [0.8.0]` or `## Release 0.8.0` section
+   exists yet. It creates `release/0.8` from `master`'s head, with one commit of its own, the one to tag:
+   `## [Unreleased]` becomes `## [0.8.0] - YYYY-MM-DD` (today, UTC) below a new, empty `## [Unreleased]`, and each
    analyzer rule moves from `analyzers/*/AnalyzerReleases.Unshipped.md` to that folder's `AnalyzerReleases.Shipped.md`,
-   under `## Release 0.7.0`. On `master`, it cherry-picks that commit, then raises `MinVerMinimumMajorMinor` to `0.8`
+   under `## Release 0.8.0`. On `master`, it cherry-picks that commit, then raises `MinVerMinimumMajorMinor` to `0.9`
    in a second commit, so `master`'s prereleases are versioned above the branch's releases. It always raises the minor:
    when the next release is a major, edit `MinVerMinimumMajorMinor` in that second commit by hand before pushing. It
    pushes and tags nothing, and prints the commands for the steps below and how to undo it.
@@ -36,7 +36,7 @@ Only the maintainer can push `v*` tags.
 3. Push the branch, and wait for CI to pass on that push: the release requires that run.
 
    ```sh
-   git push origin release/0.7
+   git push origin release/0.8
    ```
 
 4. Push `master`, before the tag, so the release workflow checks the tag against `master` with the cherry-pick on it:
@@ -54,24 +54,24 @@ Only the maintainer can push `v*` tags.
 
    ```sh
    git -c gpg.format=ssh -c user.signingkey=~/.ssh/id_ed25519.pub \
-     tag -s v0.7.0 -m "Tenantry 0.7.0 (beta)" origin/release/0.7
-   git push origin v0.7.0
+     tag -s v0.8.0 -m "Tenantry 0.8.0 (beta)" origin/release/0.8
+   git push origin v0.8.0
    ```
 
 The script makes only a minor's `X.Y.0`. To start with a release candidate, do step 2 by hand:
 
 1. From an up-to-date `master` whose head has passed CI, SonarCloud included (the check `scripts/cut-release.sh` makes):
-   `git switch -c release/0.7`.
-2. In `CHANGELOG.md`, add `## [0.7.0-rc.1] - YYYY-MM-DD` (today, UTC) below `## [Unreleased]`, so the section holds the
+   `git switch -c release/0.8`.
+2. In `CHANGELOG.md`, add `## [0.8.0-rc.1] - YYYY-MM-DD` (today, UTC) below `## [Unreleased]`, so the section holds the
    entries, and leave `## [Unreleased]` empty above it.
-3. Move the analyzer rules to `AnalyzerReleases.Shipped.md` under `## Release 0.7.0`, not `## Release 0.7.0-rc.1`:
+3. Move the analyzer rules to `AnalyzerReleases.Shipped.md` under `## Release 0.8.0`, not `## Release 0.8.0-rc.1`:
    the release-tracking analyzer takes only a numeric version, and fails the build (RS2007) on a prerelease one.
-4. Commit, then `git switch master` and `git cherry-pick -x release/0.7`, and raise `MinVerMinimumMajorMinor` in a
+4. Commit, then `git switch master` and `git cherry-pick -x release/0.8`, and raise `MinVerMinimumMajorMinor` in a
    second commit.
 
-Later candidates and `v0.7.0` follow on the same branch, each from a pull request into it that adds its own
-`CHANGELOG.md` section (`## [0.7.0-rc.2]`, `## [0.7.0]`), as a patch does. A rule added after the first candidate
-joins the `## Release 0.7.0` table, which the analyzer accepts, rather than a second section. Every section added to
+Later candidates and `v0.8.0` follow on the same branch, each from a pull request into it that adds its own
+`CHANGELOG.md` section (`## [0.8.0-rc.2]`, `## [0.8.0]`), as a patch does. A rule added after the first candidate
+joins the `## Release 0.8.0` table, which the analyzer accepts, rather than a second section. Every section added to
 `release/X.Y` is also added to `master`'s `CHANGELOG.md`, placed by version, before the tag is pushed: the release
 workflow refuses a tag whose section is missing from `origin/master`. The first candidate's section reaches `master` as
 the cherry-pick in step 4 above, so push `master` before its tag, as for a new minor.
@@ -177,9 +177,9 @@ cannot be replaced:
    project-file baselines, as `TenantryPackageBaseline` moves to the patch.
 
 If every package was pushed and only the GitHub release is missing, create it by hand from the run's packages, which
-it attested before the push, within the 7 days GitHub keeps them. The agent skills' Monday run picks the release up
-without the event the workflow's last step would have sent. In a checkout of `master` with the tags fetched, using the
-run's id from its URL, give it the files and marks the workflow would have:
+it attested before the push, within the 7 days GitHub keeps them. The agent skills need no event from the workflow's
+last step: a patch needs no change to them, and their Monday run moves them to a new `X.Y.0`. In a checkout of `master`
+with the tags fetched, using the run's id from its URL, give it the files and marks the workflow would have:
 
 ```sh
 tag=v0.7.1
@@ -206,7 +206,7 @@ immutable release's files cannot be added to or replaced once it is published.
 Each push to `master` publishes its packages to NuGet.org as a prerelease, without approval, once that run's Build &
 Test jobs (`build-test.yml`) and Windows build have passed; the .NET 11 lane is not waited for. The `prerelease` job in
 `.github/workflows/ci.yml` pushes the packages, with their symbol packages, that the Build & Test job built and checked.
-A version is `X.Y.0-alpha.0.N`, such as `0.7.0-alpha.0.126`. `X.Y` is `MinVerMinimumMajorMinor`, the minor `master`
+A version is `X.Y.0-alpha.0.N`, such as `0.8.0-alpha.0.126`. `X.Y` is `MinVerMinimumMajorMinor`, the minor `master`
 works towards, and `N` is MinVer's count of the commits since `master`'s nearest release tag, `v0.6.0`. No release tag
 is put on a commit `master` contains (`scripts/release-source.sh` refuses one), so that tag stays the nearest and `N`
 grows with every push: each push publishes a higher version than the one before, and every one sorts below its minor's
@@ -309,6 +309,6 @@ release never fails on it.
   `{"package": "core", "version": "X.Y.Z"}`, and its `update-version` workflow opens a pull request that moves the
   skills to the release; its Monday run does the same if the event does not arrive. In that pull request, add the
   names Tenantry.Pro's release removes (its `eng/removed-names.txt`) to `scripts/removed-names.txt`, fix what the
-  checks report, and merge it. A patch opens such a pull request too; merge it once its checks pass.
+  checks report, and merge it. A patch needs no change to the skills.
 - The site shows a new minor's docs once Tenantry.Pro has released it too. The home page's code sample follows the
   README's: update it on the site if the README's changed.
