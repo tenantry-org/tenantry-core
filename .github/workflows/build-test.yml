@@ -67,6 +67,11 @@ jobs:
         # Locked: fails if a test or sample project's packages.lock.json is out of date
         run: dotnet restore Tenantry.slnx --locked-mode
 
+      - name: Check every published floor is tested
+        # The minimum dependency lane: each src version range's floor must be what some test's lock file resolves.
+        # It runs before SonarCloud begin, so the scanner does not analyse the script's build.
+        run: dotnet run scripts/check-dependency-floors.cs
+
       - name: SonarCloud begin
         if: ${{ inputs.run_sonar }}
         env:
@@ -81,10 +86,6 @@ jobs:
           /d:sonar.coverage.exclusions="samples/**"
           /d:sonar.cpd.exclusions="samples/**"
           /d:sonar.qualitygate.wait=true
-
-      - name: Check every published floor is tested
-        # The minimum dependency lane: each src version range's floor must be what some test's lock file resolves
-        run: dotnet run scripts/check-dependency-floors.cs
 
       - name: Build
         run: dotnet build Tenantry.slnx -c Release --no-restore
@@ -106,17 +107,7 @@ jobs:
         run: dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
 
       - name: Coverage gate (>= 90% line coverage)
-        run: |
-          dotnet reportgenerator \
-            -reports:coverage/coverage.xml \
-            -targetdir:coverage/report \
-            -reporttypes:JsonSummary
-          line=$(jq '.summary.linecoverage' coverage/report/Summary.json)
-          echo "Total line coverage: ${line}%"
-          awk "BEGIN { exit !(${line} >= 90) }" || {
-            echo "::error::Line coverage ${line}% is below the required 90%"
-            exit 1
-          }
+        run: bash scripts/check-coverage.sh 90
 
       - name: Pack
         # Each src project, then the dotnet new templates (templates/), which the solution leaves out, so their pack
@@ -245,21 +236,8 @@ jobs:
         run: dotnet format Tenantry.slnx --verify-no-changes --no-restore
 
       - name: Check for ReSharper warnings
-        # Rider's inspections, with its solution-wide analysis and the settings in .editorconfig. inspectcode builds the
-        # solution first, as nothing above has. Any warning fails the step: fix it, or suppress it with a comment that
-        # says why.
-        run: |
-          dotnet tool restore
-          dotnet jb inspectcode Tenantry.slnx --severity=WARNING --swea --format=Sarif -o=artifacts/inspect.sarif \
-            --verbosity=WARN
-          jq -r '.runs[].results[] | .locations[0].physicalLocation as $at
-            | "::error file=\($at.artifactLocation.uri // ""),line=\($at.region.startLine // 1)::"
-              + "\(.ruleId): \(.message.text)"' artifacts/inspect.sarif
-          count="$(jq '[.runs[].results[]] | length' artifacts/inspect.sarif)"
-          if [ "$count" != "0" ]; then
-            echo "::error::ReSharper reports $count warnings (above): Rider must show none"
-            exit 1
-          fi
+        # Rider's inspections (see the script). inspectcode builds the solution first, as nothing above has.
+        run: bash scripts/check-inspections.sh Tenantry.slnx
 
       - name: Check the API reference
         # docs/api is generated from the XML documentation comments; a change to the public API or its comments

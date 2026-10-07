@@ -16,10 +16,12 @@ eng/common/shared-files.txt
 eng/package-consumer/PackageLoadCheck.cs
 samples/Directory.Build.props
 scripts/api-docs.cs
+scripts/check-coverage.sh
 scripts/check-dependabot.cs
 scripts/check-dependency-floors.cs
 scripts/check-doc-links.cs
 scripts/check-doc-snippets.sh
+scripts/check-inspections.sh
 scripts/check-package-consumer.sh
 scripts/check-package-ranges.cs
 scripts/check-removed-names.cs
