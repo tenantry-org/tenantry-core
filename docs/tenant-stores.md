@@ -108,10 +108,17 @@ tenant.ValidateTenantActivity(t => t is Tenant { IsActive: true });
 
 Check for the active status, as here, rather than the suspended one, so a descriptor of another type is refused. For a
 check that needs services, implement `ITenantActivityValidator<TKey>` and add it with
-`tenant.ValidateTenantActivity<TValidator>()`, which registers it as a singleton. It is kept for the application's
-lifetime, so it cannot take a scoped service such as a `DbContext`: create a scope inside it instead. A validator
-registered as scoped or transient makes `ITenantActivity<TKey>` throw when it is first resolved. Every check must allow
-the tenant. Tenantry then refuses an inactive tenant:
+`ValidateTenantActivity<TValidator>()`, which registers it as a singleton:
+
+```csharp
+tenant.UseStore<EfCoreTenantStore>()
+    .ValidateTenantActivity<SubscriptionActivityValidator>()
+    .CacheTenants();
+```
+
+The validator is kept for the application's lifetime, so it cannot take a scoped service such as a `DbContext`: create
+a scope inside it instead. A validator registered as scoped or transient makes `ITenantActivity<TKey>` throw when it is
+first resolved. Every check must allow the tenant. Tenantry then refuses an inactive tenant:
 
 - An HTTP request gets `403 Forbidden` where a tenant is required, and runs without a tenant elsewhere, even with
   `app.UseTenantResolution()`, which does not make an inactive tenant current. `OnRejected` is told the reason is

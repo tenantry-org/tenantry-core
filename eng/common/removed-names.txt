@@ -32,3 +32,5 @@ TenantIds.IsUnset => TenantIds.IsReserved
 ITenantStoreCache => ITenantInvalidator
 TenantConnectionStringProvider => UseConnectionStrings(options => …); resolve ITenantConnectionStringProvider, and wrap it with DecorateConnectionStrings
 UseNoTenant => ITenantContextSetter.MakeNoTenantCurrent
+AddHttpPropagation => UseTenantry() on each client, which registers what it needs
+TenantryHttpTenantBuilderExtensions => TenantryHttpClientBuilderExtensions.UseTenantry

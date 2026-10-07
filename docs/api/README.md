@@ -162,7 +162,6 @@ For code that extends the package, such as another package that builds on it. An
 | Type | Kind | Summary |
 |------|------|---------|
 | [`TenantryHttpClientBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryhttpclientbuilderextensions.md) | class | Sends the current tenant with an HTTP or gRPC client's requests. |
-| [`TenantryHttpTenantBuilderExtensions`](microsoft-extensions-dependencyinjection-tenantryhttptenantbuilderextensions.md) | class | Sends the current tenant to the services an application calls over HTTP or gRPC. |
 
 ## Tenantry.Options
 

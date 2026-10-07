@@ -19,9 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `InvalidOperationException` when it is first resolved, which `RunInScopeAsync` and the request middleware do. Such a
   validator was resolved once, from the root provider, and shared by every request. Register it as a singleton with
   `tenant.ValidateTenantActivity<TValidator>()`, and have it create a scope for any scoped service it needs.
-- An HTTP or gRPC client with `UseTenantry()` in an application without `AddHttpPropagation()` or with no address to
-  send the tenant to, and an `ITenantConnectionStringProvider<TKey>` registered as scoped or transient for
-  `AddDbContextPerTenantDatabase`, now stop the host as it starts. Fix the registration the error names.
+- An HTTP or gRPC client with `UseTenantry()` and no address to send the tenant to, and an
+  `ITenantConnectionStringProvider<TKey>` registered as scoped or transient for `AddDbContextPerTenantDatabase`, now
+  stop the host as it starts. Fix the registration the error names.
+- `tenant.AddHttpPropagation()` is removed: `UseTenantry()` on each client is the one call. Delete
+  `.AddHttpPropagation()` from `AddTenantry`.
+- `ResolveFromClaim` finds no tenant for a user with more than one claim of its type, and the next resolver runs. It
+  took the first. For tokens that list the tenants a caller may use, resolve the tenant another way, from a header or
+  the host, and check it with `ValidateTenantAccessByClaim`.
 - Code that set the `tenantry-tenant-id` header itself, on a client with `UseTenantry()` and no tenant current, now
   gets `InvalidOperationException`. Make the tenant current with `MakeCurrent` or `RunInScopeAsync` instead.
 - Tenantry.Options' warning `OrdinaryOptionsReadAsTenant` is now event 2008, where it was 3001, so Tenantry's events
@@ -68,7 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TenantNotResolvedException` when none is current, for code that must not run without one. Use it where code wrote
   `CurrentTenant!`, which throws a `NullReferenceException` without a tenant.
 - `tenant.ValidateTenantActivity<TValidator>()` (Tenantry.Core) adds an `ITenantActivityValidator<TKey>` of your own
-  as a singleton, for a suspension check that needs services. See
+  as a singleton, for a suspension check that needs services. It is a member of `ITenantBuilder<TKey>`, as
+  `UseStore<TStore>()` is, so calls chain after it. See
   [Suspended and inactive tenants](docs/tenant-stores.md#suspended-and-inactive-tenants).
 - Warning 2007, `StringTenantIdCollation`, in `Tenantry.EfCore`: with `string` tenant ids on SQL Server or MySQL, a
   model with tenant-owned tables where neither the `TenantId` column, the table nor the model sets a collation is
@@ -98,15 +104,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ResolveFromClaim` and the docs use. It read `tenant` claims.
 - `UseTenantry()` on an HTTP or gRPC client now refuses a request to the client's service that already carries the
   `tenantry-tenant-id` header while no tenant is current (`InvalidOperationException`), as it did for a header naming
-  another tenant while one is current. Before, such a header was sent unchanged. An untrusted client could set it on
-  a request to an endpoint that allows a missing tenant, and header propagation would forward it to a service that
-  trusts this one, which then acted for the tenant it named. To call as a tenant, make it current with `MakeCurrent`
-  or `RunInScopeAsync` rather than setting the header.
+  another tenant while one is current. Before, such a header was sent unchanged. It checks the headers set before it
+  runs, so call `UseTenantry()` after `AddHeaderPropagation()` and after any handler that sets headers: a handler
+  added after it sets headers Tenantry does not see. To call as a tenant, make it current with `MakeCurrent` or
+  `RunInScopeAsync` rather than setting the header.
   See [Which requests carry it](docs/http-propagation.md#which-requests-carry-it).
+- `UseTenantry()` on an HTTP or gRPC client registers what sending the tenant needs, and `tenant.AddHttpPropagation()`
+  is removed.
+- `ResolveFromClaim` resolves no tenant when the user has more than one claim of its type, so the next resolver runs.
+  It took the first, so a token that listed several tenants, as `ValidateTenantAccessByClaim` reads them, resolved
+  whichever came first.
 - Two registration errors now stop the host as it starts, rather than failing the first request or job that meets
-  them: an HTTP or gRPC client with `UseTenantry()` in an application without `AddHttpPropagation()`, or with no
-  address to send the tenant to; and `AddDbContextPerTenantDatabase` with an `ITenantConnectionStringProvider<TKey>`
-  registered as scoped or transient. A service provider built without a host still reports them on first use.
+  them: an HTTP or gRPC client with `UseTenantry()` and no address to send the tenant to; and
+  `AddDbContextPerTenantDatabase` with an `ITenantConnectionStringProvider<TKey>` registered as scoped or transient. A
+  service provider built without a host still reports them on first use.
 - TNY1001 counts a context whose `DbSet<T>` or `modelBuilder.Entity<T>()` is of a type parameter constrained to a
   tenant-owned type as one with tenant-owned types, so the other types it maps with a `TenantId` are now reported. It
   also reads generated code for its contexts, types and markers, so an `IsSharedAcrossTenants()` in a generated file

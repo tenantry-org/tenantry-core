@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -71,23 +70,4 @@ internal sealed class DelegateTenantActivityValidator<TKey>(
 {
     public ValueTask<bool> IsActiveAsync(ITenantDescriptor<TKey> tenant, CancellationToken cancellationToken) =>
         isActive(tenant, cancellationToken);
-}
-
-/// <summary>Registers an activity validator type for the builder's key type, as a singleton.</summary>
-internal sealed class TenantActivityValidatorRegistration<
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator> : ITenantRegistration
-    where TValidator : class
-{
-    public void Apply<TKey>(ITenantBuilder<TKey> tenant)
-        where TKey : IEquatable<TKey>, IParsable<TKey>
-    {
-        if (!typeof(ITenantActivityValidator<TKey>).IsAssignableFrom(typeof(TValidator)))
-        {
-            throw new InvalidOperationException(
-                $"{typeof(TValidator).Name} does not implement ITenantActivityValidator<{typeof(TKey).Name}>, the " +
-                $"activity validator of this application's tenant key type '{typeof(TKey).Name}'.");
-        }
-
-        tenant.Services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(ITenantActivityValidator<TKey>), typeof(TValidator)));
-    }
 }

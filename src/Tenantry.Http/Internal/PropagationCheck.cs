@@ -1,11 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 
 namespace Tenantry.Http.Internal;
 
 /// <summary>
-/// Checks, as the host starts, that a client marked with <c>UseTenantry()</c> can be created: that
-/// <c>AddHttpPropagation()</c> was called, and that the client has an address to limit the tenant to. The client would
-/// otherwise fail only when it is first created.
+/// Checks, as the host starts, that a client marked with <c>UseTenantry()</c> has an address to limit the tenant to.
+/// The client would otherwise fail only when it is first created.
 /// </summary>
 /// <remarks>
 /// It runs through <c>ValidateOnStart</c>, one named check per client, which every .NET host runs before it starts.
@@ -15,9 +16,9 @@ internal sealed class PropagationCheck
 {
     public static void Register(IServiceCollection services, string name, Uri? serviceAddress) =>
         services.AddOptions<PropagationCheck>(name)
-            .Validate<IServiceProvider>((_, provider) =>
+            .Validate<IOptionsMonitor<HttpClientFactoryOptions>>((_, clients) =>
             {
-                using var handler = TenantPropagationHandler.Create(provider, name, serviceAddress);
+                PropagationTarget.Of(name, clients.Get(name), serviceAddress);
                 return true;
             })
             .ValidateOnStart();

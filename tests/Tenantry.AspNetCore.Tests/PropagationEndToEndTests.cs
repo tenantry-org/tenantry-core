@@ -66,8 +66,7 @@ public sealed class PropagationEndToEndTests
         builder.WebHost.UseTestServer();
         builder.Services.AddTenantry<Guid>(tenant => tenant
             .ResolveFromPropagationHeader(_ => true)   // the test's callers are all its own services
-            .UseStore<SlugStore>()
-            .AddHttpPropagation());
+            .UseStore<SlugStore>());
         builder.Services.AddHttpClient("next", client => client.BaseAddress = new Uri("https://next.internal")).UseTenantry();
 
         await using var app = builder.Build();
@@ -97,7 +96,7 @@ public sealed class PropagationEndToEndTests
     private static ServiceProvider BuildCaller(WebApplication service)
     {
         ServiceCollection services = new();
-        services.AddTenantry<Guid>(tenant => tenant.UseInMemoryStore([SlugStore.Acme]).AddHttpPropagation());
+        services.AddTenantry<Guid>(tenant => tenant.UseInMemoryStore([SlugStore.Acme]));
         services.AddHttpClient("service", client => client.BaseAddress = new Uri("http://localhost/"))
             .UseTenantry()
             .ConfigurePrimaryHttpMessageHandler(() => service.GetTestServer().CreateHandler());

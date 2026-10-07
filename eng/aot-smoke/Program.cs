@@ -12,7 +12,6 @@ ServiceCollection services = new();
 services.AddSingleton<HybridCache, DictionaryCache>();
 services.AddTenantry<string>(tenant => tenant
     .UseInMemoryStore([acme])
-    .AddHttpPropagation()
     .IsolateCaches()
     .ConfigurePerTenant(perTenant => perTenant.Configure<PlanOptions>((options, tenant) => options.Name = $"{tenant.Name}'s plan")));
 services.AddHttpClient("service", client => client.BaseAddress = new Uri("http://service.internal"))

@@ -102,7 +102,8 @@ tenant.ResolveFromClaim("org_id");
 ```
 
 Reads the claim from `HttpContext.User`, so `UseTenantry()` must come after `UseAuthentication()`. The caller
-cannot name a tenant its token does not carry.
+cannot name a tenant its token does not carry. A user with more than one claim of the type resolves no tenant here, and
+the next resolver runs.
 
 ### Query string
 
@@ -128,10 +129,8 @@ tenant.ValidateTenantAccessByClaim("tenant_id");  // the caller must be entitled
 Put the most trusted source first. If none match, the request proceeds without a tenant unless one is required
 ([Access control](access-control.md)).
 
-- `ResolveFromClaim` reads the first matching claim, so use it only for tokens that carry exactly one tenant. For
-  tokens that list several, resolve from the header and validate against the claims.
-- A header fallback lets any caller without the claim, anonymous ones too, name a tenant. Pair it with an access
-  validator such as `ValidateTenantAccessByClaim`.
+- A header fallback lets any caller the claim does not resolve, anonymous ones too, name a tenant. Pair it with an
+  access validator such as `ValidateTenantAccessByClaim`.
 
 At least one resolver must be registered, or `app.UseTenantry()` throws at startup.
 

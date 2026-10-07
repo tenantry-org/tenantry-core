@@ -15,13 +15,12 @@ dotnet add package Tenantry.Http
 
 ## Sending the tenant
 
-Add `AddHttpPropagation()` in `AddTenantry`, then `UseTenantry()` on each client of your own services:
+Add `UseTenantry()` to each client of your own services:
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromSubdomain(o => o.BaseDomains.Add("example.com"))
-    .UseStore<EfCoreTenantStore>()
-    .AddHttpPropagation());
+    .UseStore<EfCoreTenantStore>());
 
 builder.Services.AddHttpClient<BillingClient>(c => c.BaseAddress = new Uri("https://billing.internal"))
     .UseTenantry();
@@ -46,9 +45,8 @@ builder.Services.AddGrpcClient<Inventory.InventoryClient>(o => o.Address = inven
     .UseTenantry(inventory);
 ```
 
-A client with neither, or an application without `AddHttpPropagation()`, stops the host as it starts
-(`InvalidOperationException`), saying what to add. In a service provider built without a host, the client fails when it
-is created.
+A client with neither stops the host as it starts (`InvalidOperationException`), saying what to add. In a service
+provider built without a host, the client fails when it is created.
 
 ### Which requests carry it
 
@@ -59,6 +57,8 @@ is created.
   `InvalidOperationException`, which catches a header forwarded from the incoming request or set in
   `DefaultRequestHeaders`. To call as another tenant, make it current with `ITenantContextSetter.MakeCurrent`. With
   no current tenant, a request that already carries the header throws too.
+- Call `UseTenantry()` after `AddHeaderPropagation()` and after any handler that sets headers: a handler added after it
+  sets headers Tenantry does not see.
 - Only requests to the scheme, host and port of the address passed to `UseTenantry`, or else of the registration's
   `BaseAddress`, get the header. A request with an absolute address elsewhere goes without it.
 - `HttpClient` follows a redirect inside its primary handler with the request's headers, so a service that redirects

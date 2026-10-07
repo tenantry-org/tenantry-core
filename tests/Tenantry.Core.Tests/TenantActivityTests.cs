@@ -69,12 +69,11 @@ public sealed class TenantActivityTests
     [Fact]
     public async Task AValidatorType_IsASingleton_ConsultedWithTheOthers()
     {
-        await using var services = Build(tenant =>
-        {
-            tenant.UseInMemoryStore([Acme, Suspended]).ValidateTenantActivity(_ => true);
-            tenant.ValidateTenantActivity<NotSuspended>();
-            tenant.ValidateTenantActivity<NotSuspended>();
-        });
+        await using var services = Build(tenant => tenant
+            .UseInMemoryStore([Acme, Suspended])
+            .ValidateTenantActivity(_ => true)
+            .ValidateTenantActivity<NotSuspended>()
+            .ValidateTenantActivity<NotSuspended>());
         var activity = services.GetRequiredService<ITenantActivity<string>>();
 
         (await activity.IsActiveAsync(Acme, TestContext.Current.CancellationToken)).Should().BeTrue();
@@ -96,16 +95,6 @@ public sealed class TenantActivityTests
         provider.Invoking(p => p.GetRequiredService<ITenantActivity<string>>())
             .Should().Throw<InvalidOperationException>()
             .WithMessage($"*ITenantActivityValidator<String> NotSuspended is registered as {lifetime.ToString().ToLowerInvariant()}*ValidateTenantActivity<TValidator>()*");
-    }
-
-    [Fact]
-    public void AValidatorTypeOfAnotherKeyType_IsRefused()
-    {
-        ServiceCollection services = new();
-
-        FluentActions.Invoking(() => services.AddTenantry<Guid>(tenant => tenant.ValidateTenantActivity<NotSuspended>()))
-            .Should().Throw<InvalidOperationException>()
-            .WithMessage("NotSuspended does not implement ITenantActivityValidator<Guid>*");
     }
 
     private sealed class NotSuspended : ITenantActivityValidator<string>

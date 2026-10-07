@@ -11,7 +11,6 @@ services.AddTenantry<string>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .ValidateTenantAccessByClaim("tenant_id")
     .UseInMemoryStore([new TenantDescriptor<string> { TenantId = "acme", Name = "Acme" }])
-    .AddHttpPropagation()
     .IsolateCaches()
     .ConfigureEfCoreIsolation(options => options.OnMissingTenant = MissingTenantBehavior.Reject)
     .ConfigurePerTenant(perTenant => perTenant.Configure<ConsumerOptions>((options, t) => options.Name = t.Name)));

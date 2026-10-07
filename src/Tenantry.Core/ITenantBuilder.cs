@@ -44,6 +44,29 @@ public interface ITenantBuilder<TKey> : ITenantBuilder
     ITenantBuilder<TKey> UseStore<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>()
         where TStore : class, ITenantStore<TKey>;
+
+    /// <summary>
+    /// Adds an activity validator of type <typeparamref name="TValidator"/>, for a check that needs services. A tenant
+    /// must pass every validator. Adding the same type again does nothing.
+    /// </summary>
+    /// <typeparam name="TValidator">The validator type, created through dependency injection.</typeparam>
+    /// <remarks>
+    /// The validator is a singleton, as <see cref="ITenantActivity{TKey}"/> is, so it must not depend on scoped
+    /// services: read the tenant's status from the descriptor the store returns, or create a scope inside the
+    /// validator. <see cref="ITenantActivity{TKey}"/> throws <see cref="InvalidOperationException"/> when first
+    /// resolved if an <see cref="ITenantActivityValidator{TKey}"/> is registered as scoped or transient.
+    /// </remarks>
+    /// <returns>The same builder for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
+    ///     .UseStore&lt;AppTenantStore&gt;()
+    ///     .ValidateTenantActivity&lt;SubscriptionActivityValidator&gt;());
+    /// </code>
+    /// </example>
+    ITenantBuilder<TKey> ValidateTenantActivity<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>()
+        where TValidator : class, ITenantActivityValidator<TKey>;
 }
 
 /// <summary>

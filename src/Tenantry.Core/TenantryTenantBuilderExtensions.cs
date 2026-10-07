@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Tenantry;
 using Tenantry.Internal;
@@ -104,47 +103,6 @@ public static class TenantryTenantBuilderExtensions
         ArgumentNullException.ThrowIfNull(isActive);
 
         builder.Services.AddSingleton<ITenantActivityValidator<TKey>>(new DelegateTenantActivityValidator<TKey>(isActive));
-        return builder;
-    }
-
-    /// <summary>
-    /// Adds an activity validator of type <typeparamref name="TValidator"/>, for a check that needs services. A tenant
-    /// must pass every validator.
-    /// </summary>
-    /// <remarks>
-    /// The validator is a singleton, as <see cref="ITenantActivity{TKey}"/> is, so it must not depend on scoped
-    /// services: read the tenant's status from the descriptor the store returns, or create a scope inside the
-    /// validator. <see cref="ITenantActivity{TKey}"/> throws <see cref="InvalidOperationException"/> when first
-    /// resolved if an <see cref="ITenantActivityValidator{TKey}"/> is registered as scoped or transient.
-    /// </remarks>
-    /// <typeparam name="TValidator">
-    /// The validator type, which implements <see cref="ITenantActivityValidator{TKey}"/> for the application's tenant
-    /// key type.
-    /// </typeparam>
-    /// <param name="builder">The tenant builder.</param>
-    /// <returns>
-    /// The same <paramref name="builder"/>, without its key type: call methods that need it first, or call it as a
-    /// statement of its own.
-    /// </returns>
-    /// <exception cref="InvalidOperationException">
-    /// <typeparamref name="TValidator"/> does not implement <see cref="ITenantActivityValidator{TKey}"/> for the
-    /// builder's key type.
-    /// </exception>
-    /// <example>
-    /// <code>
-    /// builder.Services.AddTenantry&lt;Guid&gt;(tenant =&gt; tenant
-    ///     .UseStore&lt;AppTenantStore&gt;()
-    ///     .ValidateTenantActivity&lt;SubscriptionActivityValidator&gt;());
-    /// </code>
-    /// </example>
-    public static ITenantBuilder ValidateTenantActivity<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>(
-        this ITenantBuilder builder)
-        where TValidator : class
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.Add(new TenantActivityValidatorRegistration<TValidator>());
         return builder;
     }
 

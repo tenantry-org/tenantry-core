@@ -33,3 +33,25 @@ Exceptions:
 - `InvalidOperationException`: A tenant store is already registered.
 
 The store is scoped and read through [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), which resolves it from a new scope for each lookup, so it may depend on scoped services such as a `DbContext`.
+
+### `ValidateTenantActivity<TValidator>()`
+
+Adds an activity validator of type `TValidator`, for a check that needs services. A tenant must pass every validator. Adding the same type again does nothing.
+
+```csharp
+ITenantBuilder<TKey> ValidateTenantActivity<TValidator>() where TValidator : class, ITenantActivityValidator<TKey>
+```
+
+Type parameters:
+
+- `TValidator`: The validator type, created through dependency injection.
+
+Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same builder for chaining.
+
+The validator is a singleton, as [`ITenantActivity<TKey>`](tenantry-itenantactivity.md) is, so it must not depend on scoped services: read the tenant's status from the descriptor the store returns, or create a scope inside the validator. [`ITenantActivity<TKey>`](tenantry-itenantactivity.md) throws `InvalidOperationException` when first resolved if an [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) is registered as scoped or transient.
+
+```csharp
+builder.Services.AddTenantry<Guid>(tenant => tenant
+    .UseStore<AppTenantStore>()
+    .ValidateTenantActivity<SubscriptionActivityValidator>());
+```

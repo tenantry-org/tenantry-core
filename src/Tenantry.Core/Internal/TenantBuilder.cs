@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Tenantry.Internal;
 
@@ -24,6 +25,14 @@ internal sealed class TenantBuilder<TKey>(IServiceCollection services) : ITenant
     {
         TenantStores.ThrowIfRegistered<TKey>(Services);
         Services.AddScoped<ITenantStore<TKey>, TStore>();
+        return this;
+    }
+
+    public ITenantBuilder<TKey> ValidateTenantActivity<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>()
+        where TValidator : class, ITenantActivityValidator<TKey>
+    {
+        Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantActivityValidator<TKey>, TValidator>());
         return this;
     }
 }

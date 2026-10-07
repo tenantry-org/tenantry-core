@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry.AspNetCore` · Package: `Tenantry.AspNetCore` · [API reference](README.md)
 
-Resolves the tenant from a claim on the current request principal.
+Resolves the tenant from a claim on the current request principal. A principal with more than one claim of the type resolves no tenant, so the next resolver runs.
 
 ```csharp
 public sealed class ClaimTenantResolver : ITenantResolver
@@ -14,7 +14,7 @@ Implements [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md).
 
 ### `ClaimTenantResolver(string)`
 
-Resolves the tenant from a claim on the current request principal.
+Resolves the tenant from a claim on the current request principal. A principal with more than one claim of the type resolves no tenant, so the next resolver runs.
 
 ```csharp
 public ClaimTenantResolver(string claimType = "tenant_id")

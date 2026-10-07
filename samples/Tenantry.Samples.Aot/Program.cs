@@ -28,7 +28,6 @@ builder.Services.AddTenantry<string>(tenant => tenant
     ])
     .UseConnectionStrings(options => options.GetConnectionString = t => $"Database=orders_{t.TenantId}")
     .ConfigureResolution(options => options.TenantNotFoundStatusCode = StatusCodes.Status403Forbidden) // hide which tenants exist
-    .AddHttpPropagation()                                                // clients with UseTenantry() send the tenant
     .IsolateOutputCache()                                                // cached responses per tenant
     .UseResolver<TenantCookieResolver>());                               // a custom resolver, created by DI
 

@@ -148,6 +148,11 @@ public sealed class CookieTenantResolver : ITenantResolver
         ValueTask.FromResult(context.Request.Cookies["tenant"]);
 }
 
+public sealed class SubscriptionActivityValidator : ITenantActivityValidator<string>
+{
+    public ValueTask<bool> IsActiveAsync(ITenantDescriptor<string> tenant, CancellationToken ct) => ValueTask.FromResult(true);
+}
+
 public sealed class MembershipValidator : ITenantAccessValidator<Guid>
 {
     public ValueTask<bool> ValidateAsync(Microsoft.AspNetCore.Http.HttpContext context, ITenantDescriptor<Guid> tenant, CancellationToken ct) =>

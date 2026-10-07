@@ -81,6 +81,24 @@ public sealed class ClaimTenantResolverTests
     }
 
     [Fact]
+    public async Task TwoClaimsOfTheType_ReturnNull_AndOneAmongOtherClaimsIsReturned()
+    {
+        // A token that lists the tenants a caller may use names none of them as the request's tenant.
+        ClaimTenantResolver resolver = new();
+        DefaultHttpContext several = new()
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("tenant_id", "acme"), new Claim("tenant_id", "globex")], "test")),
+        };
+        DefaultHttpContext one = new()
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("tenant_id", "acme"), new Claim("role", "admin")], "test")),
+        };
+
+        (await resolver.ResolveAsync(several, TestContext.Current.CancellationToken)).Should().BeNull();
+        (await resolver.ResolveAsync(one, TestContext.Current.CancellationToken)).Should().Be("acme");
+    }
+
+    [Fact]
     public async Task CustomClaimType_IsUsed()
     {
         ClaimTenantResolver resolver = new("org_id");

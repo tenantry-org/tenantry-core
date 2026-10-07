@@ -97,6 +97,8 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
+A principal with more than one claim of the type resolves no tenant, so the next resolver runs.
+
 ### `ResolveFromHeader<TKey>(ITenantBuilder<TKey>, string)`
 
 Resolves the tenant from the specified HTTP request header.

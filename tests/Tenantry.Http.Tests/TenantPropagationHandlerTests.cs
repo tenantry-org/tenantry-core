@@ -169,7 +169,7 @@ public sealed class TenantPropagationHandlerTests
     public async Task AClientWithoutABaseAddress_StopsTheHost()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
+        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]));
         builder.Services.AddHttpClient("billing").UseTenantry();
         using var host = builder.Build();
 
@@ -179,22 +179,10 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
-    public async Task AClientThatUsesTenantry_WithoutAddHttpPropagation_StopsTheHost()
-    {
-        var builder = Host.CreateApplicationBuilder();
-        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]));
-        builder.Services.AddHttpClient("billing", c => c.BaseAddress = Billing).UseTenantry();
-        using var host = builder.Build();
-
-        await host.Awaiting(h => h.StartAsync(TestContext.Current.CancellationToken))
-            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*tenant.AddHttpPropagation()*");
-    }
-
-    [Fact]
     public async Task TheHostStarts_WithClientsThatCanSendTheTenant_WhereverTheirAddressIsSet()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
+        builder.Services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]));
         builder.Services.AddHttpClient("billing").UseTenantry().ConfigureHttpClient(c => c.BaseAddress = Billing);
         builder.Services.AddHttpClient("inventory").UseTenantry(new Uri("https://inventory.internal"));
         using var host = builder.Build();
@@ -265,7 +253,7 @@ public sealed class TenantPropagationHandlerTests
     public void UseTenantry_AddsNothingToTheClientsHttpClientActions_WhichGrpcClientsRefuse()
     {
         ServiceCollection services = new();
-        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]));
         services.AddHttpClient("inventory").UseTenantry(new Uri("https://inventory.internal"));
         using var provider = services.BuildServiceProvider();
 
@@ -282,29 +270,62 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
-    public async Task AClientThatUsesTenantry_WithoutAddHttpPropagation_FailsWhenItIsCreated_WithoutAHost()
+    public async Task AClientThatUsesTenantry_WithoutAddTenantry_FailsWhenItIsCreated()
     {
         ServiceCollection services = new();
-        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([]));
-        services.AddHttpClient("billing").UseTenantry();
+        services.AddHttpClient("billing", c => c.BaseAddress = Billing).UseTenantry();
         await using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<IHttpClientFactory>().Invoking(f => f.CreateClient("billing"))
-            .Should().Throw<InvalidOperationException>().WithMessage("*tenant.AddHttpPropagation()*");
+            .Should().Throw<InvalidOperationException>().WithMessage("*Tenantry is not registered*AddTenantry<TKey>*");
+    }
+
+    [Fact]
+    public async Task AHeaderSetByAHandlerAddedAfterUseTenantry_IsNotChecked()
+    {
+        // Handlers run in the order they are added, so Tenantry's has run when this one sets the header.
+        var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing, handlerAfter: () => new SetsTenantHeader());
+        await using var _ = provider;
+
+        await Client(provider).GetAsync("/invoices", TestContext.Current.CancellationToken);
+
+        recorder.TenantHeaders.Should().Equal("globex");
+    }
+
+    [Fact]
+    public async Task AHeaderSetByAHandlerAddedBeforeUseTenantry_IsRefused_WhenNoTenantIsCurrent()
+    {
+        var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing, handlerBefore: () => new SetsTenantHeader());
+        await using var _ = provider;
+
+        await FluentActions.Awaiting(() => Client(provider).GetAsync("/invoices", TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*'globex'*no tenant is current*");
+
+        recorder.TenantHeaders.Should().BeEmpty();
     }
 
     private static (ServiceProvider Provider, Recorder Recorder) Build<TKey>(
         Action<HttpClient>? configure = null,
         Action<HttpClient>? configureAfter = null,
-        Uri? serviceAddress = null)
+        Uri? serviceAddress = null,
+        Func<DelegatingHandler>? handlerBefore = null,
+        Func<DelegatingHandler>? handlerAfter = null)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         Recorder recorder = new();
         ServiceCollection services = new();
-        services.AddTenantry<TKey>(tenant => tenant.UseInMemoryStore([]).AddHttpPropagation());
-        var client = services.AddHttpClient("billing", c => configure?.Invoke(c))
-            .UseTenantry(serviceAddress)
-            .ConfigurePrimaryHttpMessageHandler(() => recorder);
+        services.AddTenantry<TKey>(tenant => tenant.UseInMemoryStore([]));
+        var client = services.AddHttpClient("billing", c => configure?.Invoke(c));
+
+        if (handlerBefore is not null)
+            client.AddHttpMessageHandler(handlerBefore);
+
+        client.UseTenantry(serviceAddress);
+
+        if (handlerAfter is not null)
+            client.AddHttpMessageHandler(handlerAfter);
+
+        client.ConfigurePrimaryHttpMessageHandler(() => recorder);
 
         if (configureAfter is not null)
             client.ConfigureHttpClient(configureAfter);
@@ -319,6 +340,16 @@ public sealed class TenantPropagationHandlerTests
         where TKey : IEquatable<TKey>, IParsable<TKey> =>
         provider.GetRequiredService<ITenantContextSetter<TKey>>()
             .MakeCurrent(new TenantDescriptor<TKey> { TenantId = tenantId, Name = "Tenant" });
+
+    // Stands in for header propagation: sets the header an incoming request carried.
+    private sealed class SetsTenantHeader : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            request.Headers.Add(TenantPropagation.HeaderName, "globex");
+            return base.SendAsync(request, cancellationToken);
+        }
+    }
 
     // The primary handler: answers 200 and records the header each request arrived with.
     private sealed class Recorder : HttpMessageHandler

@@ -235,36 +235,6 @@ Exceptions:
 
 The store is scoped and read through [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), which resolves it from a new scope for each lookup, so the factory may use scoped services such as a `DbContext`.
 
-### `ValidateTenantActivity<TValidator>(ITenantBuilder)`
-
-Adds an activity validator of type `TValidator`, for a check that needs services. A tenant must pass every validator.
-
-```csharp
-public static ITenantBuilder ValidateTenantActivity<TValidator>(this ITenantBuilder builder) where TValidator : class
-```
-
-Type parameters:
-
-- `TValidator`: The validator type, which implements [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) for the application's tenant key type.
-
-Parameters:
-
-- `builder` [`ITenantBuilder`](tenantry-itenantbuilder.md): The tenant builder.
-
-Returns: [`ITenantBuilder`](tenantry-itenantbuilder.md): The same `builder`, without its key type: call methods that need it first, or call it as a statement of its own.
-
-Exceptions:
-
-- `InvalidOperationException`: `TValidator` does not implement [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) for the builder's key type.
-
-The validator is a singleton, as [`ITenantActivity<TKey>`](tenantry-itenantactivity.md) is, so it must not depend on scoped services: read the tenant's status from the descriptor the store returns, or create a scope inside the validator. [`ITenantActivity<TKey>`](tenantry-itenantactivity.md) throws `InvalidOperationException` when first resolved if an [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) is registered as scoped or transient.
-
-```csharp
-builder.Services.AddTenantry<Guid>(tenant => tenant
-    .UseStore<AppTenantStore>()
-    .ValidateTenantActivity<SubscriptionActivityValidator>());
-```
-
 ### `ValidateTenantActivity<TKey>(ITenantBuilder<TKey>, Func<ITenantDescriptor<TKey>, bool>)`
 
 Stops work for tenants that `isActive` refuses, such as suspended ones: requests (with Tenantry.AspNetCore), `RunInScopeAsync`, and Tenantry.Pro's background work, jobs and messages.

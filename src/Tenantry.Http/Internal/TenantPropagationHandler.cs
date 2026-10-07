@@ -14,13 +14,11 @@ internal sealed class TenantPropagationHandler(ITenantHeaderSource source, Propa
 {
     /// <summary>The handler of the client <paramref name="name"/>.</summary>
     /// <exception cref="InvalidOperationException">
-    /// <c>AddHttpPropagation()</c> was not called, or the client has no address to send the tenant to.
+    /// Tenantry is not registered, or the client has no address to send the tenant to.
     /// </exception>
     public static TenantPropagationHandler Create(IServiceProvider provider, string name, Uri? serviceAddress) =>
         new(
-            provider.GetService<ITenantHeaderSource>() ?? throw new InvalidOperationException(
-                $"The HTTP client '{name}' calls UseTenantry(), but Tenantry is not set up to send tenants: add " +
-                "tenant.AddHttpPropagation() in AddTenantry."),
+            provider.GetRequiredService<ITenantHeaderSource>(),
             PropagationTarget.Of(name, provider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get(name), serviceAddress));
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
