@@ -23,6 +23,9 @@ app.UseTenantry();
 - It fails closed: with no tenant, queries return nothing and tenant-owned writes are refused. A write to another
   tenant's row is rejected, and `TenantId` is checked in every `UPDATE` and `DELETE`, so a forged key matches no row.
 - A database per tenant, with per-tenant connection strings and `DbContext` pooling across tenant databases.
+- Build warnings for an entity with a `TenantId` that is not tenant-owned, a context registered without
+  `UseTenantry()`, `IgnoreQueryFilters()` on a tenant-owned entity, and a tenant taken from the request with no access
+  check.
 
 ## Which packages
 
@@ -30,8 +33,12 @@ app.UseTenantry();
 - `Tenantry.Core` and `Tenantry.EfCore` for a console app or worker.
 - `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` to send the tenant to other services, and keep
   `HybridCache` entries and options per tenant.
+- `Tenantry.Templates` for `dotnet new tenantry-api` and `dotnet new tenantry-worker`.
 
 Tenantry is in beta until 1.0: a 0.x minor release can change the API, and the changelog says how to update.
+
+Moving from Finbuckle.MultiTenant: [how the two compare](https://tenantry.dev/compare) and
+[the migration guide](https://tenantry.dev/docs/core/migrating-from-finbuckle).
 
 [Get started](https://tenantry.dev/docs/core/getting-started) ·
 [Docs](https://tenantry.dev/docs/core) ·

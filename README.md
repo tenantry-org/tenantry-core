@@ -18,12 +18,13 @@ Tenantry Core is Apache-2.0 and free for commercial use. If you are moving from 
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant
-    .ResolveFromHeader("X-Tenant-Id")   // where the tenant comes from
-    .UseInMemoryStore(tenants));        // where tenants are defined
+    .ResolveFromHeader("X-Tenant-Id")           // where the tenant comes from
+    .ValidateTenantAccessByClaim("tenant_id")   // the caller's token must list it
+    .UseInMemoryStore(tenants));                // where tenants are defined
 
 builder.Services.AddDbContext<AppDbContext>(options => options
     .UseSqlServer(connectionString)
-    .UseTenantry());                    // how data is isolated
+    .UseTenantry());                            // how data is isolated
 ```
 
 ## Features
@@ -36,6 +37,9 @@ builder.Services.AddDbContext<AppDbContext>(options => options
   tenant's row is rejected before saving, and `TenantId` is part of every `UPDATE` and `DELETE`, so a forged key
   matches no row. `Database.SqlQuery`, `ExecuteSql` and `IgnoreQueryFilters()` are not isolated
   ([details](docs/efcore-integration.md#what-is-and-isnt-isolated)).
+- Build warnings for an entity with a `TenantId` that is not tenant-owned, a context registered without
+  `UseTenantry()`, `IgnoreQueryFilters()` on a tenant-owned entity, and a tenant taken from the request with no access
+  check ([analyzers](docs/analyzers.md)).
 - One `AddTenantry` serves ASP.NET Core, console apps, workers and desktop apps.
 - Built for .NET 10. .NET 8 and 9 are supported until 10 November 2027 ([compatibility](docs/compatibility.md)).
 
