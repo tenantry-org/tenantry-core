@@ -205,20 +205,12 @@ Server-Sent Events connection. Blazor Server's connection is to `/_blazor`, with
 Server app resolves from the host, a subdomain or a claim.
 
 The middleware checks the tenant once, when the connection opens. To stop a tenant that is suspended or deleted while
-its connections are open, add Tenantry's check to your hubs:
+its connections are open, add Tenantry's check to your hubs, and in an app with Blazor Server to its circuits:
 
 ```csharp
 using Microsoft.AspNetCore.SignalR;
 
 builder.Services.AddSignalR(options => options.AddTenantry());
-```
-
-In an app with Blazor Server, add the check to each of your own hubs instead, and check the circuits too. The options of
-every hub also reach Blazor's own hub, where a refused call leaves the circuit open but not responding:
-
-```csharp
-builder.Services.AddSignalR()
-    .AddHubOptions<ChatHub>(options => options.AddTenantry());
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()

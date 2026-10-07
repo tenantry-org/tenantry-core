@@ -30,9 +30,8 @@ public static class TenantryHubOptionsExtensions
     /// connection opened. A call fails with <see cref="InvalidOperationException"/> if Tenantry is not registered.
     /// </para>
     /// <para>
-    /// In an app with Blazor Server, add the filter to each of your own hubs with <c>AddHubOptions&lt;THub&gt;</c>, and
-    /// check circuits with <c>AddInteractiveServerComponents().AddTenantry()</c>. The options of every hub also reach
-    /// Blazor's own hub, where a refused call leaves the circuit open but not responding.
+    /// In an app with Blazor Server, also check circuits with <c>AddInteractiveServerComponents().AddTenantry()</c>.
+    /// This filter does not check Blazor Server's own hub.
     /// </para>
     /// </remarks>
     public static void AddTenantry(this HubOptions options)

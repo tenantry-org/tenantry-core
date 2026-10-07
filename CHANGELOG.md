@@ -45,8 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hubOptions.AddTenantry()` and `AddInteractiveServerComponents().AddTenantry()` (Tenantry.AspNetCore) check, before
   each SignalR hub method call and each Blazor Server circuit event, that the connection's tenant still exists and is
   active. A tenant suspended or deleted while its connections are open has its next hub call fail with
-  `TenantInactiveException` or `TenantNotFoundException`, and its circuits end. The docs have a new section on
-  resolving and checking the tenant of a connection: see
+  `TenantInactiveException` or `TenantNotFoundException`, and its circuits end. An app with Blazor Server adds both:
+  `hubOptions.AddTenantry()` does not check Blazor Server's own hub. The docs have a new section on resolving and
+  checking the tenant of a connection: see
   [SignalR and Blazor Server](docs/aspnetcore-integration.md#signalr-and-blazor-server).
 - `Tenantry.Templates`, `dotnet new` templates for applications that use Tenantry, published with each release.
   Install them with `dotnet new install Tenantry.Templates`, then create a project with

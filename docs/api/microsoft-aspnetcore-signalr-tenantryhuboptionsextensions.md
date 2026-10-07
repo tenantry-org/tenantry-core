@@ -26,4 +26,4 @@ A connection's tenant is the one `app.UseTenantry()` resolved for the request th
 
 The connection's tenant itself does not change: the call runs with the tenant as the store returned it when the connection opened. A call fails with `InvalidOperationException` if Tenantry is not registered.
 
-In an app with Blazor Server, add the filter to each of your own hubs with `AddHubOptions<THub>`, and check circuits with `AddInteractiveServerComponents().AddTenantry()`. The options of every hub also reach Blazor's own hub, where a refused call leaves the circuit open but not responding.
+In an app with Blazor Server, also check circuits with `AddInteractiveServerComponents().AddTenantry()`. This filter does not check Blazor Server's own hub.
