@@ -97,6 +97,26 @@ public sealed class TenantActivityTests
             .WithMessage($"*ITenantActivityValidator<String> NotSuspended is registered as {lifetime.ToString().ToLowerInvariant()}*ValidateTenantActivity<TValidator>()*");
     }
 
+    [Fact]
+    public void AnOpenGenericValidatorThatIsNotASingleton_IsRefused()
+    {
+        ServiceCollection services = new();
+        services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]));
+        services.AddTransient(typeof(ITenantActivityValidator<>), typeof(AlwaysActive<>));
+        using var provider = services.BuildServiceProvider();
+
+        provider.Invoking(p => p.GetRequiredService<ITenantActivity<string>>())
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*ITenantActivityValidator<String> AlwaysActive`1 is registered as transient*");
+    }
+
+    private sealed class AlwaysActive<TKey> : ITenantActivityValidator<TKey>
+        where TKey : IEquatable<TKey>, IParsable<TKey>
+    {
+        public ValueTask<bool> IsActiveAsync(ITenantDescriptor<TKey> tenant, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(true);
+    }
+
     private sealed class NotSuspended : ITenantActivityValidator<string>
     {
         public ValueTask<bool> IsActiveAsync(ITenantDescriptor<string> tenant, CancellationToken cancellationToken) =>

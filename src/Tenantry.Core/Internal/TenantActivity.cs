@@ -34,9 +34,9 @@ internal sealed class TenantActivity<TKey>(IEnumerable<ITenantActivityValidator<
         }
     }
 
-    // This singleton keeps its validators for the application's lifetime, so one registered as scoped or transient
-    // would be resolved once, from the root provider, and shared by every request. It is checked when the activity is
-    // first resolved, so that a registration made after AddTenantry counts.
+    // This singleton keeps its validators for the application's lifetime, so one registered as scoped or transient,
+    // open generics included, would be resolved once, from the root provider, and shared by every request. It is
+    // checked when the activity is first resolved, so that a registration made after AddTenantry counts.
     internal static void Register(IServiceCollection services) =>
         services.TryAddSingleton<ITenantActivity<TKey>>(sp =>
         {
@@ -47,8 +47,9 @@ internal sealed class TenantActivity<TKey>(IEnumerable<ITenantActivityValidator<
     private static void RequireSingletonValidators(IServiceCollection services)
     {
         var validator = services.FirstOrDefault(d =>
-            d.ServiceType == typeof(ITenantActivityValidator<TKey>) && !d.IsKeyedService &&
-            d.Lifetime != ServiceLifetime.Singleton);
+            (d.ServiceType == typeof(ITenantActivityValidator<TKey>) ||
+             d.ServiceType == typeof(ITenantActivityValidator<>)) &&
+            !d.IsKeyedService && d.Lifetime != ServiceLifetime.Singleton);
 
         if (validator is not null)
         {
