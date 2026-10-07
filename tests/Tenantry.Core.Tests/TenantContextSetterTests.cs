@@ -256,6 +256,34 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
+    public async Task AFlowWhoseFirstScopeAnotherFlowClosesWhileItsOwnIsOpen_HasNoTenantWhenItsOwnCloses()
+    {
+        var tenantContext = BuildSetter();
+        TaskCompletionSource opened = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<string?> flow;
+
+        using (tenantContext.MakeCurrent(Tenant("acme")))
+        {
+            flow = Task.Run(async () =>
+            {
+                using (tenantContext.MakeCurrent(Tenant("globex")))
+                {
+                    opened.SetResult();
+                    await closed.Task;
+                }
+
+                return tenantContext.CurrentTenantId;
+            }, TestContext.Current.CancellationToken);
+
+            await opened.Task;
+        }
+
+        closed.SetResult();
+        (await flow).Should().BeNull();
+    }
+
+    [Fact]
     public void MakeCurrent_TenantWithTheKeyTypesDefaultId_ThrowsAndLeavesNoTenant()
     {
         var strings = BuildSetter();

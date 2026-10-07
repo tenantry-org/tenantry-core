@@ -135,7 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A hub method on a long-polling SignalR connection keeps the connection's tenant after a `CreateScope` or
   `MakeCurrent` scope it opened closes. Before, no tenant was current after it, and the first per-tenant options value
   read in a hub method could be built without the tenant and kept as that tenant's. The same holds for any flow that
-  runs on after another flow closed the scope it started in.
+  opens a scope after another flow closed the scope it started in.
 - `app.UseTenantry()` before `app.UseRouting()` logs event 1007 when routing chooses an endpoint whose route value
   `ResolveFromRouteValue` could not read. Before, it was logged only for an endpoint with `RequireTenant()` or
   `AllowMissingTenant()`, so without `RequireTenantByDefault()` a request to `/{tenant}/orders` ran without a tenant

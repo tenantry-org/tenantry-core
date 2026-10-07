@@ -37,7 +37,8 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
     /// handle it inherited, the caller keeps that tenant until it disposes the handle too, which then
     /// restores the caller's previous tenant. Further disposals change nothing. A flow that runs on after
     /// another flow closed the scope it started in keeps that scope's tenant, and closing a scope it opened
-    /// restores it.
+    /// after that restores it. When the other flow closes that scope while the flow has one of its own open,
+    /// closing the flow's scope restores the nearest scope still open instead.
     /// </remarks>
     public IDisposable MakeCurrent(ITenantDescriptor<TKey> tenant)
     {
