@@ -9,10 +9,11 @@
 // The header-only quickstarts skip steps 1 and 2, which lets any caller select any tenant. Use them to
 // learn the API, and this sample as the starting point for real applications.
 //
-// Run it (Development environment), get a token, then call the API:
-//   curl -X POST localhost:5000/dev/token -H 'Content-Type: application/json' \
+// `dotnet run` starts it in Development on port 5194 (Properties/launchSettings.json).
+// Get a token, then call the API:
+//   curl -X POST localhost:5194/dev/token -H 'Content-Type: application/json' \
 //        -d '{"subject":"alice","tenants":["acme"]}'
-//   curl localhost:5000/notes -H 'Authorization: Bearer <token>' -H 'X-Tenant-Id: acme'
+//   curl localhost:5194/notes -H 'Authorization: Bearer <token>' -H 'X-Tenant-Id: acme'
 
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;

@@ -3,9 +3,10 @@
 # publishes, into a template hive of their own, creates an application from each, and builds it against the Tenantry
 # packages of the same build, restored from an empty cache with package source mapping, as check-package-consumer.sh
 # restores, and with warnings as errors, so the analyzers the packages carry must find nothing. Then it runs each, for
-# a minute at most. The API, with tokens from its development endpoint: an anonymous caller gets 401, a token for acme
-# gets 403 for globex, acme's new note is listed for acme and not for globex. The worker: it processes its
-# demonstration messages, drops those for an unknown and a suspended tenant, logs the one that fails, and keeps running.
+# a minute at most. The API, started with dotnet run so that its launch profile sets the environment, with tokens
+# from its development endpoint: an anonymous caller gets 401, a token for acme gets 403 for globex, acme's new note is
+# listed for acme and not for globex. The worker: it processes its demonstration messages, drops those for an unknown
+# and a suspended tenant, logs the one that fails, and keeps running.
 # Usage, after dotnet pack of src/ and templates/ (build-test.yml's Pack step):
 #
 #   scripts/smoke-templates.sh <package folder>
@@ -111,7 +112,9 @@ for template in tenantry-api tenantry-worker; do
   cd "$app"
   : > "$log"
   if [[ "$template" == tenantry-api ]]; then
-    ASPNETCORE_URLS="http://127.0.0.1:0" dotnet bin/Release/net10.0/Smoke.dll > "$log" 2>&1 &
+    # Without this script's environment, so the launch profile sets it, as it does for a user.
+    env -u ASPNETCORE_ENVIRONMENT -u DOTNET_ENVIRONMENT \
+      dotnet run --no-build -c Release -- --urls "http://127.0.0.1:0" > "$log" 2>&1 &
     pid=$!
     url="" result=""
     if wait_for "$log" "Now listening on: http:"; then

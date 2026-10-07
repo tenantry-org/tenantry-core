@@ -156,6 +156,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   more than one table.
 - Events 1005 and 1012 name a signed-in user without a name claim by its name identifier or `sub` claim, or as
   `(unnamed)`. Before, they logged it as `(anonymous)`, as for a request with no user.
+- A project from the `tenantry-api` template and the `SecureApi` sample start in Development with `dotnet run`, on the
+  port their `curl` examples use: each has a launch profile. Before, they started in Production and stopped at once,
+  as no `Auth:SigningKey` was set.
 
 ## [0.7.0] - 2026-10-05
 

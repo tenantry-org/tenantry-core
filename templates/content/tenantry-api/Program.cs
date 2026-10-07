@@ -6,10 +6,11 @@
 // 3. Every endpoint requires a tenant unless it opts out (400 without one). EF Core reads and writes are
 //    isolated to the selected tenant, and tenant-owned writes without a tenant are rejected.
 //
-// Run it (Development environment), get a token, then call the API:
-//   curl -X POST localhost:5000/dev/token -H 'Content-Type: application/json' \
+// `dotnet run` starts it in Development on port 5160 (Properties/launchSettings.json).
+// Get a token, then call the API:
+//   curl -X POST localhost:5160/dev/token -H 'Content-Type: application/json' \
 //        -d '{"subject":"alice","tenants":["acme"]}'
-//   curl localhost:5000/notes -H 'Authorization: Bearer <token>' -H 'X-Tenant-Id: acme'
+//   curl localhost:5160/notes -H 'Authorization: Bearer <token>' -H 'X-Tenant-Id: acme'
 //
 // Replace the development token endpoint with your identity provider, and the in-memory store with one backed by
 // your database, before going to production.
