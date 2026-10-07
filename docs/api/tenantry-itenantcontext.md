@@ -86,7 +86,7 @@ Returns: `TTenant`
 
 Exceptions:
 
-- `InvalidOperationException`: The current tenant is not a `TTenant`: the tenant store returns another type.
+- `InvalidOperationException`: The current tenant is not a `TTenant`: the tenant store returns another type. The message names both types.
 
 A default interface method: a mock of [`ITenantContext<TKey>`](tenantry-itenantcontext.md) (NSubstitute, Moq) intercepts it and returns [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) unless it is configured too, so code under test with a mocked context can read `CurrentTenant?.As<TTenant>()` instead, or tests can use a real context ([`ITenantContextSetter<TKey>.MakeCurrent`](tenantry-itenantcontextsetter.md)).
 

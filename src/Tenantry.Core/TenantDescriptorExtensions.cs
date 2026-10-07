@@ -13,7 +13,8 @@ public static class TenantDescriptorExtensions
     /// <param name="tenant">A tenant from your tenant store.</param>
     /// <returns>The same tenant, as <typeparamref name="TTenant"/>.</returns>
     /// <exception cref="InvalidOperationException">
-    /// The tenant is not a <typeparamref name="TTenant"/>: the tenant store returns another type.
+    /// The tenant is not a <typeparamref name="TTenant"/>: the tenant store returns another type. The message names
+    /// both types.
     /// </exception>
     /// <example>
     /// <code>

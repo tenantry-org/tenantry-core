@@ -66,7 +66,8 @@ public interface ITenantContext<TKey>
     /// (<see cref="ITenantContextSetter{TKey}.MakeCurrent"/>).
     /// </remarks>
     /// <exception cref="InvalidOperationException">
-    /// The current tenant is not a <typeparamref name="TTenant"/>: the tenant store returns another type.
+    /// The current tenant is not a <typeparamref name="TTenant"/>: the tenant store returns another type. The message
+    /// names both types.
     /// </exception>
     /// <example>
     /// <code>

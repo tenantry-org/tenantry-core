@@ -4,7 +4,7 @@ Namespace: `Tenantry.AspNetCore` · Package: `Tenantry.AspNetCore` · [API refer
 
 Resolves the tenant from a request header (e.g. `X-Tenant-Id`).
 
-A header sent more than once names no tenant. A proxy that sets the header must replace one the client sent, not add another.
+The value is trimmed, and an empty one names no tenant. A header sent more than once names no tenant. A proxy that sets the header must replace one the client sent, not add another.
 
 ```csharp
 public sealed class HeaderTenantResolver : ITenantResolver
@@ -26,7 +26,7 @@ Parameters:
 
 - `headerName` `string`: The name of the header that carries the tenant identifier.
 
-A header sent more than once names no tenant. A proxy that sets the header must replace one the client sent, not add another.
+The value is trimmed, and an empty one names no tenant. A header sent more than once names no tenant. A proxy that sets the header must replace one the client sent, not add another.
 
 ## Methods
 

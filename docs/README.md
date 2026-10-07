@@ -13,7 +13,7 @@ Start with [Getting started](getting-started.md) and [Core concepts](core-concep
 
 1. [Getting started](getting-started.md): install the packages and build a tenant-aware app end to end.
 2. [Core concepts](core-concepts.md): the tenant key, `ITenantDescriptor`, `ITenantContext` vs. `ITenantScope`, and the `AsyncLocal` model that ties them together.
-3. [Tenant stores](tenant-stores.md): the in-memory store, writing a custom `ITenantStore`, service lifetimes, and caching tenants.
+3. [Tenant stores](tenant-stores.md): writing an `ITenantStore` over your own tenants table, its lifetime, suspended tenants, caching and invalidation, and the in-memory store for tests.
 4. [ASP.NET Core integration](aspnetcore-integration.md): `AddTenantry`, the resolution middleware, pipeline ordering, HTTP status codes, and resolution events.
 5. [Tenant resolution](tenant-resolution.md): header, subdomain, host, route, claim, and query-string resolvers, resolver ordering, custom resolvers, and identifiers other than the tenant id.
 6. [Access control](access-control.md): requiring tenants per-endpoint or globally, access validators, and claim-based validation.

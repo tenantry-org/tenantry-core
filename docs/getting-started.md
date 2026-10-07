@@ -1,12 +1,11 @@
 # Getting started
 
-This guide takes you from an empty project to a multi-tenant ASP.NET Core app with EF Core data isolation. Without
-ASP.NET Core, read [Non-HTTP hosts](non-http-hosts.md) after the first two sections.
+This guide builds a multi-tenant ASP.NET Core app with EF Core data isolation, starting from an empty project. Without
+ASP.NET Core, read the first two sections, then [Non-HTTP hosts](non-http-hosts.md).
 
-To start from a generated project instead, `dotnet new install Tenantry.Templates` and then
-`dotnet new tenantry-api -n Orders.Api` create an ASP.NET Core API with EF Core that takes the tenant from the
-`X-Tenant-Id` header and checks it against the caller's JWT claims. It targets `net10.0`, so building it needs the
-.NET 10 SDK.
+To start from a generated project instead, run `dotnet new install Tenantry.Templates`, then
+`dotnet new tenantry-api -n Orders.Api`. That creates an ASP.NET Core API with EF Core. It takes the tenant from the
+`X-Tenant-Id` header and checks it against the caller's JWT claims. It targets `net10.0`, so it needs the .NET 10 SDK.
 
 ## 1. Install the packages
 
@@ -17,7 +16,7 @@ dotnet add package Tenantry.AspNetCore
 dotnet add package Tenantry.EfCore
 ```
 
-`Tenantry.Core` comes with them; reference it directly only if you want the core types in a project that has neither.
+`Tenantry.Core` comes with them. Reference it directly only for the core types in a project that has neither.
 
 Tenantry is built for .NET 10, and still ships for .NET 8 and 9 ([Compatibility](compatibility.md)). Each build of
 `Tenantry.EfCore` uses the EF Core major of its target framework (8.x, 9.x or 10.x).
@@ -26,13 +25,9 @@ Tenantry is built for .NET 10, and still ships for .NET 8 and 9 ([Compatibility]
 
 `TKey` is the type of your tenant ids: `Guid`, `int`, `long` and `string` all work
 ([Core concepts](core-concepts.md#the-tenant-key-tkey) has the constraints). Use the same type in your entities, store
-and registration; this guide uses `Guid`.
+and registration. This guide uses `Guid`.
 
 ## 3. Register Tenantry
-
-Registration needs no Tenantry `using` directive: `AddTenantry` and its builder methods are extension methods in
-`Microsoft.Extensions.DependencyInjection`, and `UseTenantry`, `RequireTenant` and `AllowMissingTenant` in
-`Microsoft.AspNetCore.Builder`. Types such as `TenantDescriptor<TKey>` are in the `Tenantry` namespace.
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -56,9 +51,11 @@ builder.Services.AddTenantry<Guid>(tenant =>
 });
 ```
 
-Builder methods chain, so this can also be
+The registration methods need no `using` directive. `using Tenantry;` is for types such as `TenantDescriptor<TKey>`.
+Builder methods chain, so the lambda can also be
 `tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`. `app.UseTenantry()` (step 7) throws at
-startup if no resolver or no store is registered ([Registration](core-concepts.md#registration) has the rules).
+startup without a resolver or a store ([Startup validation](aspnetcore-integration.md#startup-validation)).
+[Registration](core-concepts.md#registration) has the rules.
 
 ## 4. Mark your tenant-owned entities
 
@@ -74,9 +71,8 @@ public class Order : TenantEntity<Guid>   // adds a `Guid TenantId { get; set; }
 }
 ```
 
-Entities that do not implement `ITenantEntity<TKey>` are shared by all tenants (product catalogues, reference
-tables) and are never filtered or stamped. Leave `TenantId` unset: Tenantry stamps it on insert
-([Core concepts](core-concepts.md#itenantentity)).
+Leave `TenantId` unset: Tenantry stamps it on insert. Entities that do not implement `ITenantEntity<TKey>` are shared
+by all tenants ([`ITenantEntity`](core-concepts.md#itenantentity)).
 
 ## 5. Keep your DbContext as it is
 
@@ -100,9 +96,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
 ## 6. Register the DbContext with `UseTenantry()`
 
-`UseTenantry()` isolates the context: it adds the tenant query filter to every `ITenantEntity<Guid>` entity after
-`OnModelCreating`, and attaches the interceptor that stamps and checks `TenantId` on `SaveChanges`. It works the
-same with `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbContextFactory`.
+`UseTenantry()` isolates the context. After `OnModelCreating`, it adds the tenant query filter to every
+`ITenantEntity<Guid>` entity. It also attaches the interceptor that stamps and checks `TenantId` on `SaveChanges`. It
+works the same with `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbContextFactory`.
 
 ```csharp
 builder.Services.AddDbContext<AppDbContext>(options => options
@@ -155,7 +151,7 @@ curl -H "X-Tenant-Id: not-a-guid" "…/orders"                             # 404
 curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000099" "…/orders"  # 404 (not in store)
 ```
 
-The rejections have an empty body; add `builder.Services.AddProblemDetails()` for `application/problem+json` bodies
+The rejections have an empty body. Add `builder.Services.AddProblemDetails()` for `application/problem+json` bodies
 ([Status codes](aspnetcore-integration.md#status-codes)).
 
 ## Next steps

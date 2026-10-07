@@ -7,8 +7,8 @@ namespace Tenantry.AspNetCore;
 /// Resolves the tenant from a request header (e.g. <c>X-Tenant-Id</c>).
 /// </summary>
 /// <remarks>
-/// A header sent more than once names no tenant. A proxy that sets the header must replace one the client sent, not
-/// add another.
+/// The value is trimmed, and an empty one names no tenant. A header sent more than once names no tenant. A proxy that
+/// sets the header must replace one the client sent, not add another.
 /// </remarks>
 /// <param name="headerName">The name of the header that carries the tenant identifier.</param>
 public sealed class HeaderTenantResolver(string headerName) : ITenantResolver

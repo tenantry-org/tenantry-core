@@ -30,7 +30,7 @@ Returns: `TTenant`: The same tenant, as `TTenant`.
 
 Exceptions:
 
-- `InvalidOperationException`: The tenant is not a `TTenant`: the tenant store returns another type.
+- `InvalidOperationException`: The tenant is not a `TTenant`: the tenant store returns another type. The message names both types.
 
 ```csharp
 tenant.UseConnectionStrings(options =>
