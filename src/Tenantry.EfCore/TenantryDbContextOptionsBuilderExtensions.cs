@@ -46,8 +46,18 @@ public static class TenantryDbContextOptionsBuilderExtensions
     /// </para>
     /// <para>
     /// It installs Tenantry's own EF Core model customizer, so the options must not also replace
-    /// <c>IModelCustomizer</c>, nor use <c>UseInternalServiceProvider</c>; creating such a context throws. A compiled
-    /// model (<c>dotnet ef dbcontext optimize</c>) is not supported: EF Core compiles no model with query filters.
+    /// <c>IModelCustomizer</c>; creating such a context throws. Move that configuration into <c>OnModelCreating</c> or
+    /// an <see cref="ITenantModelContributor"/>. Creating a context with <c>UseInternalServiceProvider</c> throws too,
+    /// as EF Core adds no extension's services to a provider you build. A compiled model
+    /// (<c>dotnet ef dbcontext optimize</c>) is not supported: EF Core compiles no model with query filters.
+    /// </para>
+    /// <para>
+    /// An <c>ExecuteUpdate</c> that sets <c>TenantId</c> throws <see cref="TenantIsolationViolationException"/> of kind
+    /// <see cref="TenantIsolationViolationKind.BulkUpdate"/> when EF Core compiles the query. The guard follows each
+    /// setter through member access and <c>EF.Property</c>, casts, and <c>Select</c>, <c>Join</c> and
+    /// <c>SelectMany</c> projections. It fails closed: a setter it cannot resolve throws too, such as one through
+    /// <c>GroupBy</c>, an <c>EF.Property</c> name it cannot read, or a form a new EF Core version could bring. It does
+    /// not see a second property mapped to the <c>TenantId</c> column.
     /// </para>
     /// </remarks>
     /// <example>

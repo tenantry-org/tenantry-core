@@ -35,19 +35,26 @@ public sealed class TenantIsolationViolationException : InvalidOperationExceptio
     /// The CLR type name of the entity the check concerns, or of the <c>DbContext</c> for a check of the whole
     /// context: <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/>,
     /// <see cref="TenantIsolationViolationKind.TenantSchemaMismatch"/>,
-    /// <see cref="TenantIsolationViolationKind.SaveWithoutTransaction"/>, and
+    /// <see cref="TenantIsolationViolationKind.SaveWithoutTransaction"/>,
+    /// <see cref="TenantIsolationViolationKind.ModelConfiguration"/> for unmarked entity types, and
     /// <see cref="TenantIsolationViolationKind.TransactionRolledBack"/> when no single entity's check failed.
     /// </summary>
     public string TypeName { get; }
 
     /// <summary>
-    /// The tenant the rejected entity or database belongs to, or <see langword="null"/> when the check does not
-    /// know one (a bulk update, a model check).
+    /// The tenant the rejected entity or database belongs to, as a string for logging: for
+    /// <see cref="TenantIsolationViolationKind.EntityWrite"/>, and for
+    /// <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/> when the context was connected to a tenant's
+    /// database. For <see cref="TenantIsolationViolationKind.TenantSchemaMismatch"/>, the package that throws it sets
+    /// it. Otherwise <see langword="null"/>.
     /// </summary>
     public string? OffendingTenantId { get; }
 
     /// <summary>
-    /// The current tenant, or <see langword="null"/> when none is current or the check does not use it.
+    /// The current tenant, as a string for logging: for <see cref="TenantIsolationViolationKind.EntityWrite"/> and
+    /// <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/>, <see langword="null"/> when none is current.
+    /// For <see cref="TenantIsolationViolationKind.TenantSchemaMismatch"/>, the package that throws it sets it.
+    /// Otherwise <see langword="null"/>.
     /// </summary>
     public string? ExpectedTenantId { get; }
 }
@@ -100,7 +107,7 @@ public enum TenantIsolationViolationKind
     /// <summary>
     /// A schema-per-tenant context would use a schema other than the current tenant's, such as one built for the
     /// tenant that was current when it was first used. Thrown by packages that put tenants in schemas of their own,
-    /// from a <see cref="TenantContextGuard"/>.
+    /// such as Tenantry.Pro, from a <see cref="TenantContextGuard"/>.
     /// </summary>
     TenantSchemaMismatch,
 }

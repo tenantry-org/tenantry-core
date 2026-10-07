@@ -34,7 +34,7 @@ Parameters:
 
 ### `ExpectedTenantId`
 
-The current tenant, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) when none is current or the check does not use it.
+The current tenant, as a string for logging: for [`TenantIsolationViolationKind.EntityWrite`](tenantry-efcore-tenantisolationviolationkind.md) and [`TenantIsolationViolationKind.TenantDatabaseMismatch`](tenantry-efcore-tenantisolationviolationkind.md), [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) when none is current. For [`TenantIsolationViolationKind.TenantSchemaMismatch`](tenantry-efcore-tenantisolationviolationkind.md), the package that throws it sets it. Otherwise [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null).
 
 ```csharp
 public string? ExpectedTenantId { get; }
@@ -54,7 +54,7 @@ Value: [`TenantIsolationViolationKind`](tenantry-efcore-tenantisolationviolation
 
 ### `OffendingTenantId`
 
-The tenant the rejected entity or database belongs to, or [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null) when the check does not know one (a bulk update, a model check).
+The tenant the rejected entity or database belongs to, as a string for logging: for [`TenantIsolationViolationKind.EntityWrite`](tenantry-efcore-tenantisolationviolationkind.md), and for [`TenantIsolationViolationKind.TenantDatabaseMismatch`](tenantry-efcore-tenantisolationviolationkind.md) when the context was connected to a tenant's database. For [`TenantIsolationViolationKind.TenantSchemaMismatch`](tenantry-efcore-tenantisolationviolationkind.md), the package that throws it sets it. Otherwise [null](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null).
 
 ```csharp
 public string? OffendingTenantId { get; }
@@ -64,7 +64,7 @@ Value: `string`
 
 ### `TypeName`
 
-The CLR type name of the entity the check concerns, or of the `DbContext` for a check of the whole context: [`TenantIsolationViolationKind.TenantDatabaseMismatch`](tenantry-efcore-tenantisolationviolationkind.md), [`TenantIsolationViolationKind.TenantSchemaMismatch`](tenantry-efcore-tenantisolationviolationkind.md), [`TenantIsolationViolationKind.SaveWithoutTransaction`](tenantry-efcore-tenantisolationviolationkind.md), and [`TenantIsolationViolationKind.TransactionRolledBack`](tenantry-efcore-tenantisolationviolationkind.md) when no single entity's check failed.
+The CLR type name of the entity the check concerns, or of the `DbContext` for a check of the whole context: [`TenantIsolationViolationKind.TenantDatabaseMismatch`](tenantry-efcore-tenantisolationviolationkind.md), [`TenantIsolationViolationKind.TenantSchemaMismatch`](tenantry-efcore-tenantisolationviolationkind.md), [`TenantIsolationViolationKind.SaveWithoutTransaction`](tenantry-efcore-tenantisolationviolationkind.md), [`TenantIsolationViolationKind.ModelConfiguration`](tenantry-efcore-tenantisolationviolationkind.md) for unmarked entity types, and [`TenantIsolationViolationKind.TransactionRolledBack`](tenantry-efcore-tenantisolationviolationkind.md) when no single entity's check failed.
 
 ```csharp
 public string TypeName { get; }

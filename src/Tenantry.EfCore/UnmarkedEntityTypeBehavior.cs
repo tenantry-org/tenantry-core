@@ -10,8 +10,10 @@ namespace Tenantry.EfCore;
 /// <see cref="Warn"/> and <see cref="Reject"/> are for an application that wants each such type marked as shared, so a
 /// type left without <see cref="ITenantEntity{TKey}"/> by mistake is found. A context applies its behaviour whenever EF
 /// Core compiles one of its queries, and on every save, before anything is read or written. Contexts with different
-/// values never share a compiled query. A model with no tenant-owned entity type, such as a database-per-tenant
-/// context's, is never checked.
+/// values never share a compiled query: each value has its own model, so a static compiled query
+/// (<c>EF.CompileQuery</c>) used by contexts with different values throws EF Core's "executed with a different model"
+/// error. Keep one per value. A model with no tenant-owned entity type, such as a database-per-tenant context's, is
+/// never checked.
 /// </remarks>
 public enum UnmarkedEntityTypeBehavior
 {

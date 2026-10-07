@@ -70,13 +70,13 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// <returns>The same builder, without its key type: call methods that need it (such as <c>UseConnectionStrings</c>) first.</returns>
     /// <remarks>
     /// <para>
-    /// Use it instead of <c>AddDbContext</c> and <c>AddDbContextPool</c>: it sets each context's connection string
-    /// when the context, or a pooled context's lease, is handed out, which EF Core has no hook for. It registers a
-    /// scoped <typeparamref name="TContext"/> and a singleton <see cref="IDbContextFactory{TContext}"/>. A context that
-    /// is not pooled gets the other services its constructor needs, and its application service provider, from its
-    /// scope (the scoped context) or the root provider (the factory's). Creating a context
-    /// without a current tenant throws <see cref="TenantNotResolvedException"/>, so <c>dotnet ef</c> needs an
-    /// <c>IDesignTimeDbContextFactory</c>.
+    /// Use it instead of <c>AddDbContext</c>, <c>AddDbContextPool</c> and <c>AddPooledDbContextFactory</c>: it sets
+    /// each context's connection string when the context, or a pooled context's lease, is handed out, which EF Core
+    /// has no hook for. It registers a scoped <typeparamref name="TContext"/> and a singleton
+    /// <see cref="IDbContextFactory{TContext}"/>. A context that is not pooled gets the other services its constructor
+    /// needs, and its application service provider, from its scope (the scoped context) or the root provider (the
+    /// factory's). Creating a context without a current tenant throws <see cref="TenantNotResolvedException"/>, so
+    /// <c>dotnet ef</c> needs an <c>IDesignTimeDbContextFactory</c>.
     /// </para>
     /// <para>
     /// The options get <c>UseTenantry()</c> before <paramref name="configure"/> runs, so interceptors added there,
@@ -87,12 +87,19 @@ public static class TenantryEfCoreTenantBuilderExtensions
     /// When the provider cannot read connection strings synchronously
     /// (<see cref="ITenantConnectionStringProvider{TKey}.CanGetSynchronously"/>), a context created synchronously, such
     /// as the scoped <typeparamref name="TContext"/>, reads its connection string when it first opens a connection, so
-    /// only asynchronous EF Core calls work on it.
+    /// only asynchronous EF Core calls work on it. A synchronous one throws <see cref="InvalidOperationException"/>.
     /// </para>
     /// <para>
     /// Before a context opens a connection and before every command, even on an open connection, a guard throws
     /// <see cref="TenantIsolationViolationException"/> unless the connection was set for the context (and, pooled, its
-    /// current lease) and for the tenant current now.
+    /// current lease) and for the tenant current now. So a context whose connection or connection string was replaced
+    /// throws. So does one whose EF Core provider replaces its own connection object after the connection string is
+    /// set; the tested providers keep it.
+    /// </para>
+    /// <para>
+    /// The guard cannot see SQL run on <c>Database.GetDbConnection()</c>. A streaming or split query started before the
+    /// tenant changed keeps reading from its database, whose rows belong to the tenant current when it started.
+    /// Deleting a SQLite in-memory database runs no command the guard can check, so use those only in tests.
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">
