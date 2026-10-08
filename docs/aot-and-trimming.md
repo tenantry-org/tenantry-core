@@ -1,6 +1,7 @@
 # AOT & trimming
 
-Tenantry builds with the trim and AOT analyzers on. Support differs by package.
+Every Tenantry package is trimmable, and every one but `Tenantry.EfCore` supports Native AOT. Tenantry builds with the
+trim and AOT analyzers on.
 
 ## Summary
 
@@ -17,8 +18,11 @@ Tenantry builds with the trim and AOT analyzers on. Support differs by package.
 
 ## `Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options`
 
-Each is marked `IsAotCompatible` and `IsTrimmable` and builds with no warnings under both analyzers. Where the API
-takes a type that DI must construct, it is annotated so the trimmer keeps its constructors:
+For an AOT web app, use `Tenantry.Core` and `Tenantry.AspNetCore`, with a store over a client that supports AOT, such
+as a hand-written `ITenantStore`.
+
+Each of these packages is marked `IsAotCompatible` and `IsTrimmable`, and builds with no warnings under both
+analyzers. Where the API takes a type that DI must construct, it is annotated so the trimmer keeps its constructors:
 
 ```csharp no-compile
 ITenantBuilder<TKey> UseStore<[DynamicallyAccessedMembers(PublicConstructors)] TStore>()
@@ -43,18 +47,14 @@ dotnet publish samples/Tenantry.Samples.Aot -c Release
 
 ## `Tenantry.EfCore`: trimmable, not AOT-compatible
 
-`Tenantry.EfCore` is marked `IsTrimmable` but not `IsAotCompatible`: `UseTenantry()` builds its query filters as
-expression trees while EF Core builds the model at run time, and neither it nor EF Core supports Native AOT with a model
-built at run time.
+Publish an EF Core app without Native AOT. Trimming works, but test the trimmed build: EF Core providers and your
+model may need trim roots, as EF Core's guidance describes.
+
+`Tenantry.EfCore` is marked `IsTrimmable` but not `IsAotCompatible`. `UseTenantry()` builds its query filters as
+expression trees while EF Core builds the model at run time. Neither `Tenantry.EfCore` nor EF Core supports Native AOT
+with a model built at run time.
 
 Every public method that configures or creates an EF Core context or model carries `[RequiresUnreferencedCode]` and
 `[RequiresDynamicCode]`, as EF Core's `DbContext` does: `UseTenantry()`, `AddDbContextPerTenantDatabase` and
 `IsSharedAcrossTenants()`. The analyzers warn where your code calls them. Types that only read a model or check a
 context, such as `TenantModel` and `TenantContextGuard`, are not annotated.
-
-## Recommendations
-
-- For an AOT web app, use `Tenantry.Core` and `Tenantry.AspNetCore`, with a store over a client that supports AOT,
-  such as a hand-written `ITenantStore`.
-- Publish an EF Core app without Native AOT. Trimming works, but test the trimmed build: EF Core providers and
-  your model may need trim roots, as EF Core's guidance describes.
