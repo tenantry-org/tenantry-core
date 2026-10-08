@@ -6,14 +6,15 @@
 // goes through ITenantScopeFactory.RunInScopeAsync, which does both.
 //
 // It demonstrates:
-//   1. Registering Tenantry with AddTenantry (no AspNetCore package) and isolating a DbContext with UseTenantry().
-//   2. Stamping TenantId automatically on insert.
-//   3. Reads filtered to the current tenant.
-//   4. Nested scopes (an inner tenant shadows the outer one, restored on dispose).
+//   1. Registering Tenantry with AddTenantry (no AspNetCore package).
+//   2. Isolating a DbContext with UseTenantry().
+//   3. Stamping TenantId automatically on insert.
+//   4. Reads filtered to the current tenant.
 //   5. A write for another tenant refused before it is sent.
-//   6. Fail-closed behaviour when no tenant is current.
-//   7. Bypassing isolation deliberately for admin/reporting with IgnoreQueryFilters().
-//   8. A worker-style sweep: every tenant in its own DI scope, with ITenantScopeFactory.
+//   6. Nested scopes (an inner tenant shadows the outer one, restored on dispose).
+//   7. Fail-closed behaviour when no tenant is current.
+//   8. Bypassing isolation deliberately for admin/reporting with IgnoreQueryFilters().
+//   9. A worker-style sweep: every tenant in its own DI scope, with ITenantScopeFactory.
 //
 // Run:
 //   dotnet run --project samples/Tenantry.Samples.EfCoreConsole
