@@ -432,15 +432,14 @@ for one context with `UseTenantry(o => …)`.
 The marker changes nothing in queries or saves, and marking a tenant-owned type fails the model check. A type follows
 the type it belongs to: a derived type its hierarchy's root, and an owned type its owner. The join entity of a
 many-to-many relationship follows the types it joins, unless it has properties or foreign keys beyond the two it joins
-by.
-Keyless types, types mapped to a view and shared-type entity types (`SharedTypeEntity`) need a marker like any other;
-EF Core's migrations history table is not part of the model.
+by. Keyless types, types mapped to a view and shared-type entity types (`SharedTypeEntity`) need a marker like any
+other; EF Core's migrations history table is not part of the model.
 
 In an application that sets `Warn` or `Reject`, options that call `UseTenantry()` before `UseApplicationServiceProvider`
 throw on their first query, save or command
 ([`UseTenantry`](api/microsoft-entityframeworkcore-tenantrydbcontextoptionsbuilderextensions.md)). `AddDbContext` and
-its relatives set the services first. A static compiled
-query (`EF.CompileQuery`) needs one copy per value
+its relatives set the services first. A static compiled query (`EF.CompileQuery`) fails when contexts with different
+values of the option share it, so keep one per value
 ([`UnmarkedEntityTypeBehavior`](api/tenantry-efcore-unmarkedentitytypebehavior.md)).
 
 Without the option, a test can list the unmarked types (xUnit here):
