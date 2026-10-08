@@ -130,7 +130,7 @@ public sealed class TenantStoreCacheTests
     public async Task AReadThatEndsAfterAnInvalidation_NeverReplacesWhatAReaderCachedSince(bool byIdentifier)
     {
         VersionedStore store = new();
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry<string>(tenant => tenant.UseStore(_ => store).CacheTenants());
         await using var provider = services.BuildServiceProvider();
         var tenants = provider.GetRequiredService<ITenantLookup<string>>();
@@ -156,7 +156,7 @@ public sealed class TenantStoreCacheTests
     public async Task UnderConcurrentReadsAndInvalidations_NoLookupAfterAnInvalidation_ReturnsWhatItRemoved()
     {
         VersionedStore store = new() { Yield = true };
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry<string>(tenant => tenant.UseStore(_ => store).CacheTenants());
         await using var provider = services.BuildServiceProvider();
         var tenants = provider.GetRequiredService<ITenantLookup<string>>();
@@ -196,7 +196,7 @@ public sealed class TenantStoreCacheTests
     [Fact]
     public async Task WithoutCacheTenants_EveryLookupReadsTheStore_AndInvalidatingDoesNothing()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store));
         await using var provider = services.BuildServiceProvider();
         var tenants = provider.GetRequiredService<ITenantLookup<string>>();
@@ -219,7 +219,7 @@ public sealed class TenantStoreCacheTests
     [Fact]
     public async Task CacheTenants_BeforeTheStore_AndCalledAgain_ConfiguresOneCache()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddSingleton<TimeProvider>(_time);
         services.AddTenantry<string>(tenant => tenant
             .CacheTenants()
@@ -248,7 +248,7 @@ public sealed class TenantStoreCacheTests
     [InlineData(-1)]
     public void ADurationThatIsNotPositive_Throws(int seconds)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
 
         var act = () => services.AddTenantry<string>(tenant => tenant.CacheTenants(o => o.Duration = TimeSpan.FromSeconds(seconds)));
 
@@ -299,7 +299,7 @@ public sealed class TenantStoreCacheTests
     [InlineData(false)]
     public async Task Invalidating_RunsEveryHandler_WithOrWithoutCachedTenants(bool cacheTenants)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         Recorder first = new(), second = new();
         services.AddSingleton<ITenantInvalidationHandler<string>>(first);
         services.AddSingleton<ITenantInvalidationHandler<string>>(second);
@@ -322,7 +322,7 @@ public sealed class TenantStoreCacheTests
     [Fact]
     public async Task EveryHandlerRuns_WhenOneThrows_AndTheErrorsAreThrownAfterwards()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         Recorder last = new();
         services.AddSingleton<ITenantInvalidationHandler<string>>(new Throwing("first"));
         services.AddSingleton<ITenantInvalidationHandler<string>>(last);
@@ -346,7 +346,7 @@ public sealed class TenantStoreCacheTests
     [Fact]
     public async Task InvalidatingAReservedId_IsRefused_BeforeAnyHandlerRuns()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         Recorder handler = new();
         services.AddSingleton<ITenantInvalidationHandler<int>>(handler);
         services.AddTenantry<int>(tenant => tenant.UseInMemoryStore([new TenantDescriptor<int> { TenantId = 7, Name = "Seven" }]).CacheTenants());
@@ -360,7 +360,7 @@ public sealed class TenantStoreCacheTests
     [Fact]
     public async Task AHandler_CanDependOnTheInvalidatorItself()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantInvalidationHandler<string>, NeedsTheInvalidator>());
         services.AddTenantry<string>(tenant => tenant.UseStore(_ => _store).CacheTenants());
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
@@ -377,7 +377,7 @@ public sealed class TenantStoreCacheTests
     [InlineData(false)]
     public async Task TheInvalidator_RemovesTheCachedTenant_AndAwaitsEveryHandler(bool cacheTenants)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         Slow slow = new();
         Recorder recorder = new();
         services.AddSingleton<ITenantInvalidationHandler<string>>(slow);
@@ -407,7 +407,7 @@ public sealed class TenantStoreCacheTests
     [Fact]
     public async Task ACancelledInvalidation_StopsAtTheHandlerItReached()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         Recorder after = new();
         services.AddSingleton<ITenantInvalidationHandler<string>>(new Slow());
         services.AddSingleton<ITenantInvalidationHandler<string>>(after);
@@ -425,7 +425,7 @@ public sealed class TenantStoreCacheTests
 
     private ServiceProvider Build(Action<TenantStoreCacheOptions>? configure = null)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddSingleton<TimeProvider>(_time);
         services.AddTenantry<string>(tenant => tenant
             .UseStore(_ =>

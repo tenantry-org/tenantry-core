@@ -680,7 +680,7 @@ public sealed class PerTenantOptionsTests
 
     private sealed class Ink
     {
-        public string Name => "ink";
+        public string Name { get; } = "ink";
     }
 
     private sealed class FuncStore(Func<string, CancellationToken, ValueTask<ITenantDescriptor<string>?>> get)
@@ -706,7 +706,9 @@ public sealed class PerTenantOptionsTests
     {
         public static int Disposed;
 
+#pragma warning disable CA1822 // The test calls it on the instance it resolves in the tenant's scope
         public string For(ITenantDescriptor tenant) => $"from-store-{tenant.Name}";
+#pragma warning restore CA1822
 
         public void Dispose() => Interlocked.Increment(ref Disposed);
     }

@@ -206,7 +206,7 @@ public sealed class IsolateCachesTests
     [Fact]
     public async Task WithoutAHybridCacheRegisteredFirst_TheCacheThrowsWhenUsed_NamingTheFix()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
         services.TryAddSingleton<HybridCache>(_inner);   // as AddHybridCache() adds it, only if none is registered
         await using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
@@ -238,7 +238,7 @@ public sealed class IsolateCachesTests
     public async Task AKeyedHybridCache_IsKeyedByTenantToo_WithItsOwnSharedEntries_AndInvalidatingATenantClearsIt()
     {
         InMemoryHybridCache reports = new();
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddSingleton<HybridCache>(_inner);
         services.AddKeyedSingleton<HybridCache>("reports", reports);
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme, Globex]).IsolateCaches());
@@ -261,7 +261,7 @@ public sealed class IsolateCachesTests
     [Fact]
     public void AKeyedHybridCacheRegisteredAfterAddTenantry_OrForAnyKey_StopsTheHost()
     {
-        ServiceCollection after = new();
+        ServiceCollection after = [];
         after.AddSingleton<HybridCache>(_inner);
         after.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
         after.AddKeyedSingleton<HybridCache>("reports", new InMemoryHybridCache());
@@ -271,7 +271,7 @@ public sealed class IsolateCachesTests
                 .Should().Throw<InvalidOperationException>().WithMessage("*key 'reports' was registered after AddTenantry*");
         }
 
-        ServiceCollection anyKey = new();
+        ServiceCollection anyKey = [];
         anyKey.AddSingleton<HybridCache>(_inner);
         anyKey.AddKeyedSingleton<HybridCache>(KeyedService.AnyKey, (_, _) => new InMemoryHybridCache());
         anyKey.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
@@ -290,7 +290,7 @@ public sealed class IsolateCachesTests
     public void AHybridCacheThatIsNotASingleton_IsRefusedWhenRegistered_SinceInvalidationClearsItOutsideAnyScope(
         ServiceLifetime lifetime, bool keyed)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.Add(keyed
             ? new ServiceDescriptor(typeof(HybridCache), "reports", (_, _) => new InMemoryHybridCache(), lifetime)
             : new ServiceDescriptor(typeof(HybridCache), _ => new InMemoryHybridCache(), lifetime));
@@ -310,7 +310,7 @@ public sealed class IsolateCachesTests
         await using (var provider = Build())
             RunStartupChecks(provider);
 
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
         await using (var provider = services.BuildServiceProvider(Conformance.ProviderOptions))
             RunStartupChecks(provider);
@@ -322,7 +322,7 @@ public sealed class IsolateCachesTests
     [InlineData("type")]
     public async Task EveryKindOfRegistration_IsWrapped_AndACacheCreatedForIt_IsDisposedWithIt(string kind)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         switch (kind)
         {
             case "instance":
@@ -353,7 +353,7 @@ public sealed class IsolateCachesTests
     [Fact]
     public async Task TheTenantDistributedCache_PrefixesTheRegisteredOne_WhichStaysAsItIs()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         RecordingDistributedCache distributed = new();
         services.AddSingleton<IDistributedCache>(distributed);
         services.AddSingleton<HybridCache>(_inner);
@@ -385,7 +385,7 @@ public sealed class IsolateCachesTests
     [Fact]
     public async Task EveryRegistration_Resolves_InAValidatedHost()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddSingleton<IDistributedCache>(new RecordingDistributedCache());
         services.AddSingleton<HybridCache>(_inner);
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]).IsolateCaches());
@@ -399,7 +399,7 @@ public sealed class IsolateCachesTests
 
     private ServiceProvider Build()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddSingleton<HybridCache>(_inner);
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme, Globex]).IsolateCaches());
         return services.BuildServiceProvider(Conformance.ProviderOptions);

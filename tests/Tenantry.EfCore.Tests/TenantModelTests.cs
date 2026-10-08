@@ -136,7 +136,9 @@ public sealed class TenantModelTests : IDisposable
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Order>();
+#pragma warning disable CA2263 // The non-generic overload is what this context tests
             modelBuilder.Entity(typeof(NonTenant)).IsSharedAcrossTenants();
+#pragma warning restore CA2263
         }
     }
 

@@ -31,6 +31,7 @@ public sealed class AtomicSaveTests : IDisposable
 
     public void Dispose() => _connection.Dispose();
 
+    // Every forgery, once with the theory's flag false and once with it true.
     public static TheoryData<Forgery, bool> Forgeries()
     {
         TheoryData<Forgery, bool> data = [];
@@ -44,21 +45,8 @@ public sealed class AtomicSaveTests : IDisposable
         return data;
     }
 
-    public static TheoryData<Forgery, bool> ForgeriesBySuppressorPlace()
-    {
-        TheoryData<Forgery, bool> data = [];
-
-        foreach (var forgery in Enum.GetValues<Forgery>())
-        {
-            data.Add(forgery, false);
-            data.Add(forgery, true);
-        }
-
-        return data;
-    }
-
     [Theory]
-    [MemberData(nameof(ForgeriesBySuppressorPlace))]
+    [MemberData(nameof(Forgeries))]
     public async Task AnInterceptorThatSuppressesConcurrencyFailures_CannotSuppressACheckOtherStatementsRelyOn(Forgery forgery, bool suppressorFirst)
     {
         await SeedAcmeAsync();

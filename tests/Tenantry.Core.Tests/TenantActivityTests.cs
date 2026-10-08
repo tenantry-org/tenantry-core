@@ -57,7 +57,7 @@ public sealed class TenantActivityTests
     public async Task TheExceptionCarriesTheIdAsTheKeyType()
     {
         TenantDescriptor<Guid> suspended = new() { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000002"), Name = "Suspended Ltd" };
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry<Guid>(tenant => tenant.UseInMemoryStore([suspended]).ValidateTenantActivity(_ => false));
         await using var provider = services.BuildServiceProvider();
         var activity = provider.GetRequiredService<ITenantActivity<Guid>>();
@@ -87,7 +87,7 @@ public sealed class TenantActivityTests
     [InlineData(ServiceLifetime.Transient)]
     public void AValidatorThatIsNotASingleton_IsRefused_NamingIt(ServiceLifetime lifetime)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]));
         services.Add(new ServiceDescriptor(typeof(ITenantActivityValidator<string>), typeof(NotSuspended), lifetime));
         using var provider = services.BuildServiceProvider();
@@ -100,7 +100,7 @@ public sealed class TenantActivityTests
     [Fact]
     public void AnOpenGenericValidatorThatIsNotASingleton_IsRefused()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme]));
         services.AddTransient(typeof(ITenantActivityValidator<>), typeof(AlwaysActive<>));
         using var provider = services.BuildServiceProvider();
@@ -125,7 +125,7 @@ public sealed class TenantActivityTests
 
     private static ServiceProvider Build(Action<ITenantBuilder<string>> configure)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddTenantry(configure);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }

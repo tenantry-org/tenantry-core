@@ -125,7 +125,7 @@ public sealed class DatabaseValuesIsolationTests : IDisposable
         Customer forged = new() { Id = 1, TenantId = "globex", Address = new Address { City = "?" }, Phones = { new Phone { Id = 1, Number = "?" } } };
         db.Attach(forged);
 
-        db.Entry(forged.Address!).GetDatabaseValues().Should().BeNull();
+        db.Entry(forged.Address).GetDatabaseValues().Should().BeNull();
         db.Entry(forged.Phones[0]).GetDatabaseValues().Should().BeNull();
     }
 

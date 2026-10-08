@@ -492,7 +492,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
     [Fact]
     public void WithoutConnectionStrings_FailsAtRegistration_WithGuidance()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
 
         services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
                 .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled)))
@@ -508,7 +508,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         ServiceLifetime lifetime,
         bool beforeAddTenantry)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         var provider = ServiceDescriptor.Describe(
             typeof(ITenantConnectionStringProvider<string>),
             _ => Substitute.For<ITenantConnectionStringProvider<string>>(),
@@ -571,7 +571,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
     [Fact]
     public void AConnectionStringProviderOfTheApplicationsOwn_ThatIsASingleton_IsAccepted()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddSingleton(Substitute.For<ITenantConnectionStringProvider<string>>());
         services.AddTenantry<string>(tenant => tenant
             .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled));
@@ -583,7 +583,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
     [Fact]
     public void AScopedProviderReplacedByUseConnectionStrings_IsAccepted()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddScoped(_ => Substitute.For<ITenantConnectionStringProvider<string>>());
         services.AddTenantry<string>(tenant => tenant
             .UseConnectionStrings(_ => Substitute.For<ITenantConnectionStringProvider<string>>())
@@ -596,7 +596,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
     [Fact]
     public void SameContextTwice_FailsAtRegistration()
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
 
         services.Invoking(collection => collection.AddTenantry<string>(tenant => tenant
                 .UseConnectionStrings(options => options.GetConnectionString = t => t.TenantId)
@@ -688,7 +688,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
         bool context = true,
         IInterceptor? interceptor = null)
     {
-        ServiceCollection services = new();
+        ServiceCollection services = [];
         services.AddLogging();
         configure?.Invoke(services);
         services.AddTenantry<string>(tenant =>

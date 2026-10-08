@@ -20,7 +20,7 @@ namespace Tenantry.AspNetCore.Tests;
 /// Server's hub, with <c>hubOptions.AddTenantry()</c> on every hub as well, and called directly with the tenant current,
 /// as Blazor calls it for a circuit's inbound activity.
 /// </summary>
-public sealed class BlazorServerTests
+public sealed partial class BlazorServerTests
 {
     private static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme" };
 
@@ -197,7 +197,7 @@ public sealed class BlazorServerTests
     /// A Blazor Server circuit, opened as its browser script opens one: the page's component marker, a hub connection
     /// over a WebSocket in Blazor's MessagePack protocol, then the calls that start the circuit and add the component.
     /// </summary>
-    private sealed class CircuitConnection : IAsyncDisposable, IInvocationBinder
+    private sealed partial class CircuitConnection : IAsyncDisposable, IInvocationBinder
     {
         private readonly WebSocket _socket;
         private readonly IHubProtocol _protocol;
@@ -214,7 +214,7 @@ public sealed class BlazorServerTests
         {
             using var client = app.GetTestClient();
             var page = await client.GetStringAsync($"/?tenant={tenant}", Ct);
-            var marker = Regex.Match(page, "<!--Blazor:(\\{.*?\\})-->").Groups[1].Value;
+            var marker = BlazorMarker().Match(page).Groups[1].Value;
 
             var protocol = app.Services.GetServices<IHubProtocol>().Single(p => p.Name == "blazorpack");
             var socket = await app.GetTestServer().CreateWebSocketClient()
@@ -240,13 +240,17 @@ public sealed class BlazorServerTests
             return circuit;
         }
 
+        // The interactive component's marker in the server-rendered page.
+        [GeneratedRegex("<!--Blazor:(\\{.*?\\})-->")]
+        private static partial Regex BlazorMarker();
+
         // A JavaScript interop call to a .NET method that does not exist: Blazor answers it with a failure, and it is
         // the circuit's inbound activity.
         public ValueTask SendActivityAsync() =>
             SendAsync(new InvocationMessage("BeginInvokeDotNetFromJS", ["1", "NoSuchAssembly", "NoSuchMethod", 0L, "[]"]));
 
-        // Skips the messages before the next call of the browser method named.
-        public Task ReceiveAsync(string target) =>
+        // Skips the messages before the next call of the browser method named, and returns that call.
+        public Task<HubInvocationMessage> ReceiveAsync(string target) =>
             ReceiveAsync<HubInvocationMessage>(message => message switch
             {
                 InvocationMessage invocation => invocation.Target == target,

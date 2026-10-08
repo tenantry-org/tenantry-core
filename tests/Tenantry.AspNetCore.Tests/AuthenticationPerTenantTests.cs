@@ -632,7 +632,7 @@ public sealed class AuthenticationPerTenantTests
             var cookie = await Context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
             return cookie.Succeeded
-                ? AuthenticateResult.Success(new AuthenticationTicket(cookie.Principal!, cookie.Properties, Scheme.Name))
+                ? AuthenticateResult.Success(new AuthenticationTicket(cookie.Principal, cookie.Properties, Scheme.Name))
                 : cookie;
         }
     }

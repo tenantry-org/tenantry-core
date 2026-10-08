@@ -24,7 +24,7 @@ public sealed class IsolationLogTests : IAsyncDisposable
         await using var db = await CreateAsync();
         db.Orders.Add(new Order { Description = "Acme order" });
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var id = db.Orders.Single().Id;
+        var id = (await db.Orders.SingleAsync(TestContext.Current.CancellationToken)).Id;
         db.ChangeTracker.Clear();
 
         _tenant.As("globex");

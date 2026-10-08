@@ -174,8 +174,8 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         {
             Customer stub = new() { Id = 1, TenantId = "acme", Home = new Home { City = "acme home" }, Billing = new Billing { City = "acme billing" } };
             db.Attach(stub);
-            stub.Home!.City = "globex home";
-            stub.Billing!.City = "globex billing";
+            stub.Home.City = "globex home";
+            stub.Billing.City = "globex billing";
 
             (await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>())
                 .Which.OffendingTenantId.Should().Be("acme");
@@ -258,7 +258,7 @@ public sealed class PlainOwnedEntityOwnerTests : IDisposable
         {
             Customer stub = new() { Id = 1, TenantId = "acme", Home = new Home { City = "acme home", Location = new Location { Street = "acme new street" } } };
             db.Attach(stub);
-            stub.Home!.Location!.Street = "globex street";
+            stub.Home.Location.Street = "globex street";
 
             await db.Awaiting(d => d.SaveChangesAsync()).Should().ThrowAsync<TenantIsolationViolationException>();
         }
