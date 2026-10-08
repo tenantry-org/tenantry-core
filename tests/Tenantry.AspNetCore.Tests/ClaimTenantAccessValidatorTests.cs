@@ -89,8 +89,7 @@ public sealed class ClaimTenantAccessValidatorTests
     [Fact]
     public async Task ValidateAsync_WithJsonArrayContainingNoMatch_ReturnsFalse()
     {
-        // Valid JSON array, but none of the values match the tenant ID.
-        // This exercises the return-false path after the foreach loop in ClaimMatchesTenant.
+        // A valid JSON array, but none of its values is the tenant's id.
         var context = CreateContext(new Claim("tenant_ids", "[\"other1\",\"other2\"]"));
         TenantDescriptor<string> tenant = new() { TenantId = "acme", Name = "Acme Corp" };
 

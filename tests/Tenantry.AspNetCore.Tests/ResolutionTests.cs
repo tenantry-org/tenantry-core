@@ -430,6 +430,30 @@ public sealed class ResolutionTests
         logs.For(1008).Should().ContainSingle();
     }
 
+    [Theory]
+    [InlineData("[\"acme\"]", "acme")]
+    [InlineData("[\"acme\",\"umbrella\"]", "globex")]
+    public async Task AClaimHoldingAJsonArray_ResolvesItsOneTenant_OrLetsTheNextResolverRun(string claimValue, string expected)
+    {
+        await using var app = await StartAsync<string>(
+            tenant => tenant.ResolveFromClaim().ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([Acme, Globex, Umbrella]),
+            pipeline: a =>
+            {
+                a.Use((context, next) =>
+                {
+                    context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("tenant_id", claimValue)], "Test"));
+                    return next(context);
+                });
+                a.UseTenantry();
+            });
+        using var client = app.GetTestClient();
+        using HttpRequestMessage request = new(HttpMethod.Get, "/tenant");
+        request.Headers.Add("X-Tenant-Id", "globex");
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be(expected);
+    }
+
     [Fact]
     public async Task UseTenantryInTheRightPlace_LogsNoOrderingWarning()
     {

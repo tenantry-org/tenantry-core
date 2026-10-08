@@ -39,7 +39,8 @@ public static class TenantryHttpClientBuilderExtensions
     /// <paramref name="builder"/> is <c>ConfigureHttpClientDefaults</c>'s, which configures every client, third-party
     /// SDKs' included. The client has neither <paramref name="serviceAddress"/> nor an absolute <c>BaseAddress</c> in
     /// its registration (thrown as the host starts, or, in a service provider built without a host, when the client is
-    /// created). Tenantry is not registered with <c>AddTenantry</c> (thrown when the client is created).
+    /// created). Tenantry is not registered with <c>AddTenantry</c> (thrown as the host starts, or, in a service
+    /// provider built without a host, when the client is created).
     /// A request already carries the header with an id other than the current tenant's, or with no tenant current, or
     /// the tenant's id is not printable ASCII without a space at either end (thrown when the request is sent).
     /// </exception>

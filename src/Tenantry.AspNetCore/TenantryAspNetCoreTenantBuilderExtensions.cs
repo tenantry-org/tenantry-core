@@ -100,7 +100,10 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// <summary>
     /// Resolves the tenant from a claim on the current request principal.
     /// </summary>
-    /// <remarks>A principal with more than one claim of the type resolves no tenant, so the next resolver runs.</remarks>
+    /// <remarks>
+    /// A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant
+    /// here, and the next resolver runs.
+    /// </remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="claimType">The type of the claim that carries the tenant identifier.</param>

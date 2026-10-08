@@ -179,6 +179,17 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
+    public async Task AClientThatUsesTenantry_WithoutAddTenantry_StopsTheHost()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddHttpClient("billing", c => c.BaseAddress = Billing).UseTenantry();
+        using var host = builder.Build();
+
+        await host.Awaiting(h => h.StartAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*Tenantry is not registered*AddTenantry<TKey>*");
+    }
+
+    [Fact]
     public async Task TheHostStarts_WithClientsThatCanSendTheTenant_WhereverTheirAddressIsSet()
     {
         var builder = Host.CreateApplicationBuilder();
@@ -270,7 +281,7 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
-    public async Task AClientThatUsesTenantry_WithoutAddTenantry_FailsWhenItIsCreated()
+    public async Task AClientThatUsesTenantry_WithoutAddTenantry_FailsWhenItIsCreated_WithoutAHost()
     {
         ServiceCollection services = new();
         services.AddHttpClient("billing", c => c.BaseAddress = Billing).UseTenantry();

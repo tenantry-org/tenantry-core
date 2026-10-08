@@ -89,8 +89,8 @@ tenant.ResolveFromClaim("org_id");
 ```
 
 `UseTenantry()` must come after `UseAuthentication()`, as the resolver reads the claim from `HttpContext.User`. The
-caller cannot name a tenant its token does not carry. A user with more than one claim of the type resolves no tenant
-here, and the next resolver runs.
+caller cannot name a tenant its token does not carry. A user whose claims of the type list more than one tenant, as
+repeated claims or a JSON array, resolves no tenant here, and the next resolver runs.
 
 ### Query string
 

@@ -16,9 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tenant.ValidateTenantActivity<TValidator>()`, and have it create a scope for any scoped service it needs
   ([Suspended and inactive tenants](docs/tenant-stores.md#suspended-and-inactive-tenants)).
 - A class of your own that implements `ITenantBuilder<TKey>` adds `ValidateTenantActivity<TValidator>()`.
-- An HTTP or gRPC client with `UseTenantry()` and no address, or a scoped or transient
-  `ITenantConnectionStringProvider<TKey>` for `AddDbContextPerTenantDatabase`, now stops the host as it starts. Fix the
-  registration the error names.
+- An HTTP or gRPC client with `UseTenantry()` and no address or in an application without `AddTenantry`, or a scoped
+  or transient `ITenantConnectionStringProvider<TKey>` for `AddDbContextPerTenantDatabase`, now stops the host as it
+  starts. Fix the registration the error names.
 - Delete `.AddHttpPropagation()` from `AddTenantry`: `UseTenantry()` on each client is the whole setup
   ([Sending the tenant](docs/http-propagation.md#sending-the-tenant)).
 - Where a user's token lists several tenants in claims of the type `ResolveFromClaim` reads, resolve the tenant from a
@@ -107,13 +107,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Which requests carry it](docs/http-propagation.md#which-requests-carry-it).
 - `UseTenantry()` on an HTTP or gRPC client registers what sending the tenant needs, and `tenant.AddHttpPropagation()`
   is removed.
-- `ResolveFromClaim` resolves no tenant when the user has more than one claim of its type, so the next resolver runs.
-  It took the first, so a token that listed several tenants, as `ValidateTenantAccessByClaim` reads them, resolved
-  whichever came first.
-- Two registration errors now stop the host as it starts, rather than failing the first request or job that meets
-  them: an HTTP or gRPC client with `UseTenantry()` and no address to send the tenant to; and
-  `AddDbContextPerTenantDatabase` with an `ITenantConnectionStringProvider<TKey>` registered as scoped or transient. A
-  service provider built without a host still reports them on first use.
+- `ResolveFromClaim` reads its claims as `ValidateTenantAccessByClaim` does, repeated or as one claim holding a JSON
+  array (`["acme","globex"]`), and resolves no tenant when they list more than one, so the next resolver runs. It took
+  the first claim's whole value, so a token that listed several tenants resolved whichever came first, and a claim
+  holding a JSON array, even of one id, was looked up as written and found no tenant.
+- Three registration errors now stop the host as it starts, rather than failing the first request or job that meets
+  them: an HTTP or gRPC client with `UseTenantry()` and no address to send the tenant to; such a client in an
+  application without `AddTenantry`; and `AddDbContextPerTenantDatabase` with an `ITenantConnectionStringProvider<TKey>`
+  registered as scoped or transient. A service provider built without a host still reports them on first use.
 - Tenantry.Options' warning `OrdinaryOptionsReadAsTenant` is event 2008, where it was 3001, so Tenantry's events are
   1000 to 2999 and Tenantry.Pro's are 3000 and above.
 - `TenantInactiveException.TenantId` holds the tenant's id as the application's key type, as

@@ -98,6 +98,25 @@ public sealed class ClaimTenantResolverTests
         (await resolver.ResolveAsync(one, TestContext.Current.CancellationToken)).Should().Be("acme");
     }
 
+    [Theory]
+    [InlineData("[\"acme\"]", "acme")]
+    [InlineData(" [ \" acme \" ] ", "acme")]
+    [InlineData("[7]", "7")]
+    [InlineData("[\"acme\",\"globex\"]", null)]
+    [InlineData("[]", null)]
+    [InlineData("[\"acme\"", "[\"acme\"")]
+    public async Task OneClaimHoldingAJsonArray_IsReadAsTheTenantsItLists(string claimValue, string? expected)
+    {
+        // As ValidateTenantAccessByClaim reads it: one tenant resolves, several resolve none, and text that is not a
+        // JSON array is one identifier.
+        ClaimTenantResolver resolver = new();
+        var context = ContextWithClaim("tenant_id", claimValue);
+
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
+
+        result.Should().Be(expected);
+    }
+
     [Fact]
     public async Task CustomClaimType_IsUsed()
     {

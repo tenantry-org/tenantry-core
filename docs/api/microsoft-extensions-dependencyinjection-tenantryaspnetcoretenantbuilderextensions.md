@@ -97,7 +97,7 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-A principal with more than one claim of the type resolves no tenant, so the next resolver runs.
+A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant here, and the next resolver runs.
 
 ### `ResolveFromHeader<TKey>(ITenantBuilder<TKey>, string)`
 
