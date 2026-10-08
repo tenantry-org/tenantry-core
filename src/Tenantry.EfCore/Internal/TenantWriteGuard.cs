@@ -644,18 +644,17 @@ internal sealed class TenantWriteGuard<TKey>
         Dictionary<object, bool> shared = new(ReferenceEqualityComparer.Instance);
         var pairs = _entries
             .Where(entry => entry.State is EntityState.Added or EntityState.Deleted && entry.Metadata.FindPrimaryKey() is not null)
-            .GroupBy(entry => (entry.Metadata.GetRootType(), KeyValues.Of(entry, entry.Metadata.FindPrimaryKey()!.Properties)));
+            .GroupBy(entry => (entry.Metadata.GetRootType(), KeyValues.Of(entry, entry.Metadata.FindPrimaryKey()!.Properties)))
+            .Where(pair =>
+                pair.Any(entry => entry.State == EntityState.Added) && pair.Any(entry => entry.State == EntityState.Deleted));
 
         foreach (var pair in pairs)
         {
-            if (pair.Any(entry => entry.State == EntityState.Added) && pair.Any(entry => entry.State == EntityState.Deleted))
-            {
-                var spansTables = pair.Any(entry => SpansTables(entry.Metadata));
+            var spansTables = pair.Any(entry => SpansTables(entry.Metadata));
 
-                foreach (var entry in pair)
-                {
-                    shared.TryAdd(entry.Entity, spansTables);
-                }
+            foreach (var entry in pair)
+            {
+                shared.TryAdd(entry.Entity, spansTables);
             }
         }
 
@@ -691,12 +690,9 @@ internal sealed class TenantWriteGuard<TKey>
         {
             byValues = [];
 
-            foreach (var entry in _entries)
+            foreach (var entry in _entries.Where(entry => key.DeclaringEntityType.IsAssignableFrom(entry.Metadata)))
             {
-                if (key.DeclaringEntityType.IsAssignableFrom(entry.Metadata))
-                {
-                    byValues.TryAdd(KeyValues.Of(entry, key.Properties), entry);
-                }
+                byValues.TryAdd(KeyValues.Of(entry, key.Properties), entry);
             }
 
             _byKey.Add(key, byValues);

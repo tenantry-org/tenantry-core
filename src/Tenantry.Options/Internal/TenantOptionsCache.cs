@@ -78,7 +78,11 @@ internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantCon
             return Task.Run(() => lookup.GetTenantAsync(tenantId).AsTask()).GetAwaiter().GetResult();
 
         var read = lookup.GetTenantAsync(tenantId);
-        return read.IsCompletedSuccessfully ? read.Result : read.AsTask().GetAwaiter().GetResult();
+
+        if (read.IsCompletedSuccessfully)
+            return read.Result;
+
+        return read.AsTask().GetAwaiter().GetResult();
     }
 
     private ITenantLookup<TKey>? Lookup()

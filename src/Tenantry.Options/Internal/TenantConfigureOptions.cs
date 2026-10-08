@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Tenantry.Options.Internal;
 
 /// <summary>A step of <c>ConfigurePerTenant</c>, which the options factory applies while a tenant is current.</summary>
-internal interface ITenantOptionsStep<TOptions>
+internal interface ITenantOptionsStep<in TOptions>
     where TOptions : class
 {
     void Apply(string name, TOptions options);

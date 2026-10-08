@@ -248,8 +248,7 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
             if (!visited.Add(current))
                 continue;
 
-            if (current.Name == TenantryEfCore || (state.Reaches.TryGetValue(current, out known) && known) ||
-                IsProjectReferenceAssembly(current))
+            if (KnownToReach(current, state))
             {
                 state.Reaches.TryAdd(assembly, true);
                 return true;
@@ -270,6 +269,11 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
 
         return false;
     }
+
+    // Whether the assembly is Tenantry.EfCore, already found to reach it, or a project's reference assembly.
+    private static bool KnownToReach(IAssemblySymbol assembly, State state) =>
+        assembly.Name == TenantryEfCore || (state.Reaches.TryGetValue(assembly, out var known) && known) ||
+        IsProjectReferenceAssembly(assembly);
 
     // A reference assembly that is not the framework's: the framework's reference packs carry the attribute too.
     private static bool IsProjectReferenceAssembly(IAssemblySymbol assembly) =>
@@ -432,16 +436,8 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
         return definition.PartialDefinitionPart ?? definition;
     }
 
-    private static bool HasBuilder(ImmutableArray<IArgumentOperation> arguments, KnownTypes types)
-    {
-        foreach (var argument in arguments)
-        {
-            if (IsBuilder(argument.Value, types))
-                return true;
-        }
-
-        return false;
-    }
+    private static bool HasBuilder(ImmutableArray<IArgumentOperation> arguments, KnownTypes types) =>
+        arguments.Any(argument => IsBuilder(argument.Value, types));
 
     // Whether the member, called or read on an options builder, is the application's or of an assembly that can reach
     // Tenantry.EfCore (EF Core's own members are neither).

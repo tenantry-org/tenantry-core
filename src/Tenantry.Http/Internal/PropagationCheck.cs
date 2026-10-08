@@ -12,7 +12,9 @@ namespace Tenantry.Http.Internal;
 /// It runs through <c>ValidateOnStart</c>, one named check per client, which every .NET host runs before it starts.
 /// A service provider built without a host does not run it; the client's handler checks the same when it is created.
 /// </remarks>
+#pragma warning disable S1118 // The options factory creates it, so it cannot be static or privately constructed
 internal sealed class PropagationCheck
+#pragma warning restore S1118
 {
     public static void Register(IServiceCollection services, string name, Uri? serviceAddress) =>
         services.AddOptions<PropagationCheck>(name)

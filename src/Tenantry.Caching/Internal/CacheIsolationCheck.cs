@@ -12,7 +12,9 @@ namespace Tenantry.Caching.Internal;
 /// It runs through <c>ValidateOnStart</c>, which every .NET host runs before it starts, so it needs no hosting
 /// dependency. A service provider built without a host does not run it.
 /// </remarks>
+#pragma warning disable S1118 // The options factory creates it, so it cannot be static or privately constructed
 internal sealed class CacheIsolationCheck
+#pragma warning restore S1118
 {
     public static void Register(IServiceCollection services) =>
         services.AddOptions<CacheIsolationCheck>()

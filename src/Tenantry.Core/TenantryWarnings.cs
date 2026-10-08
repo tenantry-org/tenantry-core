@@ -41,7 +41,9 @@ public static class TenantryWarnings
     /// <summary>Registers <paramref name="eventIds"/> as ignored, after refusing any id this class does not name.</summary>
     internal static void Ignore(IServiceCollection services, int[] eventIds)
     {
+#pragma warning disable S3267 // The body throws, so with Where the loop could never run twice
         foreach (var eventId in eventIds)
+#pragma warning restore S3267
         {
             if (!Ignorable.Contains(eventId))
             {

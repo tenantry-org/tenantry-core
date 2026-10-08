@@ -95,40 +95,18 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         // that is not signed in and has no claims has nothing to carry over, and is treated as before.
         if (early is { Resolution.Result: ResolutionResult.Resolved } &&
             resolution.Result == ResolutionResult.AccessDenied &&
-            (context.User.Identities.Any(identity => identity.IsAuthenticated) || context.User.Claims.Any()))
+            IsSignedInOrHasClaims(context.User))
         {
             early.RefusedSignedIn = true;
         }
 
         var required = IsTenantRequired(endpoint) || early is { RefusedSignedIn: true };
 
-        // Before routing, whether the request is rejected is known only once routing has chosen its endpoint.
-        if (endpoint is not null || required || resolution.Result == ResolutionResult.Resolved)
-        {
-            _metrics.Record(resolution.Result, rejected: required && resolution.Result != ResolutionResult.Resolved);
-        }
+        RecordResult(endpoint, required, resolution.Result);
 
         if (resolution is { Tenant: { } tenant, Result: ResolutionResult.Resolved })
         {
-            var tenantId = TenantIds.Format(tenant.TenantId);
-            requestActivity?.SetTag(TenantTelemetry.TenantIdTag, tenantId);
-
-            if (_requestMetrics.Enabled)
-            {
-                TagRequestMetrics(context, tenant, tenantId);
-            }
-
-            using var current = _tenantContext.MakeCurrent(tenant);
-            using var logScope = _logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId));
-
-            TenantResolutionLog.TenantResolved(_logger, tenantId, context.Request.Method, context.Request.Path);
-
-            if (_options.OnResolved is { } onResolved)
-            {
-                await onResolved(new TenantResolvedContext<TKey>(context, tenant)).ConfigureAwait(false);
-            }
-
-            await NextAsync(context, endpoint is null, resolution).ConfigureAwait(false);
+            await NextAsTenantAsync(context, tenant, requestActivity, endpoint is null, resolution).ConfigureAwait(false);
             return;
         }
 
@@ -138,21 +116,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
 
         if (resolution is { Result: ResolutionResult.AccessDenied or ResolutionResult.Inactive, Tenant: { } refused })
         {
-            // A signed-in user without a name claim is named by its identifier, and is never logged as anonymous.
-            var user = context.User.Identity?.Name
-                ?? context.User.FindFirstValue(ClaimTypes.NameIdentifier)
-                ?? context.User.FindFirstValue("sub")
-                ?? (context.User.Identities.Any(identity => identity.IsAuthenticated) ? "(unnamed)" : "(anonymous)");
-            var refusedId = TenantIds.Format(refused.TenantId);
-
-            if (resolution.Result == ResolutionResult.Inactive)
-            {
-                TenantResolutionLog.TenantInactive(_logger, context.Request.Method, context.Request.Path, user, refusedId);
-            }
-            else
-            {
-                TenantResolutionLog.TenantAccessDenied(_logger, context.Request.Method, context.Request.Path, user, refusedId);
-            }
+            LogRefused(context, resolution.Result, refused);
         }
 
         if (required)
@@ -166,7 +130,70 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             return;
         }
 
-        switch (resolution.Result)
+        LogContinuingWithoutTenant(context, resolution.Result);
+        await NextAsync(context, endpoint is null, resolution).ConfigureAwait(false);
+    }
+
+    // Before routing, whether the request is rejected is known only once routing has chosen its endpoint.
+    private void RecordResult(Endpoint? endpoint, bool required, ResolutionResult result)
+    {
+        if (endpoint is not null || required || result == ResolutionResult.Resolved)
+        {
+            _metrics.Record(result, rejected: required && result != ResolutionResult.Resolved);
+        }
+    }
+
+    // Tags the request with the tenant and runs the rest of the pipeline while it is current.
+    private async Task NextAsTenantAsync(
+        HttpContext context,
+        ITenantDescriptor<TKey> tenant,
+        Activity? requestActivity,
+        bool endpointWasNull,
+        TenantResolution<TKey> resolution)
+    {
+        var tenantId = TenantIds.Format(tenant.TenantId);
+        requestActivity?.SetTag(TenantTelemetry.TenantIdTag, tenantId);
+
+        if (_requestMetrics.Enabled)
+        {
+            TagRequestMetrics(context, tenant, tenantId);
+        }
+
+        using var current = _tenantContext.MakeCurrent(tenant);
+        using var logScope = _logger.BeginScope(TenantTelemetry.CreateLogScope(tenantId));
+
+        TenantResolutionLog.TenantResolved(_logger, tenantId, context.Request.Method, context.Request.Path);
+
+        if (_options.OnResolved is { } onResolved)
+        {
+            await onResolved(new TenantResolvedContext<TKey>(context, tenant)).ConfigureAwait(false);
+        }
+
+        await NextAsync(context, endpointWasNull, resolution).ConfigureAwait(false);
+    }
+
+    private void LogRefused(HttpContext context, ResolutionResult result, ITenantDescriptor<TKey> refused)
+    {
+        // A signed-in user without a name claim is named by its identifier, and is never logged as anonymous.
+        var user = context.User.Identity?.Name
+            ?? context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.User.FindFirstValue("sub")
+            ?? (context.User.Identities.Any(identity => identity.IsAuthenticated) ? "(unnamed)" : "(anonymous)");
+        var refusedId = TenantIds.Format(refused.TenantId);
+
+        if (result == ResolutionResult.Inactive)
+        {
+            TenantResolutionLog.TenantInactive(_logger, context.Request.Method, context.Request.Path, user, refusedId);
+        }
+        else
+        {
+            TenantResolutionLog.TenantAccessDenied(_logger, context.Request.Method, context.Request.Path, user, refusedId);
+        }
+    }
+
+    private void LogContinuingWithoutTenant(HttpContext context, ResolutionResult result)
+    {
+        switch (result)
         {
             case ResolutionResult.Missing:
                 TenantResolutionLog.NoTenantIdentifier(_logger, context.Request.Method, context.Request.Path);
@@ -189,9 +216,10 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
                     "names a tenant the request may not use");
                 break;
         }
-
-        await NextAsync(context, endpoint is null, resolution).ConfigureAwait(false);
     }
+
+    private static bool IsSignedInOrHasClaims(ClaimsPrincipal user) =>
+        user.Identities.Any(identity => identity.IsAuthenticated) || user.Claims.Any();
 
     // Before authentication, app.UseTenantResolution() found what it could: the access validators, and the claim
     // resolvers when nothing else named a tenant, run now that the user is known.

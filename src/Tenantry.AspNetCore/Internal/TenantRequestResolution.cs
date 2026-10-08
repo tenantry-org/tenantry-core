@@ -22,7 +22,9 @@ internal sealed record TenantResolution<TKey>(
     public async ValueTask<bool> ResolvesNowAsync<TResolver>(HttpContext context)
         where TResolver : ITenantResolver
     {
+#pragma warning disable S3267 // Each resolver is awaited, which Any cannot do
         foreach (var resolver in MissedResolvers?.OfType<TResolver>() ?? [])
+#pragma warning restore S3267
         {
             if (!string.IsNullOrWhiteSpace(await resolver.ResolveAsync(context, context.RequestAborted).ConfigureAwait(false)))
             {
@@ -145,10 +147,7 @@ internal sealed class TenantRequestResolution<TKey>
 
             identifier = null;
 
-            // The authentication middleware has not run yet, so a claim resolver could not see the request's user, or
-            // routing has not, so a route-value resolver could not see its route values.
-            if ((resolver is ClaimTenantResolver && context.Features.Get<IAuthenticationFeature>() is null) ||
-                (resolver is RouteValueTenantResolver && context.GetEndpoint() is null))
+            if (RanTooEarly(resolver, context))
             {
                 (missedResolvers ??= []).Add(resolver);
             }
@@ -180,6 +179,12 @@ internal sealed class TenantRequestResolution<TKey>
 
         return new(ResolutionResult.Resolved, identifier, tenant, missedResolvers);
     }
+
+    // The authentication middleware has not run yet, so a claim resolver could not see the request's user, or routing
+    // has not, so a route-value resolver could not see its route values.
+    private static bool RanTooEarly(ITenantResolver resolver, HttpContext context) =>
+        (resolver is ClaimTenantResolver && context.Features.Get<IAuthenticationFeature>() is null) ||
+        (resolver is RouteValueTenantResolver && context.GetEndpoint() is null);
 }
 
 /// <summary>

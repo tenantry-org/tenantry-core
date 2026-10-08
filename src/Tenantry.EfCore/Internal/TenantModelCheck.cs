@@ -458,14 +458,14 @@ internal static class TenantEntityTypes
 
         foreach (var entityType in model.GetEntityTypes().Where(type => !type.IsOwned() && !IsTenantEntity(type.ClrType)))
         {
-            foreach (var mapping in entityType.GetTableMappings())
+            foreach (var table in entityType.GetTableMappings().Select(mapping => mapping.Table))
             {
-                if (tenantTables.TryGetValue(mapping.Table, out var tenantEntity))
+                if (tenantTables.TryGetValue(table, out var tenantEntity))
                 {
                     throw new TenantIsolationViolationException(
                         TenantIsolationViolationKind.ModelConfiguration,
                         entityType.ClrType.Name,
-                        $"Entity '{entityType.ClrType.Name}' shares table '{mapping.Table.Name}' with tenant-owned " +
+                        $"Entity '{entityType.ClrType.Name}' shares table '{table.Name}' with tenant-owned " +
                         $"'{tenantEntity}' but is not tenant-owned, so its queries and writes of that table's rows are " +
                         $"not isolated. Implement ITenantEntity<{keyType.Name}> on it, or map it to a table of its own.");
                 }

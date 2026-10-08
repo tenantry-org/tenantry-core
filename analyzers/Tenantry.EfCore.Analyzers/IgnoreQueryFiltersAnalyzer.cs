@@ -69,16 +69,8 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
     {
         var model = names.SemanticModel;
 
-        if (model is null)
-            return false;
-
-        foreach (var node in names.Value.Syntax.DescendantNodesAndSelf())
-        {
-            if (model.GetConstantValue(node, context.CancellationToken) is { HasValue: true, Value: TenantFilterName })
-                return true;
-        }
-
-        return false;
+        return model is not null && names.Value.Syntax.DescendantNodesAndSelf().Any(node =>
+            model.GetConstantValue(node, context.CancellationToken) is { HasValue: true, Value: TenantFilterName });
     }
 
     // The calls that make up the query in the one expression the call is in, which EF Core ignores the filters for
@@ -160,17 +152,26 @@ public sealed class IgnoreQueryFiltersAnalyzer : DiagnosticAnalyzer
                 return navigation;
             }
 
-            // A lambda EF Core translates: what it reads from its parameters, and the queries it runs.
-            if (!SymbolEqualityComparer.Default.Equals(parameter.OriginalDefinition, types.Expression))
-                continue;
-
-            foreach (var operation in argument.Value.DescendantsAndSelf())
+            if (SymbolEqualityComparer.Default.Equals(parameter.OriginalDefinition, types.Expression) &&
+                TenantOwnedInLambda(argument.Value, types) is { } owned)
             {
-                if (operation.Type is { } type && (IsQuery(type, types) || FromLambdaParameter(operation)) &&
-                    TenantOwned(type, types) is { } owned)
-                {
-                    return owned;
-                }
+                return owned;
+            }
+        }
+
+        return null;
+    }
+
+    // The first tenant-owned type in a lambda EF Core translates: what it reads from its parameters, and the queries it
+    // runs.
+    private static ITypeSymbol? TenantOwnedInLambda(IOperation lambda, KnownTypes types)
+    {
+        foreach (var operation in lambda.DescendantsAndSelf())
+        {
+            if (operation.Type is { } type && (IsQuery(type, types) || FromLambdaParameter(operation)) &&
+                TenantOwned(type, types) is { } owned)
+            {
+                return owned;
             }
         }
 

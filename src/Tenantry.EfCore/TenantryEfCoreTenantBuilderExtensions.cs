@@ -135,7 +135,9 @@ public static class TenantryEfCoreTenantBuilderExtensions
     }
 
     // The options type of the startup check, one named after each context type.
+#pragma warning disable S2094 // The options factory creates it, so it must be a class; the check uses only its name
     private sealed class TenantDatabaseCheck;
+#pragma warning restore S2094
 
     private sealed class TenantDatabaseRegistration<[DynamicallyAccessedMembers(ContextMembers)] TContext>(
         Action<IServiceProvider, DbContextOptionsBuilder> configure,

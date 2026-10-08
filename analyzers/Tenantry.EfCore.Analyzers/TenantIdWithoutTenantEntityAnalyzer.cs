@@ -177,27 +177,30 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
                 if (generated || state.MarkedShared.ContainsKey(entity) || !ShouldBeTenantOwned(entity, types))
                     continue;
 
-                // Once per type, where it is first mapped outside generated code (in source order, so the result does not depend on threads).
-                if (!reported.TryGetValue(entity, out var first) || Precedes(location, first))
-                    reported[entity] = location;
+                KeepFirst(reported, entity, location);
             }
         }
 
         foreach (var pair in reported)
         {
-            var tenantId = FindTenantId(pair.Key)!;
-            var keyType = tenantId.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-
             context.ReportDiagnostic(Diagnostic.Create(
                 Rules.TenantIdWithoutTenantEntity,
                 pair.Value,
                 pair.Key.Name,
-                CanBeKey(tenantId.Type, context.Compilation)
-                    ? $"implement ITenantEntity<{keyType}>, or mark it [SharedAcrossTenants] if every tenant shares it"
-                    : $"its TenantId is a {keyType}, which cannot be a tenant key: make it a non-nullable Guid, int, long " +
-                      "or string and implement ITenantEntity<TKey>, or mark the type [SharedAcrossTenants] if every " +
-                      "tenant shares it"));
+                Advice(FindTenantId(pair.Key)!.Type, context.Compilation)));
         }
+    }
+
+    // What the diagnostic tells the developer to do, by whether the TenantId's type can be a tenant key.
+    private static string Advice(ITypeSymbol tenantIdType, Compilation compilation)
+    {
+        var keyType = tenantIdType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+
+        return CanBeKey(tenantIdType, compilation)
+            ? $"implement ITenantEntity<{keyType}>, or mark it [SharedAcrossTenants] if every tenant shares it"
+            : $"its TenantId is a {keyType}, which cannot be a tenant key: make it a non-nullable Guid, int, long " +
+              "or string and implement ITenantEntity<TKey>, or mark the type [SharedAcrossTenants] if every " +
+              "tenant shares it";
     }
 
     // The contexts the unknown markers silence, after the generic markers are resolved to the types their calls pass.
@@ -287,6 +290,13 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    // Once per type, where it is first mapped outside generated code (in source order, so the result does not depend on threads).
+    private static void KeepFirst(Dictionary<ITypeSymbol, Location> reported, ITypeSymbol entity, Location location)
+    {
+        if (!reported.TryGetValue(entity, out var first) || Precedes(location, first))
+            reported[entity] = location;
     }
 
     private static bool Precedes(Location location, Location other)
