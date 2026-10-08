@@ -187,7 +187,7 @@ public sealed class TenantPropagationHandlerTests
         builder.Services.AddHttpClient("inventory").UseTenantry(new Uri("https://inventory.internal"));
         using var host = builder.Build();
 
-        await host.StartAsync(TestContext.Current.CancellationToken);
+        await host.Awaiting(h => h.StartAsync(TestContext.Current.CancellationToken)).Should().NotThrowAsync();
         await host.StopAsync(TestContext.Current.CancellationToken);
     }
 

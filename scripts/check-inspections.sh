@@ -26,6 +26,6 @@ jq -r '.runs[].results[] | .locations[0].physicalLocation as $at
     + "\(.ruleId): \(.message.text)"' "$sarif"
 count="$(jq '[.runs[].results[]] | length' "$sarif")"
 if [[ "$count" != "0" ]]; then
-  echo "::error::ReSharper reports $count warnings (above): Rider must show none"
+  echo "::error::ReSharper reports $count warnings (above): Rider must show none" >&2
   exit 1
 fi

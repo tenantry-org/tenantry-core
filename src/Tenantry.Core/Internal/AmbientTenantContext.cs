@@ -100,9 +100,9 @@ internal sealed class AmbientTenantContext<TKey> : ITenantContextSetter<TKey>
             // Scopes closed after the scope inside them opened are skipped; one closed before is restored.
             var closed = current;
 
-            while (closed is { _parentWasClosed: false, Parent: { IsDisposed: true } parent })
+            while (closed is { _parentWasClosed: false, Parent: { IsDisposed: true } outer })
             {
-                closed = parent;
+                closed = outer;
             }
 
             CurrentFrame.Value = closed.Parent;

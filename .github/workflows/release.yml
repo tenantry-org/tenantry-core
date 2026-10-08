@@ -262,7 +262,7 @@ jobs:
           listed=false
           deadline=$((SECONDS + 900))
           while [ "$SECONDS" -lt "$deadline" ]; do
-            if curl -fsSL --max-time 30 https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json \
+            if curl --proto '=https' -fsSL --max-time 30 https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json \
               | jq -e --arg version "$version" '.versions | index($version) != null' > /dev/null; then
               listed=true
               break

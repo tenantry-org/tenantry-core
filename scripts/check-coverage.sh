@@ -18,6 +18,6 @@ dotnet reportgenerator -reports:coverage/coverage.xml -targetdir:coverage/report
 line="$(jq -e '.summary.linecoverage | numbers' coverage/report/Summary.json)"
 echo "Total line coverage: ${line}%"
 if ! awk -v line="$line" -v minimum="$minimum" 'BEGIN { exit !(line >= minimum) }'; then
-  echo "::error::Line coverage ${line}% is below the required ${minimum}%"
+  echo "::error::Line coverage ${line}% is below the required ${minimum}%" >&2
   exit 1
 fi

@@ -34,10 +34,10 @@ internal static class TenantActivityCheck
         public ValueTask Visit<TKey>()
             where TKey : IEquatable<TKey>, IParsable<TKey> =>
             services.GetRequiredService<ITenantContext<TKey>>().CurrentTenant is { } tenant
-                ? ThrowIfInactiveAsync(tenant)
+                ? RefuseIfInactiveAsync(tenant)
                 : ValueTask.CompletedTask;
 
-        private async ValueTask ThrowIfInactiveAsync<TKey>(ITenantDescriptor<TKey> tenant)
+        private async ValueTask RefuseIfInactiveAsync<TKey>(ITenantDescriptor<TKey> tenant)
             where TKey : IEquatable<TKey>, IParsable<TKey>
         {
             var current = await services.GetRequiredService<ITenantLookup<TKey>>()

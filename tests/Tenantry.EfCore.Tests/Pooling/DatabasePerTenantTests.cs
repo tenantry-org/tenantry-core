@@ -564,7 +564,7 @@ public abstract class DatabasePerTenantTests(bool pooled) : IAsyncLifetime
             .AddDbContextPerTenantDatabase<PooledNotesContext>((_, options) => options.UseSqlite(), pooled));
         using var host = builder.Build();
 
-        await host.StartAsync(TestContext.Current.CancellationToken);
+        await host.Awaiting(h => h.StartAsync(TestContext.Current.CancellationToken)).Should().NotThrowAsync();
         await host.StopAsync(TestContext.Current.CancellationToken);
     }
 
