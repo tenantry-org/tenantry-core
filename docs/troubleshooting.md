@@ -180,9 +180,9 @@ passing `app.UseTenantry()`, so its tenant was never checked and the endpoint di
 
 ## Every request returns `500` after `UseTenantResolution()` (event 1013)
 
-Move the authorization middleware after `app.UseTenantry()`. It runs between `app.UseTenantResolution()` and
-`app.UseTenantry()`, added some other way than `app.UseAuthorization()`, which would have failed the start. There it
-would authorize on a tenant the access validators have not checked, so the request is refused
+Move the authorization middleware after `app.UseTenantry()`. It was added between `app.UseTenantResolution()` and
+`app.UseTenantry()` some other way than `app.UseAuthorization()`, which would have failed the start. There it would
+authorize on a tenant the access validators have not checked, so the request is refused
 ([Checks on the pipeline](authentication-per-tenant.md#checks-on-the-pipeline)).
 
 ## Authentication ignores the tenant's settings (event 1010)
