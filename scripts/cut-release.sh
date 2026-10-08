@@ -29,8 +29,8 @@ fail() {
 
 # Exit code 2 from git ls-remote --exit-code: origin has no such ref.
 absent_on_origin() {
-  local status=0
-  git ls-remote --exit-code origin "$1" > /dev/null || status=$?
+  local ref="$1" status=0
+  git ls-remote --exit-code origin "$ref" > /dev/null || status=$?
   [[ $status -eq 2 ]]
 }
 

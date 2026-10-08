@@ -120,14 +120,15 @@ for template in tenantry-api tenantry-worker; do
     if wait_for "$log" "Now listening on: http:"; then
       url=$(sed -n 's/.*Now listening on: \(http:[^ ]*\).*/\1/p' "$log" | head -n 1)
       token_for() { # <tenant>
+        local tenant="$1"
         curl -s --max-time 30 -X POST "$url/dev/token" -H 'Content-Type: application/json' \
-          -d "{\"subject\":\"smoke\",\"tenants\":[\"$1\"]}" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || true
+          -d "{\"subject\":\"smoke\",\"tenants\":[\"$tenant\"]}" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || true
       }
       call() { # <method> <tenant> <token or empty> [body]; prints the status code, and the body to $work/body
-        local auth=()
-        [[ -n "$3" ]] && auth=(-H "Authorization: Bearer $3")
-        curl -s --max-time 30 -o "$work/body" -w '%{http_code}' -X "$1" -H "X-Tenant-Id: $2" \
-          -H 'Content-Type: application/json' ${4:+-d "$4"} ${auth[@]+"${auth[@]}"} "$url/notes" || true
+        local method="$1" tenant="$2" token="$3" body="${4:-}" auth=()
+        [[ -n "$token" ]] && auth=(-H "Authorization: Bearer $token")
+        curl -s --max-time 30 -o "$work/body" -w '%{http_code}' -X "$method" -H "X-Tenant-Id: $tenant" \
+          -H 'Content-Type: application/json' ${body:+-d "$body"} ${auth[@]+"${auth[@]}"} "$url/notes" || true
       }
       acme=$(token_for acme)
       globex=$(token_for globex)
