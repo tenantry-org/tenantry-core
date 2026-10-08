@@ -26,24 +26,22 @@ using Tenantry;
 using Tenantry.EfCore;
 using Tenantry.Samples.EfCoreConsole;
 
-// Two tenants we will switch between. In a real worker these would come from your
-// ITenantStore through ITenantLookup, not be built by hand.
+// Two tenants, built by hand. A real worker reads them from its ITenantStore through ITenantLookup.
 var acme = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-0000000000a1"), Name = "Acme" };
 var globex = new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-0000000000b2"), Name = "Globex" };
 
-// Host.CreateApplicationBuilder gives us DI + logging + configuration without any web stack.
+// A host with DI, logging and configuration, but no web stack.
 var builder = Host.CreateApplicationBuilder(args);
 
-// Quieten the host's lifetime chatter so the sample's own output is easy to read,
-// but keep Warning+ so Tenantry's isolation diagnostics are visible.
+// Warnings and above only, so EF Core's log of every SQL command does not hide the sample's output.
+// Tenantry logs the refused write in step 5 as an error, so it still shows.
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
 // ── 1. Register Tenantry (no ASP.NET Core package needed) ───────────────────────────────
 builder.Services.AddTenantry<Guid>(tenant =>
 {
-    // A store is optional for AddTenantry (nothing resolves tenants for you off the
-    // request like the ASP.NET middleware does), but registering one lets you look tenants
-    // up by id from anywhere, for example when a queued message only carries the tenant id.
+    // AddTenantry needs no store here, as no middleware resolves tenants from a request. A store lets code
+    // look a tenant up by id, for example when a queued message carries only the tenant id.
     tenant.UseInMemoryStore([acme, globex]);
 });
 
@@ -56,13 +54,13 @@ builder.Services.AddDbContext<SampleDbContext>(options =>
 
 using var host = builder.Build();
 
-// A console app has no request scope, so create one DI scope for our unit of work.
+// A console app has no request scope, so create one DI scope for this unit of work.
 using var scope = host.Services.CreateScope();
 var sp = scope.ServiceProvider;
 var tenantContext = sp.GetRequiredService<ITenantContextSetter<Guid>>();
 var db = sp.GetRequiredService<SampleDbContext>();
 
-// Fresh database every run so the sample is reproducible.
+// A new database each run, so every run prints the same output.
 await db.Database.EnsureDeletedAsync();
 await db.Database.EnsureCreatedAsync();
 
@@ -73,14 +71,14 @@ using (tenantContext.MakeCurrent(acme))
     db.Orders.Add(new Order { Description = "Acme widget order" });
     db.Orders.Add(new Order { Description = "Acme gadget order" });
 
-    // We never set TenantId: the interceptor stamps it from the active scope.
+    // TenantId is not set here: the interceptor stamps it with the current tenant.
     await db.SaveChangesAsync();
 
     acmeOrder = await db.Orders.FirstAsync();
     Print("Acme", $"sees {await db.Orders.CountAsync()} order(s); first TenantId = {acmeOrder.TenantId}");
 }
 
-// ── 4. Do some work as Globex (note the automatic read isolation) ──────────────────────────
+// ── 4. Do some work as Globex, whose reads see only its own rows ──────────────────────────
 using (tenantContext.MakeCurrent(globex))
 {
     db.Orders.Add(new Order { Description = "Globex sprocket order" });
@@ -113,9 +111,9 @@ using (tenantContext.MakeCurrent(globex))
     Print("Globex (restored)", $"sees {await db.Orders.CountAsync()} order(s) again");
 }
 
-// ── 7. No active scope = fail closed ───────────────────────────────────────────────────────
-// With no tenant resolved, the filter matches nothing, so reads return zero rows rather than
-// leaking every tenant's data. A SaveChanges of tenant-owned entities here would be rejected.
+// ── 7. No tenant current: isolation fails closed ───────────────────────────────────────────
+// With no tenant current, the filter matches nothing, so reads return no rows rather than every
+// tenant's. A SaveChanges of tenant-owned entities here is rejected.
 Print("No scope", $"sees {await db.Orders.CountAsync()} order(s): isolation fails closed");
 
 // ── 8. Admin / reporting: bypass isolation on purpose ───────────────────────────────────────

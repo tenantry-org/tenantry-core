@@ -7,7 +7,7 @@ namespace TenantryApi;
 /// <summary>
 /// Token validation settings. In production the tokens come from your identity provider and only the
 /// issuer, audience and signing keys are configured here; <see cref="IssueDevelopmentToken"/> exists so the
-/// sample can be run and tested without one.
+/// project can be run and tested without one.
 /// </summary>
 public sealed class AuthSettings
 {

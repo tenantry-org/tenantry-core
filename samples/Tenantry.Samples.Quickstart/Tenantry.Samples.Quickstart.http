@@ -12,7 +12,7 @@ X-Tenant-Id: globex
 GET {{host}}/me
 X-Tenant-Id: acme
 
-### Get current tenant info for Globex, using the query string resolver we registered
+### Get current tenant info for Globex, from the query string resolver
 GET {{host}}/me?tenant=globex
 
 ### A custom access validator refuses this request with 403

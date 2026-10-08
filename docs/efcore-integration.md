@@ -9,8 +9,9 @@ interface, and uses only standard EF Core features ([tested providers](#tested-p
 
 ## Setup at a glance
 
-> Resolving the tenant from a header without authentication lets any caller select any tenant. In production,
-> authenticate callers and check that they belong to the tenant they select ([Access control](access-control.md)).
+> Resolving the tenant from a header without authentication lets any caller select any tenant. The build reports it as
+> warning [TNY2001](analyzers.md#tny2001) until you add an access validator. In production, authenticate callers and
+> check that they belong to the tenant they select ([Access control](access-control.md)).
 
 ```csharp
 using Microsoft.EntityFrameworkCore;

@@ -131,10 +131,6 @@ request, whether the cookie scheme or a remote scheme over it is the default:
 | One name, ticket in the cookie | `403`; the response sets no cookie | signed in: the browser keeps its cookie, whose ticket was never changed |
 | One name, `SessionStore` | `403`; the session is removed from the store | signed out: the cookie names a session that no longer exists |
 
-Static files that `app.UseStaticFiles()` serves can go before `app.UseTenantResolution()`, out of the refusal's reach
-([Static files](#static-files)), but a sign-in page cannot. That is why a cookie name per tenant is the recommended
-set-up.
-
 The validator refuses an anonymous caller too, but such a caller carries no claims, so a sign-in endpoint runs with no
 tenant current. Mark it `AllowMissingTenant()` and take the tenant from the request, such as its host, when you issue
 the cookie. Its authentication handler was created with the tenant current, so it writes the tenant's cookie. It must

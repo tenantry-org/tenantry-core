@@ -28,9 +28,8 @@ var auth = builder.Configuration.GetSection("Auth").Get<AuthSettings>() ?? new A
 
 if (builder.Environment.IsDevelopment() && string.IsNullOrEmpty(auth.SigningKey))
 {
-    // No key configured: sign development tokens with a random key for this run, so the sample works
-    // from a fresh clone without committing a secret. Configure Auth:SigningKey (or real issuer keys)
-    // everywhere else.
+    // No key configured: sign development tokens with a random key for this run, so a new project runs
+    // without committing a secret. Configure Auth:SigningKey (or real issuer keys) everywhere else.
     auth = new AuthSettings
     {
         Issuer = auth.Issuer,
@@ -75,7 +74,7 @@ builder.Services.AddDbContext<NotesDbContext>(options => options
 
 var app = builder.Build();
 
-// Sample only: create the schema on startup. Use EF Core migrations in production.
+// Create the schema on startup. Use EF Core migrations in production.
 await using (var scope = app.Services.CreateAsyncScope())
 {
     await scope.ServiceProvider.GetRequiredService<NotesDbContext>().Database.EnsureCreatedAsync();
@@ -101,7 +100,7 @@ app.MapGet("/health", () => Results.Ok("healthy"))
 
 if (app.Environment.IsDevelopment())
 {
-    // Stands in for an identity provider so the sample runs on its own. Never expose this in production.
+    // Stands in for an identity provider so the project runs without one. Never expose this in production.
     app.MapPost("/dev/token", (DevelopmentTokenRequest request) =>
             Results.Ok(new { token = auth.IssueDevelopmentToken(request.Subject, request.Tenants) }))
         .AllowAnonymous()

@@ -92,17 +92,17 @@ using Tenantry;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddAuthentication().AddJwtBearer();   // your sign-in, configured as usual
+builder.Services.AddAuthentication().AddJwtBearer();   // configure authentication as usual
 
 builder.Services.AddTenantry<Guid>(tenant =>
 {
-    // 1. How is the tenant identified on each request? (resolvers are tried in order)
+    // 1. Where the tenant comes from (resolvers are tried in order)
     tenant.ResolveFromHeader("X-Tenant-Id");
 
-    // 2. May the signed-in user use it? (their "tenant_id" claims must name it)
+    // 2. Who may use it: the user's "tenant_id" claims must name it
     tenant.ValidateTenantAccessByClaim("tenant_id");
 
-    // 3. Which tenants exist? (swap for a DB/cache-backed store in production)
+    // 3. Which tenants exist (use a store over your database in production)
     tenant.UseInMemoryStore(
     [
         new TenantDescriptor<Guid> { TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"), Name = "Acme" },
@@ -198,7 +198,7 @@ The [documentation index](docs/README.md) also links the API reference.
 
 | Sample | Demonstrates |
 |--------|--------------|
-| [`SecureApi`](samples/Tenantry.Samples.SecureApi) | **Start here for production:** JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation, integration tests |
+| [`SecureApi`](samples/Tenantry.Samples.SecureApi) | Production starting point: JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation, integration tests |
 | [`Quickstart`](samples/Tenantry.Samples.Quickstart) | Minimal ASP.NET Core setup, resolvers, access validators, endpoint metadata |
 | [`EfCoreWeb`](samples/Tenantry.Samples.EfCoreWeb) | An EF Core app with migrations, DB-backed store, mixed tenanted/global entities, admin queries |
 | [`EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantry` and manual scopes |

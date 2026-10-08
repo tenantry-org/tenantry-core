@@ -51,6 +51,9 @@ builder.Services.AddTenantry<Guid>(tenant =>
 });
 ```
 
+The build reports this registration as warning [TNY2001](analyzers.md#tny2001) until you add an access validator
+([Validating tenant access](access-control.md#validating-tenant-access)).
+
 The registration methods need no `using` directive. `using Tenantry;` is for types such as `TenantDescriptor<TKey>`.
 Builder methods chain, so the lambda can also be
 `tenant => tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore(tenants)`. `app.UseTenantry()` (step 7) throws at

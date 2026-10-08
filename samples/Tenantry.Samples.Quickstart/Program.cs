@@ -12,28 +12,25 @@ builder.Services.AddTenantry<string>(tenant =>
     // Read the tenant ID from the X-Tenant-Id HTTP header.
     tenant.ResolveFromHeader("X-Tenant-Id");
 
-    // We can chain multiple resolution methods together, they will be tried in order of registration.
-    // app.UseTenantry() fails at startup without at least one registered resolver
+    // Resolvers are tried in the order they are added. app.UseTenantry() fails at startup without one.
     tenant.ResolveFromQueryString("tenant");
 
-    // Prevent requests without a tenant ID from executing by default
-    // Can be overridden with [AllowMissingTenant] (MVC) or .AllowMissingTenant() (Minimal APIs)
-    // Omitting this will allow all requests to execute regardless of whether a tenant was resolved.
-    // You could then explicitly require a tenant by using [RequireTenant] (MVC) or .RequireTenant() (Minimal APIs)
+    // Every endpoint requires a tenant unless it has [AllowMissingTenant] (MVC) or .AllowMissingTenant()
+    // (minimal APIs). Without this line, every endpoint runs whether or not a tenant was resolved, unless it has
+    // [RequireTenant] (MVC) or .RequireTenant() (minimal APIs).
     tenant.RequireTenantByDefault();
 
-    // We can register custom validators to put additional constraints on access
-    // They have access to the entire HTTP context and the tenant info
+    // Access validators read the HttpContext and the tenant, and can refuse the tenant: a request that needs it
+    // then gets 403.
     tenant.ValidateTenantAccess((ctx, tenantInfo) =>
         !ctx.Request.Headers.ContainsKey("X-Block-Access"));
 
-    // Validators can be chained together and will be evaluated with logical AND (both this and the last must pass)
-    // They can also be asynchronous
+    // Every validator must pass: this one and the one above. A validator can be asynchronous.
     tenant.ValidateTenantAccess(async (ctx, tenantInfo, ct) =>
         await ValueTask.FromResult(!ctx.Request.Headers.ContainsKey("X-Also-Block-Access")));
 
-    // In-memory store: replace it with a database/cache-backed ITenantStore implementation in production.
-    // app.UseTenantry() fails at startup without a registered store
+    // In production, replace the in-memory store with an ITenantStore over your database.
+    // app.UseTenantry() fails at startup without a store.
     tenant.UseInMemoryStore(
     [
         new TenantDescriptor<string> { TenantId = "acme",   Name = "Acme Corp"  },
@@ -43,9 +40,8 @@ builder.Services.AddTenantry<string>(tenant =>
 
 var app = builder.Build();
 
-// Add the tenant resolution middleware
-// Must come before any endpoint that needs the tenant context.
-// Place after UseAuthentication() if using claim-based resolution.
+// Resolves the tenant for each request and runs the access validators. It goes after UseAuthentication() when the
+// app has authentication, and before anything that needs the tenant.
 app.UseTenantry();
 
 var orders = new List<Order>
@@ -55,19 +51,19 @@ var orders = new List<Order>
     new() {TenantId = "globex", Description = "Order 3"}
 };
 
-// List orders for the current tenant only, do not execute if tenant is unresolved
+// The current tenant's orders. The endpoint requires a tenant.
 app.MapGet("/orders", (ITenantContext<string> ctx) =>
         Results.Ok(orders.Where(o => o.TenantId == ctx.CurrentTenantId)))
-    .RequireTenant(); // <- Has no effect here because we're already using RequireTenantByDefault()
+    .RequireTenant(); // no effect here, as RequireTenantByDefault() already requires one
 
-// Show the resolved tenant for the current request, allow to execute if tenant is unresolved
+// The current request's tenant. The endpoint also runs without one, and answers 404.
 app.MapGet("/me", (ITenantContext<string> ctx) =>
     ctx.HasTenant
         ? Results.Ok(new { TenantId = ctx.CurrentTenantId, ctx.RequiredTenant.Name })
         : Results.NotFound("No tenant resolved."))
     .AllowMissingTenant();
 
-// A completely tenant-agnostic endpoint
+// An endpoint that needs no tenant
 app.MapGet("/health", () => Results.Ok("ok"))
     .AllowMissingTenant();
 

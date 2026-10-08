@@ -138,6 +138,10 @@ app.UseAuthorization();
 app.UseTenantry();
 ```
 
+Like Finbuckle's header strategy, `ResolveFromHeader` lets any caller name any tenant, so the build reports
+[TNY2001](analyzers.md#tny2001) until you add an access validator
+([Validating tenant access](access-control.md#validating-tenant-access)).
+
 Finbuckle's claim strategy authenticated the request itself. `ResolveFromClaim` reads `HttpContext.User`, which the
 authentication middleware sets, so `UseTenantry()` goes after `UseAuthentication()`
 ([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering) has the full rule).
