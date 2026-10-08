@@ -30,9 +30,8 @@ Only the maintainer can push `v*` tags.
    pushes and tags nothing, and prints the commands for the steps below and how to undo it.
 
    The branch's commit reaches `master` only as a cherry-pick (a new commit with its own hash), never by merging or
-   fast-forwarding: that would put the tagged commit on `master`'s history, where MinVer
-   would count `master`'s prerelease versions from the tag and restart them. The release workflow refuses a tag on a
-   commit `master` contains, and the prerelease job refuses a version below one already published.
+   fast-forwarding: that would put the tagged commit on `master`'s history, where MinVer would count `master`'s
+   prerelease versions from the tag and restart them. The prerelease job refuses a version below one already published.
 3. Push the branch, and wait for CI to pass on that push: the release requires that run.
 
    ```sh
@@ -48,9 +47,10 @@ Only the maintainer can push `v*` tags.
 5. Optionally rehearse: Actions → Release → Run workflow on `release/X.Y` (or `master`), with the tag as the version.
    It runs the release's checks, builds the same packages, and shows what a release would publish and its notes,
    without publishing anything.
-6. Tag the branch's head, signed, and push the tag. The script prints the command with git's configured signing key
-   (`git config user.signingkey`) when it is an SSH key; without one, or with a GPG key id, name your SSH public key
-   file in place of the example:
+6. Before the first release that includes Tenantry.Templates (0.8's first tag, a candidate or `v0.8.0`), do the two
+   checks in [The templates package](#the-templates-package). Tag the branch's head, signed, and push the tag. The
+   script prints the command with git's configured signing key (`git config user.signingkey`) when it is an SSH key;
+   without one, or with a GPG key id, name your SSH public key file in place of the example:
 
    ```sh
    git -c gpg.format=ssh -c user.signingkey=~/.ssh/id_ed25519.pub \
@@ -125,8 +125,8 @@ request into `release/0.7`:
    waits for approval in the `release` environment. Once approved, it pushes `Tenantry.Templates`
    ([The templates package](#the-templates-package)), then the six library packages and their symbol packages, to
    NuGet.org, and creates the GitHub release, a prerelease for a tag with a prerelease suffix, marked as the latest
-   only if no higher version is released. For a release without a prerelease suffix, it then tells the agent skills
-   about it ([After a minor release](#after-a-minor-release)).
+   only if no higher version is released. For an `X.Y.0`, it then tells the agent skills about it
+   ([After a minor release](#after-a-minor-release)).
 3. NuGet.org validates and indexes the packages in a few minutes; they are available once
    `https://api.nuget.org/v3-flatcontainer/tenantry.core/index.json` lists the version. A version can be unlisted
    afterwards, but never deleted or replaced.
@@ -139,7 +139,7 @@ To check a package, download each copy into its own folder, since the two file n
 ```sh
 mkdir github nuget
 gh release download v0.8.0 --repo tenantry-org/tenantry-core -p Tenantry.Core.0.8.0.nupkg -D github
-curl -fsSL -o nuget/tenantry.core.0.8.0.nupkg \
+curl --proto '=https' -fsSL -o nuget/tenantry.core.0.8.0.nupkg \
   https://api.nuget.org/v3-flatcontainer/tenantry.core/0.8.0/tenantry.core.0.8.0.nupkg
 gh attestation verify github/Tenantry.Core.0.8.0.nupkg --repo tenantry-org/tenantry-core
 openssl dgst -sha512 -binary github/Tenantry.Core.0.8.0.nupkg | openssl base64 -A && echo
@@ -177,9 +177,8 @@ cannot be replaced:
    project-file baselines, as `TenantryPackageBaseline` moves to the patch.
 
 If every package was pushed and only the GitHub release is missing, create it by hand from the run's packages, which
-it attested before the push, within the 7 days GitHub keeps them. The agent skills need no event from the workflow's
-last step: a patch needs no change to them, and their Monday run moves them to a new `X.Y.0`. In a checkout of `master`
-with the tags fetched, using the run's id from its URL, give it the files and marks the workflow would have:
+it attested before the push, within the 7 days GitHub keeps them. In a checkout of `master` with the tags fetched,
+using the run's id from its URL, give it the files and marks the workflow would have:
 
 ```sh
 tag=v0.7.1
@@ -207,13 +206,12 @@ Each push to `master` publishes its packages to NuGet.org as a prerelease, witho
 Test jobs (`build-test.yml`) and Windows build have passed; the .NET 11 lane is not waited for. The `prerelease` job in
 `.github/workflows/ci.yml` pushes the packages, with their symbol packages, that the Build & Test job built and checked.
 A version is `X.Y.0-alpha.0.N`, such as `0.8.0-alpha.0.126`. `X.Y` is `MinVerMinimumMajorMinor`, the minor `master`
-works towards, and `N` is MinVer's count of the commits since `master`'s nearest release tag, `v0.6.0`. No release tag
-is put on a commit `master` contains (`scripts/release-source.sh` refuses one), so that tag stays the nearest and `N`
-grows with every push: each push publishes a higher version than the one before, and every one sorts below its minor's
-release candidates and release. There is no GitHub release, attestation or SBOM for a prerelease, and the templates
-package is not published: the job deletes it from the downloaded packages before its checks and the push, since
-NuGet.org's policy for the `prerelease` environment names the six library packages ([Repository
-settings](#repository-settings)).
+works towards, and `N` is MinVer's count of the commits since `master`'s nearest release tag, `v0.6.0`. Release tags
+are never on `master`'s history, so that tag stays the nearest and `N` grows with every push: each push publishes a
+higher version than the one before, and every one sorts below its minor's release candidates and release. There is no
+GitHub release, attestation or SBOM for a prerelease, and the templates package is not published: the job deletes it
+from the downloaded packages before its checks and the push, since NuGet.org's policy for the `prerelease` environment
+names the six library packages ([Repository settings](#repository-settings)).
 
 Prereleases exist so Tenantry.Pro can build against `master` from a clean clone, and for early testers. They carry no
 support or compatibility promise: the next one can change or remove any API, and security fixes are made only for the
@@ -284,7 +282,7 @@ existing packages, and name the six packages one by one rather than by a glob: `
 `Tenantry.AspNetCore`, `Tenantry.Options`, `Tenantry.Http` and `Tenantry.Caching`. Both workflows log in with the
 NuGet.org user name in the `NUGET_USER` repository secret.
 
-The release's last step tells the agent skills about a release with the `SKILLS_DISPATCH_TOKEN` repository secret. The
+The release's last step tells the agent skills about an `X.Y.0` with the `SKILLS_DISPATCH_TOKEN` repository secret. The
 maintainer creates it: a fine-grained personal access token with `tenantry-org` as its resource owner, access to the
 `tenantry-agent-skills` repository only, and the Contents read and write permission, which sending a
 `repository_dispatch` event needs. Renew it before it expires. Without it, the step skips with a notice, so a
@@ -292,12 +290,13 @@ release never fails on it.
 
 ## After any release
 
-- On the release branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, once
-  its library packages are on NuGet.org, and remove the `<TenantryPackageBaseline />` of a package released for the
-  first time (`Tenantry.Templates` has none, as pack does not validate it). Pack then checks each package against that
-  release, so a patch cannot break code compiled against it (Tenantry.Pro accepts any release in the minor). After an
-  `X.Y.0`, do the same on `master`, and delete each `src/*/CompatibilitySuppressions.xml` on both: the release
-  branch's patches break nothing, and the next minor's intended breaks are recorded afresh on `master`
+- On the release branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, unless
+  it is a release candidate, which is never a baseline: leave it as it is. Set it once the library packages are on
+  NuGet.org, and remove the `<TenantryPackageBaseline />` of a package released for the first time
+  (`Tenantry.Templates` has none, as pack does not validate it). Pack then checks each package against that release,
+  so a patch cannot break code compiled against it (Tenantry.Pro accepts any release in the minor). After an `X.Y.0`,
+  do the same on `master`, and delete each `src/*/CompatibilitySuppressions.xml` on both: the release branch's patches
+  break nothing, and the next minor's intended breaks are recorded afresh on `master`
   (`dotnet pack -p:ApiCompatGenerateSuppressionFile=true`), and in the changelog.
 
 ## After a minor release
@@ -306,7 +305,7 @@ release never fails on it.
   Tenantry is followed by a Tenantry.Pro release built against it, from its own release checklist.
 - Move the agent skills (`tenantry-org/tenantry-agent-skills`) to the release. Once NuGet.org lists the new
   `Tenantry.Core`, the release workflow sends that repository a `tenantry-release` event, with
-  `{"package": "core", "version": "X.Y.Z"}`, and its `update-version` workflow opens a pull request that moves the
+  `{"package": "core", "version": "X.Y.0"}`, and its `update-version` workflow opens a pull request that moves the
   skills to the release, Tenantry.Pro's pins included; its Monday run does the same if the event does not arrive.
   Leave that pull request open until Tenantry.Pro's `X.Y.0` is released. Pro's release checklist (step 10) adds Pro's
   removed names to that pull request and merges it. A patch needs no change to the skills.

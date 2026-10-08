@@ -95,6 +95,11 @@ jobs:
           RELEASE: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
         run: |
           baseline="$(sed -n 's:.*<TenantryPackageBaseline>\(.*\)</TenantryPackageBaseline>.*:\1:p' Directory.Build.props)"
+          if [[ "$baseline" == *-* ]]; then
+            echo "::error::TenantryPackageBaseline is $baseline, a release candidate: the baseline is a release," \
+              "never a candidate (RELEASING.md, After any release)"
+            exit 1
+          fi
           if [[ "${RELEASE#v}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) && "${BASH_REMATCH[3]}" != 0 &&
                 "$(cut -d . -f 1-2 <<<"$baseline")" != "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" ]]; then
             echo "::error::TenantryPackageBaseline is ${baseline:-empty}, but pack must check the patch $RELEASE" \
@@ -245,12 +250,11 @@ jobs:
             ./artifacts/sbom/*.cdx.json
 
       - name: Tell the agent skills about the release
-        # tenantry-org/tenantry-agent-skills moves its skills to the newest stable Tenantry.Core that NuGet.org lists
-        # (its update-version.yml), so the event waits until NuGet.org lists this version. A prerelease is not sent.
-        # The release is complete by now, so a missing SKILLS_DISPATCH_TOKEN (RELEASING.md, Repository settings), a
-        # version not yet listed or a refused event is reported without failing the run; the skills' Monday run picks
-        # the release up instead.
-        if: ${{ !contains(github.ref_name, '-') }}
+        # tenantry-org/tenantry-agent-skills moves its skills to a new minor's X.Y.0 (its update-version.yml), so only
+        # an X.Y.0 is sent, once NuGet.org lists it. The release is complete by now, so a missing SKILLS_DISPATCH_TOKEN
+        # (RELEASING.md, Repository settings), a version not yet listed or a refused event is reported without failing
+        # the run; the skills' Monday run picks the release up instead.
+        if: ${{ !contains(github.ref_name, '-') && endsWith(github.ref_name, '.0') }}
         env:
           GH_TOKEN: ${{ secrets.SKILLS_DISPATCH_TOKEN }}
         run: |
@@ -307,8 +311,8 @@ jobs:
           echo "A release would attest each package's provenance, push each .nupkg to NuGet.org, Tenantry.Templates"
           echo "first, with any .snupkg beside it to the NuGet.org symbol server, and create a GitHub release with its"
           echo "CHANGELOG.md section as notes and the packages, their checksums and SBOMs attached, marked as the latest"
-          echo "release only if no higher release is tagged when it is created (scripts/newest-release.sh). For a"
-          echo "release without a prerelease suffix, it would then send tenantry-agent-skills a tenantry-release event."
+          echo "release only if no higher release is tagged when it is created (scripts/newest-release.sh). For an"
+          echo "X.Y.0, it would then send tenantry-agent-skills a tenantry-release event."
 
       - name: Show the release notes
         if: inputs.version != ''

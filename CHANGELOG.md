@@ -27,8 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stop setting or forwarding the `tenantry-tenant-id` header on a client with `UseTenantry()` while no tenant is
   current: to call as a tenant, make it current with `MakeCurrent` or `RunInScopeAsync`
   ([Which requests carry it](docs/http-propagation.md#which-requests-carry-it)).
-- Change a log alert or filter on event 3001 in the category `Tenantry.Options` to event 2008. Tenantry.Pro 0.8 uses
-  this numbering.
+- Change a log alert or filter on event 3001 in the category `Tenantry.Options` to event 2008. Events from 3000 up are
+  now Tenantry.Pro's.
 - With `string` tenant ids on SQL Server or MySQL, warning 2007 can now be logged: set a collation that compares case
   on `TenantId`, or turn the warning off
   ([String tenant ids](docs/efcore-integration.md#string-tenant-ids-and-the-databases-collation)).
@@ -76,23 +76,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider, only `ForMySQLHasCollation`, as it does not apply `UseCollation`), or
   `IgnoreWarnings(TenantryWarnings.StringTenantIdCollation)`, turns it off. See
   [String tenant ids](docs/efcore-integration.md#string-tenant-ids-and-the-databases-collation).
-- Docs: a second per-tenant database beside the one `AddDbContextPerTenantDatabase` connects, through `AddDbContext`
-  ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)); and notes that
-  `AddDbContextFactory` by default, and `AddDbContext` with singleton options, keep the first tenant's connection
-  string, that `IMemoryCache` and third-party bulk libraries are not isolated, that with `app.UseTenantResolution()` a
-  custom resolver that reads the user finds nothing before authentication, that `RunInScopeAsync` and `CreateScope`
-  open no `TenantId` log scope ([Non-HTTP hosts](docs/non-http-hosts.md#when-you-have-a-tenant-id)), and how to call
-  or serve a service that names the tenant in a header other than `tenantry-tenant-id`. The tenant stores guide and
-  `ITenantInvalidator<TKey>` now say to invalidate both tenants when an identifier moves from one to the other. With a
-  database per tenant, the EF Core guide now shows how to create and migrate every tenant's database, which
+- The EF Core guide shows a second database per tenant beside the one `AddDbContextPerTenantDatabase` connects, through
+  `AddDbContext` ([A second database per tenant](docs/efcore-integration.md#a-second-database-per-tenant)).
+- With a database per tenant, the EF Core guide shows how to create and migrate every tenant's database, which
   `dotnet ef database update` cannot do
   ([Creating and migrating tenant databases](docs/efcore-integration.md#creating-and-migrating-tenant-databases)).
-  Five corrections: with `app.UseTenantResolution()`, a signed-in request whose tenant was current during
-  authentication and which the access validators refuse is refused on every endpoint, and `OnRejected` runs for it; a
-  cancelled `ITenantInvalidator<TKey>` call stops before the next handler, and several handler failures are thrown as
-  an `AggregateException`; SQL Server's default collation ignores case but not accents; event 1009 is logged under a
-  fourth category, `Tenantry.AspNetCore.OutputCache`; and the example that holds the scope itself throws
-  `TenantNotFoundException` for a missing tenant and checks that the tenant is active, as `RunInScopeAsync` does.
+- The EF Core guide says that `AddDbContextFactory` by default, and `AddDbContext` with singleton options, keep the
+  first tenant's connection string.
+- The caching guide says that `IMemoryCache` is not isolated, and the EF Core guide that third-party bulk libraries are
+  not.
+- The tenant resolution guide says that with `app.UseTenantResolution()`, a custom resolver that reads the user finds
+  nothing before authentication.
+- The non-HTTP hosts guide says that `RunInScopeAsync` and `CreateScope` open no `TenantId` log scope
+  ([When you have a tenant id](docs/non-http-hosts.md#when-you-have-a-tenant-id)).
+- The calling other services guide shows how to call or serve a service that names the tenant in a header other than
+  `tenantry-tenant-id` ([Another header](docs/http-propagation.md#another-header)).
+- The tenant stores guide and `ITenantInvalidator<TKey>` say to invalidate both tenants when an identifier moves from
+  one to the other.
 
 ### Changed
 
@@ -103,9 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tenantry-tenant-id` header while no tenant is current (`InvalidOperationException`), as it did for a header naming
   another tenant while one is current. Before, such a header was sent unchanged. It checks the headers set before it
   runs, so call `UseTenantry()` after `AddHeaderPropagation()` and after any handler that sets headers: a handler
-  added after it sets headers Tenantry does not see. To call as a tenant, make it current with `MakeCurrent` or
-  `RunInScopeAsync` rather than setting the header.
-  See [Which requests carry it](docs/http-propagation.md#which-requests-carry-it).
+  added after it sets headers Tenantry does not see. See
+  [Which requests carry it](docs/http-propagation.md#which-requests-carry-it).
 - `UseTenantry()` on an HTTP or gRPC client registers what sending the tenant needs, and `tenant.AddHttpPropagation()`
   is removed.
 - `ResolveFromClaim` resolves no tenant when the user has more than one claim of its type, so the next resolver runs.
@@ -157,6 +156,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   more than one table.
 - Events 1005 and 1012 name a signed-in user without a name claim by its name identifier or `sub` claim, or as
   `(unnamed)`. Before, they logged it as `(anonymous)`, as for a request with no user.
+- The docs said that with `app.UseTenantResolution()`, a signed-in user whose tenant the access validators refuse was
+  refused only on endpoints that require a tenant. They now say that such a request, whose tenant was current during
+  authentication, is refused on every endpoint, and that `OnRejected` runs for it.
+- `ITenantInvalidator<TKey>`'s docs now say that a cancelled call stops before the next handler, and that several
+  handler failures are thrown as an `AggregateException`.
+- The AI agents guide now says that SQL Server's default collation ignores case but not accents.
+- The diagnostics guide named three log categories. Event 1009 is logged under a fourth,
+  `Tenantry.AspNetCore.OutputCache`.
+- The non-HTTP hosts guide's example that holds the scope itself now throws `TenantNotFoundException` for a missing
+  tenant and checks that the tenant is active, as `RunInScopeAsync` does.
 - The `SecureApi` sample starts in Development with `dotnet run`, on the port its `curl` examples use, as a project
   from the `tenantry-api` template does: each has a launch profile. Before, the sample started in Production and
   stopped at once, as no `Auth:SigningKey` was set.
