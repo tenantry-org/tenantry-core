@@ -259,7 +259,7 @@ Calling it again adds another check: a tenant must pass all of them. See [`ITena
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant
     .UseStore<AppTenantStore>()
-    .ValidateTenantActivity(t => t.As<AppTenant>().IsActive));
+    .ValidateTenantActivity(t => t is AppTenant { IsActive: true }));
 ```
 
 ### `ValidateTenantActivity<TKey>(ITenantBuilder<TKey>, Func<ITenantDescriptor<TKey>, CancellationToken, ValueTask<bool>>)`
@@ -286,5 +286,5 @@ Calling it again adds another check: a tenant must pass all of them. See [`ITena
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant
     .UseStore<AppTenantStore>()
-    .ValidateTenantActivity(t => t.As<AppTenant>().IsActive));
+    .ValidateTenantActivity(t => t is AppTenant { IsActive: true }));
 ```

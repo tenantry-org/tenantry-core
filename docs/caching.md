@@ -42,8 +42,8 @@ public sealed class RecentOrders(HybridCache cache, AppDbContext db)
 - A call with no current tenant throws `TenantNotResolvedException`, rather than reading or writing an entry no tenant
   owns.
 - `IsolateCaches()` wraps the `HybridCache` registered before it, by `AddHybridCache()` or another library. It must be a
-  singleton, as `AddHybridCache()` registers it. A `HybridCache` registered after `AddTenantry`, or for any key, stops
-  the host. One registered as scoped or transient throws
+  singleton, as `AddHybridCache()` registers it. A `HybridCache` registered after `AddTenantry`, keyed or not, or one
+  registered under `KeyedService.AnyKey`, stops the host. One registered as scoped or transient throws
   ([`IsolateCaches()`](api/microsoft-extensions-dependencyinjection-tenantrycachingtenantbuilderextensions.md)).
 - A keyed `HybridCache` registered before `AddTenantry` is kept per tenant the same way.
   `[FromKeyedServices("reports")] HybridCache` holds the current tenant's entries, and

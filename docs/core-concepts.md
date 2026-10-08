@@ -59,7 +59,7 @@ public class AppTenant : ITenantDescriptor<Guid>
     public string Name { get; set; } = "";
     public string Plan { get; set; } = "";
     public string ConnectionString { get; set; } = "";
-    public bool IsSuspended { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 ```
 
@@ -71,7 +71,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")
     .UseStore<EfCoreTenantStore>()
     .UseConnectionStrings(o => o.GetConnectionString = t => t.As<AppTenant>().ConnectionString)
-    .ValidateTenantActivity(t => !t.As<AppTenant>().IsSuspended));
+    .ValidateTenantActivity(t => t is AppTenant { IsActive: true }));
 
 app.MapGet("/plan", (ITenantContext<Guid> tenants) => tenants.GetCurrentTenant<AppTenant>()?.Plan);
 ```
@@ -106,7 +106,7 @@ public interface ITenantContext<TKey>
 {
     ITenantDescriptor<TKey>? CurrentTenant { get; }  // null if none resolved
     ITenantDescriptor<TKey> RequiredTenant { get; }  // CurrentTenant, or throws TenantNotResolvedException
-    bool HasTenant { get; }                          // true if a tenant is active
+    bool HasTenant { get; }                          // true if a tenant is current
     TKey? CurrentTenantId { get; }                   // CurrentTenant?.TenantId, or default(TKey)
     TTenant? GetCurrentTenant<TTenant>()             // CurrentTenant?.As<TTenant>()
         where TTenant : class, ITenantDescriptor<TKey>;
@@ -224,8 +224,8 @@ nearest scope still open, or to no tenant, once its innermost scope is closed: w
 one after another flow closed the inner one. Disposing an outer scope while an inner one is open only closes it, and
 the inner one stays current.
 
-The move stops early at a scope that was opened when the scope around it had already closed, and the flow gets that
-closed scope's tenant. This keeps a flow on its tenant after another flow closed the scope it started in: each scope
-the flow opens while none of its own is open gives that tenant back when it closes. A flow started inside such a scope
-gets that tenant too, when it closes its own scope after that scope has closed. The hub calls of a long-polling
-SignalR connection run this way, in the flow of the request that opened the connection.
+A flow keeps its tenant after another flow closed the scope it started in, as the hub calls of a long-polling SignalR
+connection do in the flow of the request that opened the connection. Each scope the flow opens while none of its own is
+open gives that tenant back when it closes. A flow started inside such a scope gets that tenant too, when it closes its
+own scope after that scope has closed. The move to the nearest open scope stops at a scope opened when the scope around
+it had already closed, and the flow gets that closed scope's tenant.

@@ -161,7 +161,7 @@ builder.Services.AddTenantry<Guid>(tenant =>
     tenant.UseStore<EfCoreTenantStore>();
     tenant.RequireTenantByDefault();             // every endpoint needs a tenant
     tenant.ValidateTenantAccessByClaim("tenant_id"); // the token must list that tenant
-    tenant.ValidateTenantActivity(t => !t.As<AppTenant>().IsSuspended); // and it must be active
+    tenant.ValidateTenantActivity(t => t is AppTenant { IsActive: true }); // and it must be active
 });
 ```
 

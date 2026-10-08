@@ -19,10 +19,10 @@ public interface ITenantStore<TKey>
 }
 ```
 
-Both lookups return `null` when there is none. `GetAllTenantsAsync` lists suspended tenants too: whether work may run
-for a tenant is decided [separately](#suspended-and-inactive-tenants). The request middleware finds a request's tenant
-with `FindByIdentifierAsync`. Implement it when requests name tenants by something other than their id, such as a
-subdomain slug or a custom domain with `Guid` keys
+`GetTenantAsync` and `FindByIdentifierAsync` return `null` when there is no such tenant. `GetAllTenantsAsync` lists
+suspended tenants too: whether work may run for a tenant is decided [separately](#suspended-and-inactive-tenants). The
+request middleware finds a request's tenant with `FindByIdentifierAsync`. Implement it when requests name tenants by
+something other than their id, such as a subdomain slug or a custom domain with `Guid` keys
 ([Identifiers other than the id](tenant-resolution.md#identifiers-other-than-the-id)). A store that wraps another must
 forward it ([`FindByIdentifierAsync`](api/tenantry-itenantstore.md)).
 
@@ -75,9 +75,8 @@ Register one store: a second throws.
 - Tenantry reads the store through `ITenantLookup<TKey>`, which resolves it from a new scope for each lookup.
   Singletons such as hosted services should do the same, rather than inject the store.
 
-`app.UseTenantry()` fails at startup without a store. A [non-HTTP host](non-http-hosts.md) that only calls
-`CreateScope` with descriptors it already holds needs none. Without one, `ITenantLookup` and `RunInScopeAsync` throw
-`InvalidOperationException`.
+`app.UseTenantry()` fails at startup without a store. For hosts without requests, see
+[Non-HTTP hosts](non-http-hosts.md#registration-with-addtenantry).
 
 ## Suspended and inactive tenants
 
@@ -138,7 +137,7 @@ With [caching](#caching), invalidate a tenant when you suspend it, or it is serv
 
 ## In-memory store
 
-For tests, samples and single-instance demos whose tenants do not change at run time:
+For tests, samples and demos whose tenants do not change at run time:
 
 ```csharp
 tenant.UseInMemoryStore(

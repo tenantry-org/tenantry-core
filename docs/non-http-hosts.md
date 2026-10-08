@@ -109,7 +109,7 @@ public sealed class InvoiceWorker(ITenantScopeFactory<Guid> scopes, ITenantLooku
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await ProcessAsync(db, stoppingToken);
         }
-        // No tenant is active here: each scope restored the previous (empty) state when it was disposed.
+        // No tenant is current here: each scope restored the previous (empty) state when it was disposed.
     }
 }
 ```
@@ -154,6 +154,9 @@ await scopes.RunInScopeAsync(dequeuedId, (scope, ct) => HandleAsync(scope, ct), 
 
 For the same reason, do not keep `CurrentTenant` in a singleton's field. The rules for `async` code and threads are
 in [the `AsyncLocal` model](core-concepts.md#the-asynclocal-model).
+
+Tenantry.Pro carries the tenant id with Hangfire and Quartz.NET jobs and with MassTransit and Rebus messages, and runs
+each one as its tenant ([Library integrations](https://tenantry.dev/docs/pro/background-jobs#library-integrations)).
 
 ## Desktop apps
 

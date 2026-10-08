@@ -100,7 +100,7 @@ public class AppTenant : ITenantDescriptor<Guid>
     public string Plan { get; set; } = "";
     public string Region { get; set; } = "";
     public string ConnectionString { get; set; } = "";
-    public bool IsSuspended { get; set; }
+    public bool IsActive { get; set; } = true;
     public string Authority { get; set; } = "";
     public string ClientId { get; set; } = "";
     public string? SignInScheme { get; set; }

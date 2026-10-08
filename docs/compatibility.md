@@ -61,11 +61,6 @@ With `string` tenant ids, every tenant's id must be unique under the `TenantId` 
 compares ids under it. SQL Server's and MySQL's defaults ignore case
 ([String tenant ids and the database's collation](efcore-integration.md#string-tenant-ids-and-the-databases-collation)).
 
-## Native AOT and trimming
-
-`Tenantry.Core`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` support trimming
-and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does ([AOT & trimming](aot-and-trimming.md)).
-
 ## Dependency versions
 
 - `Microsoft.Extensions.*` packages take a minimum from the target framework's own major (8.0 on net8.0), with no

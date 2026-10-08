@@ -80,7 +80,7 @@ public static class TenantryTenantBuilderExtensions
     /// <code>
     /// builder.Services.AddTenantry&lt;string&gt;(tenant =&gt; tenant
     ///     .UseStore&lt;AppTenantStore&gt;()
-    ///     .ValidateTenantActivity(t =&gt; t.As&lt;AppTenant&gt;().IsActive));
+    ///     .ValidateTenantActivity(t =&gt; t is AppTenant { IsActive: true }));
     /// </code>
     /// </example>
     public static ITenantBuilder<TKey> ValidateTenantActivity<TKey>(
