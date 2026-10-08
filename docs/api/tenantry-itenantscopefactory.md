@@ -69,6 +69,8 @@ Exceptions:
 
 Opens no log scope, so entries the work writes carry no `TenantId` unless you open one with [`TenantTelemetry.CreateLogScope<TKey>`](tenantry-tenanttelemetry.md) around the call.
 
+Await the call. It returns to the caller's synchronization context to start the work and dispose the scope, so blocking on it (`.Result`, `.Wait()`, `.GetAwaiter().GetResult()`) on a desktop app's UI thread can deadlock.
+
 ### `RunInScopeAsync<TResult>(TKey, Func<ITenantScope<TKey>, CancellationToken, Task<TResult>>, CancellationToken)`
 
 Looks the tenant up with [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), then runs `work` inside a new scope for it (see [`ITenantScopeFactory<TKey>.CreateScope`](tenantry-itenantscopefactory.md)). The scope is disposed when the work completes or throws. The caller's current tenant is never changed.
@@ -98,3 +100,5 @@ Exceptions:
 - `OperationCanceledException`: `cancellationToken` was cancelled before the work started.
 
 Opens no log scope, so entries the work writes carry no `TenantId` unless you open one with [`TenantTelemetry.CreateLogScope<TKey>`](tenantry-tenanttelemetry.md) around the call.
+
+Await the call. It returns to the caller's synchronization context to start the work and dispose the scope, so blocking on it (`.Result`, `.Wait()`, `.GetAwaiter().GetResult()`) on a desktop app's UI thread can deadlock.

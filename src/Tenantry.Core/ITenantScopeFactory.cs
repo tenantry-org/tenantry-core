@@ -65,8 +65,15 @@ public interface ITenantScopeFactory<TKey>
     /// disposed when the work completes or throws. The caller's current tenant is never changed.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Opens no log scope, so entries the work writes carry no <c>TenantId</c> unless you open one with
     /// <see cref="TenantTelemetry.CreateLogScope{T}(T)"/> around the call.
+    /// </para>
+    /// <para>
+    /// Await the call. It returns to the caller's synchronization context to start the work and dispose the scope,
+    /// so blocking on it (<c>.Result</c>, <c>.Wait()</c>, <c>.GetAwaiter().GetResult()</c>) on a desktop app's UI
+    /// thread can deadlock.
+    /// </para>
     /// </remarks>
     /// <param name="tenantId">The id of the tenant to run the work as.</param>
     /// <param name="work">The work to run. It receives the scope and <paramref name="cancellationToken"/>.</param>

@@ -1,7 +1,7 @@
 # Tenantry documentation
 
 Tenantry keeps each tenant's data apart in EF Core applications, in a shared database or a database per tenant. In a
-shared database, tenant-owned entities carry a `TenantId` that every query and save is scoped to; with a
+shared database, tenant-owned entities carry a `TenantId` that every query and save is scoped to. With a
 [database per tenant](efcore-integration.md#database-per-tenant), each tenant's contexts connect to its own database.
 Your entities need no base class, and Tenantry does not take over your request pipeline. Schema per tenant,
 provisioning and migrations across tenant databases are in [Tenantry Pro](https://tenantry.dev/pro), a paid
@@ -24,7 +24,7 @@ Start with [Getting started](getting-started.md) and [Core concepts](core-concep
 11. [ASP.NET Core Identity](aspnetcore-identity.md): users kept per tenant in a shared database, user names unique within a tenant, and sign-in cookies tied to their tenant.
 12. [EF Core integration](efcore-integration.md): query filters, the `SaveChanges` interceptor, isolation options, pooling, a database per tenant, migrations, and cross-tenant queries.
 13. [Owned and multi-table entities](efcore-advanced.md): how owned entities, entities split across tables and many-to-many join rows are checked, saves that succeed or fail as a whole, and models that cannot be isolated.
-14. [Non-HTTP hosts](non-http-hosts.md): `AddTenantry` for console apps, worker services, and background jobs.
+14. [Non-HTTP hosts](non-http-hosts.md): `AddTenantry` for worker services, scheduled jobs, CLI tools and desktop apps, and running work as a tenant.
 15. [Testing](testing.md): tests that use Tenantry's real services, with tenant scopes, `WebApplicationFactory` and EF Core isolation.
 16. [Diagnostics](diagnostics.md): log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.
 17. [AOT & trimming](aot-and-trimming.md): what is supported, per package, and why EF Core differs.
@@ -64,4 +64,4 @@ Your endpoint + EF Core
 ```
 
 A console or worker app has no request, so you make the tenant current yourself with `ITenantScopeFactory` (or
-`ITenantContextSetter.MakeCurrent`); everything below that line behaves the same.
+`ITenantContextSetter.MakeCurrent`). Everything below that line behaves the same.
