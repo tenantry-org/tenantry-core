@@ -138,7 +138,8 @@ using (tenantContext.MakeCurrent(tenant))
 // The previous tenant (or none) is restored here.
 ```
 
-Like `CreateScope`, call it in the method that does the work, not in an `async` helper that returns the handle.
+Like `CreateScope`, call it in the method that does the work, not in an `async` helper that returns the handle
+([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
 
 ## Work that runs later
 
