@@ -211,8 +211,8 @@ Two more checks:
 - Resolving the tenant from a header, route value, query string, host or subdomain with no access validator lets any
   caller act as any tenant. Add `ValidateTenantAccessByClaim(...)` or `ValidateTenantAccess(...)` in the same
   `AddTenantry`.
-- Pass an id that came from outside to `RunInScopeAsync`. `MakeCurrent` and `CreateScope` trust the descriptor they
-  are given, so never build one from such an id
+- Pass an id that came from outside to `RunInScopeAsync`. Never build a descriptor from it for `MakeCurrent` or
+  `CreateScope`, which do not look the tenant up
   ([Running work as a tenant](non-http-hosts.md#running-work-as-a-tenant)).
 - Resolve a new context in each tenant's scope. A context from `AddDbContextPerTenantDatabase` is connected to one
   tenant's database, and a query or save with it after the current tenant changes throws

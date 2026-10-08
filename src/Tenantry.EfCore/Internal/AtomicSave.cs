@@ -613,14 +613,14 @@ internal sealed class AtomicSave
                 TenantIsolationViolationKind.TransactionRolledBack,
                 typeName,
                 $"{outcome}: {failure}, and a SaveChanges in it wrote rows whose tenant another of its statements " +
-                "checks. EF Core could not undo the failed save in this transaction (it has no savepoint, as with SQL " +
-                "Server's multiple active result sets, or it is an ambient transaction), so rows it wrote could belong " +
-                "to another tenant. Catching a failed SaveChanges (a unique key, a foreign key, a concurrency conflict) " +
-                "and going on in the same transaction causes this too, as does a save in which an interceptor " +
-                "suppressed a concurrency conflict (for a last-write-wins policy, for example). Run the unit of work " +
-                "again in a new transaction, or use a transaction with savepoints, where EF Core undoes the failed save " +
-                "itself: turn off multiple active result sets, or use Database.BeginTransaction rather than a " +
-                "TransactionScope.");
+                "checks. EF Core could not undo the failed save in this transaction (it has no savepoint, as with " +
+                "SQL Server's multiple active result sets, the rollback to its savepoint failed, or it is an ambient " +
+                "transaction), so rows it wrote could belong to another tenant. Catching a failed SaveChanges (a " +
+                "unique key, a foreign key, a concurrency conflict) and going on in the same transaction causes this " +
+                "too, as does a save in which an interceptor suppressed a concurrency conflict (for a " +
+                "last-write-wins policy, for example). Run the unit of work again in a new transaction, or use a " +
+                "transaction with savepoints, where EF Core undoes the failed save itself: turn off multiple active " +
+                "result sets, or use Database.BeginTransaction rather than a TransactionScope.");
         }
     }
 

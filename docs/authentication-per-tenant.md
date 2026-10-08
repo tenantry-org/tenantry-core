@@ -131,13 +131,22 @@ request, whether the cookie scheme or a remote scheme over it is the default:
 | One name, ticket in the cookie | `403`; the response sets no cookie | signed in: the browser keeps its cookie, whose ticket was never changed |
 | One name, `SessionStore` | `403`; the session is removed from the store | signed out: the cookie names a session that no longer exists |
 
-Static files can go before `app.UseTenantResolution()`, out of the refusal's reach; a sign-in page cannot. That is why a
-cookie name per tenant is the recommended set-up.
+Static files that `app.UseStaticFiles()` serves can go before `app.UseTenantResolution()`, out of the refusal's reach
+([Static files](#static-files)), but a sign-in page cannot. That is why a cookie name per tenant is the recommended
+set-up.
 
 The validator refuses an anonymous caller too, but such a caller carries no claims, so a sign-in endpoint runs with no
 tenant current. Mark it `AllowMissingTenant()` and take the tenant from the request, such as its host, when you issue
 the cookie. Its authentication handler was created with the tenant current, so it writes the tenant's cookie. It must
 stay after `app.UseTenantResolution()` for that.
+
+### Static files
+
+Static files that `app.UseStaticFiles()` serves before `app.UseTenantResolution()` are out of the refusal's reach and
+need no tenant. Assets that `app.MapStaticAssets()` maps, as the .NET 9 and 10 templates do, are endpoints, which run
+after `app.UseTenantry()`. A refusal covers them as it covers every page. With
+[`RequireTenantByDefault()`](access-control.md#requiring-a-tenant), a request for one that names no tenant is rejected
+unless you map them with `app.MapStaticAssets().AllowMissingTenant()`.
 
 ## Identity provider metadata
 
@@ -171,7 +180,8 @@ so a tenant on a new provider needs a scheme added and a restart.
 
 ### Checks on the pipeline
 
-Two checks catch authorization between `app.UseTenantResolution()` and `app.UseTenantry()`:
+Authorization between `app.UseTenantResolution()` and `app.UseTenantry()` runs before the access validators check the
+tenant, so a policy that reads the tenant could let in a caller who may not use it. Two checks catch it there:
 
 - The application fails to start if `app.UseAuthorization()` is between them.
 - If the authorization middleware is added there some other way, each request it runs for gets `500` and log event

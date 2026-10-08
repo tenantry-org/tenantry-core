@@ -11,8 +11,8 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class TenantryTenantBuilderExtensions
 {
     /// <summary>
-    /// Registers an in-memory tenant store that holds <paramref name="tenants"/>, for tests and single-instance
-    /// deployments whose tenants do not change.
+    /// Registers an in-memory tenant store that holds <paramref name="tenants"/>, for tests, samples and demos whose
+    /// tenants do not change.
     /// </summary>
     /// <remarks>The store is a singleton, built when this is called.</remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>

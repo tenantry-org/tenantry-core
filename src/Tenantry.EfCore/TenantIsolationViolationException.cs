@@ -42,20 +42,27 @@ public sealed class TenantIsolationViolationException : InvalidOperationExceptio
     public string TypeName { get; }
 
     /// <summary>
-    /// The tenant the rejected entity or database belongs to, as a string for logging: for
-    /// <see cref="TenantIsolationViolationKind.EntityWrite"/>, and for
-    /// <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/> when the context was connected to a tenant's
-    /// database. For <see cref="TenantIsolationViolationKind.TenantSchemaMismatch"/>, the package that throws it sets
-    /// it. Otherwise <see langword="null"/>.
+    /// The tenant the rejected entity or database belongs to, as a string for logging, or <see langword="null"/>.
     /// </summary>
+    /// <remarks>
+    /// Tenantry sets it for <see cref="TenantIsolationViolationKind.EntityWrite"/>, except when it could not read the
+    /// row's tenant: a join row saved without the tenant-owned row it joins, an owned entity saved without its owner,
+    /// or an entity with no row stored for the current tenant. It also sets it for
+    /// <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/> when the context was connected to a tenant's
+    /// database. It is <see langword="null"/> for every other kind Tenantry throws, and for those Tenantry.Pro throws.
+    /// </remarks>
     public string? OffendingTenantId { get; }
 
     /// <summary>
-    /// The current tenant, as a string for logging: for <see cref="TenantIsolationViolationKind.EntityWrite"/> and
-    /// <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/>, <see langword="null"/> when none is current.
-    /// For <see cref="TenantIsolationViolationKind.TenantSchemaMismatch"/>, the package that throws it sets it.
-    /// Otherwise <see langword="null"/>.
+    /// The current tenant, as a string for logging, or <see langword="null"/>.
     /// </summary>
+    /// <remarks>
+    /// Tenantry sets it for <see cref="TenantIsolationViolationKind.EntityWrite"/>, and for
+    /// <see cref="TenantIsolationViolationKind.TenantDatabaseMismatch"/> when a tenant is current. It is
+    /// <see langword="null"/> for every other kind Tenantry throws. Tenantry.Pro sets it for the
+    /// <see cref="TenantIsolationViolationKind.TenantSchemaMismatch"/> it throws, and for the
+    /// <see cref="TenantIsolationViolationKind.ModelConfiguration"/> it throws for a Shared tenant's context.
+    /// </remarks>
     public string? ExpectedTenantId { get; }
 }
 
@@ -98,9 +105,10 @@ public enum TenantIsolationViolationKind
     SaveWithoutTransaction,
 
     /// <summary>
-    /// A save in this transaction failed, or never finished, after sending statements, and a save in it wrote rows
-    /// whose tenant check is another of its statements. EF Core could not undo only the failed save (no savepoint, or
-    /// an ambient transaction), so the transaction was rolled back instead of committed.
+    /// A save that sent statements in this transaction failed or never reported success, and a save in it wrote rows
+    /// whose tenant check is another of its statements. EF Core could not undo only the failed save (no savepoint, a
+    /// failed rollback to its savepoint, or an ambient transaction), so the transaction was rolled back instead of
+    /// committed.
     /// </summary>
     TransactionRolledBack,
 

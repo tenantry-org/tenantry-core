@@ -72,7 +72,7 @@ public class Order : TenantEntity<Guid>   // adds a `Guid TenantId { get; set; }
 ```
 
 Leave `TenantId` unset: Tenantry stamps it on insert. Entities that do not implement `ITenantEntity<TKey>` are shared
-by all tenants ([`ITenantEntity`](core-concepts.md#itenantentity)).
+by all tenants ([`ITenantEntity`](core-concepts.md#itenantentitytkey)).
 
 ## 5. Keep your DbContext as it is
 

@@ -157,7 +157,8 @@ before using the other tenant. That request goes one of two ways:
   cookie, so the browser keeps its cookies and the user stays signed in to their own tenant. With the ticket in a
   `SessionStore`, that session is removed instead, and the user is signed out.
 
-Static files can go before `app.UseTenantResolution()`. A sign-in page cannot, since it needs the tenant's cookie
+Static files can go before `app.UseTenantResolution()` when `app.UseStaticFiles()` serves them
+([Static files](authentication-per-tenant.md#static-files)). A sign-in page cannot, since it needs the tenant's cookie
 settings.
 
 ## See also

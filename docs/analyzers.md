@@ -200,12 +200,10 @@ dotnet_diagnostic.TNY2001.severity = none
 ## TNY3001
 
 `ITenantContextSetter<TKey>.MakeCurrent` or `ITenantScopeFactory<TKey>.CreateScope` is given a descriptor created in the
-call (`new TenantDescriptor<TKey> { ... }`). Both trust the descriptor, without a store lookup or activity check
-([Running work as a tenant](non-http-hosts.md#running-work-as-a-tenant)). So a descriptor built from an id that came
-from outside can name a tenant that does not exist or is suspended.
-
-With an id, run the work with `RunInScopeAsync(tenantId, ...)`, which looks the tenant up and refuses a missing or
-inactive one. Otherwise pass a tenant read from `ITenantLookup<TKey>`. A descriptor in a variable or field is not
+call (`new TenantDescriptor<TKey> { ... }`). Neither looks the tenant up or checks that it is active, so a descriptor
+built from an id that came from outside can name a tenant that does not exist or is suspended. Run work that starts
+from an id with `RunInScopeAsync(tenantId, ...)`, or pass a tenant read from `ITenantLookup<TKey>`
+([Running work as a tenant](non-http-hosts.md#running-work-as-a-tenant)). A descriptor in a variable or field is not
 reported. The rule is info by default, since tests build descriptors this way.
 
 ## TNY3002

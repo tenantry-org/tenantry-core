@@ -32,8 +32,8 @@ The first `Tenantry.AspNetCore` method you call registers the middleware's servi
 
 `app.UseTenantry()` throws `InvalidOperationException` when the pipeline is built if no resolver or no store is
 registered. A web application that registers resolvers but never calls `app.UseTenantry()` fails to start, because no
-request would have a tenant. A host that serves no requests (a worker) is not checked. Registering a second store, or a
-second key type, throws at once.
+request would have a tenant. A host that serves no requests (a worker) is not checked. Registering a second
+[store](tenant-stores.md#registration-and-lifetimes) or [key type](core-concepts.md#the-tenant-key-tkey) throws at once.
 
 ## The middleware
 
@@ -44,8 +44,8 @@ app.UseTenantry();
 
 For each request, the middleware:
 
-1. Tries each resolver in registration order and takes the first identifier one returns. `null`, an empty string or
-   whitespace counts as none, and the next resolver runs.
+1. Takes the first identifier a resolver returns, in registration order
+   ([Resolver ordering and fallback](tenant-resolution.md#resolver-ordering-and-fallback)).
 2. If no resolver produced an identifier, rejects a request that
    [requires a tenant](access-control.md#requiring-a-tenant) (`400 Bad Request`), and continues any other without one.
 3. Finds the tenant with `ITenantLookup<TKey>.FindByIdentifierAsync`

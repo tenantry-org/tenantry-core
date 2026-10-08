@@ -329,15 +329,16 @@ type is not tenant-owned ([the list](efcore-advanced.md#models-that-cannot-be-is
 
 ## What Tenantry does not have
 
-- Tenantry ships no tenant stores: the in-memory store is for development and samples. An application has one store.
-  Finbuckle's configuration, distributed cache, HTTP remote and echo stores have no equivalent, and neither have its
-  methods that add, update and remove tenants. Write an `ITenantStore<TKey>` as in step 3: two methods, and
+- Tenantry ships no database or configuration store; the in-memory store is for tests and samples. An application has
+  one store. Finbuckle's configuration, distributed cache, HTTP remote and echo stores have no equivalent, and neither
+  have its methods that add, update and remove tenants. Write an `ITenantStore<TKey>` as in step 3: two methods, and
   `FindByIdentifierAsync` when identifiers differ from ids.
 - There is no base path, session, static or remote authentication callback resolver. Write an `ITenantResolver`
   ([Custom resolvers](tenant-resolution.md#custom-resolvers)). For a tenant in the path, use a route template with
   `{tenant}` and `ResolveFromRouteValue()`; nothing rewrites `PathBase`.
 - `BypassWhen` and `BypassWhenEndpointNotResolved` have no equivalent. `UseTenantry()` resolves every request that
-  reaches it, so put middleware that must skip it, such as static files, before it.
+  reaches it, so put middleware that must skip it, such as `UseStaticFiles()`, before it. Assets that
+  `MapStaticAssets()` maps are endpoints, which it reaches ([Static files](authentication-per-tenant.md#static-files)).
 - `IgnoredIdentifiers` has no equivalent: the subdomain resolver ignores the subdomains in `IgnoredSubdomains`, and a
   store can return `null` for any other identifier.
 

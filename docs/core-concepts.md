@@ -130,7 +130,7 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
 ```
 
 Most code never calls these methods. In ASP.NET Core the middleware calls `MakeCurrent` once the tenant is resolved.
-In console and worker apps, [`ITenantScopeFactory<TKey>`](#itenantscopefactory-and-itenantscope) makes a tenant
+In console and worker apps, [`ITenantScopeFactory<TKey>`](#itenantscopefactorytkey-and-itenantscopetkey) makes a tenant
 current together with a new DI scope. Call `MakeCurrent` yourself only when you need no new scope, with a tenant you
 already hold ([Running work as a tenant](non-http-hosts.md#running-work-as-a-tenant)).
 
@@ -183,7 +183,7 @@ tenant current, so the scoped services resolved from it (such as a `DbContext`) 
 | `TenantNotResolvedException` | `Tenantry.Core` | Code that needs a current tenant runs without one (an EF Core write, `CurrentTenantConnectionString`, `RequiredTenant`). |
 | `TenantNotFoundException` | `Tenantry.Core` | A tenant id is not in the store (`RunInScopeAsync`). It derives from `TenantNotResolvedException` and carries the `TenantId`, so a queue consumer can drop a message for a tenant that no longer exists. |
 | `TenantInactiveException` | `Tenantry.Core` | `RunInScopeAsync` names a tenant that `ValidateTenantActivity` refuses. It derives from `TenantNotResolvedException` and carries the `TenantId`, of the application's key type. |
-| `TenantIsolationViolationException` | `Tenantry.EfCore` | EF Core would read or write across tenants; `Kind` says which check failed. See [EF Core integration](efcore-integration.md). |
+| `TenantIsolationViolationException` | `Tenantry.EfCore` | EF Core would read or write across tenants; `Kind` says which check failed ([`TenantIsolationViolationKind`](api/tenantry-efcore-tenantisolationviolationkind.md) lists them). |
 
 ## Registration
 
@@ -219,9 +219,13 @@ registration rules:
 
 ### Disposing scopes out of order
 
-Disposing the innermost scope restores the nearest one still open. Disposing any other, out of order or from another
-async flow, closes it without changing the current tenant, and only in the flow that disposes it.
+Disposing a scope closes it, and changes the current tenant only in the flow that disposes it. That flow moves to the
+nearest scope still open, or to no tenant, once its innermost scope is closed: when it disposes that scope, or an outer
+one after another flow closed the inner one. Disposing an outer scope while an inner one is open only closes it, and
+the inner one stays current.
 
-A flow that runs on after another flow closed the scope it started in keeps that scope's tenant. Disposing a scope it
-opened after that restores that tenant. The hub calls of a long-polling SignalR connection run this way, in the flow
-of the request that opened the connection.
+The move stops early at a scope that was opened when the scope around it had already closed, and the flow gets that
+closed scope's tenant. This keeps a flow on its tenant after another flow closed the scope it started in: each scope
+the flow opens while none of its own is open gives that tenant back when it closes. A flow started inside such a scope
+gets that tenant too, when it closes its own scope after that scope has closed. The hub calls of a long-polling
+SignalR connection run this way, in the flow of the request that opened the connection.

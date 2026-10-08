@@ -1,9 +1,8 @@
 namespace Tenantry;
 
 /// <summary>
-/// An <see cref="ITenantStore{TKey}"/> backed by an in-memory dictionary.
-/// Suitable for testing, development, demos, and simple single-instance deployments
-/// where tenants do not change at runtime.
+/// An <see cref="ITenantStore{TKey}"/> backed by an in-memory dictionary, for tests, samples and demos whose tenants
+/// do not change at run time.
 /// </summary>
 /// <typeparam name="TKey">
 /// The tenant identifier type. Must implement <see cref="IEquatable{T}"/> and <see cref="IParsable{T}"/>.

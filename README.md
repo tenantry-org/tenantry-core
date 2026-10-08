@@ -182,7 +182,7 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and i
 | [ASP.NET Core Identity](docs/aspnetcore-identity.md) | Users per tenant in a shared database, and sign-in cookies tied to their tenant |
 | [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
 | [Owned and multi-table entities](docs/efcore-advanced.md) | How owned entities, split tables and many-to-many join rows are checked, all-or-nothing saves, unsupported models |
-| [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantry` in console apps, workers, and background jobs |
+| [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantry` for worker services, scheduled jobs, CLI tools and desktop apps |
 | [Testing](docs/testing.md) | Tests with Tenantry's real services: scopes, `WebApplicationFactory`, EF Core isolation |
 | [Diagnostics](docs/diagnostics.md) | Log event ids, the `tenant.id` trace tag and log scope, the resolution metric |
 | [AOT & trimming](docs/aot-and-trimming.md) | What is supported, per package, and why |

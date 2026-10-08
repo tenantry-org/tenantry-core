@@ -186,7 +186,7 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
 
 ### `UseInMemoryStore<TKey>(ITenantBuilder<TKey>, IEnumerable<ITenantDescriptor<TKey>>)`
 
-Registers an in-memory tenant store that holds `tenants`, for tests and single-instance deployments whose tenants do not change.
+Registers an in-memory tenant store that holds `tenants`, for tests, samples and demos whose tenants do not change.
 
 ```csharp
 public static ITenantBuilder<TKey> UseInMemoryStore<TKey>(this ITenantBuilder<TKey> builder, IEnumerable<ITenantDescriptor<TKey>> tenants) where TKey : IEquatable<TKey>, IParsable<TKey>

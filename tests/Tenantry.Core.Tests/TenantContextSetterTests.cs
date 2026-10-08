@@ -284,6 +284,48 @@ public sealed class TenantContextSetterTests
     }
 
     [Fact]
+    public async Task AFlowStartedInsideAScopeOpenedAfterTheEnclosingScopeClosed_GetsTheEnclosingTenant_WhenBothClose()
+    {
+        var tenantContext = BuildSetter();
+        TaskCompletionSource ended = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource opened = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<string?> flow;
+
+        using (tenantContext.MakeCurrent(Tenant("acme")))
+        {
+            flow = Task.Run(async () =>
+            {
+                await ended.Task;
+                Task<string?> child;
+
+                // Opened after acme's scope closed: once it closes, closing the child's scope restores acme.
+                using (tenantContext.MakeCurrent(Tenant("globex")))
+                {
+                    child = Task.Run(async () =>
+                    {
+                        using (tenantContext.MakeCurrent(Tenant("initech")))
+                        {
+                            opened.SetResult();
+                            await closed.Task;
+                        }
+
+                        return tenantContext.CurrentTenantId;
+                    }, TestContext.Current.CancellationToken);
+
+                    await opened.Task;
+                }
+
+                closed.SetResult();
+                return await child;
+            }, TestContext.Current.CancellationToken);
+        }
+
+        ended.SetResult();
+        (await flow).Should().Be("acme");
+    }
+
+    [Fact]
     public void MakeCurrent_TenantWithTheKeyTypesDefaultId_ThrowsAndLeavesNoTenant()
     {
         var strings = BuildSetter();

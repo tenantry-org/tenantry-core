@@ -95,12 +95,15 @@ Other setups need care:
   [`OnSaveWithoutTransaction`](efcore-integration.md#configuring-write-isolation) to `Reject`.
 - In a transaction without savepoints, such as SQL Server with multiple active result sets (MARS), do not catch a
   failed save and carry on (after a unique or foreign key violation, or to retry a concurrency conflict). Once a save
-  with such rows has run in it, the transaction is rolled back instead of committed in two cases: a save in it failed
-  after sending a statement, or EF Core could not roll back to its savepoint. `Commit` then throws
-  `TenantIsolationViolationException` of kind `TransactionRolledBack` (event 2004). Turn MARS off to avoid it.
+  with such rows has run in it, the transaction is rolled back instead of committed if a save that sent statements in
+  it failed or never reported success. `Commit` then throws `TenantIsolationViolationException` of kind
+  `TransactionRolledBack` (event 2004). Turn MARS off to avoid it. A transaction with savepoints is rolled back the
+  same way when EF Core could not roll a failed save back to its savepoint.
 - In a `TransactionScope`, or a transaction the connection was enlisted in, EF Core creates no savepoint. The same
   failures roll the transaction back when it completes, so disposing the completed scope throws
   `TransactionAbortedException`. Begin the transaction with `Database.BeginTransaction` instead.
+- With Npgsql, a transaction begun through ADO.NET can be refused for an earlier one that failed
+  ([Npgsql: a transaction refused for an earlier one](#npgsql-a-transaction-refused-for-an-earlier-one)).
 
 For these rollbacks, a failure counts even when an interceptor of yours suppresses it, as with a concurrency conflict,
 or throws it from `SavedChanges` after the save succeeded. A save stopped before it sent anything does not count. An
@@ -180,3 +183,15 @@ concurrency token. So the interceptors check each model on its first query and f
   values) is refused with `TenantIsolationViolationException`.
 - An end whose key in the join row includes its `TenantId` needs no confirmation: the join row can only name that
   tenant's row.
+
+### Npgsql: a transaction refused for an earlier one
+
+With Npgsql, a transaction begun through ADO.NET can be refused when handed to a context with `UseTransaction`. This
+happens when:
+
+- a context began a transaction through EF Core, and a save in it failed;
+- that transaction was disposed without an EF Core commit or rollback, while the context stayed in use; and
+- the later transaction, begun on the same connection, got the same `NpgsqlTransaction` object.
+
+Begin that transaction through EF Core (`Database.BeginTransaction`) instead, or end the failed one through EF Core with
+`RollbackTransaction`.

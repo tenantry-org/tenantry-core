@@ -185,8 +185,8 @@ static HashSet<string> HeadingIds(string[] lines)
 
         var text = heading.Groups[1].Value;
         text = Regex.Replace(text, @"!?\[([^\]]*)\]\([^)]*\)", "$1");
-        text = Regex.Replace(text, @"<[^>]+>", "");
-        text = Regex.Replace(text, @"`([^`]*)`", "$1");
+        // A code span keeps its text, "<TKey>" included; an HTML tag outside one is dropped.
+        text = Regex.Replace(text, @"`([^`]*)`|<[^>]+>", match => match.Groups[1].Value);
         text = Regex.Replace(text, @"(\*\*|\*)(.+?)\1", "$2");
 
         var slug = Slug(text);

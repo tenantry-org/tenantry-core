@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry` · Package: `Tenantry.Core` · [API reference](README.md)
 
-An [`ITenantStore<TKey>`](tenantry-itenantstore.md) backed by an in-memory dictionary. Suitable for testing, development, demos, and simple single-instance deployments where tenants do not change at runtime.
+An [`ITenantStore<TKey>`](tenantry-itenantstore.md) backed by an in-memory dictionary, for tests, samples and demos whose tenants do not change at run time.
 
 ```csharp
 public sealed class InMemoryTenantStore<TKey> : ITenantStore<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>

@@ -22,9 +22,8 @@ checked ([Authentication per tenant](authentication-per-tenant.md)).
 
 ## Startup fails with "app.UseAuthorization() is between app.UseTenantResolution() and app.UseTenantry()"
 
-Call `app.UseAuthorization()` after `app.UseTenantry()`. Between the two, authorization runs on the tenant the request
-names, before the access validators check it. A policy that reads the tenant could then let in a caller who may not use
-it ([Checks on the pipeline](authentication-per-tenant.md#checks-on-the-pipeline)).
+Call `app.UseAuthorization()` after `app.UseTenantry()`. Between the two, authorization runs before the access
+validators check the tenant ([Checks on the pipeline](authentication-per-tenant.md#checks-on-the-pipeline)).
 
 ## Registration fails with "A tenant store is already registered" or "already registered with tenant key type"
 
@@ -64,7 +63,8 @@ carry its `TenantId`, or the save throws, so set it yourself in deliberate cross
 ## `TenantIsolationViolationException` on save
 
 Isolation is working: a modified or deleted entity, or an added one that names another tenant, belongs to a tenant
-other than the current one. `Kind` is `EntityWrite`, and `OffendingTenantId` and `ExpectedTenantId` name the tenants.
+other than the current one. `Kind` is `EntityWrite`, `ExpectedTenantId` is the current tenant, and `OffendingTenantId`
+is the entity's tenant, or `null` when Tenantry could not read it.
 
 - You loaded the entity in one tenant's scope and changed it in another's. Work inside the owning tenant's scope.
 - You set `TenantId` to another tenant. Leave it to the interceptor.
@@ -83,13 +83,13 @@ Run the unit of work again in a new transaction, or use a transaction with savep
 how). Catching a failed save and going on in the same transaction is refused at the commit.
 
 `Kind` is `TransactionRolledBack`. A save in this transaction wrote rows checked through another statement (owned rows
-in their own table, an entity split across tables, or many-to-many join rows), and a save in it failed partway. Any
-failure counts, and so does a save that never reported success. EF Core had no savepoint to undo only the failed save
-(SQL Server with MARS, for example), or could not roll back to it, so Tenantry rolled back the whole transaction. In a
-`TransactionScope`, disposing the scope throws `TransactionAbortedException` instead.
+in their own table, an entity split across tables, or many-to-many join rows), and a save that sent statements in it
+failed or never reported success. EF Core could not undo only the failed save (no savepoint, as with SQL Server's MARS,
+or a failed rollback to its savepoint), so Tenantry rolled back the whole transaction. In a `TransactionScope`,
+disposing the scope throws `TransactionAbortedException` instead.
 
-With Npgsql, a transaction can also be refused for an earlier one
-([Details](#npgsql-a-transaction-refused-for-an-earlier-one)).
+With Npgsql, a transaction can also be
+[refused for an earlier one](efcore-advanced.md#npgsql-a-transaction-refused-for-an-earlier-one).
 
 ## `TenantIsolationViolationException` of kind `SaveWithoutTransaction`
 
@@ -265,17 +265,3 @@ disposal, and not back from an `async` helper to its caller
 
 These are expected. Do not publish an EF Core app with Native AOT
 ([`Tenantry.EfCore`: trimmable, not AOT-compatible](aot-and-trimming.md#tenantryefcore-trimmable-not-aot-compatible)).
-
-## Details
-
-### Npgsql: a transaction refused for an earlier one
-
-With Npgsql, a transaction begun through ADO.NET can be refused when handed to a context with `UseTransaction`. This
-happens when:
-
-- a context began a transaction through EF Core, and a save in it failed;
-- that transaction was disposed without an EF Core commit or rollback, while the context stayed in use; and
-- the later transaction, begun on the same connection, got the same `NpgsqlTransaction` object.
-
-Begin that transaction through EF Core (`Database.BeginTransaction`) instead, or end the failed one through EF Core with
-`RollbackTransaction`.
