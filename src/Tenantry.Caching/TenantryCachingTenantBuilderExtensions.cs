@@ -26,8 +26,13 @@ public static class TenantryCachingTenantBuilderExtensions
     /// It wraps the <see cref="HybridCache"/> registered before it, so call <c>AddHybridCache()</c> before
     /// <c>AddTenantry</c>. The host throws <see cref="InvalidOperationException"/> as it starts if a
     /// <see cref="HybridCache"/>, keyed or not, is registered after it (<c>AddHybridCache()</c> included), or one is
-    /// registered for any key. With no <see cref="HybridCache"/> registered at all, the one it registers throws when
-    /// used, naming the fix.
+    /// registered for any key (<c>KeyedService.AnyKey</c>), whose keys are not known in advance to clear. A service
+    /// provider built without a host is not checked. With no <see cref="HybridCache"/> registered at all, the one it
+    /// registers throws when used, naming the fix.
+    /// </para>
+    /// <para>
+    /// The cache must be a singleton, as <c>AddHybridCache()</c> registers it: invalidating a tenant clears its entries
+    /// outside any scope.
     /// </para>
     /// <para>
     /// A keyed <see cref="HybridCache"/> registered before it is kept per tenant the same way, and the same key gives a

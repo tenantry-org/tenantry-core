@@ -41,8 +41,16 @@ public interface ITenantScopeFactory<TKey>
     /// </summary>
     /// <param name="tenant">The tenant to activate.</param>
     /// <remarks>
+    /// <para>
     /// Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from
-    /// outside the application, use <see cref="RunInScopeAsync"/>, which does both.
+    /// outside the application, use <see cref="RunInScopeAsync"/>, which does both. A descriptor the store does not
+    /// hold becomes current like any other: shared-database queries are filtered by its id and new rows are stamped
+    /// with it.
+    /// </para>
+    /// <para>
+    /// Opens no log scope, so entries written in the scope carry no <c>TenantId</c> unless you open one with
+    /// <see cref="TenantTelemetry.CreateLogScope{T}(T)"/>.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".</exception>
     /// <returns>
@@ -56,6 +64,10 @@ public interface ITenantScopeFactory<TKey>
     /// <paramref name="work"/> inside a new scope for it (see <see cref="CreateScope"/>). The scope is
     /// disposed when the work completes or throws. The caller's current tenant is never changed.
     /// </summary>
+    /// <remarks>
+    /// Opens no log scope, so entries the work writes carry no <c>TenantId</c> unless you open one with
+    /// <see cref="TenantTelemetry.CreateLogScope{T}(T)"/> around the call.
+    /// </remarks>
     /// <param name="tenantId">The id of the tenant to run the work as.</param>
     /// <param name="work">The work to run. It receives the scope and <paramref name="cancellationToken"/>.</param>
     /// <param name="cancellationToken">Passed to the tenant lookup and to <paramref name="work"/>.</param>

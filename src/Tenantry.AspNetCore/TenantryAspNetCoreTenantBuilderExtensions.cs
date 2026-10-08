@@ -126,8 +126,9 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </para>
     /// <para>
     /// The value is read as a tenant id (<see cref="TenantIds.TryParse{TKey}"/>) and looked up with the store's
-    /// <see cref="ITenantStore{TKey}.GetTenantAsync"/>, not its <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/>;
-    /// a value that is not a tenant id finds no tenant.
+    /// <see cref="ITenantStore{TKey}.GetTenantAsync"/>, not its <see cref="ITenantStore{TKey}.FindByIdentifierAsync"/>,
+    /// so a store whose identifiers are slugs still finds the tenant. A value that is not a tenant id, or is an id
+    /// reserved for "no tenant", finds no tenant.
     /// </para>
     /// <para>
     /// <paramref name="isTrustedCaller"/> runs after authentication, so it can read <c>HttpContext.User</c>:

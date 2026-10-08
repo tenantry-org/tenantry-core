@@ -34,7 +34,7 @@ Exceptions:
 
 - `ArgumentException`: The tenant's id is the key type's default value (`Empty`, `0`) or an empty string, which Tenantry reserves for "no tenant".
 
-Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from outside the application, use `ITenantScopeFactory.RunInScopeAsync`, which does both.
+Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from outside the application, use `ITenantScopeFactory.RunInScopeAsync`, which does both. A descriptor the store does not hold becomes current like any other: shared-database queries are filtered by its id and new rows are stamped with it.
 
 ### `MakeNoTenantCurrent()`
 

@@ -21,7 +21,7 @@ public static IHttpClientBuilder UseTenantry(this IHttpClientBuilder builder, Ur
 Parameters:
 
 - `builder` `IHttpClientBuilder`: The client's builder, from `AddHttpClient` or `AddGrpcClient`.
-- `serviceAddress` `Uri`: The address of the service the client calls, for a client whose registration sets no `BaseAddress`: a gRPC client's `Address`, or the address a typed client sets in its constructor. Only its scheme, host and port are used.
+- `serviceAddress` `Uri`: The address of the service the client calls, for a client whose registration sets no `BaseAddress`. A gRPC client keeps its `Address` in its own options, which Tenantry cannot read, and a typed client may set its address in its constructor, after the handlers are built. Only its scheme, host and port are used.
 
 Returns: `IHttpClientBuilder`: The same `builder` for chaining.
 

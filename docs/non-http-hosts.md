@@ -5,7 +5,7 @@ with no ASP.NET Core dependency. With no request or middleware, you decide when 
 `ITenantScopeFactory<TKey>`, and EF Core filters, stamps and checks as it does on the web.
 
 To start from a generated project, `dotnet new install Tenantry.Templates` and then
-`dotnet new tenantry-worker -n Orders.Worker` create a worker service with EF Core that runs each message as the tenant
+`dotnet new tenantry-worker -n Orders.Worker` create a worker service with EF Core. It runs each message as the tenant
 it names, with `RunInScopeAsync`. It targets `net10.0`, so building it needs the .NET 10 SDK.
 
 ## Registration with `AddTenantry`
@@ -27,10 +27,10 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 
 [Registration](core-concepts.md#registration) lists what it registers. A hosted service reads tenants through
 `ITenantLookup<TKey>`, not by injecting the scoped store ([lifetimes](tenant-stores.md#registration-and-lifetimes)).
-`ITenantLookup` and `RunInScopeAsync` need a store: without one, creating `ITenantLookup` throws
-`InvalidOperationException`, so a hosted service that depends on it fails as the host starts. A host that only
-creates scopes for tenants it already has (`CreateScope`), or makes them current with `ITenantContextSetter`, needs
-no store.
+
+`ITenantLookup` and `RunInScopeAsync` need a store. Without one, a hosted service that depends on `ITenantLookup` fails
+as the host starts ([`ITenantLookup`](api/tenantry-itenantlookup.md)). A host that only creates scopes for tenants it
+already has (`CreateScope`), or makes them current with `ITenantContextSetter`, needs no store.
 
 ## Running work as a tenant
 
@@ -43,11 +43,9 @@ take them in their constructor. Choose by what you have:
 | `scopes.CreateScope(tenant)` | You already loaded the tenant: iterating the store, or onboarding one before its store row exists | Opens one | None |
 | `tenantContext.MakeCurrent(tenant)` | You already loaded the tenant and a scope already exists: custom middleware, or a framework that opened the scope, such as a message consumer | None | None |
 
-`CreateScope` and `MakeCurrent` trust the descriptor they are given, so a descriptor the store does not hold becomes
-current like any other: shared-database queries are filtered by its id and new rows are stamped with it. Pass them only
-a tenant you already hold, and run work that starts from an id with `RunInScopeAsync`. It takes the work as a callback
-because a scope opened inside an asynchronous lookup would not be current for the code that awaited it
-([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
+Run work that starts from an id with `RunInScopeAsync`. `CreateScope` and `MakeCurrent` trust the descriptor they are
+given, so pass them only a tenant you already hold. A descriptor the store does not hold becomes current like any
+other: shared-database queries are filtered by its id and new rows are stamped with it.
 
 `IServiceProvider.CreateScope()` and `CreateAsyncScope()` are .NET's plain DI scopes and set no tenant.
 
@@ -65,10 +63,12 @@ await scopes.RunInScopeAsync(message.TenantId, async (scope, ct) =>
 }, cancellationToken);
 ```
 
-If the store has no such tenant, for example for a message queued before the tenant was deleted, it throws
-`TenantNotFoundException`, a `TenantNotResolvedException` with the id in its `TenantId` property. With
-`ValidateTenantActivity`, it throws `TenantInactiveException` for a suspended tenant without running the work. An
-overload takes work that returns a value.
+- A tenant the store does not have throws `TenantNotFoundException`, for example for a message queued before the
+  tenant was deleted. It is a `TenantNotResolvedException` with the id in its `TenantId` property.
+- With `ValidateTenantActivity`, a suspended tenant throws `TenantInactiveException`, and the work does not run.
+- An overload takes work that returns a value.
+- `RunInScopeAsync` takes the work as a callback because a scope opened inside an asynchronous lookup would not be
+  current for the code that awaited it ([the `AsyncLocal` model](core-concepts.md#the-asynclocal-model)).
 
 `RunInScopeAsync` and `CreateScope` open no log scope, so entries the work writes, EF Core's included, carry no
 `TenantId`. To add it, open one around the call ([Logs](diagnostics.md#logs)):
@@ -114,13 +114,12 @@ public sealed class InvoiceWorker(ITenantScopeFactory<Guid> scopes, ITenantLooku
 }
 ```
 
-`GetAllTenantsAsync` lists suspended tenants too, and `CreateScope` does not check them. If your app suspends
-tenants, skip them with `if (!await activity.IsActiveAsync(tenant, stoppingToken)) continue;`, where `activity` is an
-injected `ITenantActivity<TKey>` ([Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
-
-Give each tenant its own scope, and so its own `DbContext`, so no change-tracker state crosses tenants. Disposing the
-scope disposes its services while the tenant is still current, then restores whichever tenant was current before it,
-in the code that disposed it, with `using` or `await using`, in loops and when nested.
+- `GetAllTenantsAsync` lists suspended tenants too, and `CreateScope` does not check them. If your app suspends tenants,
+  skip them with `if (!await activity.IsActiveAsync(tenant, stoppingToken)) continue;`, where `activity` is an injected
+  `ITenantActivity<TKey>` ([Suspended and inactive tenants](tenant-stores.md#suspended-and-inactive-tenants)).
+- Give each tenant its own scope, and so its own `DbContext`, so no change-tracker state crosses tenants.
+- Disposing the scope disposes its services while the tenant is still current. It then restores whichever tenant was
+  current before it, in the code that disposed it. This holds with `using` or `await using`, in loops and when nested.
 
 ### Lower level: `ITenantContextSetter.MakeCurrent`
 
@@ -157,10 +156,11 @@ in [the `AsyncLocal` model](core-concepts.md#the-asynclocal-model).
 
 ## Desktop apps
 
-A desktop app's UI thread has a synchronization context. The work you pass to `RunInScopeAsync` starts on the context
-you called it from, so it can update the UI, and the scope's services are disposed there too, where they were
-created. As `RunInScopeAsync` returns to that context, await it: blocking on it on the UI thread deadlocks.
-Tenantry's own reads do not return to the context, so a store read, an activity check or a connection string that your
+Await `RunInScopeAsync` on a desktop app's UI thread: it returns to the thread's synchronization context, so blocking on
+it there deadlocks. The work you pass starts on the context you called it from, so it can update the UI, and the
+scope's services are disposed there too, where they were created.
+
+Tenantry's own reads do not return to the context. A store read, an activity check or a connection string that your
 code waits for on the UI thread does not deadlock, though it still blocks the UI while it runs. Your own store and
 delegates should use `ConfigureAwait(false)` for the same reason.
 

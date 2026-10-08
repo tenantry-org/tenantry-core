@@ -34,7 +34,9 @@ Exceptions:
 
 Entries every tenant shares go through [`SharedHybridCache`](tenantry-caching-sharedhybridcache.md); code that uses `IDistributedCache` directly can inject [`ITenantDistributedCache`](tenantry-caching-itenantdistributedcache.md). Invalidating a tenant ([`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md)) removes its `HybridCache` entries.
 
-It wraps the `HybridCache` registered before it, so call `AddHybridCache()` before `AddTenantry`. The host throws `InvalidOperationException` as it starts if a `HybridCache`, keyed or not, is registered after it (`AddHybridCache()` included), or one is registered for any key. With no `HybridCache` registered at all, the one it registers throws when used, naming the fix.
+It wraps the `HybridCache` registered before it, so call `AddHybridCache()` before `AddTenantry`. The host throws `InvalidOperationException` as it starts if a `HybridCache`, keyed or not, is registered after it (`AddHybridCache()` included), or one is registered for any key (`KeyedService.AnyKey`), whose keys are not known in advance to clear. A service provider built without a host is not checked. With no `HybridCache` registered at all, the one it registers throws when used, naming the fix.
+
+The cache must be a singleton, as `AddHybridCache()` registers it: invalidating a tenant clears its entries outside any scope.
 
 A keyed `HybridCache` registered before it is kept per tenant the same way, and the same key gives a [`SharedHybridCache`](tenantry-caching-sharedhybridcache.md) for that cache's shared entries.
 

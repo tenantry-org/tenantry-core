@@ -47,7 +47,8 @@ app.MapGet("/limits", (IOptionsSnapshot<LimitsOptions> limits) => limits.Value.M
   and before every `PostConfigure`, wherever those were registered, and in the order you add them.
 - Without a current tenant, the readers give the ordinary value.
 - `IOptionsSnapshot<T>` is scoped, so scope validation refuses a singleton that depends on it. A singleton holds
-  `IOptionsMonitor<T>` and reads `CurrentValue` each time it needs the value.
+  `IOptionsMonitor<T>` and reads `CurrentValue` each time it needs the value. Read once in a constructor,
+  `CurrentValue` keeps one tenant's value.
 - `Configure<T>(configure)` applies to the default-named options, `Configure<T>(name, configure)` to one name
   (`Get("name")`), and `ConfigureAll<T>(configure)` to every name. For authentication schemes, see
   [Authentication per tenant](authentication-per-tenant.md).
@@ -66,15 +67,13 @@ public sealed class LimitsChecker(IOptions<LimitsOptions> options)
 ```
 
 If `IOptions<T>` gave the tenant's value, this singleton would keep the settings of the first tenant that used it and
-apply them to every other tenant, and library code you do not own does the same. So `IOptions<T>` always gives the
-ordinary value, built with no tenant current, so a tenant's settings never reach code that keeps a value; code that
-should see the tenant's settings reads `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. The first time `IOptions<T>` is
-read while a tenant is current, Tenantry logs a warning (event 2008, [Diagnostics](diagnostics.md#logs)) naming the
-options type, since that code most likely expects the tenant's value; where it does not, turn the warning off with
-[`IgnoreWarnings`](diagnostics.md#turning-off-a-warning).
+apply them to every other tenant. Library code you do not own does the same. So `IOptions<T>` always gives the ordinary
+value, built with no tenant current, and a tenant's settings never reach code that keeps a value. Code that should see
+the tenant's settings reads `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`, where the value is used.
 
-Likewise, reading the monitor's `CurrentValue` once in a constructor keeps one tenant's value: read it where the value
-is used.
+The first time `IOptions<T>` is read while a tenant is current, Tenantry logs a warning naming the options type (event
+2008, [Diagnostics](diagnostics.md#logs)), since that code most likely expects the tenant's value. Where it does not,
+turn the warning off with [`IgnoreWarnings`](diagnostics.md#turning-off-a-warning).
 
 ### Settings from a database
 
@@ -91,40 +90,42 @@ builder.Services.AddTenantry<Guid>(tenant => tenant
     })));
 ```
 
-The options pattern has no asynchronous configuration, so the step runs synchronously; it runs once per tenant, until
+The options pattern has no asynchronous configuration, so the step runs synchronously. It runs once per tenant, until
 the tenant is invalidated (below). A step that throws is run again on the next read.
 
 ## When settings change
 
-Each tenant's value is built on first use and cached. To rebuild it after a tenant's settings change, invalidate the
-tenant: `ITenantInvalidator<TKey>.InvalidateAsync(tenantId)` clears its options with everything else Tenantry keeps for
-it ([Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)), and `InvalidateAllAsync()` clears every tenant's.
+Each tenant's value is built on first use and cached. After a tenant's settings change, invalidate the tenant:
+`ITenantInvalidator<TKey>.InvalidateAsync(tenantId)` clears its options with everything else Tenantry keeps for it
+([Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)), and `InvalidateAllAsync()` clears every tenant's.
 
-A tenant's options are built from the store's copy of the tenant, so after an invalidation a request resolved before
-it gets the new settings, and a descriptor passed to `MakeCurrent` or `CreateScope` cannot change them. For an id the
-store does not hold, they are built from the current descriptor on each read and not kept. Without a store, they are
-built from the descriptor current at the first read and kept until the tenant is invalidated.
-
-Building a value reads the store once, blocking, since options have no asynchronous configuration. Use
-[`CacheTenants`](tenant-stores.md#caching) so that the read is usually answered from memory. When a synchronization
-context or a task scheduler other than the default is current, the read runs on the thread pool, so a store that awaits
-without `ConfigureAwait(false)` does not wait on the thread the read blocks. A store that fails fails the read of the
-options whose value is being built; the next read tries again.
-
-A change to the configuration the options are bound to (a reloaded `appsettings.json`) clears every tenant's value of
-that options type. Each instance of the application has its own values, so
-[publish the invalidation](tenant-stores.md#several-instances) to the others, or keep the settings in configuration
-that reloads.
-
-The values are kept in memory, one per tenant for each options type and name, until an invalidation or a
-configuration reload clears them, with no size limit or expiry, so an application with many tenants and large options
-types holds them all once each tenant has been served.
+- A change to the configuration the options are bound to (a reloaded `appsettings.json`) clears every tenant's value
+  of that options type.
+- Each instance of the application has its own values. [Publish the invalidation](tenant-stores.md#several-instances)
+  to the others, or keep the settings in configuration that reloads.
+- Building a value reads the store once, blocking, since options have no asynchronous configuration. Use
+  [`CacheTenants`](tenant-stores.md#caching) so that the read is usually answered from memory ([Details](#details)).
 
 ## Validation
 
 `Validate` and `IValidateOptions<T>` run on each tenant's value when it is built, so reading the options as a tenant
 whose settings are invalid throws `OptionsValidationException`. `ValidateOnStart` runs at startup, without a tenant, so
 it validates the ordinary value.
+
+## Details
+
+With a store, a tenant's options are built from the store's copy of the tenant. After an invalidation, a request
+resolved before it gets the new settings, and a descriptor passed to `MakeCurrent` or `CreateScope` cannot change them.
+For an id the store does not hold, they are built from the current descriptor on each read and not kept. Without a
+store, they are built from the descriptor current at the first read and kept until the tenant is invalidated.
+
+When a synchronization context or a task scheduler other than the default is current, the store read runs on the thread
+pool. A store that awaits without `ConfigureAwait(false)` then does not wait on the thread the read blocks. A store that
+fails fails the read of the options whose value is being built, and the next read tries again.
+
+The values are kept in memory, one per tenant for each options type and name, until an invalidation or a configuration
+reload clears them. They have no size limit or expiry, so an application with many tenants and large options types
+holds them all once each tenant has been served.
 
 ## See also
 

@@ -30,9 +30,9 @@ public static class TenantryHttpClientBuilderExtensions
     /// </remarks>
     /// <param name="builder">The client's builder, from <c>AddHttpClient</c> or <c>AddGrpcClient</c>.</param>
     /// <param name="serviceAddress">
-    /// The address of the service the client calls, for a client whose registration sets no <c>BaseAddress</c>: a gRPC
-    /// client's <c>Address</c>, or the address a typed client sets in its constructor. Only its scheme, host and port
-    /// are used.
+    /// The address of the service the client calls, for a client whose registration sets no <c>BaseAddress</c>. A gRPC
+    /// client keeps its <c>Address</c> in its own options, which Tenantry cannot read, and a typed client may set its
+    /// address in its constructor, after the handlers are built. Only its scheme, host and port are used.
     /// </param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="InvalidOperationException">

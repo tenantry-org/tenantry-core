@@ -8,8 +8,8 @@ were resolved. None of it needs setting up beyond your logging, tracing and metr
 Tenantry logs under four categories: `Tenantry.AspNetCore` (the request middleware), `Tenantry.AspNetCore.OutputCache`
 (output caching per tenant, event 1009), `Tenantry.EfCore` (the isolation in your `DbContext`) and `Tenantry.Options`
 (options per tenant). Tenantry's event ids are 1000 to 2999, and Tenantry.Pro's are 3000 and above, so an id names
-one event. An id changes only in a release whose changelog says so, so you can alert on them: above all on 2001, a
-save that tried to write another tenant's row.
+one event. An id changes only in a release whose changelog says so, so you can alert on them. Above all, alert on 2001,
+a save that tried to write another tenant's row.
 
 | Event id | Name | Level | When |
 |----------|------|-------|------|
@@ -19,37 +19,38 @@ save that tried to write another tenant's row.
 | 1004 | `TenantNotFound` | Warning | A request's identifier names no tenant, and its endpoint requires a tenant. |
 | 1005 | `TenantAccessDenied` | Warning | An access validator refuses a request's tenant. |
 | 1006 | `ContinuingWithoutTenant` | Debug | A request's identifier names no tenant, one that is not active, or one it may not use, and its endpoint does not require a tenant. |
-| 1007 | `TenantryBeforeRouting` | Warning | `app.UseTenantry()` ran before routing chose an endpoint with `RequireTenant()` or `AllowMissingTenant()`, or one with the route value `ResolveFromRouteValue` reads. Requests without a tenant are still rejected where one is required. Logged once. |
-| 1008 | `TenantryBeforeAuthentication` | Warning | The authentication middleware ran after `app.UseTenantry()` and signed in a user with the claim `ResolveFromClaim` reads, which it therefore missed. Logged once. |
+| 1007 | `TenantryBeforeRouting` | Warning | `app.UseTenantry()` ran before routing chose the endpoint. The endpoint has `RequireTenant()` or `AllowMissingTenant()`, or the route value `ResolveFromRouteValue` reads. Requests without a tenant are still rejected where one is required. Logged once. |
+| 1008 | `TenantryBeforeAuthentication` | Warning | The authentication middleware ran after `app.UseTenantry()`. It signed in a user with the claim `ResolveFromClaim` reads, so the resolver missed the claim. Logged once. |
 | 1009 | `OutputCacheBeforeTenantry` | Warning | The output cache ran before `app.UseTenantry()` for a request, so `IsolateOutputCache()` did not cache its response. Logged once. |
 | 1010 | `TenantResolutionAfterAuthentication` | Warning | `app.UseTenantResolution()` ran after the authentication middleware, so authentication used no tenant's settings. Logged once. |
-| 1011 | `TenantryDidNotRun` | Error | `app.UseTenantResolution()` resolved a request, but `app.UseTenantry()` did not run before its endpoint, which was not run (500). |
+| 1011 | `TenantryDidNotRun` | Error | `app.UseTenantResolution()` resolved a request, but `app.UseTenantry()` did not run before its endpoint. The endpoint was not run (500). |
 | 1012 | `TenantInactive` | Warning | A request's tenant is not active (`ValidateTenantActivity`). |
 | 1013 | `AuthorizationBeforeTenantry` | Error | The authorization middleware ran after `app.UseTenantResolution()` and before `app.UseTenantry()`, so it saw a tenant the access validators had not checked. The request was refused (500). |
-| 1014 | `AuthorizationMarkersMissing` | Warning | The running ASP.NET Core does not set the keys Tenantry reads to catch authorization between `app.UseTenantResolution()` and `app.UseTenantry()`, so that order is no longer caught. Logged once, as the application starts. |
-| 1015 | `SignOutFailed` | Error | Signing out a scheme failed while Tenantry refused a request whose user was signed in under a tenant the access validators refused. A session that scheme keeps may still hold that user; the request was refused as usual. |
-| 1016 | `TenantResolutionBeforeRouting` | Warning | `app.UseTenantResolution()` ran before routing chose an endpoint with the route value `ResolveFromRouteValue` reads, so the tenant current during authentication, if any, did not come from the route. Logged once. |
+| 1014 | `AuthorizationMarkersMissing` | Warning | The running ASP.NET Core does not set the keys Tenantry reads to catch authorization between `app.UseTenantResolution()` and `app.UseTenantry()`. Tenantry no longer catches that order. Logged once, as the application starts. |
+| 1015 | `SignOutFailed` | Error | Signing out a scheme failed while Tenantry refused a request. The request's user was signed in under a tenant the access validators refused. A session that scheme keeps may still hold that user. The request was refused as usual. |
+| 1016 | `TenantResolutionBeforeRouting` | Warning | `app.UseTenantResolution()` ran before routing chose an endpoint with the route value `ResolveFromRouteValue` reads. The tenant current during authentication, if any, did not come from the route. Logged once. |
 | 2001 | `TenantIsolationViolation` | Error | `SaveChanges` refused to write an entity of another tenant. |
 | 2002 | `WriteWithoutTenant` | Warning | `SaveChanges` wrote tenant-owned entities without a tenant, under `OnMissingTenant = Warn`. |
 | 2003 | `WriteMatchedNoRow` | Warning | An update or delete of a tenant-owned entity matched no row: it does not exist, belongs to another tenant, or changed concurrently. |
 | 2004 | `TransactionNotCommitted` | Error | A save failed, or never finished, after sending statements in a transaction where a save wrote rows that depend on another of its statements' tenant check. EF Core could not roll back only that save (no savepoint, or a `TransactionScope`), so the transaction is rolled back instead of committed. `EntityType` is the entity whose check failed, or the context's type for any other failure, such as a caught save failure the application went on after. |
 | 2005 | `SaveInTransaction` | Debug | A save whose rows rely on another of its statements' tenant check runs in a transaction although `AutoTransactionBehavior` is `Never` (`OnSaveWithoutTransaction = UseTransaction`). |
-| 2006 | `UnmarkedEntityTypes` | Warning | A context's model has entity types that are neither tenant-owned nor marked as shared across tenants, and the application set `OnUnmarkedEntityType = Warn` (the default, `Allow`, logs nothing). Logged once for each model EF Core builds: usually once per context type, and again if EF Core drops the model from its cache. |
-| 2007 | `StringTenantIdCollation` | Warning | On SQL Server or MySQL, a context's model has `string` tenant ids in tables where neither the `TenantId` column, the table nor the model sets a collation, so the database's default, which ignores case, compares them ([String tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)). Logged once for each model EF Core builds, also in `dotnet ef` commands that start the application's host. |
+| 2006 | `UnmarkedEntityTypes` | Warning | A context's model has entity types that are neither tenant-owned nor marked as shared across tenants. The application set `OnUnmarkedEntityType = Warn`. The default, `Allow`, logs nothing. Logged once for each model EF Core builds: usually once per context type, and again if EF Core drops the model from its cache. |
+| 2007 | `StringTenantIdCollation` | Warning | On SQL Server or MySQL, a context's model has `string` tenant ids in tables where neither the `TenantId` column, the table nor the model sets a collation. The database's default, which ignores case, then compares them ([String tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)). Logged once for each model EF Core builds, also in `dotnet ef` commands that start the application's host. |
 | 2008 | `OrdinaryOptionsReadAsTenant` | Warning | `IOptions<T>` of a type configured per tenant was read while a tenant is current. It gives the ordinary value, so the code most likely wants `IOptionsSnapshot<T>` or `IOptionsMonitor<T>`. Logged once per options type. |
 
-While a request's tenant is current, a log scope with one property, `TenantId`, is open, so every entry the request
-writes carries it in a logging provider that records scopes: Serilog's, or the console's and OpenTelemetry's with
-`IncludeScopes`. Tenantry.Pro's jobs and messages open the same scope. `RunInScopeAsync` and `CreateScope` open none,
-so open it yourself around work you run with them, as below.
+While a request's tenant is current, a log scope with one property, `TenantId`, is open. Every entry the request writes
+carries it in a logging provider that records scopes: Serilog's, or the console's and OpenTelemetry's with
+`IncludeScopes`. Tenantry.Pro's jobs and messages open the same scope. `RunInScopeAsync` and `CreateScope` open none
+([Non-HTTP hosts](non-http-hosts.md#when-you-have-a-tenant-id)), so open it yourself around work you run with them, as
+below.
 
 ```csharp
 builder.Logging.AddJsonConsole(o => o.IncludeScopes = true);
 ```
 
-The names are public, in `TenantTelemetry`, so your own code can record the tenant the same way: `TenantIdTag`
-(`tenant.id`), `LogScopeName` (`TenantId`), and `CreateLogScope`, the scope's state, which formats the id as Tenantry
-does (`TenantIds.Format`).
+The names are public, in `TenantTelemetry`, so your own code can record the tenant the same way. `TenantIdTag` is
+`tenant.id` and `LogScopeName` is `TenantId`. `CreateLogScope` gives the scope's state, with the id formatted as
+Tenantry formats it (`TenantIds.Format`).
 
 ```csharp
 using Tenantry;

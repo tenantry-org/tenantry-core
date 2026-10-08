@@ -39,7 +39,9 @@ Exceptions:
 
 - `ArgumentException`: The tenant's id is the key type's default value or an empty string, which Tenantry reserves for "no tenant".
 
-Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from outside the application, use [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md), which does both.
+Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from outside the application, use [`ITenantScopeFactory<TKey>.RunInScopeAsync`](tenantry-itenantscopefactory.md), which does both. A descriptor the store does not hold becomes current like any other: shared-database queries are filtered by its id and new rows are stamped with it.
+
+Opens no log scope, so entries written in the scope carry no `TenantId` unless you open one with [`TenantTelemetry.CreateLogScope<TKey>`](tenantry-tenanttelemetry.md).
 
 ### `RunInScopeAsync(TKey, Func<ITenantScope<TKey>, CancellationToken, Task>, CancellationToken)`
 
@@ -64,6 +66,8 @@ Exceptions:
 - `InvalidOperationException`: No tenant store is registered.
 - `ArgumentException`: `tenantId` is the key type's default value or an empty string, which no tenant can have.
 - `OperationCanceledException`: `cancellationToken` was cancelled before the work started.
+
+Opens no log scope, so entries the work writes carry no `TenantId` unless you open one with [`TenantTelemetry.CreateLogScope<TKey>`](tenantry-tenanttelemetry.md) around the call.
 
 ### `RunInScopeAsync<TResult>(TKey, Func<ITenantScope<TKey>, CancellationToken, Task<TResult>>, CancellationToken)`
 
@@ -92,3 +96,5 @@ Exceptions:
 - `InvalidOperationException`: No tenant store is registered.
 - `ArgumentException`: `tenantId` is the key type's default value or an empty string, which no tenant can have.
 - `OperationCanceledException`: `cancellationToken` was cancelled before the work started.
+
+Opens no log scope, so entries the work writes carry no `TenantId` unless you open one with [`TenantTelemetry.CreateLogScope<TKey>`](tenantry-tenanttelemetry.md) around the call.

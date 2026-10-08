@@ -24,7 +24,9 @@ public interface ITenantContextSetter<TKey> : ITenantContext<TKey>
     /// <returns>A handle that restores the previously current tenant on disposal.</returns>
     /// <remarks>
     /// Does not look the tenant up or check that it is active, so pass a tenant you already hold. For an id from
-    /// outside the application, use <c>ITenantScopeFactory.RunInScopeAsync</c>, which does both.
+    /// outside the application, use <c>ITenantScopeFactory.RunInScopeAsync</c>, which does both. A descriptor the store
+    /// does not hold becomes current like any other: shared-database queries are filtered by its id and new rows are
+    /// stamped with it.
     /// </remarks>
     /// <exception cref="ArgumentException">
     /// The tenant's id is the key type's default value (<see cref="Guid.Empty"/>, <c>0</c>) or an empty string,
