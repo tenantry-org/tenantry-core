@@ -80,4 +80,9 @@
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="[10.0.0, 12.0.0)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Microsoft.Data.SqlClient allows the vulnerable System.Security.Cryptography.Pkcs 9.0.11; an application raises it, and so does this build -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+  </ItemGroup>
+
 </Project>
