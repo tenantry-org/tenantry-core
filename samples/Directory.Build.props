@@ -1,21 +1,6 @@
 <Project>
 
-  <!--
-    Samples: net10.0, not packed. Shared with Tenantry Pro (eng/common/shared-files.txt). Their package versions
-    are set centrally, in Directory.Packages.props. Some of those depend on the TargetFramework set here, which is
-    read before a sample's project file, so a sample keeps net10.0. Tenantry Pro's export script writes the versions
-    into the standalone copies of its samples that customers receive.
-  -->
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
-
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <IsPackable>false</IsPackable>
-    <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <!-- Keep the lock file out of the default items, so SDKs that copy *.json to the output (Worker) don't ship it -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);packages.lock.json</DefaultItemExcludes>
-  </PropertyGroup>
+  <!-- Samples: the settings Tenantry Pro shares, in the shared/ submodule -->
+  <Import Project="../shared/samples/Directory.Build.props" />
 
 </Project>

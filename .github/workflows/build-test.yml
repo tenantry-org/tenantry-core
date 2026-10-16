@@ -29,6 +29,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0   # MinVer needs full history; SonarCloud needs it for SCM blame
 
       - name: Pull the database images in the background
@@ -70,7 +71,7 @@ jobs:
       - name: Check every published floor is tested
         # The minimum dependency lane: each src version range's floor must be what some test's lock file resolves.
         # It runs before SonarCloud begin, so the scanner does not analyse the script's build.
-        run: dotnet run scripts/check-dependency-floors.cs
+        run: dotnet run shared/scripts/check-dependency-floors.cs
 
       - name: SonarCloud begin
         if: ${{ inputs.run_sonar }}
@@ -98,7 +99,7 @@ jobs:
 
       - name: Test (all) + coverage
         # On Microsoft Testing Platform (global.json); dotnet-coverage writes coverage/coverage.xml (see the script)
-        run: bash scripts/test-with-coverage.sh
+        run: bash shared/scripts/test-with-coverage.sh
 
       - name: SonarCloud end (uploads analysis, fails on quality gate)
         if: ${{ inputs.run_sonar }}
@@ -107,7 +108,7 @@ jobs:
         run: dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
 
       - name: Coverage gate (>= 90% line coverage)
-        run: bash scripts/check-coverage.sh 90
+        run: bash shared/scripts/check-coverage.sh 90
 
       - name: Pack
         # Each src project, then the dotnet new templates (templates/), which the solution leaves out, so their pack
@@ -133,7 +134,7 @@ jobs:
       - name: Check package dependency ranges
         # Fails on a dependency without its intended range: exact for a sibling whose internals it uses, a minimum only
         # for Microsoft.Extensions.*, otherwise up to the next breaking version (see the script)
-        run: dotnet run scripts/check-package-ranges.cs -- ./artifacts
+        run: dotnet run shared/scripts/check-package-ranges.cs -- ./artifacts
 
       - name: Consumer check
         # A stand-in application restores these packages from an empty cache with package source mapping,
@@ -144,7 +145,7 @@ jobs:
           mkdir ./artifacts/libraries
           cp ./artifacts/*.nupkg ./artifacts/libraries/
           rm ./artifacts/libraries/Tenantry.Templates.[0-9]*.nupkg
-          bash scripts/check-package-consumer.sh ./artifacts/libraries 'Tenantry.*'
+          bash shared/scripts/check-package-consumer.sh ./artifacts/libraries 'Tenantry.*'
 
       - name: Smoke-test the templates
         # The dotnet new templates: each is created from the templates package packed above, the one a release
@@ -155,7 +156,7 @@ jobs:
       - name: Check the documentation's code blocks
         # Every ```csharp block in the README and docs builds against these packages (see the script). The first
         # pattern names the package whose version the snippets reference.
-        run: bash scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.*'
+        run: bash shared/scripts/check-doc-snippets.sh ./artifacts 'Tenantry.Core' 'Tenantry.*'
 
       - name: Upload packages
         # The release job publishes exactly these packages: the ones built, tested and checked above. On master,
@@ -183,6 +184,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0   # MinVer needs full history
 
       - name: Setup .NET
@@ -213,19 +215,24 @@ jobs:
 
       - name: Check the scripts
         # actionlint covers only the workflows' run blocks; this runs shellcheck on the scripts they call
-        run: shellcheck -S warning scripts/*.sh
+        run: shellcheck -S warning scripts/*.sh shared/scripts/*.sh
+
+      - name: Check the root copies of the shared files
+        # global.json, .editorconfig and dotnet-tools.json must match shared/'s, since the tools read them at the root
+        run: bash shared/scripts/check-root-copies.sh
 
       - name: Check the Dependabot configuration
         # Its list of banded packages (version ranges, per-framework versions) must match the project files
-        run: dotnet run scripts/check-dependabot.cs
+        run: dotnet run shared/scripts/check-dependabot.cs
 
       - name: Check for removed names
-        # The README, docs, samples and src name no API or package that no longer exists (eng/common/removed-names.txt)
-        run: dotnet run scripts/check-removed-names.cs
+        # The README, docs, samples and src name no API or package that no longer exists
+        # (shared/eng/common/removed-names.txt)
+        run: dotnet run shared/scripts/check-removed-names.cs
 
       - name: Check the documentation's links
         # Every link in the README, docs and samples reaches a file, page and heading, as tenantry.dev serves docs/
-        run: dotnet run scripts/check-doc-links.cs
+        run: dotnet run shared/scripts/check-doc-links.cs
 
       - name: Restore
         # Locked: fails if a test or sample project's packages.lock.json is out of date
@@ -237,12 +244,12 @@ jobs:
 
       - name: Check for ReSharper warnings
         # Rider's inspections (see the script). inspectcode builds the solution first, as nothing above has.
-        run: bash scripts/check-inspections.sh Tenantry.slnx
+        run: bash shared/scripts/check-inspections.sh Tenantry.slnx
 
       - name: Check the API reference
         # docs/api is generated from the XML documentation comments; a change to the public API or its comments
-        # must commit the regenerated pages (scripts/generate-api-docs.sh)
-        run: bash scripts/generate-api-docs.sh --check
+        # must commit the regenerated pages (shared/scripts/generate-api-docs.sh)
+        run: bash shared/scripts/generate-api-docs.sh --check
 
       - name: Verify AOT publish
         run: dotnet publish samples/Tenantry.Samples.Aot -c Release

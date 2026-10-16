@@ -1,8 +1,8 @@
 <Project>
 
-  <Import Project="eng/common/Build.props" />
+  <Import Project="shared/eng/common/Build.props" />
 
-  <!-- This repository's own settings. Projects under src/, tests/ and samples/ add their folder's Directory.Build.props. -->
+  <!-- This repository's own settings. Projects under src/, tests/ and samples/ add their folder's settings from shared/. -->
   <PropertyGroup>
     <RepositoryUrl>https://github.com/tenantry-org/tenantry-core</RepositoryUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
@@ -13,8 +13,8 @@
          packed. -->
     <TenantryPackageReadmeBody>$(MSBuildThisFileDirectory)eng/package-readme.md</TenantryPackageReadmeBody>
     <TenantryPackageReadme>$(MSBuildProjectDirectory)/obj/package-readme.md</TenantryPackageReadme>
-    <!-- The last release, which pack checks each package's API against (eng/common/Build.targets). Raise it after each
-         release (RELEASING.md). -->
+    <!-- The last release, which pack checks each package's API against (shared/eng/common/Build.targets). Raise it
+         after each release (RELEASING.md). -->
     <TenantryPackageBaseline>0.7.0</TenantryPackageBaseline>
     <!-- The minor master works towards. Releases are tagged on release branches, on commits master does not contain, so
          master's last reachable tag stays behind; this keeps master's packages versioned X.Y.0-alpha.0.N above every

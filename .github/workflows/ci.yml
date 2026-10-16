@@ -44,6 +44,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0   # MinVer needs full history
 
       - name: Setup .NET
@@ -70,6 +71,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0   # MinVer needs full history
 
       - name: Setup .NET 11 (preview)
@@ -116,6 +118,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           persist-credentials: false   # only Directory.Build.props and the script are needed
 
       - name: Download the tested packages
@@ -183,7 +186,7 @@ jobs:
           done
           status=0
           errors="$RUNNER_TEMP/unpublished.err"
-          output="$(bash scripts/check-unpublished.sh "$VERSION" "${ids[@]}" 2> "$errors")" || status=$?
+          output="$(bash shared/scripts/check-unpublished.sh "$VERSION" "${ids[@]}" 2> "$errors")" || status=$?
           echo "$output"
           if [ "$status" = "0" ]; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
@@ -230,29 +233,27 @@ jobs:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
 
-      - name: Tell Tenantry Pro when a shared file changed
-        # Tenantry Pro copies the files eng/common/shared-files.txt lists, and its CI checks the copies against the
-        # Core it pins, so a push that changes one leaves Pro red until its pin moves to this version. The
-        # tenantry-core-prerelease event starts Pro's update-core-pin.yml with the version; a push that changes no
-        # shared file sends nothing, and Pro's Monday run moves the pin. A missing PRO_DISPATCH_TOKEN (RELEASING.md,
-        # Repository settings) or a refused event is reported without failing the run, and a comparison GitHub cannot
-        # make counts as a change.
+      - name: Tell Tenantry Pro when the shared files changed
+        # Tenantry Pro's CI checks that its shared/ submodule is at the commit the Core it pins holds, so a push that
+        # moves Core's shared/ leaves Pro red until its pin moves to this version. The tenantry-core-prerelease event
+        # starts Pro's update-core-pin.yml with the version; a push that leaves shared/ where it was sends nothing, and
+        # Pro's Monday run moves the pin. A missing PRO_DISPATCH_TOKEN (RELEASING.md, Repository settings) or a refused
+        # event is reported without failing the run, and a comparison GitHub cannot make counts as a change.
         env:
           GH_TOKEN: ${{ github.token }}
           PRO_DISPATCH_TOKEN: ${{ secrets.PRO_DISPATCH_TOKEN }}
           BEFORE: ${{ github.event.before }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          shared="$(sed '/^#/d;/^$/d' eng/common/shared-files.txt)"
+          # The comparison lists the submodule as the file "shared" when its commit moved
           if changed="$(gh api --paginate "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$GITHUB_SHA" \
             --jq '.files[].filename')"; then
-            if ! grep -qFx -f <(echo "$shared") <<<"$changed"; then
-              echo "No shared file changed between $BEFORE and $GITHUB_SHA, so Tenantry Pro was not told."
+            if ! grep -qFx shared <<<"$changed"; then
+              echo "shared/ did not move between $BEFORE and $GITHUB_SHA, so Tenantry Pro was not told."
               exit 0
             fi
           else
-            echo "::warning::Could not compare $BEFORE and $GITHUB_SHA, so Tenantry Pro is told as if a shared file" \
-              "changed."
+            echo "::warning::Could not compare $BEFORE and $GITHUB_SHA, so Tenantry Pro is told as if shared/ moved."
           fi
           if [ -z "$PRO_DISPATCH_TOKEN" ]; then
             echo "::notice::PRO_DISPATCH_TOKEN is not set, so Tenantry Pro was not told about $VERSION; its Monday" \

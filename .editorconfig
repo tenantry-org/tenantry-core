@@ -1,5 +1,5 @@
-# Code style for tenantry-core and tenantry-pro; the two copies are identical. CI checks C# files with
-# `dotnet format --verify-no-changes`.
+# Code style for tenantry-core and tenantry-pro, kept in tenantry-shared. Each repository's root copy matches it
+# (shared/scripts/check-root-copies.sh). CI checks C# files with `dotnet format --verify-no-changes`.
 root = true
 
 [*]
@@ -32,7 +32,7 @@ csharp_space_after_keywords_in_control_flow_statements = true
 csharp_preserve_single_line_statements = false
 csharp_preserve_single_line_blocks = true
 
-# The analysers at AnalysisLevel 10.0-recommended (src/Directory.Build.props), less one: member names that are
+# The analysers at AnalysisLevel 10.0-recommended (shared/src/Directory.Build.props), less one: member names that are
 # keywords in other .NET languages (Get, in Visual Basic). The packages are for C# and F#, where Get is no keyword.
 dotnet_diagnostic.CA1716.severity = none
 

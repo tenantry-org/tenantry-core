@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    A stand-in application for scripts/check-package-consumer.sh, which copies it out of the repository
+    A stand-in application for shared/scripts/check-package-consumer.sh, which copies it out of the repository
     and builds it against freshly packed packages. Not part of the solution. Its package versions are set here, since
     the copy is outside the repository, where Directory.Packages.props does not reach.
   -->
@@ -21,6 +21,12 @@
     <PackageReference Include="Tenantry.Http" Version="[$(TenantryVersion)]" />
     <PackageReference Include="Tenantry.Caching" Version="[$(TenantryVersion)]" />
     <PackageReference Include="Tenantry.Options" Version="[$(TenantryVersion)]" />
+  </ItemGroup>
+
+  <!-- The load check, shared with Tenantry Pro. The script copies it beside its copy of this project, which then
+       compiles it as any other source file. -->
+  <ItemGroup Condition="Exists('../../shared/eng/package-consumer/PackageLoadCheck.cs')">
+    <Compile Include="../../shared/eng/package-consumer/PackageLoadCheck.cs" />
   </ItemGroup>
 
 </Project>

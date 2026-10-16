@@ -1,8 +1,8 @@
 <Project>
 
-  <!-- Central package management for the solution and the templates package (see eng/common/Packages.props); this
-       repository's own versions follow. -->
-  <Import Project="eng/common/Packages.props" />
+  <!-- Central package management for the solution and the templates package (see shared/eng/common/Packages.props);
+       this repository's own versions follow. -->
+  <Import Project="shared/eng/common/Packages.props" />
 
   <ItemGroup Condition="'$(MicrosoftExtensionsFloor)' != ''">
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="[$(MicrosoftExtensionsFloor), )" />
@@ -53,9 +53,9 @@
 
   <!--
     The ADO.NET drivers under the database providers, for the latest dependency lane only (LatestDependencies, see
-    eng/common/Build.targets): the integration tests reference them directly there, so the lane runs the newest driver
-    an application can update to rather than the oldest the provider allows. Npgsql and MySqlConnector stay in the
-    major their provider supports; SqlClient and MySql.Data take any newer release, as an application can.
+    shared/eng/common/Build.targets): the integration tests reference them directly there, so the lane runs the newest
+    driver an application can update to rather than the oldest the provider allows. Npgsql and MySqlConnector stay in
+    the major their provider supports; SqlClient and MySql.Data take any newer release, as an application can.
   -->
   <ItemGroup Condition="'$(LatestDependencies)' == 'true' And '$(TargetFramework)' == 'net8.0'">
     <PackageVersion Include="Npgsql" Version="[8.0.3, 9.0.0)" />

@@ -36,7 +36,7 @@
              Pack="true" PackagePath="content/" />
     <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="" />
     <None Include="$(TenantryPackageReadme)" Pack="true" PackagePath="README.md" />
-    <None Include="$(MSBuildThisFileDirectory)../eng/common/package-icon.png" Pack="true" PackagePath="icon.png" />
+    <None Include="$(MSBuildThisFileDirectory)../shared/eng/common/package-icon.png" Pack="true" PackagePath="icon.png" />
   </ItemGroup>
 
   <!-- Each template's template.json, with the version of the Tenantry packages it references: this package's -->

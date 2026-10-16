@@ -36,6 +36,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0   # all branches and tags, so origin/release/* and the release tags are available
 
       - name: Require the tagged commit to be on its release branch
@@ -62,9 +63,9 @@ jobs:
           fi
 
       - name: Require the release's notes in CHANGELOG.md
-        # Its "## [x.y.z]" section is the GitHub release's notes (scripts/release-notes.sh)
+        # Its "## [x.y.z]" section is the GitHub release's notes (shared/scripts/release-notes.sh)
         if: github.event_name == 'push'
-        run: bash scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
+        run: bash shared/scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
 
       - name: Require the release's notes in master's CHANGELOG.md too
         # Every section added to a release branch is also added to master's (RELEASING.md), so the next minor's
@@ -75,7 +76,7 @@ jobs:
           RELEASE: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
         run: |
           git show refs/remotes/origin/master:CHANGELOG.md > "$RUNNER_TEMP/master-CHANGELOG.md"
-          if ! bash scripts/release-notes.sh "$RELEASE" "$RUNNER_TEMP/master-CHANGELOG.md" > /dev/null 2>&1; then
+          if ! bash shared/scripts/release-notes.sh "$RELEASE" "$RUNNER_TEMP/master-CHANGELOG.md" > /dev/null 2>&1; then
             version="${RELEASE#v}"
             if [[ "$version" =~ ^[0-9]+\.[0-9]+\.0(-|$) ]]; then
               todo="push master, whose cherry-pick of the release branch's commit adds it, or add it there"
@@ -120,7 +121,7 @@ jobs:
           for project in src/*/*.csproj templates/Tenantry.Templates.csproj; do
             ids+=("$(basename "$project" .csproj)")
           done
-          bash scripts/check-unpublished.sh "${RELEASE#v}" "${ids[@]}"
+          bash shared/scripts/check-unpublished.sh "${RELEASE#v}" "${ids[@]}"
 
   # Re-run build + tests + coverage gate + AOT publish against the tagged commit before
   # publishing. SonarCloud is skipped: it analyses master only (ci.yml says why), and the source job checked that the
@@ -149,6 +150,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0               # the release tags, for whether this is the newest release
           persist-credentials: false   # only CHANGELOG.md, the scripts and the tags are needed
 
@@ -176,7 +178,7 @@ jobs:
 
       - name: Write the release notes
         # The tag's section of CHANGELOG.md, before anything is published
-        run: bash scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
+        run: bash shared/scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
 
       - name: Check the packages carry the tag's version
         run: |
@@ -223,11 +225,11 @@ jobs:
           done
 
       - name: Find whether this is the newest release
-        # GitHub shows one release as Latest: only the newest (scripts/newest-release.sh), decided now, so a rerun after
-        # a newer release is tagged does not take it from that release
+        # GitHub shows one release as Latest: only the newest (shared/scripts/newest-release.sh), decided now, so a
+        # rerun after a newer release is tagged does not take it from that release
         id: latest
         run: |
-          newest="$(git tag --list 'v[0-9]*' | bash scripts/newest-release.sh)"
+          newest="$(git tag --list 'v[0-9]*' | bash shared/scripts/newest-release.sh)"
           if [ "$newest" = "$GITHUB_REF_NAME" ]; then
             echo "latest=true" >> "$GITHUB_OUTPUT"
           else
@@ -294,6 +296,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
 
       - name: Download the tested packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -311,12 +315,12 @@ jobs:
           echo "A release would attest each package's provenance, push each .nupkg to NuGet.org, Tenantry.Templates"
           echo "first, with any .snupkg beside it to the NuGet.org symbol server, and create a GitHub release with its"
           echo "CHANGELOG.md section as notes and the packages, their checksums and SBOMs attached, marked as the latest"
-          echo "release only if no higher release is tagged when it is created (scripts/newest-release.sh). For an"
-          echo "X.Y.0, it would then send tenantry-agent-skills a tenantry-release event."
+          echo "release only if no higher release is tagged when it is created (shared/scripts/newest-release.sh)."
+          echo "For an X.Y.0, it would then send tenantry-agent-skills a tenantry-release event."
 
       - name: Show the release notes
         if: inputs.version != ''
         # The input reaches the script as an environment variable, never expanded into the script text.
         env:
           RELEASE: ${{ inputs.version }}
-        run: bash scripts/release-notes.sh "$RELEASE"
+        run: bash shared/scripts/release-notes.sh "$RELEASE"

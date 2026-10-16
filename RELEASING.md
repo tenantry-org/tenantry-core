@@ -108,7 +108,8 @@ NuGet.org.
 `master`, and before it attached the packages to the GitHub release. Its first patch brings these first, in a pull
 request into `release/0.7`:
 
-- `.github/workflows/release.yml` from `master`, with `scripts/newest-release.sh`, which it calls;
+- `.github/workflows/release.yml` from `master`, with `scripts/newest-release.sh`, which it calls: `release/0.7` has
+  no `shared/` submodule, so the copy calls its scripts in `scripts/`, not `shared/scripts/`;
 - `TenantryPackageBaseline` raised to `0.7.0`;
 - both `src/*/CompatibilitySuppressions.xml` deleted.
 
@@ -154,9 +155,9 @@ The GitHub release is a second public download point for the packages. Its copie
 signature, and unlisting a version on NuGet.org does not remove them; deleting the release's package assets does.
 
 Before anything is built, the workflow checks that no package already has the version on NuGet.org
-(`scripts/check-unpublished.sh`), and the push refuses a duplicate rather than skipping it, so a tag moved or pushed
-again for a released version fails instead of creating a GitHub release whose checksums do not match the published
-packages. A dry run given a version checks it too.
+(`shared/scripts/check-unpublished.sh`), and the push refuses a duplicate rather than skipping it, so a tag moved or
+pushed again for a released version fails instead of creating a GitHub release whose checksums do not match the
+published packages. A dry run given a version checks it too.
 
 If the push stops before any package is published, as when NuGet.org refuses `Tenantry.Templates`, which goes first,
 fix the cause and rerun the failed job within 7 days. If it stops after some packages were pushed, a published package
@@ -186,8 +187,8 @@ run=<the release run's id>
 rm -rf artifacts/release
 gh run download "$run" --repo tenantry-org/tenantry-core --name nuget-packages --dir artifacts/release
 (cd artifacts/release && sha256sum -- *.nupkg *.snupkg > SHA256SUMS)
-bash scripts/release-notes.sh "$tag" <(git show "$tag:CHANGELOG.md") > artifacts/release/notes.md
-newest="$(git tag --list 'v[0-9]*' | bash scripts/newest-release.sh)"
+bash shared/scripts/release-notes.sh "$tag" <(git show "$tag:CHANGELOG.md") > artifacts/release/notes.md
+newest="$(git tag --list 'v[0-9]*' | bash shared/scripts/newest-release.sh)"
 flags=(--latest=false)
 [[ "$tag" == "$newest" ]] && flags=(--latest)
 [[ "$tag" == *-* ]] && flags+=(--prerelease)
@@ -223,11 +224,11 @@ The job refuses any version but `X.Y.0-alpha.0.N` for the `MinVerMinimumMajorMin
 version in a release branch's range fails rather than publishing. It also refuses an N at or below the highest N
 NuGet.org has for that `X.Y`, unless the version is published already: a smaller N means a release tag is on `master`'s
 history, or that a later push's run reached the job first, in which case the newer prerelease is out and nothing needs
-doing. It checks the version on NuGet.org with `scripts/check-unpublished.sh`. When every package has it already, the
-job checks that the published `Tenantry.Core` was built from the same commit: if so, the run is a rerun and skips the
-push with a notice; if not, it fails. A version only some packages have fails the job, since a published package cannot
-be replaced: unlist those packages, and the next push to `master` publishes the next version. Runs publish one at a
-time, in the order they reach the job, and none is cancelled.
+doing. It checks the version on NuGet.org with `shared/scripts/check-unpublished.sh`. When every package has it
+already, the job checks that the published `Tenantry.Core` was built from the same commit: if so, the run is a rerun
+and skips the push with a notice; if not, it fails. A version only some packages have fails the job, since a published
+package cannot be replaced: unlist those packages, and the next push to `master` publishes the next version. Runs
+publish one at a time, in the order they reach the job, and none is cancelled.
 
 A rerun in the few minutes NuGet.org takes to index a push finds the version unpublished and fails as a duplicate.
 Nothing needs doing; a rerun after that skips. A run that fails part way through the push can leave every package
@@ -289,7 +290,7 @@ maintainer creates it: a fine-grained personal access token with `tenantry-org` 
 release never fails on it.
 
 `ci.yml`'s prerelease job tells Tenantry Pro, with the `PRO_DISPATCH_TOKEN` repository secret, when a push to `master`
-changed a file that `eng/common/shared-files.txt` lists: Pro's copies are checked against the Core it pins, so such a
+moved the `shared/` submodule: Pro's CI checks that its own `shared/` is at the commit of the Core it pins, so such a
 push leaves Pro's CI red until its pin moves, and the `tenantry-core-prerelease` event starts Pro's `update-core-pin.yml`
 with the version just published. The token is made like the skills' one, with access to the `tenantry-pro` repository
 only. Without it, the step skips with a notice, and Pro's Monday run moves the pin.
@@ -319,8 +320,8 @@ only. Without it, the step skips with a notice, and Pro's Monday run moves the p
   branch before the `X.Y.0` reaches NuGet.org, or straight after. `update-version` then finds
   `scripts/tenantry-version.txt` already at `X.Y.0` and does nothing, so it copies none of Core's removed names either:
   before the fast-forward, check that the branch's Tenantry Core section of `scripts/removed-names.txt` matches
-  `eng/common/removed-names.txt` in the release. Pro's step 10 then adds Pro's names in a new pull request. If the
-  workflow's pull request came first, fast-forward anyway and close it, since it only puts new numbers in the old
+  `shared/eng/common/removed-names.txt` in the release. Pro's step 10 then adds Pro's names in a new pull request. If
+  the workflow's pull request came first, fast-forward anyway and close it, since it only puts new numbers in the old
   text. A patch needs no change to the skills.
 - The site shows a new minor's docs once Tenantry.Pro has released it too. The home page's code sample follows the
   README's: update it on the site if the README's changed.

@@ -9,6 +9,9 @@ the 8.0 and 9.0 runtimes.
 
 ## Build & test
 
+The build settings and most scripts are in the `shared/` submodule, so clone with `git clone --recurse-submodules`,
+or run `git submodule update --init` in a clone made without it.
+
 ```bash
 dotnet restore Tenantry.slnx
 dotnet build   Tenantry.slnx -c Release
@@ -29,26 +32,29 @@ dotnet test --solution Tenantry.slnx -c Release --filter "Category!=Integration"
 Exit code 8 means a test application ran no tests: here, the integration tests the filter leaves out.
 
 Package versions for `src/`, `analyzers/`, `tests/`, `samples/` and the templates package are set centrally, in
-`Directory.Packages.props` and, for those Tenantry Pro also uses, `eng/common/Packages.props`; the projects under
+`Directory.Packages.props` and, for those Tenantry Pro also uses, `shared/eng/common/Packages.props`; the projects under
 `eng/` set their own, and each says why.
 Test and sample projects commit a `packages.lock.json`, and CI restores with `--locked-mode`, so it fails when a lock
 file is stale: when you change a package version, run `dotnet restore Tenantry.slnx` and commit the lock files it
-rewrites. `src/` projects have no lock files; the version ranges their packages declare are checked
-by `scripts/check-package-ranges.cs` instead. In Rider, set Settings > Build, Execution, Deployment > NuGet > restore
-engine to MSBuild: Rider's embedded engine writes the samples' lock files differently from the CLI, and CI's locked
-restore then fails.
+rewrites. `src/` projects have no lock files; the version ranges their packages declare are checked by
+`shared/scripts/check-package-ranges.cs` instead. In Rider, set Settings > Build, Execution, Deployment > NuGet >
+restore engine to MSBuild: Rider's embedded engine writes the samples' lock files differently from the CLI, and CI's
+locked restore then fails.
 
-The build settings, scripts and package versions that `eng/common/shared-files.txt` lists are shared with the
-Tenantry Pro repository, which copies them from here when it moves its Core pin, so they hold nothing specific to this
-repository. CI also builds on Windows.
+The build settings, scripts and package versions in `shared/` are shared with the Tenantry Pro repository, so they
+hold nothing specific to this repository. `shared/` is a submodule of
+[tenantry-shared](https://github.com/tenantry-org/tenantry-shared): change a shared file there, then commit the moved
+`shared/` here, and Tenantry Pro takes the same commit when it moves its Core pin. `global.json`, `.editorconfig` and
+`dotnet-tools.json` are also copied at the root, where the tools look for them, and must match `shared/`'s. CI also
+builds on Windows.
 
 ## Checks your PR must pass
 
 CI runs these steps (`.github/workflows/build-test.yml`) on every push to `master` or a `release/X.Y` branch and every
 pull request into them, and the release workflow runs them again on the tagged commit. One job restores, builds, tests
 and packs, in that order; a second job beside it runs the checks that need neither the tests nor the packages: the
-workflow, script, Dependabot, name and link checks, the lock files, formatting, ReSharper's inspections, the API
-reference and Native AOT. Each runs locally with the same command, from the repository root. `dotnet tool restore`
+workflow, script, root copy, Dependabot, name and link checks, the lock files, formatting, ReSharper's inspections, the
+API reference and Native AOT. Each runs locally with the same command, from the repository root. `dotnet tool restore`
 installs the tools `dotnet-tools.json` pins (docfx, dotnet-coverage, ReportGenerator, the Sonar scanner, CycloneDX and
 ReSharper's command-line tools); the scripts that need them restore them too.
 
@@ -56,38 +62,39 @@ ReSharper's command-line tools); the scripts that need them restore them too.
 |-------|---------|---------------|
 | Every action is pinned to a commit | The `grep` in `build-test.yml` | Pin the action to a full commit SHA, with its version in a comment (`uses: owner/repo@<sha> # vX.Y.Z`) |
 | The workflows are valid | `actionlint` (the `Lint the workflows` step in `build-test.yml`), which also runs shellcheck on each `run:` block | Fix what it reports |
-| The scripts are valid | `shellcheck -S warning scripts/*.sh` | Fix what it reports, or disable that check on its line with a comment that says why |
-| Dependabot's list of banded packages matches the project files | `dotnet run scripts/check-dependabot.cs` | Update the list in `.github/dependabot.yml` |
-| No API or package that no longer exists is named in the README, docs, samples or `src/` | `dotnet run scripts/check-removed-names.cs` | Use the name it gives; the removed names are in `eng/common/removed-names.txt` |
-| Every link reaches a file, page and heading | `dotnet run scripts/check-doc-links.cs` | Fix the link it names. Links in `docs/` are checked as tenantry.dev serves them: another page as `page.md#heading`, any other file through `../` |
+| The scripts are valid | `shellcheck -S warning scripts/*.sh shared/scripts/*.sh` | Fix what it reports, or disable that check on its line with a comment that says why |
+| The root copies match `shared/` | `bash shared/scripts/check-root-copies.sh` | Change the file in tenantry-shared, move `shared/` to that commit, then copy the file to the root |
+| Dependabot's list of banded packages matches the project files | `dotnet run shared/scripts/check-dependabot.cs` | Update the list in `.github/dependabot.yml` |
+| No API or package that no longer exists is named in the README, docs, samples or `src/` | `dotnet run shared/scripts/check-removed-names.cs` | Use the name it gives; the removed names are in `shared/eng/common/removed-names.txt` |
+| Every link reaches a file, page and heading | `dotnet run shared/scripts/check-doc-links.cs` | Fix the link it names. Links in `docs/` are checked as tenantry.dev serves them: another page as `page.md#heading`, any other file through `../` |
 | The lock files are up to date | `dotnet restore Tenantry.slnx --locked-mode` | `dotnet restore Tenantry.slnx`, then commit the lock files |
 | Formatting | `dotnet format Tenantry.slnx --verify-no-changes --no-restore` | `dotnet format Tenantry.slnx` |
-| Rider shows no warnings | `bash scripts/check-inspections.sh Tenantry.slnx`, which builds the solution first and writes each warning to `artifacts/inspect.sarif` | Any warning fails it. Fix it, or suppress it with a comment that says why. Rider's settings are in `.editorconfig` |
-| Every published floor is tested | `dotnet run scripts/check-dependency-floors.cs` | A version range's minimum must be a version some test project resolves |
+| Rider shows no warnings | `bash shared/scripts/check-inspections.sh Tenantry.slnx`, which builds the solution first and writes each warning to `artifacts/inspect.sarif` | Any warning fails it. Fix it, or suppress it with a comment that says why. Rider's settings are in `.editorconfig` |
+| Every published floor is tested | `dotnet run shared/scripts/check-dependency-floors.cs` | A version range's minimum must be a version some test project resolves |
 | The build has no warnings | `dotnet build Tenantry.slnx -c Release --no-restore` | Warnings are errors, trim (`IL2xxx`) and AOT (`IL3xxx`) warnings in `src/` included |
 | The samples start | `bash scripts/smoke-samples.sh` | After the Release build |
-| Every test passes on every target framework, with coverage | `bash scripts/test-with-coverage.sh` | Docker runs the integration tests; it writes `coverage/coverage.xml` |
+| Every test passes on every target framework, with coverage | `bash shared/scripts/test-with-coverage.sh` | Docker runs the integration tests; it writes `coverage/coverage.xml` |
 | SonarCloud quality gate | CI only | On every push to `master` and every pull request into it; not on `release/X.Y`, whose changes were analysed on `master` (the SonarCloud plan serves only the main branch). A pull request from a fork, or from Dependabot, gets no `SONAR_TOKEN`, so its Sonar step fails. For a result, a maintainer pushes its commits to a branch of this repository (`git fetch origin pull/<number>/head && git push origin FETCH_HEAD:refs/heads/<branch>`) and opens a pull request from that branch |
-| Line coverage is at least 90% | `bash scripts/check-coverage.sh 90` | After the tests with coverage. It fails below 90%: add tests for the new code |
+| Line coverage is at least 90% | `bash shared/scripts/check-coverage.sh 90` | After the tests with coverage. It fails below 90%: add tests for the new code |
 | The public API still works for code built against the last release | `for p in src/*/*.csproj; do dotnet pack "$p" -c Release --no-build -o artifacts; done`, then `dotnet pack templates/Tenantry.Templates.csproj -c Release -o artifacts` for the templates package (the pack validates each library package against `TenantryPackageBaseline`) | Keep the old member, or, for an intended break in a minor release, record it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true` |
 | A CycloneDX SBOM per package | The `dotnet CycloneDX` loop in `build-test.yml` | Run it after the pack, as it reads each package's version from `artifacts`, and fix the project it names |
-| The packages' dependency ranges | `dotnet run scripts/check-package-ranges.cs -- artifacts` | Each dependency has its intended range (see the script) |
-| The API reference is up to date | `bash scripts/generate-api-docs.sh --check` | `bash scripts/generate-api-docs.sh`, then commit `docs/api`: a change to the public API or its XML documentation changes it |
-| An application can restore and run the packages | `rm -rf artifacts/libraries && mkdir artifacts/libraries && cp artifacts/*.nupkg artifacts/libraries/ && rm artifacts/libraries/Tenantry.Templates.[0-9]*.nupkg`, then `bash scripts/check-package-consumer.sh artifacts/libraries 'Tenantry.*'`: the packages without the templates package, which an application cannot reference | From an empty cache, with package source mapping, on every target framework |
+| The packages' dependency ranges | `dotnet run shared/scripts/check-package-ranges.cs -- artifacts` | Each dependency has its intended range (see the script) |
+| The API reference is up to date | `bash shared/scripts/generate-api-docs.sh --check` | `bash shared/scripts/generate-api-docs.sh`, then commit `docs/api`: a change to the public API or its XML documentation changes it |
+| An application can restore and run the packages | `rm -rf artifacts/libraries && mkdir artifacts/libraries && cp artifacts/*.nupkg artifacts/libraries/ && rm artifacts/libraries/Tenantry.Templates.[0-9]*.nupkg`, then `bash shared/scripts/check-package-consumer.sh artifacts/libraries 'Tenantry.*'`: the packages without the templates package, which an application cannot reference | From an empty cache, with package source mapping, on every target framework |
 | The templates work | `bash scripts/smoke-templates.sh artifacts` | Each `dotnet new` template is created from the templates package in `artifacts`, builds against the packages with warnings as errors, and runs |
-| The docs' code blocks build | `bash scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.*'` | Every `csharp` code block in the README and `docs/` builds against the packages |
+| The docs' code blocks build | `bash shared/scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.*'` | Every `csharp` code block in the README and `docs/` builds against the packages |
 | Native AOT publish | `dotnet publish samples/Tenantry.Samples.Aot -c Release` | No trim or AOT warnings |
 | Native AOT smoke test | `dotnet publish eng/aot-smoke -c Release -o artifacts/aot-smoke`, then `artifacts/aot-smoke/AotSmoke` | Tenantry.Http and Tenantry.Caching compile whole for Native AOT, and the binary runs them |
 
 When you remove or rename a public type, member, namespace or package, add the old name to
-`eng/common/removed-names.txt`, with what replaces it, so the docs cannot keep it.
+`shared/eng/common/removed-names.txt`, with what replaces it, so the docs cannot keep it.
 
 The release job, and on `master` the prerelease job, publish the packages CI built and checked, not a rebuild. CI also
 restores and builds on Windows, and builds and tests for .NET 11 with its preview SDK (`ci.yml`,
 `bash scripts/test-net11.sh`, after removing the SDK version from `global.json`). Every Monday, `dependency-lanes.yml`
 runs the tests with every dependency at the newest version its range allows
-(`bash scripts/test-latest-dependencies.sh`), and the integration tests against the newest database server releases.
-A failure there opens an issue, or comments on the one still open.
+(`bash shared/scripts/test-latest-dependencies.sh`), and the integration tests against the newest database server
+releases. A failure there opens an issue, or comments on the one still open.
 
 ## Pull request flow
 

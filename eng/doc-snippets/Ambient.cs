@@ -1,5 +1,5 @@
 // What the documentation's code blocks take for granted. In a Program.cs: `builder`, `app`, `args` and a connection
-// string. Inside AddTenantry's lambda: `tenant` (scripts/doc-snippets.cs wraps such blocks in WithTenant). In a
+// string. Inside AddTenantry's lambda: `tenant` (shared/scripts/doc-snippets.cs wraps such blocks in WithTenant). In a
 // fragment of a worker or a handler: the scope factory, a DbContext, a message and so on. And the application's own
 // types that a block uses without declaring. A block's own declarations win over these, because its namespace is
 // nested inside this one. Placeholders use Guid keys, as most of the docs do.

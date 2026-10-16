@@ -8,3 +8,4 @@ Directory.Build.props   @olliejm
 Directory.Packages.props @olliejm
 /eng/                   @olliejm
 /scripts/               @olliejm
+/shared                 @olliejm

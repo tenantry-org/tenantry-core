@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <!--
-    The code blocks of the README and docs, as scripts/check-doc-snippets.sh builds them against freshly packed
-    packages: scripts/doc-snippets.cs writes one file per block next to this project, and Ambient.cs supplies what a
-    block takes for granted (a builder, an app). A web project with implicit usings, as in the getting-started guide.
+    The code blocks of the README and docs, as shared/scripts/check-doc-snippets.sh builds them against freshly
+    packed packages: shared/scripts/doc-snippets.cs writes one file per block next to this project, and Ambient.cs
+    supplies what a block takes for granted (a builder, an app). A web project with implicit usings, as in the
+    getting-started guide.
     Not part of the solution. Its package versions are set here, since the copy the script builds is outside the
     repository, where Directory.Packages.props does not reach.
   -->
