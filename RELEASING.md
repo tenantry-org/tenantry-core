@@ -288,6 +288,12 @@ maintainer creates it: a fine-grained personal access token with `tenantry-org` 
 `repository_dispatch` event needs. Renew it before it expires. Without it, the step skips with a notice, so a
 release never fails on it.
 
+`ci.yml`'s prerelease job tells Tenantry Pro, with the `PRO_DISPATCH_TOKEN` repository secret, when a push to `master`
+changed a file that `eng/common/shared-files.txt` lists: Pro's copies are checked against the Core it pins, so such a
+push leaves Pro's CI red until its pin moves, and the `tenantry-core-prerelease` event starts Pro's `update-core-pin.yml`
+with the version just published. The token is made like the skills' one, with access to the `tenantry-pro` repository
+only. Without it, the step skips with a notice, and Pro's Monday run moves the pin.
+
 ## After any release
 
 - On the release branch, set `TenantryPackageBaseline` in `Directory.Build.props` to the version just released, unless

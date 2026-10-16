@@ -1,6 +1,7 @@
-# The files Tenantry Pro takes unchanged from Tenantry Core, which keeps them. Change one here, in Core, then run
-# scripts/sync-shared-files.sh in Pro to copy them. Pro's CI fails when its copies differ from the Core it pins; its
-# weekly latest lane reports a difference from Core's master.
+# The files Tenantry Pro takes unchanged from Tenantry Core, which keeps them. Change one here, in Core: Pro's pin move
+# (scripts/move-core-pin.sh there) copies them, and Core's CI tells Pro to move its pin when a push to master changed
+# one. Pro's CI fails when its copies differ from the Core it pins; its weekly latest lane reports a difference from
+# Core's master.
 .editorconfig
 dotnet-tools.json
 global.json

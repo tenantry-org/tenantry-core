@@ -229,3 +229,38 @@ jobs:
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+
+      - name: Tell Tenantry Pro when a shared file changed
+        # Tenantry Pro copies the files eng/common/shared-files.txt lists, and its CI checks the copies against the
+        # Core it pins, so a push that changes one leaves Pro red until its pin moves to this version. The
+        # tenantry-core-prerelease event starts Pro's update-core-pin.yml with the version; a push that changes no
+        # shared file sends nothing, and Pro's Monday run moves the pin. A missing PRO_DISPATCH_TOKEN (RELEASING.md,
+        # Repository settings) or a refused event is reported without failing the run, and a comparison GitHub cannot
+        # make counts as a change.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRO_DISPATCH_TOKEN: ${{ secrets.PRO_DISPATCH_TOKEN }}
+          BEFORE: ${{ github.event.before }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          shared="$(sed '/^#/d;/^$/d' eng/common/shared-files.txt)"
+          if changed="$(gh api --paginate "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$GITHUB_SHA" \
+            --jq '.files[].filename')"; then
+            if ! grep -qFx -f <(echo "$shared") <<<"$changed"; then
+              echo "No shared file changed between $BEFORE and $GITHUB_SHA, so Tenantry Pro was not told."
+              exit 0
+            fi
+          else
+            echo "::warning::Could not compare $BEFORE and $GITHUB_SHA, so Tenantry Pro is told as if a shared file" \
+              "changed."
+          fi
+          if [ -z "$PRO_DISPATCH_TOKEN" ]; then
+            echo "::notice::PRO_DISPATCH_TOKEN is not set, so Tenantry Pro was not told about $VERSION; its Monday" \
+              "run moves the pin."
+            exit 0
+          fi
+          if ! GH_TOKEN="$PRO_DISPATCH_TOKEN" gh api --method POST repos/tenantry-org/tenantry-pro/dispatches \
+            -f event_type=tenantry-core-prerelease -f "client_payload[version]=$VERSION"; then
+            echo "::warning::Tenantry Pro refused the tenantry-core-prerelease event: check PRO_DISPATCH_TOKEN" \
+              "(RELEASING.md, Repository settings). Its Monday run moves the pin."
+          fi

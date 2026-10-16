@@ -39,8 +39,8 @@ engine to MSBuild: Rider's embedded engine writes the samples' lock files differ
 restore then fails.
 
 The build settings, scripts and package versions that `eng/common/shared-files.txt` lists are shared with the
-Tenantry Pro repository, which copies them from here, so they hold nothing specific to this repository. CI also
-builds on Windows.
+Tenantry Pro repository, which copies them from here when it moves its Core pin, so they hold nothing specific to this
+repository. CI also builds on Windows.
 
 ## Checks your PR must pass
 
