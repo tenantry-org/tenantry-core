@@ -27,6 +27,7 @@ updates:
       - dependency-name: "Microsoft.CodeAnalysis.CSharp"
       - dependency-name: "Microsoft.CodeAnalysis.CSharp.Workspaces"
       - dependency-name: "Microsoft.Data.SqlClient"
+      - dependency-name: "Microsoft.EntityFrameworkCore.Design"
       - dependency-name: "Microsoft.EntityFrameworkCore.InMemory"
       - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
       - dependency-name: "Microsoft.EntityFrameworkCore.Sqlite"

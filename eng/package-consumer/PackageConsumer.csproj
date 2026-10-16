@@ -2,7 +2,8 @@
 
   <!--
     A stand-in application for scripts/check-package-consumer.sh, which copies it out of the repository
-    and builds it against freshly packed packages. Not part of the solution.
+    and builds it against freshly packed packages. Not part of the solution. Its package versions are set here, since
+    the copy is outside the repository, where Directory.Packages.props does not reach.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>

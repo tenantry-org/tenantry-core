@@ -2,8 +2,8 @@
 
   <!--
     Package versions both repositories use, imported by each one's Directory.Packages.props (central package
-    management, for src and tests; samples declare their own versions). Core is the source (see Build.props), and its
-    Dependabot maintains the ones with a single exact version; Pro's ignores them.
+    management, for src, tests and samples). Core is the source (see Build.props), and its Dependabot maintains the
+    ones with a single exact version; Pro's ignores them.
 
     A version range ("[8.0.31, 9.0.0)") is what a package publishes: its floor is the oldest version supported, which
     some test must resolve (scripts/check-dependency-floors.cs). A per-framework band stays in its framework's major.
@@ -24,8 +24,8 @@
   <!--
     The floors of each target framework's Microsoft packages, for the ranges below and in each repository's
     Directory.Packages.props: Microsoft.Extensions.* from the framework's first release, EF Core from the release the
-    tests run against, and the framework's band ending at the next major. Set in a framework's own evaluation only,
-    which every project here has, since they all multi-target.
+    tests run against, and the framework's band ending at the next major. Set in a framework's own evaluation only:
+    every project here multi-targets, or sets its framework in its folder's Directory.Build.props, as the samples do.
   -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <MicrosoftExtensionsFloor>8.0.0</MicrosoftExtensionsFloor>

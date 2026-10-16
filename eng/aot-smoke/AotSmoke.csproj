@@ -6,7 +6,8 @@
       Tenantry.Core, Tenantry.Http, Tenantry.Caching and Tenantry.Options are rooted whole, so the trimmer analyses all their code, and the
       app calls their generic paths (a HybridCache wrapped by IsolateCaches, with and without state), which only a
       whole-program compile checks. Microsoft's HybridCache implementation has trim warnings of its own, so the app
-      brings a small cache instead. Not part of the solution.
+      brings a small cache instead. Not part of the solution. Its package version is set here: Directory.Packages.props
+      picks that package's version by target framework, and is read before this file sets one.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

@@ -28,8 +28,9 @@ dotnet test --solution Tenantry.slnx -c Release --filter "Category!=Integration"
 
 Exit code 8 means a test application ran no tests: here, the integration tests the filter leaves out.
 
-Package versions for `src/` and `tests/` are set centrally, in `Directory.Packages.props` and, for those Tenantry
-Pro also uses, `eng/common/Packages.props`; each sample declares its own, as an application copied from it would.
+Package versions for `src/`, `analyzers/`, `tests/`, `samples/` and the templates package are set centrally, in
+`Directory.Packages.props` and, for those Tenantry Pro also uses, `eng/common/Packages.props`; the projects under
+`eng/` set their own, and each says why.
 Test and sample projects commit a `packages.lock.json`, and CI restores with `--locked-mode`, so it fails when a lock
 file is stale: when you change a package version, run `dotnet restore Tenantry.slnx` and commit the lock files it
 rewrites. `src/` projects have no lock files; the version ranges their packages declare are checked

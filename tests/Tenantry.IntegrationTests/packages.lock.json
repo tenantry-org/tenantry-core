@@ -632,8 +632,8 @@
       "tenantry.samples.secureapi": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.12, )",
-          "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.12, )",
+          "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.12, 11.0.0)",
+          "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.12, 11.0.0)",
           "Tenantry.AspNetCore": "[1.0.0, )",
           "Tenantry.Core": "[1.0.0, )",
           "Tenantry.EfCore": "[1.0.0, )"
