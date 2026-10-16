@@ -52,7 +52,7 @@
     and overall for a minimum-only range ("[8.0.0, )" becomes "*"). A prerelease floor also allows prereleases
     ("8.*-*"). A range of any other shape fails the build, since no floating version would keep inside it. Exact
     versions are left alone, and the lane writes its own lock files. It rewrites central versions (PackageVersion)
-    and versions declared on a reference (the samples').
+    and versions declared on a reference alike.
   -->
   <Target Name="FloatRangesToLatest" BeforeTargets="CollectPackageReferences;CollectCentralPackageVersions" Condition="'$(LatestDependencies)' == 'true'">
     <ItemGroup>
