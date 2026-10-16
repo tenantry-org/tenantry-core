@@ -52,7 +52,7 @@
     and overall for a minimum-only range ("[8.0.0, )" becomes "*"). A prerelease floor also allows prereleases
     ("8.*-*"). A range of any other shape fails the build, since no floating version would keep inside it. Exact
     versions are left alone, and the lane writes its own lock files. It rewrites central versions (PackageVersion)
-    and versions declared on a reference alike.
+    and the versions a reference declares (Version, or VersionOverride with central package management) alike.
   -->
   <Target Name="FloatRangesToLatest" BeforeTargets="CollectPackageReferences;CollectCentralPackageVersions" Condition="'$(LatestDependencies)' == 'true'">
     <ItemGroup>
@@ -60,6 +60,8 @@
                      Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageVersion.Version)', '^\s*\[[^,]*,'))" />
       <_RangeToFloat Include="@(PackageReference)" Kind="PackageReference"
                      Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageReference.Version)', '^\s*\[[^,]*,'))" />
+      <_RangeToFloat Include="@(PackageReference)" Kind="VersionOverride" Version="%(PackageReference.VersionOverride)"
+                     Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageReference.VersionOverride)', '^\s*\[[^,]*,'))" />
       <_RangeToFloat Update="@(_RangeToFloat)"
                      Floor="$([System.Text.RegularExpressions.Regex]::Replace('%(Version)', '^\s*\[\s*([^,\]\s]+).*$', '$1'))"
                      Upper="$([System.Text.RegularExpressions.Regex]::Replace('%(Version)', '^[^,]*,\s*([^\)\]\s]*)\s*[\)\]]\s*$', '$1'))"
@@ -87,6 +89,8 @@
       <PackageVersion Include="@(_RangeToFloat)" Version="%(_RangeToFloat.Latest)" Condition="'%(_RangeToFloat.Kind)' == 'PackageVersion'" />
       <PackageReference Remove="@(_RangeToFloat)" Condition="'%(_RangeToFloat.Kind)' == 'PackageReference'" />
       <PackageReference Include="@(_RangeToFloat)" Version="%(_RangeToFloat.Latest)" Condition="'%(_RangeToFloat.Kind)' == 'PackageReference'" />
+      <PackageReference Remove="@(_RangeToFloat)" Condition="'%(_RangeToFloat.Kind)' == 'VersionOverride'" />
+      <PackageReference Include="@(_RangeToFloat)" Version="" VersionOverride="%(_RangeToFloat.Latest)" Condition="'%(_RangeToFloat.Kind)' == 'VersionOverride'" />
       <_RangeToFloat Remove="@(_RangeToFloat)" />
     </ItemGroup>
   </Target>
