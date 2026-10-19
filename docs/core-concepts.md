@@ -114,7 +114,8 @@ applies them to a `DbContext` with `UseTenantry()` ([EF Core integration](efcore
 - An entity owned by another tenant is a violation: a new entity whose `TenantId` names another tenant, or a changed or
   deleted entity that was loaded as, or now names, another tenant. The save throws `TenantIsolationViolationException`
   before anything is written. Nothing is moved to the current tenant.
-- A bulk update, which no save checks, can never set `TenantId`. One that would is a violation.
+- A bulk update, which no save checks, can never set `TenantId`. One that would, or one that sets a property the
+  integration cannot identify, is a violation.
 - An entity type that does not implement `ITenantEntity<TKey>`, is not owned by one that does and is not the join
   entity of a many-to-many relationship with a tenant-owned end is shared. Its rows are read without a filter and
   written without a tenant check or a stamp, whether or not a tenant is current. `[SharedAcrossTenants]` states that a

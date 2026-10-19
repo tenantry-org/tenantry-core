@@ -24,7 +24,8 @@ public static class TenantryWarnings
 
     private static readonly int[] Ignorable = [StringTenantIdCollation, OrdinaryOptionsReadAsTenant];
 
-    // Tenantry's own events are 1000 to 2999; an integration's start at 3000 (docs/diagnostics.md).
+    // Tenantry's own events are 1000 to 2999. Tenantry.Pro's are 3000 to 9999, and other integrations' 10000 and above
+    // (docs/diagnostics.md).
     private const int FirstIntegrationEventId = 3000;
 
     /// <summary>
@@ -48,7 +49,10 @@ public static class TenantryWarnings
     /// <c>IgnoreWarnings</c>; the ids are from the range the documentation's diagnostics page leaves for integrations.
     /// </summary>
     /// <param name="services">The application's services.</param>
-    /// <param name="eventIds">The event ids of the integration's warnings, 3000 or above.</param>
+    /// <param name="eventIds">
+    /// The event ids of the integration's warnings: 3000 to 9999 are Tenantry.Pro's, and an integration by others uses
+    /// 10000 and above.
+    /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="services"/> or <paramref name="eventIds"/> is null.</exception>
     /// <exception cref="ArgumentOutOfRangeException">An id is below 3000, in the range of Tenantry's own events.</exception>
     public static void Register(IServiceCollection services, params int[] eventIds)
@@ -62,7 +66,8 @@ public static class TenantryWarnings
             throw new ArgumentOutOfRangeException(
                 nameof(eventIds),
                 eventIds[own],
-                $"Event ids below {FirstIntegrationEventId} are Tenantry's own. An integration's start at {FirstIntegrationEventId}.");
+                $"Event ids below {FirstIntegrationEventId} are Tenantry's own. Tenantry.Pro's are {FirstIntegrationEventId} to 9999, " +
+                "and other integrations' 10000 and above.");
         }
 
         Add(services, ids => new Registered(ids), eventIds);
