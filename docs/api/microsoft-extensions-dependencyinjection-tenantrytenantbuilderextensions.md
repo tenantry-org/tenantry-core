@@ -88,7 +88,7 @@ A decorator should forward [`ITenantConnectionStringProvider<TKey>.CanGetSynchro
 
 ### `IgnoreWarnings<TKey>(ITenantBuilder<TKey>, params int[])`
 
-Stops Tenantry logging the warnings `eventIds`, each about configuration the application may have chosen on purpose. [`TenantryWarnings`](tenantry-tenantrywarnings.md) names the ones it accepts.
+Stops Tenantry logging the warnings `eventIds`, each about configuration the application may have chosen on purpose. [`TenantryWarnings`](tenantry-tenantrywarnings.md) names the ones it accepts, and an integration registers its own with [`TenantryWarnings.Register`](tenantry-tenantrywarnings.md).
 
 ```csharp
 public static ITenantBuilder<TKey> IgnoreWarnings<TKey>(this ITenantBuilder<TKey> builder, params int[] eventIds) where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -107,9 +107,9 @@ Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `build
 
 Exceptions:
 
-- `ArgumentException`: An id is not one that [`TenantryWarnings`](tenantry-tenantrywarnings.md) names.
+- `ArgumentException`: An id is not one that [`TenantryWarnings`](tenantry-tenantrywarnings.md) names, and no integration registered it.
 
-Each call adds to the ids of the others.
+Each call adds to the ids of the others. Call it after the method that registers an integration whose warning it names.
 
 ```csharp
 builder.Services.AddTenantry<string>(tenant => tenant

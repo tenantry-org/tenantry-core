@@ -17,4 +17,4 @@ public enum SaveWithoutTransactionBehavior
 | Value | Description |
 |-------|-------------|
 | `UseTransaction = 0` | Run that save in a transaction EF Core begins and commits itself, as it does by default (`AutoTransactionBehavior.WhenNeeded`), and set `Never` back when the save ends. The default. |
-| `Reject = 1` | Throw [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md), of kind [`TenantIsolationViolationKind.SaveWithoutTransaction`](tenantry-efcore-tenantisolationviolationkind.md), before anything is sent. For a database or connection pooler that cannot run transactions. |
+| `Reject = 1` | Throw [`TenantIsolationViolationException`](tenantry-tenantisolationviolationexception.md), of kind [`TenantIsolationViolationKind.SaveWithoutTransaction`](tenantry-tenantisolationviolationkind.md), before anything is sent. For a database or connection pooler that cannot run transactions. |

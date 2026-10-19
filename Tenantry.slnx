@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/analyzers/">
     <Project Path="analyzers\Tenantry.AspNetCore.Analyzers\Tenantry.AspNetCore.Analyzers.csproj" />
+    <Project Path="analyzers\Tenantry.Core.Analyzers\Tenantry.Core.Analyzers.csproj" />
     <Project Path="analyzers\Tenantry.EfCore.Analyzers\Tenantry.EfCore.Analyzers.csproj" />
   </Folder>
   <Folder Name="/samples/">

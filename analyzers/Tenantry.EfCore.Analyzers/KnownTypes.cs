@@ -10,15 +10,13 @@ internal sealed class KnownTypes
     {
         TenantEntity = compilation.GetTypeByMetadataName("Tenantry.ITenantEntity`1");
         TenantDescriptor = compilation.GetTypeByMetadataName("Tenantry.ITenantDescriptor`1");
-        SharedAcrossTenants = compilation.GetTypeByMetadataName("Tenantry.EfCore.SharedAcrossTenantsAttribute");
+        SharedAcrossTenants = compilation.GetTypeByMetadataName("Tenantry.SharedAcrossTenantsAttribute");
         DbContext = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.DbContext");
         DbSet = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.DbSet`1");
         ModelBuilder = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.ModelBuilder");
         QueryableExtensions = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions");
         RelationalDatabaseFacadeExtensions =
             compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions");
-        TenantScopeFactory = compilation.GetTypeByMetadataName("Tenantry.ITenantScopeFactory`1");
-        TenantContextSetter = compilation.GetTypeByMetadataName("Tenantry.ITenantContextSetter`1");
         EntityTypeBuilderExtensions =
             compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.TenantryEntityTypeBuilderExtensions");
         PrimaryKeyAttribute = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.PrimaryKeyAttribute");
@@ -67,10 +65,6 @@ internal sealed class KnownTypes
     public INamedTypeSymbol? QueryableExtensions { get; }
 
     public INamedTypeSymbol? RelationalDatabaseFacadeExtensions { get; }
-
-    public INamedTypeSymbol? TenantScopeFactory { get; }
-
-    public INamedTypeSymbol? TenantContextSetter { get; }
 
     public static KnownTypes For(Compilation compilation) => new(compilation);
 

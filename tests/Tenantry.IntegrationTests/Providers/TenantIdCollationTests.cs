@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Tenantry.EfCore;
 
 namespace Tenantry.IntegrationTests.Providers;
 

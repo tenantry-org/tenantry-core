@@ -34,7 +34,7 @@ Returns: `int`
 
 ### `IsIgnored(IServiceProvider, int)`
 
-Whether the application turned off the warning `eventId` with `IgnoreWarnings`. Tenantry's packages read it before they log one of the warnings this class names.
+Whether the application turned off the warning `eventId` with `IgnoreWarnings`. Tenantry's packages read it before they log one of the warnings this class names, and an integration before it logs one it registered.
 
 ```csharp
 public static bool IsIgnored(IServiceProvider services, int eventId)
@@ -46,3 +46,21 @@ Parameters:
 - `eventId` `int`: The warning's event id.
 
 Returns: `bool`: [true](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool) when the warning is not to be logged.
+
+### `Register(IServiceCollection, params int[])`
+
+Registers the warnings an integration logs that the application may turn off, so `IgnoreWarnings` accepts their event ids. Call it from the integration's registration method, which the application calls before `IgnoreWarnings`; the ids are from the range the documentation's diagnostics page leaves for integrations.
+
+```csharp
+public static void Register(IServiceCollection services, params int[] eventIds)
+```
+
+Parameters:
+
+- `services` `IServiceCollection`: The application's services.
+- `eventIds` `int[]`: The event ids of the integration's warnings, 3000 or above.
+
+Exceptions:
+
+- `ArgumentNullException`: `services` or `eventIds` is null.
+- `ArgumentOutOfRangeException`: An id is below 3000, in the range of Tenantry's own events.

@@ -1,8 +1,8 @@
-namespace Tenantry.EfCore;
+namespace Tenantry;
 
 /// <summary>
-/// What <c>SaveChanges</c> does when it writes tenant-owned entities and no tenant is current. Set with
-/// <see cref="EfCoreIsolationOptions.OnMissingTenant"/>. Reads are not affected: they always fail closed.
+/// What a save does when it writes tenant-owned entities and no tenant is current. An integration's options set it:
+/// Tenantry.EfCore's <c>EfCoreIsolationOptions.OnMissingTenant</c>. Reads are not affected: they always fail closed.
 /// </summary>
 public enum MissingTenantBehavior
 {

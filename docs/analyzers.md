@@ -1,8 +1,8 @@
 # Analyzers
 
-`Tenantry.EfCore` and `Tenantry.AspNetCore` carry Roslyn analyzers that warn, in `dotnet build`, Visual Studio and
-Rider, of mistakes that leave tenant data unprotected. There is no other package to install, and no runtime dependency:
-the compiler loads them, and they are not copied to the output.
+`Tenantry.Core`, `Tenantry.EfCore` and `Tenantry.AspNetCore` carry Roslyn analyzers that warn, in `dotnet build`,
+Visual Studio and Rider, of mistakes that leave tenant data unprotected. There is no other package to install, and no
+runtime dependency: the compiler loads them, and they are not copied to the output.
 
 | Rule | Package | Default | Reports |
 |------|---------|---------|---------|
@@ -11,12 +11,12 @@ the compiler loads them, and they are not copied to the output.
 | [TNY1003](#tny1003) | Tenantry.EfCore | Info | Raw SQL on `Database`, which is not isolated |
 | [TNY1004](#tny1004) | Tenantry.EfCore | Warning | A context with tenant-owned entities registered without `UseTenantry()` |
 | [TNY2001](#tny2001) | Tenantry.AspNetCore | Warning | The tenant resolved from the request with no access validator |
-| [TNY3001](#tny3001) | Tenantry.EfCore | Info | `MakeCurrent` or `CreateScope` given a descriptor built in the call |
-| [TNY3002](#tny3002) | Tenantry.EfCore | Info | Blocking on `RunInScopeAsync` |
+| [TNY3001](#tny3001) | Tenantry.Core | Info | `MakeCurrent` or `CreateScope` given a descriptor built in the call |
+| [TNY3002](#tny3002) | Tenantry.Core | Info | Blocking on `RunInScopeAsync` |
 
 The first digit of a rule's number is its area: 1 for EF Core isolation, 2 for resolution and access, 3 for tenant
-scopes. The tenant scope rules are about `Tenantry.Core`'s API. They come with `Tenantry.EfCore`, which every
-application that keeps tenant data in EF Core references.
+scopes. Each package carries the rules about its own API, so the tenant scope rules come with `Tenantry.Core`, which
+every application references.
 
 Each rule reports what it can be sure of, and leaves alone most code it cannot see into. The sections on
 [TNY1001](#tny1001), [TNY1004](#tny1004) and [TNY2001](#tny2001) name the cases they report anyway.

@@ -10,7 +10,7 @@ Add it to a context's options with `AddInterceptors`, or from an [`ITenantDbCont
 
 In a context that uses `UseTenantry()`, the check runs before Tenantry stamps the save's new entities with the current tenant, wherever the guard is among the context's interceptors, so a save it refuses leaves the tracked entities as they were. Add the guard before an interceptor of your own that changes entities when a save starts.
 
-Throw [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md) when the context needs a tenant and none is current, and [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) when it would use another tenant's data.
+Throw [`TenantNotResolvedException`](tenantry-tenantnotresolvedexception.md) when the context needs a tenant and none is current, and [`TenantIsolationViolationException`](tenantry-tenantisolationviolationexception.md) when it would use another tenant's data.
 
 ```csharp
 [EditorBrowsable(EditorBrowsableState.Advanced)]

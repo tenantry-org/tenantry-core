@@ -16,4 +16,4 @@ public enum UnmarkedEntityTypeBehavior
 |-------|-------------|
 | `Allow = 0` | Use the model as it is. The default. |
 | `Warn = 1` | Use the model, and log a structured warning naming the unmarked entity types, once for each model EF Core builds. |
-| `Reject = 2` | Throw [`TenantIsolationViolationException`](tenantry-efcore-tenantisolationviolationexception.md) of kind [`TenantIsolationViolationKind.ModelConfiguration`](tenantry-efcore-tenantisolationviolationkind.md), naming the unmarked entity types, before the first query or save. A value outside the enum does the same. |
+| `Reject = 2` | Throw [`TenantIsolationViolationException`](tenantry-tenantisolationviolationexception.md) of kind [`TenantIsolationViolationKind.ModelConfiguration`](tenantry-tenantisolationviolationkind.md), naming the unmarked entity types, before the first query or save. A value outside the enum does the same. |

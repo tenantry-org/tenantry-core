@@ -3,7 +3,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
-using Tenantry.EfCore;
 
 var services = new ServiceCollection();
 services.AddLogging();

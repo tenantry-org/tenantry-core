@@ -57,7 +57,7 @@ Returns: `bool`
 
 ### `IsSharedAcrossTenants(IReadOnlyEntityType)`
 
-Returns whether `entityType` is marked as shared by every tenant, with [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) or `IsSharedAcrossTenants()`, or belongs to a type that is: a base type of its hierarchy, or the type that owns it.
+Returns whether `entityType` is marked as shared by every tenant, with [`SharedAcrossTenantsAttribute`](tenantry-sharedacrosstenantsattribute.md) or `IsSharedAcrossTenants()`, or belongs to a type that is: a base type of its hierarchy, or the type that owns it.
 
 ```csharp
 public static bool IsSharedAcrossTenants(IReadOnlyEntityType entityType)

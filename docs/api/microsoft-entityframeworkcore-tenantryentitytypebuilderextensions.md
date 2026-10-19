@@ -12,7 +12,7 @@ public static class TenantryEntityTypeBuilderExtensions
 
 ### `IsSharedAcrossTenants(EntityTypeBuilder)`
 
-Marks the entity type as one whose rows every tenant shares, as [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) does. It changes nothing in queries or saves.
+Marks the entity type as one whose rows every tenant shares, as [`SharedAcrossTenantsAttribute`](tenantry-sharedacrosstenantsattribute.md) does. It changes nothing in queries or saves.
 
 ```csharp
 [RequiresUnreferencedCode("EF Core and Tenantry's query filters read entity types through reflection, which trimming can break. See https://aka.ms/efcore-docs-trimming.")]
@@ -28,7 +28,7 @@ Returns: `EntityTypeBuilder`: The same `builder` for chaining.
 
 ### `IsSharedAcrossTenants<TEntity>(EntityTypeBuilder<TEntity>)`
 
-Marks the entity type as one whose rows every tenant shares, as [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) does. It changes nothing in queries or saves.
+Marks the entity type as one whose rows every tenant shares, as [`SharedAcrossTenantsAttribute`](tenantry-sharedacrosstenantsattribute.md) does. It changes nothing in queries or saves.
 
 ```csharp
 [RequiresUnreferencedCode("EF Core and Tenantry's query filters read entity types through reflection, which trimming can break. See https://aka.ms/efcore-docs-trimming.")]

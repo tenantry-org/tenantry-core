@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Tenantry;
 using Tenantry.EfCore;
 using Tenantry.EfCore.Internal;
 

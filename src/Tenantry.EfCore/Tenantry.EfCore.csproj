@@ -6,7 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Tenantry.Core\Tenantry.Core.csproj" IncludeAssets="compile;runtime;build;native;contentfiles;analyzers;buildtransitive" />
+    <!-- PrivateAssets="none": the packed dependency on Tenantry.Core keeps its analyzers, so an application that
+         references only this package still gets them -->
+    <ProjectReference Include="..\Tenantry.Core\Tenantry.Core.csproj" IncludeAssets="compile;runtime;build;native;contentfiles;analyzers;buildtransitive" PrivateAssets="none" />
   </ItemGroup>
 
   <ItemGroup>

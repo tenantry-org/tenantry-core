@@ -123,7 +123,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
-using Tenantry.EfCore;
 using Xunit;
 
 public sealed class IsolationTests : IAsyncLifetime
@@ -190,8 +189,9 @@ Two more checks:
 
 ## Mistakes and the correct form
 
-`Tenantry.EfCore` and `Tenantry.AspNetCore` carry [analyzers](analyzers.md) that report most of these at build time
-(TNY1001 to TNY3002). Fix what they report rather than suppress it, unless the code is meant to cross tenants.
+`Tenantry.Core`, `Tenantry.EfCore` and `Tenantry.AspNetCore` carry [analyzers](analyzers.md) that report most of
+these at build time (TNY1001 to TNY3002). Fix what they report rather than suppress it, unless the code is meant to
+cross tenants.
 
 - An entity with a `TenantId` property that does not implement `ITenantEntity<TKey>` is not tenant-owned: every
   tenant reads and writes all its rows. Implement `ITenantEntity<TKey>` (or derive from `TenantEntity<TKey>`).

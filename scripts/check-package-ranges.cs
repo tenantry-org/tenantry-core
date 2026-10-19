@@ -8,7 +8,9 @@
 //     the dependant then works only with the same release (Tenantry Pro's integration and EF Core packages). Any other
 //     sibling must take this release up to the next that may break it, [x.y.z, x.(y+1).0) in 0.x, so a consumer can
 //     update one package of the set within that band. eng/common/Build.targets packs project references that way: a
-//     reference marked PinExact="true" as exact, the others as a band.
+//     reference marked PinExact="true" as exact, the others as a band. A dependency on a sibling that carries
+//     analyzers must not exclude them (a ProjectReference does by default; PrivateAssets="none" keeps them), or an
+//     application that references only the dependant loses the sibling's analyzers.
 //   - Microsoft.Extensions.* take a minimum only (">= x.y.z", no upper bound). Microsoft ships every
 //     Microsoft.Extensions major for every supported framework and keeps it compatible, and current Azure SDKs need
 //     Microsoft.Extensions 10.x even on net8.0, so a cap would stop consumers restoring. The minimum must be the
@@ -116,9 +118,14 @@ static string? CheckSibling(Dependency dependency, Package package, Package sibl
     var expected = $"[{package.Version}, {NextBreaking(package.Version)})";
 
     // A nuspec writes the range without the space.
-    return dependency.Version.Replace(" ", "") == expected.Replace(" ", "")
-        ? null
-        : $"expected {expected}, this release up to the next that may break it, because {sibling.Id} shares no internals with it (only a ProjectReference to a package that does takes PinExact=\"true\")";
+    if (dependency.Version.Replace(" ", "") != expected.Replace(" ", ""))
+    {
+        return $"expected {expected}, this release up to the next that may break it, because {sibling.Id} shares no internals with it (only a ProjectReference to a package that does takes PinExact=\"true\")";
+    }
+
+    return sibling.CarriesAnalyzers && dependency.Exclude.Split(',').Any(asset => asset.Trim().Equals("Analyzers", StringComparison.OrdinalIgnoreCase))
+        ? $"excludes the analyzers {sibling.Id} carries, so an application that references only {package.Id} loses them (set PrivateAssets=\"none\" on the ProjectReference)"
+        : null;
 }
 
 static string? CheckBand(Dependency dependency)
@@ -198,11 +205,13 @@ static Package ReadPackage(string path)
             .Select(d => new Dependency(
                 (string?)group.Attribute("targetFramework") ?? "any",
                 (string)d.Attribute("id")!,
-                (string?)d.Attribute("version") ?? "")))
+                (string?)d.Attribute("version") ?? "",
+                (string?)d.Attribute("exclude") ?? "")))
         .ToList();
 
     var id = Value("id");
-    return new Package(id, Value("version"), dependencies, ReadInternalsVisibleTo(archive, id));
+    var carriesAnalyzers = archive.Entries.Any(e => e.FullName.StartsWith("analyzers/", StringComparison.Ordinal));
+    return new Package(id, Value("version"), dependencies, ReadInternalsVisibleTo(archive, id), carriesAnalyzers);
 }
 
 // The assembly names an assembly in the package grants its internals to (its InternalsVisibleTo attributes).
@@ -243,6 +252,6 @@ static HashSet<string> ReadInternalsVisibleTo(ZipArchive archive, string id)
     return names;
 }
 
-internal sealed record Package(string Id, string Version, List<Dependency> Dependencies, HashSet<string> InternalsVisibleTo);
+internal sealed record Package(string Id, string Version, List<Dependency> Dependencies, HashSet<string> InternalsVisibleTo, bool CarriesAnalyzers);
 
-internal sealed record Dependency(string Framework, string Id, string Version);
+internal sealed record Dependency(string Framework, string Id, string Version, string Exclude);

@@ -1,4 +1,4 @@
-using Tenantry.EfCore.Analyzers;
+using Tenantry.Core.Analyzers;
 
 namespace Tenantry.Analyzers.Tests;
 

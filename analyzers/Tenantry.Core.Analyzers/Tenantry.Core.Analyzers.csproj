@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The analyzers Tenantry.Core carries: tenant scopes (docs/analyzers.md). -->
+  <PropertyGroup>
+    <RootNamespace>Tenantry.Core.Analyzers</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tenantry.Analyzers.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -23,6 +23,8 @@
   <!-- This repository's samples run the analyzers too, as an application that references the packages does, so they
        must be clean under them -->
   <ItemGroup Condition="$(MSBuildProjectDirectory.Replace('\', '/').Contains('/samples/'))">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)analyzers/Tenantry.Core.Analyzers/Tenantry.Core.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)analyzers/Tenantry.EfCore.Analyzers/Tenantry.EfCore.Analyzers.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)analyzers/Tenantry.AspNetCore.Analyzers/Tenantry.AspNetCore.Analyzers.csproj"

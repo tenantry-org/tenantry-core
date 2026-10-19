@@ -160,18 +160,19 @@ Call `UseTenantry()` after adding your own `SaveChanges` interceptors. One that 
 a save writes, such as a soft delete that turns a delete into an update, is not checked. `AddDbContextPerTenantDatabase`
 applies `UseTenantry()` first ([Database per tenant](#database-per-tenant)).
 
-`TenantIsolationViolationException` (namespace `Tenantry.EfCore`) says which check failed in `Kind`, and which entity
-or context it concerns in `TypeName`. `OffendingTenantId` and `ExpectedTenantId` are strings for logging. When it is
-thrown nothing has been written, and a refused commit's transaction is rolled back.
-[`TenantIsolationViolationKind`](api/tenantry-efcore-tenantisolationviolationkind.md) lists the checks, and
-[`TenantIsolationViolationException`](api/tenantry-efcore-tenantisolationviolationexception.md) what each property holds
-for each.
+`TenantIsolationViolationException` (namespace `Tenantry`, package `Tenantry.Core`) says which check failed in `Kind`,
+and which entity or context it concerns in `TypeName`. `OffendingTenantId` and `ExpectedTenantId` are strings for
+logging. When it is thrown nothing has been written, and a refused commit's transaction is rolled back.
+[`TenantIsolationViolationKind`](api/tenantry-tenantisolationviolationkind.md) lists the checks, and
+[`TenantIsolationViolationException`](api/tenantry-tenantisolationviolationexception.md) what each property holds for
+each. [Isolation rules](core-concepts.md#isolation-rules) states the rules the checks apply.
 
 ## Configuring write isolation
 
 Both defaults are the strictest settings, so this is optional:
 
 ```csharp
+using Tenantry;
 using Tenantry.EfCore;
 
 builder.Services.AddTenantry<Guid>(tenant => tenant
@@ -392,6 +393,7 @@ To catch a type left without `ITenantEntity<TKey>` by mistake, mark the shared t
 `OnModelCreating`. Then set `OnUnmarkedEntityType` so that `UseTenantry()` checks the rest:
 
 ```csharp
+using Tenantry;
 using Tenantry.EfCore;
 
 [SharedAcrossTenants]

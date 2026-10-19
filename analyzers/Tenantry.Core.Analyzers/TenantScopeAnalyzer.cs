@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 
-namespace Tenantry.EfCore.Analyzers;
+namespace Tenantry.Core.Analyzers;
 
 /// <summary>
 /// TNY3001: <c>MakeCurrent</c> or <c>CreateScope</c> given a descriptor created in the call itself

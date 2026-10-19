@@ -13,6 +13,11 @@
     <InternalsVisibleTo Include="Tenantry.EfCore.Tests"/>
   </ItemGroup>
 
+  <!-- The analyzer the package carries (docs/analyzers.md) -->
+  <ItemGroup>
+    <TenantryAnalyzer Include="..\..\analyzers\Tenantry.Core.Analyzers\Tenantry.Core.Analyzers.csproj" />
+  </ItemGroup>
+
   <!-- Not in the .NET 11 preview lane (IncludeNet11), where the DI abstractions come with the shared framework -->
   <ItemGroup Condition="'$(TargetFramework)' != 'net11.0'">
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />

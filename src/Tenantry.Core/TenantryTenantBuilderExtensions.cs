@@ -343,14 +343,20 @@ public static class TenantryTenantBuilderExtensions
 
     /// <summary>
     /// Stops Tenantry logging the warnings <paramref name="eventIds"/>, each about configuration the application may
-    /// have chosen on purpose. <see cref="TenantryWarnings"/> names the ones it accepts.
+    /// have chosen on purpose. <see cref="TenantryWarnings"/> names the ones it accepts, and an integration registers
+    /// its own with <see cref="TenantryWarnings.Register"/>.
     /// </summary>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>
     /// <param name="eventIds">The warnings' event ids.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
-    /// <remarks>Each call adds to the ids of the others.</remarks>
-    /// <exception cref="ArgumentException">An id is not one that <see cref="TenantryWarnings"/> names.</exception>
+    /// <remarks>
+    /// Each call adds to the ids of the others. Call it after the method that registers an integration whose warning it
+    /// names.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// An id is not one that <see cref="TenantryWarnings"/> names, and no integration registered it.
+    /// </exception>
     /// <example>
     /// <code>
     /// builder.Services.AddTenantry&lt;string&gt;(tenant =&gt; tenant

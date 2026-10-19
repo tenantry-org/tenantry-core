@@ -419,6 +419,9 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.0, )"
         }
       },
+      "tenantry.core.analyzers": {
+        "type": "Project"
+      },
       "tenantry.efcore": {
         "type": "Project",
         "dependencies": {
@@ -936,6 +939,9 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[8.0.0, )"
         }
       },
+      "tenantry.core.analyzers": {
+        "type": "Project"
+      },
       "tenantry.efcore": {
         "type": "Project",
         "dependencies": {
@@ -1447,6 +1453,9 @@
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[9.0.0, )"
         }
+      },
+      "tenantry.core.analyzers": {
+        "type": "Project"
       },
       "tenantry.efcore": {
         "type": "Project",

@@ -14,13 +14,13 @@ public sealed class EfCoreIsolationOptions
 
 ### `OnMissingTenant`
 
-What a save does when it writes tenant-owned entities and no tenant is current. Defaults to [`MissingTenantBehavior.Reject`](tenantry-efcore-missingtenantbehavior.md). Saves that write no tenant-owned entity are never affected.
+What a save does when it writes tenant-owned entities and no tenant is current. Defaults to [`MissingTenantBehavior.Reject`](tenantry-missingtenantbehavior.md). Saves that write no tenant-owned entity are never affected.
 
 ```csharp
 public MissingTenantBehavior OnMissingTenant { get; set; }
 ```
 
-Value: [`MissingTenantBehavior`](tenantry-efcore-missingtenantbehavior.md)
+Value: [`MissingTenantBehavior`](tenantry-missingtenantbehavior.md)
 
 ### `OnSaveWithoutTransaction`
 
@@ -42,4 +42,4 @@ public UnmarkedEntityTypeBehavior OnUnmarkedEntityType { get; set; }
 
 Value: [`UnmarkedEntityTypeBehavior`](tenantry-efcore-unmarkedentitytypebehavior.md)
 
-Mark an entity type whose rows every tenant shares with [`SharedAcrossTenantsAttribute`](tenantry-efcore-sharedacrosstenantsattribute.md) or `IsSharedAcrossTenants()`. [`TenantModel.FindUnisolatedEntityTypes`](tenantry-efcore-tenantmodel.md) lists the types this checks.
+Mark an entity type whose rows every tenant shares with [`SharedAcrossTenantsAttribute`](tenantry-sharedacrosstenantsattribute.md) or `IsSharedAcrossTenants()`. [`TenantModel.FindUnisolatedEntityTypes`](tenantry-efcore-tenantmodel.md) lists the types this checks.

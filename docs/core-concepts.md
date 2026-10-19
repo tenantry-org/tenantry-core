@@ -97,6 +97,34 @@ public interface ITenantEntity<TKey>
 - Entities that do not implement it are shared by all tenants (product catalogues, reference tables), and are never
   filtered or stamped.
 
+### Isolation rules
+
+These rules hold for every integration that keeps tenant-owned entities, whichever library it uses. `Tenantry.EfCore`
+applies them to a `DbContext` with `UseTenantry()` ([EF Core integration](efcore-integration.md)).
+
+- Reads return only the current tenant's rows, and always fail closed: with no tenant current, a query of
+  tenant-owned entities returns no rows. No option changes that.
+- `MissingTenantBehavior` governs writes only: what a save that writes tenant-owned entities does with no tenant
+  current. `Reject`, the default, throws `TenantNotResolvedException` before anything is written. `Warn` saves and
+  logs warning 2002, and `Allow` saves silently; under both, updates and deletes are not checked against a tenant, and
+  a new entity is saved only if its `TenantId` is set. A save that writes no tenant-owned entity never needs a tenant.
+- A reserved tenant id on an entity means unset: the key type's default value, or an empty string
+  ([`TenantIds.IsReserved`](api/tenantry-tenantids.md)). A new entity with one is stamped with the current tenant's id,
+  so leave `TenantId` unset on new entities.
+- An entity owned by another tenant is a violation: a new entity whose `TenantId` names another tenant, or a changed or
+  deleted entity that was loaded as, or now names, another tenant. The save throws `TenantIsolationViolationException`
+  before anything is written. Nothing is moved to the current tenant.
+- A bulk update, which no save checks, can never set `TenantId`. One that would is a violation.
+- An entity type that does not implement `ITenantEntity<TKey>`, is not owned by one that does and is not the join
+  entity of a many-to-many relationship with a tenant-owned end is shared. Its rows are read without a filter and
+  written without a tenant check or a stamp, whether or not a tenant is current. `[SharedAcrossTenants]` states that a
+  type is shared, for an integration that checks for types left unmarked by mistake
+  ([Entity types that are not tenant-owned](efcore-integration.md#entity-types-that-are-not-tenant-owned)). A
+  tenant-owned type cannot be marked.
+
+Raw SQL, and a query that drops the filter, such as EF Core's `IgnoreQueryFilters()`, are outside these rules
+([What is and isn't isolated](efcore-integration.md#what-is-and-isnt-isolated)).
+
 ## `ITenantContext<TKey>`
 
 The current tenant, read-only. Inject it into endpoints and services:
@@ -183,7 +211,7 @@ tenant current, so the scoped services resolved from it (such as a `DbContext`) 
 | `TenantNotResolvedException` | `Tenantry.Core` | Code that needs a current tenant runs without one (an EF Core write, `CurrentTenantConnectionString`, `RequiredTenant`). |
 | `TenantNotFoundException` | `Tenantry.Core` | A tenant id is not in the store (`RunInScopeAsync`). It derives from `TenantNotResolvedException` and carries the `TenantId`, so a queue consumer can drop a message for a tenant that no longer exists. |
 | `TenantInactiveException` | `Tenantry.Core` | `RunInScopeAsync` names a tenant that `ValidateTenantActivity` refuses. It derives from `TenantNotResolvedException` and carries the `TenantId`, of the application's key type. |
-| `TenantIsolationViolationException` | `Tenantry.EfCore` | EF Core would read or write across tenants; `Kind` says which check failed ([`TenantIsolationViolationKind`](api/tenantry-efcore-tenantisolationviolationkind.md) lists them). |
+| `TenantIsolationViolationException` | `Tenantry.Core` | A data access integration, such as `Tenantry.EfCore`, would read or write across tenants; `Kind` says which check failed ([`TenantIsolationViolationKind`](api/tenantry-tenantisolationviolationkind.md) lists them). |
 
 ## Registration
 
@@ -214,6 +242,33 @@ registration rules:
   [one store](tenant-stores.md#registration-and-lifetimes).
 - Code that needs the key type without naming it, such as a package's registration method, reads it from
   [`ITenantKeyType`](api/tenantry-itenantkeytype.md), whose generic visitor works under Native AOT.
+
+## Building an integration against Core
+
+`Tenantry.EfCore` uses only `Tenantry.Core`'s public types. An integration for another data access library, or for a
+host Tenantry does not cover, builds on these:
+
+- [`ITenantBuilder.Services`](api/tenantry-itenantbuilder.md) and `ITenantBuilder.Add(ITenantRegistration)`: an
+  extension method on `ITenantBuilder<TKey>` registers the integration's services inside `AddTenantry`'s lambda. An
+  extension method on the non-generic `ITenantBuilder` with a type parameter of its own, such as a context type, goes
+  through `Add`, which applies its registration with the application's key type, so callers do not repeat it
+  ([`ITenantRegistration`](api/tenantry-itenantregistration.md)).
+- [`ITenantContext<TKey>`](api/tenantry-itenantcontext.md): the current tenant, read on every query and save.
+- [`ITenantScopeFactory<TKey>`](api/tenantry-itenantscopefactory.md): runs work as a tenant, for jobs and messages.
+- [`ITenantConnectionStringProvider<TKey>`](api/tenantry-itenantconnectionstringprovider.md) and
+  [`CurrentTenantConnectionString<TKey>`](api/tenantry-currenttenantconnectionstring.md): a tenant's connection string,
+  for a database per tenant.
+- [`ITenantEntity<TKey>`](api/tenantry-itenantentity.md) and [`TenantIds`](api/tenantry-tenantids.md): which entities
+  are tenant-owned, and the ids that mean no tenant, formatted and parsed as Tenantry does.
+- [`ITenantInvalidationHandler<TKey>`](api/tenantry-itenantinvalidationhandler.md): clears what the integration keeps
+  per tenant when a tenant changes.
+- [`TenantTelemetry`](api/tenantry-tenanttelemetry.md): the names a tenant is recorded under in logs and traces, so
+  the integration's entries carry the same `TenantId` scope and `tenant.id` tag.
+- `TenantIsolationViolationException`, `MissingTenantBehavior` and `[SharedAcrossTenants]`: the
+  [isolation rules](#isolation-rules), so an application sees the same exception and option whichever integration
+  refuses a write.
+- [`TenantryWarnings.Register`](api/tenantry-tenantrywarnings.md): the warnings the integration lets the application
+  turn off with `IgnoreWarnings` ([Turning off a warning](diagnostics.md#turning-off-a-warning)).
 
 ## Details
 

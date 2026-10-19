@@ -27,8 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stop setting or forwarding the `tenantry-tenant-id` header on a client with `UseTenantry()` while no tenant is
   current: to call as a tenant, make it current with `MakeCurrent` or `RunInScopeAsync`
   ([Which requests carry it](docs/http-propagation.md#which-requests-carry-it)).
-- Change a log alert or filter on event 3001 in the category `Tenantry.Options` to event 2008. Events from 3000 up are
+- Change a log alert or filter on event 3001 in the category `Tenantry.Options` to event 2008. Events 3000 to 9999 are
   now Tenantry.Pro's.
+- `SharedAcrossTenantsAttribute`, `TenantIsolationViolationException`, `TenantIsolationViolationKind` and
+  `MissingTenantBehavior` are in the `Tenantry` namespace, in `Tenantry.Core`. A file that reached them through
+  `using Tenantry.EfCore;` alone needs `using Tenantry;`.
 - With `string` tenant ids on SQL Server or MySQL, warning 2007 can now be logged: set a collation that compares case
   on `TenantId`, or turn the warning off
   ([String tenant ids](docs/efcore-integration.md#string-tenant-ids-and-the-databases-collation)).
@@ -59,9 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so none of its tenant-owned entities is isolated. It reports nothing where code it cannot see could call
   `UseTenantry()`. See [TNY1004](docs/analyzers.md#tny1004).
 - `tenant.IgnoreWarnings(…)`, which stops the warnings that report configuration that may be deliberate, named in
-  `TenantryWarnings`: 2007 and 2008. It throws for any other id. Tenantry's packages read
-  `TenantryWarnings.IsIgnored` before they log one. See
+  `TenantryWarnings`: 2007 and 2008, and the ids an integration registers with `TenantryWarnings.Register`. It throws
+  for any other id. Tenantry's packages read `TenantryWarnings.IsIgnored` before they log one. See
   [Turning off a warning](docs/diagnostics.md#turning-off-a-warning).
+- [Isolation rules](docs/core-concepts.md#isolation-rules) states the read and write rules every data access
+  integration applies, and
+  [Building an integration against Core](docs/core-concepts.md#building-an-integration-against-core) lists the public
+  seams one builds on.
 - `ITenantContext<TKey>.RequiredTenant` (Tenantry.Core), the current tenant, which throws
   `TenantNotResolvedException` when none is current, for code that must not run without one. Use it where code wrote
   `CurrentTenant!`, which throws a `NullReferenceException` without a tenant.
@@ -116,7 +123,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   application without `AddTenantry`; and `AddDbContextPerTenantDatabase` with an `ITenantConnectionStringProvider<TKey>`
   registered as scoped or transient. A service provider built without a host still reports them on first use.
 - Tenantry.Options' warning `OrdinaryOptionsReadAsTenant` is event 2008, where it was 3001, so Tenantry's events are
-  1000 to 2999 and Tenantry.Pro's are 3000 and above.
+  1000 to 2999 and Tenantry.Pro's are 3000 to 9999. Events 10000 and above are for integrations by others.
+- `SharedAcrossTenantsAttribute`, `TenantIsolationViolationException`, `TenantIsolationViolationKind` and
+  `MissingTenantBehavior` moved from `Tenantry.EfCore` (namespace `Tenantry.EfCore`) to `Tenantry.Core` (namespace
+  `Tenantry`), so an integration for another data access library shares them instead of declaring its own.
+  `EfCoreIsolationOptions` and its properties keep their names.
+- TNY3001 and TNY3002, the tenant scope rules, come with `Tenantry.Core`, whose API they check, instead of
+  `Tenantry.EfCore` ([Analyzers](docs/analyzers.md)).
 - `TenantInactiveException.TenantId` holds the tenant's id as the application's key type, as
   `TenantNotFoundException.TenantId` does. It held the id as a string.
 - TNY1001 counts a context whose `DbSet<T>` or `modelBuilder.Entity<T>()` is of a type parameter constrained to a

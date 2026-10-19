@@ -7,9 +7,9 @@ were resolved. None of it needs setting up beyond your logging, tracing and metr
 
 Tenantry logs under four categories: `Tenantry.AspNetCore` (the request middleware), `Tenantry.AspNetCore.OutputCache`
 (output caching per tenant, event 1009), `Tenantry.EfCore` (the isolation in your `DbContext`) and `Tenantry.Options`
-(options per tenant). Tenantry's event ids are 1000 to 2999, and Tenantry.Pro's are 3000 and above, so an id names
-one event. An id changes only in a release whose changelog says so, so you can alert on them. Above all, alert on 2001,
-a save that tried to write another tenant's row.
+(options per tenant). Tenantry's event ids are 1000 to 2999 and Tenantry.Pro's are 3000 to 9999, so an id of theirs
+names one event; 10000 and above are left for integrations by others. An id changes only in a release whose changelog
+says so, so you can alert on them. Above all, alert on 2001, a save that tried to write another tenant's row.
 
 | Event id | Name | Level | When |
 |----------|------|-------|------|
@@ -72,9 +72,22 @@ builder.Services.AddTenantry<string>(tenant => tenant
     .IgnoreWarnings(TenantryWarnings.StringTenantIdCollation));
 ```
 
-It accepts only 2007 (`TenantryWarnings.StringTenantIdCollation`) and 2008
-(`TenantryWarnings.OrdinaryOptionsReadAsTenant`), and throws for any other id. Events 2002 and 2006 have their own
-switches, `OnMissingTenant` and `OnUnmarkedEntityType`. Each call adds to the ids of the others.
+It accepts 2007 (`TenantryWarnings.StringTenantIdCollation`), 2008 (`TenantryWarnings.OrdinaryOptionsReadAsTenant`)
+and the ids an integration registered, and throws for any other id. Events 2002 and 2006 have their own switches,
+`OnMissingTenant` and `OnUnmarkedEntityType`. Each call adds to the ids of the others. Call it after the method that
+adds an integration whose warning it names.
+
+An integration registers the warnings it lets the application turn off with `TenantryWarnings.Register`, in the method
+that adds it, with ids from 10000 up, and reads `TenantryWarnings.IsIgnored` before it logs one:
+
+```csharp no-compile
+public static ITenantBuilder<TKey> AddReports<TKey>(this ITenantBuilder<TKey> tenant)
+    where TKey : IEquatable<TKey>, IParsable<TKey>
+{
+    TenantryWarnings.Register(tenant.Services, 10001);
+    return tenant;
+}
+```
 
 ## Traces
 
