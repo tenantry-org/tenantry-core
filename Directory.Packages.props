@@ -14,7 +14,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="[4.8.0]" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="[4.8.0]" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.2" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.4" />
   </ItemGroup>
 
   <!-- A provider that is not relational, for the tests that Tenantry works without one; and ASP.NET Core Identity's EF Core
@@ -85,7 +85,7 @@
 
   <ItemGroup>
     <!-- Microsoft.Data.SqlClient allows the vulnerable System.Security.Cryptography.Pkcs 9.0.11; an application raises it, and so does this build -->
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
 
 </Project>
