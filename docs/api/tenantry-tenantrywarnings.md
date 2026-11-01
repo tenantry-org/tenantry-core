@@ -58,7 +58,7 @@ public static void Register(IServiceCollection services, params int[] eventIds)
 Parameters:
 
 - `services` `IServiceCollection`: The application's services.
-- `eventIds` `int[]`: The event ids of the integration's warnings, 3000 or above.
+- `eventIds` `int[]`: The event ids of the integration's warnings: 3000 to 9999 are Tenantry.Pro's, and an integration by others uses 10000 and above.
 
 Exceptions:
 
