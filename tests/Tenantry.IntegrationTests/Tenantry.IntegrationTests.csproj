@@ -22,6 +22,8 @@
   <!-- MySQL: Pomelo's provider on EF Core 8 and 9, Oracle's on EF Core 10 (Pomelo has no EF Core 10 release) -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' Or '$(TargetFramework)' == 'net9.0'">
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
+    <!-- Pomelo allows a vulnerable MySqlConnector: raise it, as an application would -->
+    <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Testcontainers.MySql" />
   </ItemGroup>
 
@@ -34,10 +36,6 @@
   <ItemGroup Condition="'$(LatestDependencies)' == 'true' And '$(TargetFramework)' != 'net11.0'">
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(LatestDependencies)' == 'true' And ('$(TargetFramework)' == 'net8.0' Or '$(TargetFramework)' == 'net9.0')">
-    <PackageReference Include="MySqlConnector" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(LatestDependencies)' == 'true' And '$(TargetFramework)' == 'net10.0'">

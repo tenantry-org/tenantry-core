@@ -102,7 +102,8 @@ The suite covers forged writes, entities loaded under another tenant, unchanged-
 and a database per tenant.
 
 Every build runs it against the versions in the table: the oldest release of each provider that the tests allow, with
-the ADO.NET driver that provider requires at the least. The server images are pinned: SQL Server 2022 CU27,
+the ADO.NET driver that provider requires at the least. The exception is MySqlConnector under Pomelo's provider, raised
+to 2.6.1 because older releases have a known vulnerability. The server images are pinned: SQL Server 2022 CU27,
 PostgreSQL 16.15 and MySQL 8.4.11. Only these versions run on every build.
 
 Each week two more runs report what has changed since, so they find a break soon after a release:
