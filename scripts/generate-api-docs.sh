@@ -28,7 +28,7 @@ dotnet run "$repo/scripts/api-docs.cs" -- "$metadata" "$target"
 if [[ "${1:-}" == "--check" ]]; then
   if ! diff -r "$repo/docs/api" "$target" >/dev/null; then
     diff -ru "$repo/docs/api" "$target" | head -40 >&2 || true
-    echo "docs/api is out of date: run scripts/generate-api-docs.sh and commit the result." >&2
+    echo "docs/api is out of date: run scripts/generate-api-docs.sh and commit the result (the hook in eng/hooks does this on commit: git config core.hooksPath eng/hooks)." >&2
     exit 1
   fi
   echo "docs/api matches the source."

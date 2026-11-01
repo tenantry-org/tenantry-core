@@ -7,6 +7,12 @@ This guide covers the local workflow and the checks your change must pass.
 The .NET 10 SDK builds every target framework (`net8.0;net9.0;net10.0`). To run the tests on all of them you also need
 the 8.0 and 9.0 runtimes.
 
+Once per clone, turn on the repository's git hooks, which keep `docs/api` up to date on each commit:
+
+```bash
+git config core.hooksPath eng/hooks
+```
+
 ## Build & test
 
 ```bash
@@ -72,7 +78,7 @@ ReSharper's command-line tools); the scripts that need them restore them too.
 | The public API still works for code built against the last release | `for p in src/*/*.csproj; do dotnet pack "$p" -c Release --no-build -o artifacts; done`, then `dotnet pack templates/Tenantry.Templates.csproj -c Release -o artifacts` for the templates package (the pack validates each library package against `TenantryPackageBaseline`) | Keep the old member, or, for an intended break in a minor release, record it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true` |
 | A CycloneDX SBOM per package | The `dotnet CycloneDX` loop in `build-test.yml` | Run it after the pack, as it reads each package's version from `artifacts`, and fix the project it names |
 | The packages' dependency ranges | `dotnet run scripts/check-package-ranges.cs -- artifacts` | Each dependency has its intended range (see the script) |
-| The API reference is up to date | `bash scripts/generate-api-docs.sh --check` | `bash scripts/generate-api-docs.sh`, then commit `docs/api`: a change to the public API or its XML documentation changes it |
+| The API reference is up to date | `bash scripts/generate-api-docs.sh --check` | The pre-commit hook in `eng/hooks` regenerates `docs/api` and adds it to any commit that changes `src/`; turn it on once per clone with `git config core.hooksPath eng/hooks`. Without it, run `bash scripts/generate-api-docs.sh` and commit `docs/api` |
 | An application can restore and run the packages | `rm -rf artifacts/libraries && mkdir artifacts/libraries && cp artifacts/*.nupkg artifacts/libraries/ && rm artifacts/libraries/Tenantry.Templates.[0-9]*.nupkg`, then `bash scripts/check-package-consumer.sh artifacts/libraries 'Tenantry.*'`: the packages without the templates package, which an application cannot reference | From an empty cache, with package source mapping, on every target framework |
 | The templates work | `bash scripts/smoke-templates.sh artifacts` | Each `dotnet new` template is created from the templates package in `artifacts`, builds against the packages with warnings as errors, and runs |
 | The docs' code blocks build | `bash scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.*'` | Every `csharp` code block in the README and `docs/` builds against the packages |

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Regenerates docs/api and adds it to the commit when the commit changes C# under src/, so the API reference follows
+# the XML documentation comments without a step of its own. CI's `scripts/generate-api-docs.sh --check` stays as the
+# backstop for a commit made without the hook. Git runs it once `git config core.hooksPath eng/hooks` is set in the
+# clone (CONTRIBUTING.md); `git commit --no-verify` skips it.
+set -euo pipefail
+
+git diff --cached --quiet -- 'src/*.cs' && exit 0
+echo "pre-commit: regenerating docs/api"
+bash scripts/generate-api-docs.sh > /dev/null
+git add -A -- docs/api

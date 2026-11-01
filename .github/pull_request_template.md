@@ -10,7 +10,7 @@
 - [ ] Line coverage stays **≥ 90%** (the CI coverage gate)
 - [ ] No new analyzer, trim (`IL2xxx`), or AOT (`IL3xxx`) warnings: the build treats warnings as errors
 - [ ] Public API changes are documented (XML docs) and noted below
-- [ ] `docs/api` regenerated (`bash scripts/generate-api-docs.sh`) if the public API or its XML docs changed
+- [ ] `docs/api` regenerated if the public API or its XML docs changed (the hook in `eng/hooks` does it; otherwise `bash scripts/generate-api-docs.sh`)
 - [ ] Docs under `docs/` updated if behaviour changed
 - [ ] No secrets, tokens, or credentials committed
 
