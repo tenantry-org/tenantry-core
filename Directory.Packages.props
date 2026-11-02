@@ -75,9 +75,9 @@
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
     <!-- Per-tenant authentication tests (ConfigurePerTenant<JwtBearerOptions>) -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="[$(Net11PreviewVersion), 12.0.0)" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(Net11PreviewVersion)" />
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="[$(Net11PreviewVersion), 12.0.0)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="[$(Net11Version), 12.0.0)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(Net11Version)" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="[$(Net11Version), 12.0.0)" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="[10.0.0, 12.0.0)" />
   </ItemGroup>
 

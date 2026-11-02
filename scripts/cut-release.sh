@@ -39,6 +39,11 @@ absent_on_origin() {
 git fetch --quiet origin
 [[ "$(git rev-parse master)" == "$(git rev-parse refs/remotes/origin/master)" ]] ||
   fail "master is not origin/master: pull or push master first."
+# A stable package cannot depend on a prerelease (NU5104, an error here): the net11.0 builds' Microsoft packages
+# must be a .NET 11 release, not its release candidate.
+net11="$(sed -n 's:.*<Net11Version>\(.*\)</Net11Version>.*:\1:p' eng/common/Build.props)"
+[[ "$net11" != *-* ]] ||
+  fail "eng/common/Build.props sets Net11Version to the prerelease $net11: move it to .NET 11's release first."
 # SonarCloud analyses master only, so the branch is cut from a commit whose CI run, quality gate included, passed.
 command -v gh > /dev/null || fail "gh, the GitHub CLI, is needed to check master's CI: install it, then gh auth login."
 head="$(git rev-parse master)"

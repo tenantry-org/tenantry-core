@@ -14,7 +14,7 @@ using Testcontainers.MySql;
 namespace Tenantry.IntegrationTests.Providers;
 
 // The MySQL fixture and test classes, kept in one file so a target framework without a MySQL provider
-// for its EF Core version (the net11.0 preview lane) can leave them out.
+// for its EF Core version (net11.0) can leave them out.
 
 /// <summary>MySQL through Pomelo's provider on EF Core 8 and 9, and Oracle's on EF Core 10, which Pomelo does not support.</summary>
 public sealed class MySqlFixture : DatabaseFixture

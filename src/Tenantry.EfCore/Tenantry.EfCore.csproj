@@ -25,7 +25,7 @@
     <TenantryAnalyzer Include="..\..\analyzers\Tenantry.EfCore.Analyzers\Tenantry.EfCore.Analyzers.csproj" />
   </ItemGroup>
 
-  <!-- The EF Core major each target framework builds against (Directory.Packages.props), and the .NET 11 preview lane's (IncludeNet11) -->
+  <!-- The EF Core major each target framework builds against (Directory.Packages.props) -->
   <PropertyGroup>
     <EfCoreMajor Condition="'$(TargetFramework)' == 'net8.0'">8</EfCoreMajor>
     <EfCoreMajor Condition="'$(TargetFramework)' == 'net9.0'">9</EfCoreMajor>

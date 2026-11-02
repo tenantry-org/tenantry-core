@@ -47,8 +47,16 @@ jobs:
             9.0.x
             10.0.x
 
+      - name: Setup .NET 11
+        # The SDK global.json names, and the net11.0 runtime: the release candidate until .NET 11 ships, then GA
+        # (drop dotnet-quality then)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
       - name: Show selected SDK
-        # global.json pins the 10.0 feature band, so an installed preview SDK is never used.
+        # global.json names the .NET 11 SDK (rollForward picks the newest installed 11.0 SDK)
         run: dotnet --version
 
       - name: Setup Java (required by the Sonar scanner)
@@ -193,8 +201,16 @@ jobs:
             9.0.x
             10.0.x
 
+      - name: Setup .NET 11
+        # The SDK global.json names, and the net11.0 runtime: the release candidate until .NET 11 ships, then GA
+        # (drop dotnet-quality then)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
       - name: Show selected SDK
-        # global.json pins the 10.0 feature band, so an installed preview SDK is never used.
+        # global.json names the .NET 11 SDK (rollForward picks the newest installed 11.0 SDK)
         run: dotnet --version
 
       - name: Check every action is pinned to a commit
@@ -251,5 +267,7 @@ jobs:
       # checks; then the native binary runs them (eng/aot-smoke).
       - name: Native AOT smoke test
         run: |
-          dotnet publish eng/aot-smoke -c Release -o ./artifacts/aot-smoke
-          ./artifacts/aot-smoke/AotSmoke
+          for framework in net10.0 net11.0; do
+            dotnet publish eng/aot-smoke -c Release -f "$framework" -o "./artifacts/aot-smoke/$framework"
+            "./artifacts/aot-smoke/$framework/AotSmoke"
+          done

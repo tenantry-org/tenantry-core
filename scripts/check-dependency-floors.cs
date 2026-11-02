@@ -10,12 +10,12 @@
 // that framework), this reads the test lock files the last restore used and requires at least one test project that
 // includes that src project to resolve exactly the floor: the committed ones, which CI restores in locked mode, or,
 // with NuGetLockFilePath set (a local Tenantry Core pack, scripts/pack-local-core.sh), the ones it names under each
-// project, which are the graph the build and tests use. Our own packages and the .NET 11 preview are not checked.
+// project, which are the graph the build and tests use. Our own packages are not checked.
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-string[] defaultFrameworks = ["net8.0", "net9.0", "net10.0"];
+string[] defaultFrameworks = ["net8.0", "net9.0", "net10.0", "net11.0"];
 
 var floors = new List<(string Project, string Package, string Framework, string Floor)>();
 foreach (var path in Directory.EnumerateFiles("src", "*.csproj", SearchOption.AllDirectories))

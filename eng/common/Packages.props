@@ -45,10 +45,10 @@
     <FrameworkNextMajor>11.0.0</FrameworkNextMajor>
   </PropertyGroup>
 
-  <!-- The .NET 11 preview lane only (IncludeNet11) -->
+  <!-- net11.0, from the .NET 11 release in Build.props -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
-    <MicrosoftExtensionsFloor>$(Net11PreviewVersion)</MicrosoftExtensionsFloor>
-    <EfCoreFloor>$(Net11PreviewVersion)</EfCoreFloor>
+    <MicrosoftExtensionsFloor>$(Net11Version)</MicrosoftExtensionsFloor>
+    <EfCoreFloor>$(Net11Version)</EfCoreFloor>
     <FrameworkNextMajor>12.0.0</FrameworkNextMajor>
   </PropertyGroup>
 
@@ -81,7 +81,8 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.1.1" />
+    <!-- Npgsql's release candidate for EF Core 11, until its 11.0.0 -->
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[11.0.0-rc.1.1, 12.0.0)" />
   </ItemGroup>
 
 </Project>

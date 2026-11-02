@@ -4,8 +4,8 @@ This guide covers the local workflow and the checks your change must pass.
 
 ## Prerequisites
 
-The .NET 10 SDK builds every target framework (`net8.0;net9.0;net10.0`). To run the tests on all of them you also need
-the 8.0 and 9.0 runtimes.
+The .NET 11 SDK builds every target framework (`net8.0;net9.0;net10.0;net11.0`): `global.json` names it, the release
+candidate until .NET 11 ships. To run the tests on all of them you also need the 8.0, 9.0 and 10.0 runtimes.
 
 Once per clone, turn on the repository's git hooks, which keep `docs/api` up to date on each commit:
 
@@ -83,16 +83,15 @@ ReSharper's command-line tools); the scripts that need them restore them too.
 | The templates work | `bash scripts/smoke-templates.sh artifacts` | Each `dotnet new` template is created from the templates package in `artifacts`, builds against the packages with warnings as errors, and runs |
 | The docs' code blocks build | `bash scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.*'` | Every `csharp` code block in the README and `docs/` builds against the packages |
 | Native AOT publish | `dotnet publish samples/Tenantry.Samples.Aot -c Release` | No trim or AOT warnings |
-| Native AOT smoke test | `dotnet publish eng/aot-smoke -c Release -o artifacts/aot-smoke`, then `artifacts/aot-smoke/AotSmoke` | Tenantry.Http and Tenantry.Caching compile whole for Native AOT, and the binary runs them |
+| Native AOT smoke test | For each of `net10.0` and `net11.0`: `dotnet publish eng/aot-smoke -c Release -f <framework> -o artifacts/aot-smoke/<framework>`, then `artifacts/aot-smoke/<framework>/AotSmoke` | Tenantry.Http and Tenantry.Caching compile whole for Native AOT, and the binary runs them |
 
 When you remove or rename a public type, member, namespace or package, add the old name to
 `eng/common/removed-names.txt`, with what replaces it, so the docs cannot keep it.
 
 The release job, and on `master` the prerelease job, publish the packages CI built and checked, not a rebuild. CI also
-restores and builds on Windows, and builds and tests for .NET 11 with its preview SDK (`ci.yml`,
-`bash scripts/test-net11.sh`, after removing the SDK version from `global.json`). Every Monday, `dependency-lanes.yml`
-runs the tests with every dependency at the newest version its range allows
-(`bash scripts/test-latest-dependencies.sh`), and the integration tests against the newest database server releases.
+restores and builds on Windows (`ci.yml`). Every Monday, `dependency-lanes.yml` runs the tests with every dependency
+at the newest version its range allows (`bash scripts/test-latest-dependencies.sh`), and the integration tests against
+the newest database server releases.
 A failure there opens an issue, or comments on the one still open.
 
 ## Pull request flow

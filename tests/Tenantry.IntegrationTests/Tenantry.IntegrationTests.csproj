@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <!-- Needs Docker: the tests run against SQL Server, PostgreSQL and MySQL containers, one per database for each
-       framework's run (Providers/ProviderFixtures.cs). Every target framework runs them with its EF Core version's providers; the
-       .NET 11 preview lane runs SQL Server and PostgreSQL only. -->
+       framework's run (Providers/ProviderFixtures.cs). Every target framework runs them with its EF Core version's providers;
+       net11.0 runs SQL Server and PostgreSQL only, as no MySQL provider supports EF Core 11 yet. -->
   <PropertyGroup>
     <!-- One framework at a time, so that one container per database runs at a time -->
     <TestTfmsInParallel>false</TestTfmsInParallel>
@@ -52,7 +52,7 @@
     <Compile Remove="SecureApiTests.cs" />
   </ItemGroup>
 
-  <!-- The .NET 11 preview lane: no MySQL provider exists for EF Core 11 yet -->
+  <!-- net11.0: no MySQL provider supports EF Core 11 yet -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
     <Compile Remove="Providers/MySqlProviderTests.cs" />
   </ItemGroup>

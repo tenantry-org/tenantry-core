@@ -49,7 +49,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          # The SDK global.json names: the .NET 11 release candidate until .NET 11 ships (drop dotnet-quality then)
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
 
       - name: Restore
         run: dotnet restore Tenantry.slnx --locked-mode
@@ -57,40 +59,11 @@ jobs:
       - name: Build
         run: dotnet build Tenantry.slnx -c Release --no-restore
 
-  # The .NET 11 preview lane (scripts/test-net11.sh): net11.0 builds and tests against the release candidate.
-  # It does not block: a release candidate can break things GA fixes, so a failure here is a warning to
-  # investigate, not a merge gate.
-  net11-preview:
-    name: .NET 11 preview lane
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0   # MinVer needs full history
-
-      - name: Setup .NET 11 (preview)
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 11.0.x
-          dotnet-quality: preview
-
-      - name: Use the .NET 11 SDK
-        # global.json pins the 10.0 SDK band; this lane needs 11.0. The rest stays: it opts `dotnet test` into
-        # Microsoft Testing Platform.
-        run: jq 'del(.sdk)' global.json > global.json.lane && mv global.json.lane global.json && dotnet --version
-
-      - name: Build and test for net11.0
-        run: bash scripts/test-net11.sh
-
   # Every push to master publishes its packages to NuGet.org as a prerelease (X.Y.0-alpha.0.N), so Tenantry Pro can
   # build against master's packages from a clean clone. Stable versions come only from tags on release/X.Y
   # (release.yml), on commits master does not contain, so master's versions only grow. It publishes the packages the
   # Build & Test job of this run built, tested and checked, once build-test.yml's jobs and the Windows build have
-  # passed; the .NET 11 lane does not block it. Not the templates package, which only a release publishes.
+  # passed. Not the templates package, which only a release publishes.
   prerelease:
     name: Publish the prerelease to NuGet
     runs-on: ubuntu-latest
@@ -213,7 +186,9 @@ jobs:
         if: steps.unpublished.outputs.publish == 'true'
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          # The SDK global.json names: the .NET 11 release candidate until .NET 11 ships (drop dotnet-quality then)
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
 
       - name: NuGet login (OIDC → temp API key)
         if: steps.unpublished.outputs.publish == 'true'
