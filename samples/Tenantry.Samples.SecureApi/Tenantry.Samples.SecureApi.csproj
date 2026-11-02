@@ -6,6 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!--
+    The tenantry-api template's application, built against this repository's projects so the integration tests
+    (SecureApiTests) and scripts/smoke-samples.sh run the code the template generates. Its source files are the
+    template's own, not copies, so a change to one cannot miss the other.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\templates\content\tenantry-api\*.cs" Link="%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />

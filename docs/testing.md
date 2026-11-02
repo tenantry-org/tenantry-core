@@ -90,8 +90,8 @@ public class OrdersApiTests(WebApplicationFactory<Program> app) : IClassFixture<
 - For subdomain or host resolution, give the client the tenant's host instead of a header:
   `app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://acme.example.com") })`.
 - For claim-based access validation, the client needs a signed-in caller. The
-  [`SecureApi` sample's tests](../tests/Tenantry.IntegrationTests/SecureApiTests.cs) sign tokens with a key set for the
-  test.
+  [`tenantry-api` template's tests](../tests/Tenantry.IntegrationTests/SecureApiTests.cs) sign tokens with a key set
+  for the test.
 
 To test with tenants of your own rather than the ones the application's store holds, replace the store:
 

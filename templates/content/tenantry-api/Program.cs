@@ -81,13 +81,13 @@ await using (var scope = app.Services.CreateAsyncScope())
 }
 
 // Behind a proxy that terminates TLS, call app.UseForwardedHeaders() here first, with ForwardedHeadersOptions that
-// trust only that proxy, so these see the original HTTPS scheme.
+// trust only that proxy, so these see the original HTTPS scheme. Not in Development, where the launch profile serves
+// plain HTTP only and redirection would have no HTTPS port to send callers to.
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
-
-app.UseHttpsRedirection();
 app.UseAuthentication();
 // Authorization before Tenantry, so an anonymous caller gets 401 rather than 403: no policy here needs the tenant.
 // With UseTenantResolution() (authentication settings per tenant), authorization goes after UseTenantry() instead.

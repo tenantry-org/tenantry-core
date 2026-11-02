@@ -1,8 +1,8 @@
 # Access control
 
 Access control answers two questions: whether a request needs a tenant, and whether the caller may use the tenant it
-named. The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi) does both with JWT authentication, and its
-tests check the 401, 403 and 400 responses.
+named. The [`tenantry-api` template](../templates/content/tenantry-api) does both with JWT authentication, and
+[its tests](../tests/Tenantry.IntegrationTests/SecureApiTests.cs) check the 401, 403 and 400 responses.
 
 ## Requiring a tenant
 
@@ -169,6 +169,6 @@ builder.Services.AddTenantry<Guid>(tenant =>
 ```
 
 A user whose token lists several tenants picks one with the header, and the validator checks it against all of them,
-as in the [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi). The
+as in the [`tenantry-api` template](../templates/content/tenantry-api). The
 [`Quickstart` sample](../samples/Tenantry.Samples.Quickstart) shows required tenants, chained (AND) validators and
 endpoint metadata.

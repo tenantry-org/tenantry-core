@@ -6,7 +6,8 @@ with no ASP.NET Core dependency. With no request or middleware, you decide when 
 
 To start from a generated project, `dotnet new install Tenantry.Templates` and then
 `dotnet new tenantry-worker -n Orders.Worker` create a worker service with EF Core. It runs each message as the tenant
-it names, with `RunInScopeAsync`. It targets `net10.0`, so building it needs the .NET 10 SDK.
+it names, with `RunInScopeAsync`. It targets `net10.0`: it builds with the .NET 10 SDK or later and runs on the .NET 10
+runtime.
 
 ## Registration with `AddTenantry`
 

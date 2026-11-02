@@ -5,21 +5,25 @@ ASP.NET Core, read the first two sections, then [Non-HTTP hosts](non-http-hosts.
 
 To start from a generated project instead, run `dotnet new install Tenantry.Templates`, then
 `dotnet new tenantry-api -n Orders.Api`. That creates an ASP.NET Core API with EF Core. It takes the tenant from the
-`X-Tenant-Id` header and checks it against the caller's JWT claims. It targets `net10.0`, so it needs the .NET 10 SDK.
+`X-Tenant-Id` header and checks it against the caller's JWT claims. It targets `net10.0`: it builds with the .NET 10
+SDK or later and runs on the .NET 10 runtime.
 
 ## 1. Install the packages
 
-For an ASP.NET Core app backed by EF Core:
+For an ASP.NET Core app backed by EF Core, with SQLite as the database:
 
 ```bash
 dotnet add package Tenantry.AspNetCore
 dotnet add package Tenantry.EfCore
+dotnet add package Microsoft.EntityFrameworkCore.Sqlite
 ```
 
-`Tenantry.Core` comes with them. Reference it directly only for the core types in a project that has neither.
+`Tenantry.Core` comes with them. Reference it directly only for the core types in a project that has neither. For
+another database, add its EF Core provider in place of SQLite's ([Databases](compatibility.md#databases)).
 
 Tenantry is built for .NET 10 and .NET 11, and still ships for .NET 8 and 9 ([Compatibility](compatibility.md)). Each
-build of `Tenantry.EfCore` uses the EF Core major of its target framework (8.x, 9.x, 10.x or 11.x).
+build of `Tenantry.EfCore` uses the EF Core major of its target framework (8.x, 9.x, 10.x or 11.x), so the provider must
+be of that major too.
 
 ## 2. Choose your tenant key type
 
@@ -36,7 +40,7 @@ using Tenantry;
 var builder = WebApplication.CreateBuilder(args);
 
 // Introductory setup: any caller can select any tenant with the header. For production, add
-// authentication and tenant access validation (see access-control.md and the SecureApi sample).
+// authentication and tenant access validation (see access-control.md and the tenantry-api template).
 builder.Services.AddTenantry<Guid>(tenant =>
 {
     // (a) Resolution: how the tenant is identified on each request.
@@ -105,7 +109,7 @@ works the same with `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbCo
 
 ```csharp
 builder.Services.AddDbContext<AppDbContext>(options => options
-    .UseSqlServer(connectionString)
+    .UseSqlite("Data Source=app.db")
     .UseTenantry());
 ```
 
@@ -114,11 +118,19 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 ```csharp
 var app = builder.Build();
 
+// Create the database and its tables on startup. Use EF Core migrations in production.
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
+}
+
 app.UseTenantry();   // resolves the tenant; place after UseAuthentication() if resolving from claims
 ```
 
 `UseTenantry()` must run before any endpoint that needs a tenant
-([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)).
+([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). `EnsureCreatedAsync` creates `app.db` with an
+`Orders` table the first time the app starts. It cannot change a database it has already created, so once your model
+changes, use migrations instead ([Migrations](efcore-integration.md#migrations)).
 
 ## 8. Use the tenant in your endpoints
 
@@ -139,6 +151,8 @@ app.Run();
 ```
 
 ## 9. Try it
+
+Start the app with `dotnet run`, and use the address it prints in place of `…`:
 
 ```bash
 # Acme creates and lists an order

@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Microsoft.Extensions.DependencyInjection.Abstractions`, `Caching.Abstractions`, `Logging.Abstractions` and `Options`
   from the shared framework and declare no package dependency on them, so a security fix to them reaches an
   application through its .NET runtime ([Compatibility](docs/compatibility.md)).
+- .NET 11: every package also targets `net11.0`, and `Tenantry.EfCore`'s `net11.0` build takes EF Core 11.0.0 or a
+  later 11.x. It is tested on SQL Server, PostgreSQL and SQLite. No MySQL provider supports EF Core 11 yet. See
+  [Compatibility](docs/compatibility.md).
 - `hubOptions.AddTenantry()` and `AddInteractiveServerComponents().AddTenantry()` (Tenantry.AspNetCore) check, before
   each SignalR hub method call and each Blazor Server circuit event, that the connection's tenant still exists and is
   active. A tenant suspended or deleted while its connections are open has its next hub call fail with
@@ -66,8 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `X-Tenant-Id` header and checks it against the caller's JWT `tenant_id` claims, or
   `dotnet new tenantry-worker -n Orders.Worker`, a worker service with EF Core that runs each message as the tenant it
   names with `RunInScopeAsync`, in a `TenantId` log scope. The projects reference the Tenantry packages of the
-  templates' version; `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK,
-  though an older SDK can install the templates and create a project.
+  templates' version; `--TenantryVersion` picks another. They target `net10.0`, so building one needs the .NET 10 SDK
+  or later, and running it the .NET 10 runtime, though an older SDK can install the templates and create a project.
 - TNY1004, a warning in `Tenantry.EfCore`: a context with tenant-owned entities registered with `AddDbContext`,
   `AddDbContextPool`, `AddDbContextFactory` or `AddPooledDbContextFactory` whose options do not call `UseTenantry()`,
   so none of its tenant-owned entities is isolated. It reports nothing where code it cannot see could call
@@ -111,6 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tenantry-tenant-id` ([Another header](docs/http-propagation.md#another-header)).
 - The tenant stores guide and `ITenantInvalidator<TKey>` say to invalidate both tenants when an identifier moves from
   one to the other.
+- The Finbuckle migration guide says that keeping `string` ids on SQL Server or MySQL logs warning 2007, and how to set
+  a collation or turn it off
+  ([Keep string tenant ids](docs/migrating-from-finbuckle.md#2-keep-string-tenant-ids)).
 
 ### Changed
 
@@ -154,6 +160,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is shared and `Purchase` is tenant-owned, reads every tenant's purchases, and was not reported. Its title is now "A
   query that reads a tenant-owned entity ignores the tenant filter", and its message names the tenant-owned type the
   query reads. See [TNY1002](docs/analyzers.md#tny1002).
+- The `SecureApi` sample has no code of its own: it builds the `tenantry-api` template's source files, so the
+  integration tests run the code the template generates, and the docs name the template (`dotnet new tenantry-api`)
+  as the starting point for an application. Outside Development it now redirects HTTP to HTTPS and sends HSTS, as the
+  template does, and it listens on port 5160, as the template's projects do.
 
 ### Fixed
 
@@ -229,6 +239,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Tenantry.AspNetCore.OutputCache`.
 - The non-HTTP hosts guide's example that holds the scope itself now throws `TenantNotFoundException` for a missing
   tenant and checks that the tenant is active, as `RunInScopeAsync` does.
+- The getting-started guide installs an EF Core provider (SQLite), gives it a connection string and creates the
+  database before its `curl` calls. Followed from an empty project, its code did not build without a provider, and
+  its first request failed without the tables.
+- The README's console quick start says that its `EfCoreTenantStore` is an `ITenantStore<Guid>`, and the tenant stores
+  guide, whose `EfCoreTenantStore` has `string` keys, says that the other guides' has `Guid` keys.
 - The `SecureApi` sample starts in Development with `dotnet run`, on the port its `curl` examples use, as a project
   from the `tenantry-api` template does: each has a launch profile. Before, the sample started in Production and
   stopped at once, as no `Auth:SigningKey` was set.

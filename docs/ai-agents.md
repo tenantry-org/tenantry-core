@@ -88,8 +88,8 @@ app.MapGet("/invoices", (BillingDbContext db) => db.Invoices.ToListAsync());   /
 ```
 
 [Getting started](getting-started.md) has each step in full, [Access control](access-control.md) the validators, and
-[Tenant stores](tenant-stores.md) how to write a store. The [`SecureApi` sample](../samples/Tenantry.Samples.SecureApi)
-is the shape to copy.
+[Tenant stores](tenant-stores.md) how to write a store. The [`tenantry-api` template](../templates/content/tenantry-api)
+(`dotnet new tenantry-api`) is the shape to copy.
 
 ## Add it to a worker, console or desktop app
 

@@ -2,13 +2,15 @@ using System.Net;
 using System.Net.Http.Headers;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Tenantry.Samples.SecureApi;
+using Tenantry.IntegrationTests.Providers;
+using TenantryApi;
 
 namespace Tenantry.IntegrationTests;
 
 /// <summary>
-/// Hosts the production-shaped SecureApi sample in-process and checks the request-level guarantees:
-/// authentication, caller-to-tenant validation, required tenants and per-tenant data isolation.
+/// Hosts the tenantry-api template's application (the SecureApi sample builds it) in-process and checks the
+/// request-level guarantees: authentication, caller-to-tenant validation, required tenants and per-tenant data
+/// isolation.
 /// </summary>
 public sealed class SecureApiTests : IAsyncLifetime
 {
@@ -125,6 +127,33 @@ public sealed class SecureApiTests : IAsyncLifetime
         var act = () => db.SaveChangesAsync();
 
         await act.Should().ThrowAsync<TenantNotResolvedException>();
+    }
+
+    [Fact]
+    public async Task FirstRunInDevelopment_LogsNoWarnings()
+    {
+        // A new project's first run is in Development, from its launch profile, with no signing key configured. A
+        // warning there, such as HTTPS redirection finding no HTTPS port, reads as a fault in the generated project.
+        TenantIdCollationTests.Recorder recorder = new();
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
+        {
+            host.UseEnvironment("Development");
+            host.UseSetting("ConnectionStrings:Notes", $"Data Source={_databasePath}");
+            host.ConfigureServices(services => services.AddSingleton<ILoggerProvider>(recorder));
+        });
+        using var client = factory.CreateClient();
+
+        var issued = await client.PostAsJsonAsync("/dev/token", new DevelopmentTokenRequest("alice", ["acme"]),
+            TestContext.Current.CancellationToken);
+        var token = (await issued.Content.ReadFromJsonAsync<Dictionary<string, string>>(
+            TestContext.Current.CancellationToken))!["token"];
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", "acme");
+        var notes = await client.GetAsync("/notes", TestContext.Current.CancellationToken);
+
+        notes.StatusCode.Should().Be(HttpStatusCode.OK);
+        recorder.Entries.Where(entry => entry.Level >= LogLevel.Warning)
+            .Select(entry => $"{entry.Category}: {entry.Message}").Should().BeEmpty();
     }
 
     private HttpClient Client(string? token, string? tenant)

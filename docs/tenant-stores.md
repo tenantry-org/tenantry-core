@@ -45,6 +45,10 @@ public sealed class EfCoreTenantStore(AppDbContext db) : ITenantStore<string>
 }
 ```
 
+Most other guides use `Guid` keys and register this store with `AddTenantry<Guid>`. There it stands for the same store
+over tenants keyed by `Guid`, an `ITenantStore<Guid>`: a store's key type must be the one `AddTenantry` names, or
+`UseStore` does not compile.
+
 Register it by type or by factory. Both are [scoped](#registration-and-lifetimes):
 
 ```csharp

@@ -49,6 +49,11 @@ options per tenant. If you used `Finbuckle.MultiTenant.Identity.EntityFrameworkC
 Finbuckle's tenant ids, and the `TenantId` column it adds to your tables, are strings. Register Tenantry with
 `string` keys and that column and its data stay as they are.
 
+On SQL Server or MySQL, Tenantry then logs warning 2007 once as it builds the model, naming each tenant-owned table:
+the database's default collation ignores case, so tenants `acme` and `ACME` would read each other's rows. Set a
+collation that compares case on `TenantId` in a migration, or, once you know your ids cannot collide, turn the warning
+off ([String tenant ids](efcore-integration.md#string-tenant-ids-and-the-databases-collation)).
+
 To move to `Guid` or `int` keys, change the key type on your tenant type, your entities and `AddTenantry`, then add a
 migration. The `AlterColumn` that EF Core generates for each `TenantId` column leaves converting the stored ids to the
 database. Check that it does, or convert them yourself in the migration with `migrationBuilder.Sql`. Tenant ids stored

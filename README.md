@@ -85,8 +85,8 @@ update in the [changelog](CHANGELOG.md).
 ## Quick start (ASP.NET Core)
 
 The request names its tenant in a header, and the signed-in user's `tenant_id` claims must include it, so a caller
-cannot select a tenant it does not belong to. The [`SecureApi` sample](samples/Tenantry.Samples.SecureApi) runs this
-with JWT authentication.
+cannot select a tenant it does not belong to. The [`tenantry-api` template](templates/content/tenantry-api)
+(`dotnet new tenantry-api`) runs this with JWT authentication.
 
 ```csharp
 using Tenantry;
@@ -127,8 +127,8 @@ Add EF Core isolation where you register your context, with `options.UseTenantry
 current tenant, and saves are stamped and checked ([EF Core integration](docs/efcore-integration.md)).
 
 To start from a generated project instead, run `dotnet new install Tenantry.Templates`, then `dotnet new tenantry-api`
-for an ASP.NET Core API or `dotnet new tenantry-worker` for a worker service. The projects target `net10.0`, so
-building one needs the .NET 10 SDK.
+for an ASP.NET Core API or `dotnet new tenantry-worker` for a worker service. The projects target `net10.0`: they
+build with the .NET 10 SDK or later and run on the .NET 10 runtime.
 
 ## Quick start (console or worker)
 
@@ -139,7 +139,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 
-builder.Services.AddTenantry<Guid>(tenant => tenant.UseStore<EfCoreTenantStore>());
+builder.Services.AddTenantry<Guid>(tenant => tenant.UseStore<EfCoreTenantStore>()); // your ITenantStore<Guid>
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString).UseTenantry());
 
 // …later, in a hosted service (inject ITenantScopeFactory<Guid> scopes and ITenantLookup<Guid> tenants).
@@ -199,7 +199,7 @@ The [documentation index](docs/README.md) also links the API reference.
 
 | Sample | Demonstrates |
 |--------|--------------|
-| [`SecureApi`](samples/Tenantry.Samples.SecureApi) | Production starting point: JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation, integration tests |
+| [`SecureApi`](samples/Tenantry.Samples.SecureApi) | The [`tenantry-api` template's](templates/content/tenantry-api) application, built from its source for the integration tests: JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation. Start an application from the template with `dotnet new tenantry-api` |
 | [`Quickstart`](samples/Tenantry.Samples.Quickstart) | Minimal ASP.NET Core setup, resolvers, access validators, endpoint metadata |
 | [`EfCoreWeb`](samples/Tenantry.Samples.EfCoreWeb) | An EF Core app with migrations, DB-backed store, mixed tenanted/global entities, admin queries |
 | [`EfCoreConsole`](samples/Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantry` and manual scopes |
