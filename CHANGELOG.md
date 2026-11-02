@@ -166,6 +166,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integration tests run the code the template generates, and the docs name the template (`dotnet new tenantry-api`)
   as the starting point for an application. Outside Development it now redirects HTTP to HTTPS and sends HSTS, as the
   template does, and it listens on port 5160, as the template's projects do.
+- The `HybridCache` and `ITenantDistributedCache` of `IsolateCaches()`, and the per-tenant options values, build a
+  tenant's key prefix, tags and id text once per tenant descriptor instead of on every call, and an options read that
+  finds its value no longer allocates a closure. With `CacheTenants` or the in-memory store, a request's cache and
+  options reads reuse them. The check before each command of an `AddDbContextPerTenantDatabase` context formats tenant
+  ids only for the exception it throws.
 
 ### Fixed
 

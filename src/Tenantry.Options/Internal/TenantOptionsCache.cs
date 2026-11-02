@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -41,10 +42,32 @@ internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantCon
     : ICurrentTenantId
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
+    // Every options read keys its value by the tenant's id as text, so each descriptor's id is formatted once, not on
+    // every read. A descriptor lives as long as the request's, or CacheTenants', reference to it.
+    private readonly ConditionalWeakTable<ITenantDescriptor<TKey>, FormattedId> _formatted = new();
     private ITenantLookup<TKey>? _lookup;
     private bool _lookupResolved;
 
-    public string? Current => tenantContext.CurrentTenant is { } tenant ? TenantIds.Format(tenant.TenantId) : null;
+    public string? Current
+    {
+        get
+        {
+            if (tenantContext.CurrentTenant is not { } tenant)
+                return null;
+
+            // A descriptor whose id was changed after it was formatted is formatted again, so its values never go under
+            // the old id.
+            if (_formatted.TryGetValue(tenant, out var formatted)
+                && EqualityComparer<TKey>.Default.Equals(formatted.TenantId, tenant.TenantId))
+            {
+                return formatted.Text;
+            }
+
+            formatted = new FormattedId(tenant.TenantId, TenantIds.Format(tenant.TenantId));
+            _formatted.AddOrUpdate(tenant, formatted);
+            return formatted.Text;
+        }
+    }
 
     public object? CurrentTenant => tenantContext.CurrentTenant;
 
@@ -97,6 +120,8 @@ internal sealed class CurrentTenantId<TKey>(ITenantContextSetter<TKey> tenantCon
         _lookupResolved = true;
         return _lookup;
     }
+
+    private sealed record FormattedId(TKey TenantId, string Text);
 }
 
 /// <summary>A cache of one options type's values, per tenant, that a tenant's invalidation can clear.</summary>
@@ -160,9 +185,22 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
     {
         ArgumentNullException.ThrowIfNull(createOptions);
 
+        return GetOrAdd(name, static (_, create) => create(), createOptions);
+    }
+
+    /// <summary>
+    /// <see cref="GetOrAdd(string?, Func{TOptions})"/> with the factory's argument passed in, so a read that finds its
+    /// value allocates no closure.
+    /// </summary>
+    public TOptions GetOrAdd<TArg>(string? name, Func<string, TArg, TOptions> createOptions, TArg argument)
+    {
         // The entry is added before its value is built, so invalidating the tenant during the build removes it.
         var key = Key(name);
-        var entry = _values.GetOrAdd(key, _ => new Lazy<Built>(() => Create(createOptions)));
+        var entry = _values.GetOrAdd(
+            key,
+            static (added, state) =>
+                new Lazy<Built>(() => state.Cache.Create(added.Name, state.CreateOptions, state.Argument)),
+            (Cache: this, CreateOptions: createOptions, Argument: argument));
 
         try
         {
@@ -173,7 +211,9 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
 
             // A value that is not kept is the reader's own: one that joined another reader's build builds its own.
             _values.TryRemove(KeyValuePair.Create(key, entry));
-            return ReferenceEquals(built.Tenant, _tenant.CurrentTenant) ? built.Value : Create(createOptions).Value;
+            return ReferenceEquals(built.Tenant, _tenant.CurrentTenant)
+                ? built.Value
+                : Create(key.Name, createOptions, argument).Value;
         }
         catch
         {
@@ -186,12 +226,12 @@ internal sealed class TenantOptionsCache<[DynamicallyAccessedMembers(Dynamically
     /// <summary>The number of values kept, for tests.</summary>
     internal int Count => _values.Count;
 
-    private Built Create(Func<TOptions> createOptions)
+    private Built Create<TArg>(string name, Func<string, TArg, TOptions> createOptions, TArg argument)
     {
         var tenant = _tenant.CurrentTenant;
 
         using (_tenant.MakeStoreCopyCurrent(out var keep))
-            return new Built(createOptions(), keep, tenant);
+            return new Built(createOptions(name, argument), keep, tenant);
     }
 
     public bool TryAdd(string? name, TOptions options)
@@ -248,7 +288,7 @@ internal sealed class TenantOptionsManager<[DynamicallyAccessedMembers(Dynamical
     public TOptions Get(string? name)
     {
         name ??= Microsoft.Extensions.Options.Options.DefaultName;
-        return cache.GetOrAdd(name, () => factory.Create(name));
+        return cache.GetOrAdd(name, static (optionsName, optionsFactory) => optionsFactory.Create(optionsName), factory);
     }
 }
 

@@ -139,6 +139,29 @@ public sealed class IsolateCachesTests
     }
 
     [Fact]
+    public async Task ATenantsPrefixAndTags_AreBuiltOncePerDescriptor_AndAgainWhenItsIdChanges()
+    {
+        await using var provider = Build();
+        var cache = provider.GetRequiredService<HybridCache>();
+        var currentTenant = provider.GetRequiredService<ICurrentTenant>();
+        var tenant = new ChangingIdTenant { TenantId = "acme" };
+
+        using (provider.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(tenant))
+        {
+            var first = currentTenant.Capture();
+            currentTenant.Capture().Should().BeSameAs(first);
+            await cache.SetAsync("orders", 1, cancellationToken: Ct);
+
+            tenant.TenantId = "globex";
+            currentTenant.Capture()!.Prefix.Should().Be("t:globex:");
+            await cache.SetAsync("orders", 2, cancellationToken: Ct);
+        }
+
+        _inner.Entries["t:acme:orders"].Tags.Should().Equal("t:acme", "t:");
+        _inner.Entries["t:globex:orders"].Tags.Should().Equal("t:globex", "t:");
+    }
+
+    [Fact]
     public async Task IdsWithTheSeparator_CannotNameAnotherTenantsEntry()
     {
         await using var provider = Build();
@@ -445,6 +468,14 @@ public sealed class IsolateCachesTests
     {
         using var _ = provider.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(tenant);
         await work();
+    }
+
+    // A descriptor whose id the application changes after the tenant was made current.
+    private sealed class ChangingIdTenant : ITenantDescriptor<string>
+    {
+        public required string TenantId { get; set; }
+
+        public string Name => TenantId;
     }
 
     private sealed class RecordingDistributedCache : IDistributedCache

@@ -112,6 +112,8 @@ internal sealed class TenantDatabaseGuard<TKey>(
 
     protected override void Check(DbContext context) => CheckContext(context);
 
+    // This runs before every connection open and every command, so the names and ids the exceptions report are
+    // formatted only when one is thrown.
     private void CheckContext(DbContext? context)
     {
         if (context is null)
@@ -119,26 +121,23 @@ internal sealed class TenantDatabaseGuard<TKey>(
             return;
         }
 
-        var contextType = context.GetType().Name;
-        var currentTenantId = tenantContext is { HasTenant: true, CurrentTenantId: { } current } ? TenantIds.Format(current) : null;
-
         if (!TenantDatabaseLeases.TryGet(context, out var lease) || lease.Number != context.ContextId.Lease)
         {
+            var contextType = context.GetType().Name;
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
                 $"This '{contextType}' was not connected to a tenant's database for its current lease, so it would " +
                 "reuse the database of whichever tenant used it before. Obtain it from DI or from IDbContextFactory, " +
                 "which AddDbContextPerTenantDatabase connects to the current tenant's database.",
-                expectedTenantId: currentTenantId);
+                expectedTenantId: FormatCurrentTenantId());
         }
-
-        // The lease keeps the id as an object, so this formats it as TenantIds.Format does.
-        var leaseTenantId = lease.TenantId is null ? null : string.Create(CultureInfo.InvariantCulture, $"{lease.TenantId}");
 
         if (!ReferenceEquals(context.Database.GetDbConnection(), lease.Connection)
             || !string.Equals(context.Database.GetConnectionString(), lease.ConnectionString, StringComparison.Ordinal))
         {
+            var contextType = context.GetType().Name;
+            var leaseTenantId = FormatLeaseTenantId(lease);
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
@@ -147,11 +146,16 @@ internal sealed class TenantDatabaseGuard<TKey>(
                 "If no code of yours does, the EF Core provider replaced the connection itself, which " +
                 "AddDbContextPerTenantDatabase does not support; the providers it is tested with are listed in Compatibility.",
                 leaseTenantId,
-                currentTenantId);
+                FormatCurrentTenantId());
         }
 
-        if (!tenantContext.HasTenant || !Equals(tenantContext.CurrentTenantId, lease.TenantId))
+        if (!tenantContext.HasTenant
+            || lease.TenantId is not TKey leaseTenant
+            || !EqualityComparer<TKey>.Default.Equals(tenantContext.CurrentTenantId, leaseTenant))
         {
+            var contextType = context.GetType().Name;
+            var leaseTenantId = FormatLeaseTenantId(lease);
+            var currentTenantId = FormatCurrentTenantId();
             throw new TenantIsolationViolationException(
                 TenantIsolationViolationKind.TenantDatabaseMismatch,
                 contextType,
@@ -161,4 +165,11 @@ internal sealed class TenantDatabaseGuard<TKey>(
                 currentTenantId);
         }
     }
+
+    private string? FormatCurrentTenantId() =>
+        tenantContext is { HasTenant: true, CurrentTenantId: { } current } ? TenantIds.Format(current) : null;
+
+    // The lease keeps the id as an object, so this formats it as TenantIds.Format does.
+    private static string? FormatLeaseTenantId(TenantDatabaseLeases.Lease lease) =>
+        lease.TenantId is null ? null : string.Create(CultureInfo.InvariantCulture, $"{lease.TenantId}");
 }

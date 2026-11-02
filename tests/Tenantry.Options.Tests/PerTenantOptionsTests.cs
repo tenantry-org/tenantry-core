@@ -139,6 +139,24 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public void ATenantsId_IsFormattedOncePerDescriptor_AndAgainWhenItChanges()
+    {
+        using var provider = Build();
+        var currentTenantId = provider.GetRequiredService<ICurrentTenantId>();
+        var tenant = new ChangingIdTenant { TenantId = "acme" };
+
+        using (MakeCurrent(provider, tenant))
+        {
+            var first = currentTenantId.Current;
+            first.Should().Be("acme");
+            currentTenantId.Current.Should().BeSameAs(first);
+
+            tenant.TenantId = "globex";
+            currentTenantId.Current.Should().Be("globex");
+        }
+    }
+
+    [Fact]
     public void TheTenantsStep_RunsAfterEveryOrdinaryConfigure_WhateverTheOrderTheyWereAddedIn()
     {
         using var provider = Build(services => services.Configure<BrandingOptions>(o => o.Colour = "green"));
@@ -695,6 +713,14 @@ public sealed class PerTenantOptionsTests
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
                 loggers.Entries.Add((category, eventId.Id, formatter(state, exception)));
         }
+    }
+
+    // A descriptor whose id the application changes after the tenant was made current.
+    private sealed class ChangingIdTenant : ITenantDescriptor<string>
+    {
+        public required string TenantId { get; set; }
+
+        public string Name => TenantId;
     }
 
     private sealed class ChangingStore(ITenantDescriptor<string> tenant) : ITenantStore<string>

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Tenantry.Caching.Internal;
 
 /// <summary>
@@ -16,6 +18,15 @@ internal interface ICapturedTenant
     /// <summary>The prefix of the tenant's keys and tags (<see cref="TenantCacheKeys.TenantPrefix"/>).</summary>
     string Prefix { get; }
 
+    /// <summary>The tenant's tag, which every entry of the tenant has (<see cref="TenantCacheKeys.TenantTag"/>).</summary>
+    string Tag { get; }
+
+    /// <summary>
+    /// The tags of an entry written with no tags of the caller's: <see cref="Tag"/> and
+    /// <see cref="TenantCacheKeys.AllTenantsTag"/>.
+    /// </summary>
+    IReadOnlyList<string> Tags { get; }
+
     /// <summary>Makes the tenant current again, until the result is disposed.</summary>
     IDisposable MakeCurrent();
 }
@@ -23,14 +34,54 @@ internal interface ICapturedTenant
 internal sealed class CurrentTenant<TKey>(ITenantContextSetter<TKey> tenantContext) : ICurrentTenant
     where TKey : IEquatable<TKey>, IParsable<TKey>
 {
-    public ICapturedTenant? Capture() =>
-        tenantContext.CurrentTenant is { } tenant ? new Captured(tenant, tenantContext) : null;
+    // Every cache call names its keys from the tenant, so each descriptor's prefix and tags are built once, not on
+    // every call. A descriptor lives as long as the request's, or CacheTenants', reference to it.
+    private readonly ConditionalWeakTable<ITenantDescriptor<TKey>, Captured> _captured = new();
 
-    private sealed class Captured(ITenantDescriptor<TKey> tenant, ITenantContextSetter<TKey> tenantContext) : ICapturedTenant
+    public ICapturedTenant? Capture()
     {
-        public string Prefix { get; } = TenantCacheKeys.TenantPrefix(TenantIds.Format(tenant.TenantId));
+        if (tenantContext.CurrentTenant is not { } tenant)
+            return null;
 
-        public IDisposable MakeCurrent() => tenantContext.MakeCurrent(tenant);
+        // A descriptor whose id changed after it was captured is captured again, so it never writes under the old id.
+        if (_captured.TryGetValue(tenant, out var captured)
+            && EqualityComparer<TKey>.Default.Equals(captured.TenantId, tenant.TenantId))
+        {
+            return captured;
+        }
+
+        captured = new Captured(tenant, tenantContext);
+        _captured.AddOrUpdate(tenant, captured);
+        return captured;
+    }
+
+    private sealed class Captured : ICapturedTenant
+    {
+        private readonly ITenantDescriptor<TKey> _tenant;
+        private readonly ITenantContextSetter<TKey> _tenantContext;
+
+        public Captured(ITenantDescriptor<TKey> tenant, ITenantContextSetter<TKey> tenantContext)
+        {
+            _tenant = tenant;
+            _tenantContext = tenantContext;
+            TenantId = tenant.TenantId;
+
+            var tenantId = TenantIds.Format(TenantId);
+            Prefix = TenantCacheKeys.TenantPrefix(tenantId);
+            Tag = TenantCacheKeys.TenantTag(tenantId);
+            Tags = Array.AsReadOnly([Tag, TenantCacheKeys.AllTenantsTag]);
+        }
+
+        /// <summary>The id the prefix was built from.</summary>
+        public TKey TenantId { get; }
+
+        public string Prefix { get; }
+
+        public string Tag { get; }
+
+        public IReadOnlyList<string> Tags { get; }
+
+        public IDisposable MakeCurrent() => _tenantContext.MakeCurrent(_tenant);
     }
 }
 
