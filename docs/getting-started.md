@@ -18,8 +18,8 @@ dotnet add package Tenantry.EfCore
 
 `Tenantry.Core` comes with them. Reference it directly only for the core types in a project that has neither.
 
-Tenantry is built for .NET 10, and still ships for .NET 8 and 9 ([Compatibility](compatibility.md)). Each build of
-`Tenantry.EfCore` uses the EF Core major of its target framework (8.x, 9.x or 10.x).
+Tenantry is built for .NET 10 and .NET 11, and still ships for .NET 8 and 9 ([Compatibility](compatibility.md)). Each
+build of `Tenantry.EfCore` uses the EF Core major of its target framework (8.x, 9.x, 10.x or 11.x).
 
 ## 2. Choose your tenant key type
 

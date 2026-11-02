@@ -95,7 +95,7 @@ var categories = await db.Categories
 
 - If the query is meant to cross tenants (an admin report, maintenance), put it behind an authorization check of its
   own, and suppress the warning there with the reason.
-- If it is meant to ignore another filter only, on EF Core 10 name that filter, which keeps the tenant filter:
+- If it is meant to ignore another filter only, on EF Core 10 and later name that filter, which keeps the tenant filter:
   `IgnoreQueryFilters(["SoftDelete"])`. A call that names filters is reported only when a name among them is the
   tenant filter's, `TenantryQueryFilters.Tenant`.
 - On EF Core 8 and 9, which cannot name a filter, read the tenant-owned rows in a query of their own, without

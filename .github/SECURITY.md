@@ -41,3 +41,8 @@ from 1.0 will be set out here before 1.0 is released. The prereleases each push 
 | `Tenantry.Http` | the latest minor, and the minors the latest two Tenantry.Pro minors run on, as above |
 | `Tenantry.Caching` | the latest minor, and the minors the latest two Tenantry.Pro minors run on, as above |
 | `Tenantry.Options` | the latest minor, and the minors the latest two Tenantry.Pro minors run on, as above |
+| `Tenantry.Templates` | the latest minor only |
+
+The templates pin the versions of the Microsoft packages a new project references. When one of those versions has a
+vulnerability, the next release of the latest minor raises it, and projects created from then on get the fixed
+version. A project already created from a template is the application's own: update the version in its project file.

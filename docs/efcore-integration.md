@@ -129,11 +129,11 @@ var perTenant = await db.Orders
     .ToListAsync();
 ```
 
-On EF Core 10, `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes only the tenant filter and keeps your other
-named filters; `IgnoreQueryFilters()` removes them all. Either applies to the whole query, including the tenant-owned
-entities a shared entity's query includes, joins or reads through a navigation. [TNY1002](analyzers.md#tny1002) warns
-of a call whose query, in the same expression, reads a tenant-owned entity. Where crossing tenants is meant, as here,
-suppress the warning there with the reason.
+On EF Core 10 and later, `IgnoreQueryFilters([TenantryQueryFilters.Tenant])` removes only the tenant filter and keeps
+your other named filters; `IgnoreQueryFilters()` removes them all. Either applies to the whole query, including the
+tenant-owned entities a shared entity's query includes, joins or reads through a navigation.
+[TNY1002](analyzers.md#tny1002) warns of a call whose query, in the same expression, reads a tenant-owned entity.
+Where crossing tenants is meant, as here, suppress the warning there with the reason.
 
 ## Write isolation: the interceptor
 
@@ -517,9 +517,9 @@ tenant's join rows ([Many-to-many relationships](efcore-advanced.md#many-to-many
 
 ### Reloading an entity
 
-EF Core reads the row by key without query filters, but Tenantry keeps the tenant filter. On EF Core 10 the entity's
-other filters are still ignored (an unnamed one is named `TenantryQueryFilters.Application`). On EF Core 8 and 9 its
-own filter applies too, merged with the tenant filter.
+EF Core reads the row by key without query filters, but Tenantry keeps the tenant filter. On EF Core 10 and later the
+entity's other filters are still ignored (an unnamed one is named `TenantryQueryFilters.Application`). On EF Core 8
+and 9 its own filter applies too, merged with the tenant filter.
 
 ### Why database per tenant has its own registration
 

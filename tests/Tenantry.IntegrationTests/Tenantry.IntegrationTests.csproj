@@ -2,7 +2,8 @@
 
   <!-- Needs Docker: the tests run against SQL Server, PostgreSQL and MySQL containers, one per database for each
        framework's run (Providers/ProviderFixtures.cs). Every target framework runs them with its EF Core version's providers;
-       net11.0 runs SQL Server and PostgreSQL only, as no MySQL provider supports EF Core 11 yet. -->
+       net11.0 runs SQL Server and PostgreSQL only: Pomelo has no EF Core 11 release, and Oracle's provider only a
+       preview built against an EF Core 11 preview. -->
   <PropertyGroup>
     <!-- One framework at a time, so that one container per database runs at a time -->
     <TestTfmsInParallel>false</TestTfmsInParallel>
@@ -52,7 +53,7 @@
     <Compile Remove="SecureApiTests.cs" />
   </ItemGroup>
 
-  <!-- net11.0: no MySQL provider supports EF Core 11 yet -->
+  <!-- net11.0: no MySQL provider has an EF Core 11 release yet, only Oracle's preview -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
     <Compile Remove="Providers/MySqlProviderTests.cs" />
   </ItemGroup>

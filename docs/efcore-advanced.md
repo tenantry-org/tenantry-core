@@ -141,8 +141,8 @@ Building these models throws `TenantIsolationViolationException` (or `InvalidOpe
   (`HasForeignKey(…).HasPrincipalKey(e => e.Code)`). Tenantry confirms the end by its primary key, which need not be
   the row the join row names;
 - a tenant-owned owned type mapped to JSON (`ToJson()`). It lives in its owner's row, under the owner's `TenantId`, and
-  EF Core cannot check a `TenantId` of its own (EF Core 10 rejects the concurrency token itself), so do not implement
-  `ITenantEntity<TKey>` on it;
+  EF Core cannot check a `TenantId` of its own (EF Core 10 and later reject the concurrency token itself), so do not
+  implement `ITenantEntity<TKey>` on it;
 - a type that is not tenant-owned mapped to a tenant-owned entity's table (table splitting). With no filter or
   `TenantId`, it would read and change every tenant's rows there. This fails on the first query or save, as only the
   finished model says which tables a type is mapped to;
@@ -150,7 +150,8 @@ Building these models throws `TenantIsolationViolationException` (or `InvalidOpe
 - entities whose key type Tenantry is not registered for (`AddTenantry<Guid>` with `ITenantEntity<string>`);
 - a tenant-owned entity whose `TenantId` is not a mapped public property of the key type, such as one implemented
   explicitly (`Guid ITenantEntity<Guid>.TenantId => OrganizationId`);
-- on EF Core 10, a filter of your own named `TenantryQueryFilters.Tenant`, which the tenant filter would replace.
+- on EF Core 10 and later, a filter of your own named `TenantryQueryFilters.Tenant`, which the tenant filter would
+  replace.
 
 Something that runs after `UseTenantry()`, such as a model-building convention, can still remove the tenant filter or
 concurrency token. So the interceptors check each model on its first query and first save, and throw

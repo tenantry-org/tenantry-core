@@ -5,7 +5,7 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=tenantry-org_tenantry-core&metric=alert_status&token=3a836e3680d4d63886210902f77daf99c80b85be)](https://sonarcloud.io/summary/new_code?id=tenantry-org_tenantry-core)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=tenantry-org_tenantry-core&metric=coverage&token=3a836e3680d4d63886210902f77daf99c80b85be)](https://sonarcloud.io/summary/new_code?id=tenantry-org_tenantry-core)
 [![License](https://img.shields.io/github/license/tenantry-org/tenantry-core)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-10.0%20LTS%20%7C%208.0%2C%209.0%20legacy-512BD4)](docs/compatibility.md)
+[![.NET](https://img.shields.io/badge/.NET-10.0%20LTS%20%7C%2011.0%20STS%20%7C%208.0%2C%209.0%20legacy-512BD4)](docs/compatibility.md)
 
 Tenant isolation for ASP.NET Core and EF Core.
 

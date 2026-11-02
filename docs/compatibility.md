@@ -48,7 +48,7 @@ These combinations run the write-isolation suite against a real database on ever
 | MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` 8.0.2, 9.0.0 | .NET 8, 9 | Tested |
 | MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
 | MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | .NET 10 | Not tested (no EF Core 10 release) |
-| MySQL / MariaDB | any | .NET 11 | Not tested (no provider supports EF Core 11 yet) |
+| MySQL / MariaDB | any | .NET 11 | Not tested (Pomelo has no EF Core 11 release, and Oracle's `MySql.EntityFrameworkCore` only 11.0.0-preview, built against an EF Core 11 preview) |
 
 Each framework runs the suite with its own EF Core version. MariaDB is not tested.
 
@@ -70,6 +70,10 @@ compares ids under it. SQL Server's and MySQL's defaults ignore case
 - `Microsoft.Extensions.*` packages take a minimum from the target framework's own major (8.0 on net8.0), with no
   upper bound. Microsoft ships every `Microsoft.Extensions` major for all supported frameworks, and current Azure SDKs
   need 10.x even on .NET 8.
+- On net11.0, `Tenantry.Core`, `Tenantry.Caching` and `Tenantry.Options` declare no `Microsoft.Extensions.*` package
+  dependency: they use the copies of `DependencyInjection.Abstractions`, `Caching.Abstractions`,
+  `Logging.Abstractions` and `Options` in the shared framework, which the .NET runtime's own updates patch.
+  `Tenantry.Http` still depends on `Microsoft.Extensions.Http`, which the shared framework does not include.
 - `Tenantry.Caching` takes `Microsoft.Extensions.Caching.Abstractions` 9.0 or later on net8.0 too, the first with
   `HybridCache`.
 - EF Core is taken in the target framework's major only, as above.

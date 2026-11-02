@@ -135,7 +135,7 @@ Call `UseApplicationServiceProvider` before `UseTenantry()`, or set the option o
   it through a key that includes `TenantId`.
 - "has no mapped public property 'TenantId'": make `TenantId` a public property of the key type. Its setter can be
   private or init-only.
-- "has a query filter named 'Tenantry.Tenant'" (EF Core 10): rename your filter.
+- "has a query filter named 'Tenantry.Tenant'" (EF Core 10 and later): rename your filter.
 - "The join entity … has a key that does not include its foreign key": remove the join entity's own key, or implement
   `ITenantEntity<TKey>` on it.
 - "The join entity … names … through a key": join the end through its primary key, or a key that includes `TenantId`
@@ -149,8 +149,8 @@ Call `UseApplicationServiceProvider` before `UseTenantry()`, or set the option o
 
 - "This context replaces EF Core's IModelCustomizer": move the `ReplaceService<IModelCustomizer, …>()` configuration
   into `OnModelCreating` or an `ITenantModelContributor` ([Extending](efcore-integration.md#extending-contributors)).
-- "cannot be used with UseInternalServiceProvider": remove `UseInternalServiceProvider`. On EF Core 10 the error can
-  be EF Core's own, about `ISingletonInterceptor` services.
+- "cannot be used with UseInternalServiceProvider": remove `UseInternalServiceProvider`. On EF Core 10 and later the
+  error can be EF Core's own, about `ISingletonInterceptor` services.
 
 ## `Reload()` detaches an entity, or `GetDatabaseValues()` returns `null`
 
