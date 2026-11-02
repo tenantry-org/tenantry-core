@@ -13,6 +13,11 @@
     <!-- xUnit.net v3 test projects are executables, which run on Microsoft Testing Platform (global.json opts `dotnet test`
          into it); a support library sets OutputType back to Library -->
     <OutputType>Exe</OutputType>
+    <!-- NuGet's audit (NU1901 to NU1904) stays a warning here: an advisory against a package only the tests use,
+         such as one Roslyn's testing libraries or a database driver bring, would otherwise stop every locked restore
+         until it is raised. src, the analyzers, the samples and the package consumer still fail on one, and Dependabot
+         reports it. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
   </PropertyGroup>
 
   <!-- The test tooling, in every test project (a support library sets IsTestProject to false) -->
