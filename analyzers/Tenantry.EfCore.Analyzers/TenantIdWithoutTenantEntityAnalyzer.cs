@@ -13,8 +13,12 @@ namespace Tenantry.EfCore.Analyzers;
 /// <remarks>
 /// <para>
 /// A context's types are those of its <c>DbSet&lt;T&gt;</c> properties (its own and its base contexts') and of the
-/// <c>modelBuilder.Entity&lt;T&gt;()</c> calls in its methods. A context with no tenant-owned type among them (a
-/// database-per-tenant context, or one Tenantry does not isolate) is left alone, as Tenantry checks nothing there.
+/// <c>modelBuilder.Entity&lt;T&gt;()</c> calls in its methods and its base contexts'. A generic base context's type
+/// parameters stand for the type arguments the derived context passes, so <c>DbSet&lt;TUser&gt;</c> in a base context is
+/// the derived context's user type. A base context from another assembly, such as <c>IdentityDbContext&lt;TUser&gt;</c>,
+/// contributes its <c>DbSet&lt;T&gt;</c> properties, and a type mapped only there is reported on the derived context's
+/// declaration. A context with no tenant-owned type among them (a database-per-tenant context, or one Tenantry does not
+/// isolate) is left alone, as Tenantry checks nothing there.
 /// </para>
 /// <para>
 /// Not reported: a type marked shared, by <c>[SharedAcrossTenants]</c> (on it or a base type) or by
@@ -57,12 +61,21 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
             var state = new State();
 
+            start.RegisterSyntaxTreeAction(tree => CollectGeneratedTree(tree, state));
             start.RegisterSymbolAction(symbol => CollectContext(symbol, types, state), SymbolKind.NamedType);
             start.RegisterSymbolAction(symbol => CollectDbSet(symbol, types, state), SymbolKind.Property);
             start.RegisterOperationAction(operation => CollectCall(operation, types, state), OperationKind.Invocation);
             start.RegisterOperationAction(operation => CollectConfiguration(operation, types, state), OperationKind.ObjectCreation);
             start.RegisterCompilationEndAction(end => Report(end, types, state));
         });
+    }
+
+    // The generated syntax trees, as a type mapped only by a base context from another assembly is reported on the
+    // context's first declaration outside them.
+    private static void CollectGeneratedTree(SyntaxTreeAnalysisContext context, State state)
+    {
+        if (context.IsGeneratedCode)
+            state.GeneratedTrees.TryAdd(context.Tree, 0);
     }
 
     private static void CollectContext(SymbolAnalysisContext context, KnownTypes types, State state)
@@ -150,13 +163,28 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
         var byContext = state.Mapped.ToLookup(mapping => mapping.Context, SymbolEqualityComparer.Default);
 
-        // A context maps its own types and its base contexts'.
+        // A context maps its own types and its base contexts'. The mappings are recorded on each context's definition, so
+        // a generic base context's are read from its definition, with the type arguments this context passes for its type
+        // parameters. A base context from another assembly, such as IdentityDbContext<TUser>, has no source the analyzer
+        // sees: its DbSet<T> properties, with the type arguments substituted, are reported on this context's declaration.
         IEnumerable<(ITypeSymbol Entity, Location Location, bool Generated)> MappedBy(INamedTypeSymbol contextType)
         {
-            for (var current = (INamedTypeSymbol?)contextType; current is not null; current = current.BaseType)
+            for (var current = (INamedTypeSymbol?)contextType;
+                 current is not null && !SymbolEqualityComparer.Default.Equals(current, types.DbContext);
+                 current = current.BaseType)
             {
-                foreach (var mapping in byContext[current])
-                    yield return (mapping.Entity, mapping.Location, mapping.Generated);
+                if (SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, context.Compilation.Assembly))
+                {
+                    foreach (var mapping in byContext[current.OriginalDefinition])
+                        yield return (Substitute(mapping.Entity, current), mapping.Location, mapping.Generated);
+
+                    continue;
+                }
+
+                var (location, generated) = Declaration(contextType, state);
+
+                foreach (var set in types.DbSets(current))
+                    yield return (set.Entity, location, generated);
             }
         }
 
@@ -189,6 +217,30 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
                 pair.Key.Name,
                 Advice(FindTenantId(pair.Key)!.Type, context.Compilation)));
         }
+    }
+
+    // A type parameter of a generic base context, as the type argument the derived context passes for it.
+    private static ITypeSymbol Substitute(ITypeSymbol type, INamedTypeSymbol baseContext) =>
+        type is ITypeParameterSymbol { TypeParameterKind: TypeParameterKind.Type } parameter &&
+        SymbolEqualityComparer.Default.Equals(parameter.DeclaringType, baseContext.OriginalDefinition)
+            ? baseContext.TypeArguments[parameter.Ordinal]
+            : type;
+
+    // The context's first declaration outside generated code, in source order; generated if it has none.
+    private static (Location Location, bool Generated) Declaration(INamedTypeSymbol contextType, State state)
+    {
+        Location? first = null;
+
+        foreach (var location in contextType.Locations)
+        {
+            if (location.SourceTree is { } tree && !state.GeneratedTrees.ContainsKey(tree) &&
+                (first is null || Precedes(location, first)))
+            {
+                first = location;
+            }
+        }
+
+        return first is null ? (Location.None, true) : (first, false);
     }
 
     // What the diagnostic tells the developer to do, by whether the TenantId's type can be a tenant key.
@@ -281,11 +333,12 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
         return contexts;
     }
 
+    // The contexts are definitions, and a base context may be a constructed generic type.
     private static bool IsOrDerivesFromAny(INamedTypeSymbol type, HashSet<INamedTypeSymbol> contexts)
     {
         for (var current = (INamedTypeSymbol?)type; current is not null; current = current.BaseType)
         {
-            if (contexts.Contains(current))
+            if (contexts.Contains(current.OriginalDefinition))
                 return true;
         }
 
@@ -382,6 +435,8 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
     private sealed class State
     {
         public ConcurrentDictionary<INamedTypeSymbol, byte> Contexts { get; } = new(SymbolEqualityComparer.Default);
+
+        public ConcurrentDictionary<SyntaxTree, byte> GeneratedTrees { get; } = new();
 
         /// <summary>The types each context maps, where, and whether that is in generated code, where nothing is reported.</summary>
         public ConcurrentBag<(INamedTypeSymbol Context, ITypeSymbol Entity, Location Location, bool Generated)> Mapped { get; } = [];

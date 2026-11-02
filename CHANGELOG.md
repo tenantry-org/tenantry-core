@@ -176,6 +176,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without one. Before, the convention won, so `app.MapControllers().AllowMissingTenant()` let an action marked
   `[RequireTenant]` run without a tenant, and `app.MapControllers().RequireTenant()` refused a tenantless request to an
   action marked `[AllowMissingTenant]`. See [Access control](docs/access-control.md).
+- TNY1001 checks the types a generic base context or a base context from another assembly maps. An `AppUser` with a
+  `TenantId` that does not implement `ITenantEntity<TKey>`, mapped only by `IdentityDbContext<AppUser>`'s `Users`, was
+  not reported, so every tenant read every tenant's users. A type only such a base context maps is reported on the
+  derived context's declaration ([what it counts](docs/analyzers.md#what-tny1001-counts-as-mapped-and-marked)).
+- TNY2001 reports in an application that calls Tenantry.Pro's `UsePro`. It took `UsePro` for code that might add an
+  access validator, so it reported nothing in any application that called it, though `UsePro` adds none.
 - A hub method on a long-polling SignalR connection keeps the connection's tenant after a `CreateScope` or
   `MakeCurrent` scope it opened closes. Before, no tenant was current after it, and the first per-tenant options value
   read in a hub method could be built without the tenant and kept as that tenant's. The same holds for any flow that

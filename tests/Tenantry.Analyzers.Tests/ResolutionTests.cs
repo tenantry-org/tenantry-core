@@ -144,4 +144,35 @@ public sealed class ResolutionTests
                     tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([]);
             }
             """);
+
+    [Fact]
+    public Task ABuilderHandedToTenantryPro_IsStillReported_AsUseProAddsNoValidator() =>
+        Verify.AnalyzerWithLibrariesAsync<UnvalidatedResolutionAnalyzer>(
+            Usings + """
+                public static class Startup
+                {
+                    public static void Register(IServiceCollection services) =>
+                        services.AddTenantry<string>(tenant =>
+                        {
+                            {|TNY2001:tenant.ResolveFromHeader("X-Tenant-Id")|};
+                            tenant.UseInMemoryStore([]);
+                            tenant.UsePro();
+                        });
+                }
+                """,
+            [
+                // UsePro's shape, in an assembly of Tenantry.Pro's name.
+                new("Tenantry.Pro", """
+                    using System;
+                    using Tenantry;
+
+                    namespace Microsoft.Extensions.DependencyInjection;
+
+                    public static class TenantryProTenantBuilderExtensions
+                    {
+                        public static ITenantBuilder<TKey> UsePro<TKey>(this ITenantBuilder<TKey> builder)
+                            where TKey : IEquatable<TKey>, IParsable<TKey> => builder;
+                    }
+                    """, AsReferenceAssembly: true),
+            ]);
 }

@@ -243,6 +243,155 @@ public sealed class TenantEntityTests
             """);
 
     [Fact]
+    public Task AGenericBaseContext_MapsTheTypeArgumentsTheDerivedContextPasses() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class AppUser
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public class AppRole
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public abstract class UsersDbContext<TUser, TRole>(DbContextOptions options) : DbContext(options)
+                where TUser : class
+                where TRole : class
+            {
+                public DbSet<TUser> {|TNY1001:Users|} => Set<TUser>();
+
+                protected override void OnModelCreating(ModelBuilder modelBuilder) => {|TNY1001:modelBuilder.Entity<TRole>()|};
+            }
+
+            public class AppDbContext(DbContextOptions<AppDbContext> options) : UsersDbContext<AppUser, AppRole>(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+            }
+            """);
+
+    [Fact]
+    public Task ABaseContextFromAnotherAssembly_MapsItsDbSets_ReportedOnTheDerivedContext() =>
+        Verify.AnalyzerWithLibrariesAsync<TenantIdWithoutTenantEntityAnalyzer>(
+            Usings + """
+                public class AppUser
+                {
+                    public int Id { get; set; }
+                    public Guid TenantId { get; set; }
+                }
+
+                public class Member
+                {
+                    public int Id { get; set; }
+                    public Guid TenantId { get; set; }
+                }
+
+                // As IdentityDbContext<TUser> maps the user type through its own DbSet<TUser> Users.
+                public class {|TNY1001:AppIdentityDbContext|}(DbContextOptions<AppIdentityDbContext> options)
+                    : PackagedUsersDbContext<AppUser>(options)
+                {
+                    public DbSet<Invoice> Invoices => Set<Invoice>();
+                }
+
+                public class {|TNY1001:MembersDbContext|}(DbContextOptions<MembersDbContext> options)
+                    : ProjectUsersDbContext<Member>(options)
+                {
+                    public DbSet<Invoice> Invoices => Set<Invoice>();
+                }
+                """,
+            [
+                new("Packaged", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public class PackagedUsersDbContext<TUser>(DbContextOptions options) : DbContext(options) where TUser : class
+                    {
+                        public DbSet<TUser> Users => Set<TUser>();
+                    }
+                    """, ReferencesTenantry: false, AsReferenceAssembly: true),
+                new("Project", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public class ProjectUsersDbContext<TUser>(DbContextOptions options) : DbContext(options) where TUser : class
+                    {
+                        public DbSet<TUser> Users => Set<TUser>();
+                    }
+                    """, ReferencesTenantry: false),
+            ]);
+
+    [Fact]
+    public Task ABaseContextFromAnotherAssembly_IsReportedOnTheContextsHandWrittenDeclaration_NotInGeneratedCode() =>
+        Verify.AnalyzerWithFilesAsync<TenantIdWithoutTenantEntityAnalyzer>(
+            Usings + """
+                public class AppUser
+                {
+                    public int Id { get; set; }
+                    public Guid TenantId { get; set; }
+                }
+
+                public class Guest
+                {
+                    public int Id { get; set; }
+                    public Guid TenantId { get; set; }
+                }
+
+                public partial class {|TNY1001:AppIdentityDbContext|}(DbContextOptions<AppIdentityDbContext> options)
+                    : PackagedUsersDbContext<AppUser>(options);
+                """,
+            [
+                // Before the test file in source order, where a type is reported.
+                ("/0/Contexts.g.cs", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public partial class AppIdentityDbContext
+                    {
+                        public DbSet<Invoice> Invoices => Set<Invoice>();
+                    }
+
+                    public class GuestsDbContext(DbContextOptions<GuestsDbContext> options) : PackagedUsersDbContext<Guest>(options)
+                    {
+                        public DbSet<Invoice> Invoices => Set<Invoice>();
+                    }
+                    """),
+            ],
+            [
+                new("Packaged", """
+                    using Microsoft.EntityFrameworkCore;
+
+                    public class PackagedUsersDbContext<TUser>(DbContextOptions options) : DbContext(options) where TUser : class
+                    {
+                        public DbSet<TUser> Users => Set<TUser>();
+                    }
+                    """, ReferencesTenantry: false, AsReferenceAssembly: true),
+            ]);
+
+    [Fact]
+    public Task AnUnknownMarkerInAGenericBaseContext_SilencesTheContextsDerivedFromIt() =>
+        Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
+            public class Order
+            {
+                public int Id { get; set; }
+                public Guid TenantId { get; set; }
+            }
+
+            public abstract class SharingDbContext<T>(DbContextOptions options) : DbContext(options) where T : class
+            {
+                protected override void OnModelCreating(ModelBuilder modelBuilder)
+                {
+                    foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+                        modelBuilder.Entity(entityType.ClrType).IsSharedAcrossTenants();
+                }
+            }
+
+            public class AppDbContext(DbContextOptions<AppDbContext> options) : SharingDbContext<Invoice>(options)
+            {
+                public DbSet<Invoice> Invoices => Set<Invoice>();
+                public DbSet<Order> Orders => Set<Order>();
+            }
+            """);
+
+    [Fact]
     public Task AMarkerOnABuilderOfAnUnknownType_MakesItReportNothing() =>
         Verify.AnalyzerAsync<TenantIdWithoutTenantEntityAnalyzer>(Usings + """
             public class Order

@@ -35,13 +35,16 @@ internal static class Verify
         where TAnalyzer : DiagnosticAnalyzer, new() =>
         AnalyzerWithLibrariesAsync<TAnalyzer>(source, [], expected);
 
-    /// <summary>As <see cref="AnalyzerAsync{TAnalyzer}"/>, with more files in the same project, such as generated ones.</summary>
+    /// <summary>
+    /// As <see cref="AnalyzerAsync{TAnalyzer}"/>, with more files in the same project, such as generated ones, and the
+    /// libraries the test code references, if any.
+    /// </summary>
     public static Task AnalyzerWithFilesAsync<TAnalyzer>(
         string source,
         IEnumerable<(string Name, string Content)> files,
-        params DiagnosticResult[] expected)
+        IEnumerable<Library>? libraries = null)
         where TAnalyzer : DiagnosticAnalyzer, new() =>
-        RunAsync<TAnalyzer>(source, files, [], expected);
+        RunAsync<TAnalyzer>(source, files, libraries ?? [], []);
 
     /// <summary>
     /// As <see cref="AnalyzerAsync{TAnalyzer}"/>, with the test code referencing libraries compiled from source, as an

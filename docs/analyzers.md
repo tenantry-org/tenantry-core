@@ -183,7 +183,8 @@ The rule reports nothing when:
 - the project adds an access validator anywhere with those methods;
 - the project names `ITenantAccessValidator<TKey>` at all: a type that implements it, a registration such as
   `services.AddScoped<ITenantAccessValidator<Guid>, MembershipValidator>()`, or a `typeof`;
-- the `AddTenantry` lambda passes its builder, or the builder's `Services`, to other code;
+- the `AddTenantry` lambda passes its builder, or the builder's `Services`, to other code. Tenantry's own methods,
+  Tenantry.Pro's `UsePro` among them, are not such code: they add no validator;
 - `AddTenantry` is given a method in place of a lambda, as in `services.AddTenantry<Guid>(Tenancy.Configure)`: the rule
   does not read that method.
 
@@ -219,8 +220,13 @@ Core, workers and a console app's `Main` have no such context, so blocking there
 
 ### What TNY1001 counts as mapped and marked
 
-- A context's types are those of its `DbSet<T>` properties, its base contexts' included, and of the
-  `modelBuilder.Entity<T>()` calls in its methods. A type parameter constrained to a tenant-owned type counts as one.
+- A context's types are those of its `DbSet<T>` properties and of the `modelBuilder.Entity<T>()` calls in its methods,
+  its base contexts' included. A type parameter constrained to a tenant-owned type counts as one.
+- A generic base context's type parameters are the types the derived context passes: in
+  `class AppDbContext : UsersDbContext<AppUser>`, the base's `DbSet<TUser>` maps `AppUser`.
+- A base context from a package or another project, such as `IdentityDbContext<AppUser>`, adds the types of its
+  `DbSet<T>` properties, not those its own `OnModelCreating` maps. A type it alone maps, such as the user type, is
+  reported on the derived context's declaration.
 - Generated code counts for its contexts, types and markers, and nothing is reported in it. Each type is reported
   once, where it is first mapped outside generated code.
 - A context that maps no tenant-owned type is left alone. A database-per-tenant context, or one Tenantry does not

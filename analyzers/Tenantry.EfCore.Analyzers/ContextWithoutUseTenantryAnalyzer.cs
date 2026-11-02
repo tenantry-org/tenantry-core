@@ -436,8 +436,18 @@ public sealed class ContextWithoutUseTenantryAnalyzer : DiagnosticAnalyzer
         return definition.PartialDefinitionPart ?? definition;
     }
 
-    private static bool HasBuilder(ImmutableArray<IArgumentOperation> arguments, KnownTypes types) =>
-        arguments.Any(argument => IsBuilder(argument.Value, types));
+    // A loop, not Any() with a lambda: this runs for every call and object creation in the compilation, and the lambda
+    // would allocate a closure each time.
+    private static bool HasBuilder(ImmutableArray<IArgumentOperation> arguments, KnownTypes types)
+    {
+        foreach (var argument in arguments)
+        {
+            if (IsBuilder(argument.Value, types))
+                return true;
+        }
+
+        return false;
+    }
 
     // Whether the member, called or read on an options builder, is the application's or of an assembly that can reach
     // Tenantry.EfCore (EF Core's own members are neither).

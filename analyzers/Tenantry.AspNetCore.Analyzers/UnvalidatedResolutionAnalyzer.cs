@@ -27,9 +27,13 @@ public sealed class UnvalidatedResolutionAnalyzer : DiagnosticAnalyzer
     private static readonly ImmutableHashSet<string> Validators =
         ImmutableHashSet.Create("ValidateTenantAccess", "ValidateTenantAccessByClaim");
 
-    // The assemblies whose builder methods are known to add no validator, other than the validators above.
+    // The assemblies whose builder methods are known to add no validator, other than the validators above. Tenantry.Pro's
+    // are among them: UsePro adds none, and if it counted as code that might, the rule would say nothing in any
+    // application that calls it.
     private static readonly ImmutableHashSet<string> TenantryAssemblies = ImmutableHashSet.Create(
-        "Tenantry.Core", "Tenantry.AspNetCore", "Tenantry.EfCore", "Tenantry.Http", "Tenantry.Caching", "Tenantry.Options");
+        "Tenantry.Core", "Tenantry.AspNetCore", "Tenantry.EfCore", "Tenantry.Http", "Tenantry.Caching", "Tenantry.Options",
+        "Tenantry.Pro", "Tenantry.Pro.EfCore", "Tenantry.Pro.Hangfire", "Tenantry.Pro.MassTransit", "Tenantry.Pro.Quartz",
+        "Tenantry.Pro.Rebus");
 
     private static readonly DiagnosticDescriptor Rule = new(
         "TNY2001",
