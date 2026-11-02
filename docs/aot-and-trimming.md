@@ -43,7 +43,12 @@ serialises too.
 
 ```bash
 dotnet publish samples/Tenantry.Samples.Aot -c Release
+cd samples/Tenantry.Samples.Aot/bin/Release/net10.0/<runtime identifier>/publish
+./Tenantry.Samples.Aot
 ```
+
+The published app is a native executable. Run it from its folder, where it reads `appsettings.json`: it listens on
+`http://localhost:5268`, the address `dotnet run` uses and the sample's `.http` file calls.
 
 ## `Tenantry.EfCore`: trimmable, not AOT-compatible
 

@@ -206,6 +206,8 @@ The [documentation index](docs/README.md) also links the API reference.
 | [`DatabasePerTenant`](samples/Tenantry.Samples.DatabasePerTenant) | A database per tenant with `UseConnectionStrings` and a pooled `AddDbContextPerTenantDatabase`, plus worker scopes |
 | [`Aot`](samples/Tenantry.Samples.Aot) | Native-AOT-published ASP.NET Core app: header, subdomain and custom resolvers, problem details |
 
+[The samples' README](samples/README.md) has the command, port and first request for each.
+
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).

@@ -13,9 +13,8 @@
 // Callers are not authenticated and select the tenant with a header, so any caller can act as any
 // tenant. See Tenantry.Samples.SecureApi for authentication and tenant access validation.
 //
-// Run:
-//   dotnet ef database update
-//   dotnet run
+// Run (the app applies its migrations as it starts):
+//   dotnet run --project samples/Tenantry.Samples.EfCoreWeb
 //
 // Try:
 //   # Get product catalogue (global data, visible to all tenants)
@@ -177,6 +176,7 @@ app.MapGet("/admin/stats", async (AppDbContext db) =>
 {
     // WARNING: This query crosses tenant boundaries!
     // Use IgnoreQueryFilters() carefully, only in admin/reporting scenarios.
+    // The endpoint is open to anyone here, to keep the sample short: protect it (an admin policy) in an application.
     var stats = await db.Orders
         .IgnoreQueryFilters()  // Bypass tenant filter to see all orders
         .GroupBy(o => o.TenantId)

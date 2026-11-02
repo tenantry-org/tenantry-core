@@ -225,6 +225,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `SecureApi` sample starts in Development with `dotnet run`, on the port its `curl` examples use, as a project
   from the `tenantry-api` template does: each has a launch profile. Before, the sample started in Production and
   stopped at once, as no `Auth:SigningKey` was set.
+- The `Aot` sample, published with Native AOT and run from its publish folder, listens on `http://localhost:5268`, the
+  address its `.http` file and its call to itself use. Before, the published app listened on port 5000, and its
+  `/me/via-http` endpoint failed. `dotnet run` no longer opens a browser at `/todos`, which the sample does not have,
+  and the [Native AOT guide](docs/aot-and-trimming.md) says how to run the published app.
+- The `EfCoreWeb` sample's run steps started with `dotnet ef database update`, which needs a tool the repository does
+  not install. The sample applies its migrations as it starts, so the steps are now `dotnet run` alone.
+- The samples folder had no README. [`samples/README.md`](samples/README.md) gives each sample's command, port and
+  first request.
 
 ## [0.7.0] - 2026-10-05
 
