@@ -78,7 +78,9 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="[$(Net11Version), 12.0.0)" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(Net11Version)" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="[$(Net11Version), 12.0.0)" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="[10.0.0, 12.0.0)" />
+    <!-- HybridCache's implementation has no 11.x release yet, so net11.0 takes the 10.x one. A band over two majors
+         would stop the latest dependency lane, which floats a range only up to its next major. -->
+    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="[10.0.0, 11.0.0)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' Or '$(TargetFramework)' == 'net9.0'">
