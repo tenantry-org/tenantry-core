@@ -4,8 +4,9 @@ This guide covers the local workflow and the checks your change must pass.
 
 ## Prerequisites
 
-The .NET 11 SDK builds every target framework (`net8.0;net9.0;net10.0;net11.0`): `global.json` names it, the release
-candidate until .NET 11 ships. To run the tests on all of them you also need the 8.0, 9.0 and 10.0 runtimes.
+The .NET 11 SDK builds every target framework (`net8.0;net9.0;net10.0;net11.0`): `global.json` names the one CI
+installs, the release candidate until .NET 11 ships. A newer 11.0 SDK, if you have one, is used instead, and ReSharper's
+`inspectcode` may not load it. To run the tests on every target framework you also need the 8.0, 9.0 and 10.0 runtimes.
 `scripts/smoke-templates.sh` also needs the .NET 10 SDK: it builds the templates' `net10.0` projects with it, as a user
 without a later SDK does.
 
@@ -66,6 +67,7 @@ ReSharper's command-line tools); the scripts that need them restore them too.
 | Check | Command | When it fails |
 |-------|---------|---------------|
 | Every action is pinned to a commit | The `grep` in `build-test.yml` | Pin the action to a full commit SHA, with its version in a comment (`uses: owner/repo@<sha> # vX.Y.Z`) |
+| Every workflow installs the SDK `global.json` names | The `grep` in `build-test.yml` | Set each `dotnet-version: 11.` line under `.github/workflows` to the `global.json` version, in the same commit as `global.json` |
 | The workflows are valid | `actionlint` (the `Lint the workflows` step in `build-test.yml`), which also runs shellcheck on each `run:` block | Fix what it reports |
 | The scripts are valid | `shellcheck -S warning scripts/*.sh` | Fix what it reports, or disable that check on its line with a comment that says why |
 | Dependabot's list of banded packages matches the project files | `dotnet run scripts/check-dependabot.cs` | Update the list in `.github/dependabot.yml` |

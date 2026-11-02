@@ -192,7 +192,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          # Exactly the SDK global.json names (the .NET 11 release candidate until .NET 11 ships)
+          # The SDK global.json names (the .NET 11 release candidate until .NET 11 ships)
           dotnet-version: 11.0.100-rc.1.26425.128
 
       - name: NuGet login (OIDC → temp API key)

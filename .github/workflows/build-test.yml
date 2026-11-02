@@ -48,15 +48,23 @@ jobs:
             10.0.x
 
       - name: Setup .NET 11
-        # The SDK global.json names, with the net11.0 runtime: exactly that version, so CI builds with the SDK
-        # a local build does (the .NET 11 release candidate until .NET 11 ships)
+        # The SDK global.json names, with the net11.0 runtime (the .NET 11 release candidate until .NET 11 ships).
+        # global.json rolls forward to a newer 11.0 SDK when one is installed, so a runner image that brings one would
+        # build with it instead.
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 11.0.100-rc.1.26425.128
 
       - name: Show selected SDK
-        # global.json names the .NET 11 SDK (rollForward picks the newest installed 11.0 SDK)
-        run: dotnet --version
+        # A warning when it is not the one global.json names, since a runner image's newer 11.0 SDK is taken instead
+        run: |
+          selected="$(dotnet --version)"
+          named="$(jq -r .sdk.version global.json)"
+          echo "$selected"
+          if [ "$selected" != "$named" ]; then
+            echo "::warning::This run builds with the .NET SDK $selected, which the runner image has, not $named," \
+              "which global.json names"
+          fi
 
       - name: Setup Java (required by the Sonar scanner)
         if: ${{ inputs.run_sonar }}
@@ -203,21 +211,40 @@ jobs:
             10.0.x
 
       - name: Setup .NET 11
-        # The SDK global.json names, with the net11.0 runtime: exactly that version, so CI builds with the SDK
-        # a local build does (the .NET 11 release candidate until .NET 11 ships)
+        # The SDK global.json names, with the net11.0 runtime (the .NET 11 release candidate until .NET 11 ships).
+        # global.json rolls forward to a newer 11.0 SDK when one is installed, so a runner image that brings one would
+        # build with it instead.
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 11.0.100-rc.1.26425.128
 
       - name: Show selected SDK
-        # global.json names the .NET 11 SDK (rollForward picks the newest installed 11.0 SDK)
-        run: dotnet --version
+        # A warning when it is not the one global.json names, since a runner image's newer 11.0 SDK is taken instead
+        run: |
+          selected="$(dotnet --version)"
+          named="$(jq -r .sdk.version global.json)"
+          echo "$selected"
+          if [ "$selected" != "$named" ]; then
+            echo "::warning::This run builds with the .NET SDK $selected, which the runner image has, not $named," \
+              "which global.json names"
+          fi
 
       - name: Check every action is pinned to a commit
         # A tag can be moved; a commit cannot. Dependabot keeps the pins and their version comments up to date.
         run: |
           if grep -rnE '^\s*(-\s*)?uses:\s*[^./][^@]*@' .github/workflows | grep -vE '@[0-9a-f]{40}( |$)'; then
             echo "::error::Pin these actions to a full commit SHA, with the version in a comment (uses: owner/repo@<sha> # vX.Y.Z)"
+            exit 1
+          fi
+
+      - name: Check every workflow installs the SDK global.json names
+        # Some workflows run only weekly or on a release, so one left on another 11.0 SDK when global.json moves would
+        # otherwise fail only then, with no compatible SDK
+        run: |
+          named="$(jq -r .sdk.version global.json)"
+          if grep -rnE '^\s*(dotnet-version:\s*)?11\.[0-9]' .github/workflows \
+            | grep -vE "^[^:]+:[0-9]+:\s*(dotnet-version:\s*)?${named//./\\.}\s*$"; then
+            echo "::error::Install $named, the SDK global.json names, in these steps"
             exit 1
           fi
 

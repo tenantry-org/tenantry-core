@@ -43,8 +43,9 @@ jobs:
             10.0.x
 
       - name: Setup .NET 11
-        # The SDK global.json names, with the net11.0 runtime: exactly that version, so CI builds with the SDK
-        # a local build does (the .NET 11 release candidate until .NET 11 ships)
+        # The SDK global.json names, with the net11.0 runtime (the .NET 11 release candidate until .NET 11 ships).
+        # global.json rolls forward to a newer 11.0 SDK when one is installed, so a runner image that brings one would
+        # build with it instead.
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 11.0.100-rc.1.26425.128
