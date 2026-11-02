@@ -6,6 +6,8 @@ This guide covers the local workflow and the checks your change must pass.
 
 The .NET 11 SDK builds every target framework (`net8.0;net9.0;net10.0;net11.0`): `global.json` names it, the release
 candidate until .NET 11 ships. To run the tests on all of them you also need the 8.0, 9.0 and 10.0 runtimes.
+`scripts/smoke-templates.sh` also needs the .NET 10 SDK: it builds the templates' `net10.0` projects with it, as a user
+without a later SDK does.
 
 Once per clone, turn on the repository's git hooks, which keep `docs/api` up to date on each commit:
 
@@ -82,8 +84,8 @@ ReSharper's command-line tools); the scripts that need them restore them too.
 | A CycloneDX SBOM per package | The `dotnet CycloneDX` loop in `build-test.yml` | Run it after the pack, as it reads each package's version from `artifacts`, and fix the project it names |
 | The packages' dependency ranges | `dotnet run scripts/check-package-ranges.cs -- artifacts` | Each dependency has its intended range, and Tenantry.Core, Tenantry.EfCore and Tenantry.AspNetCore hold their analyzers (see the script) |
 | The API reference is up to date | `bash scripts/generate-api-docs.sh --check` | The pre-commit hook in `eng/hooks` regenerates `docs/api` and adds it to any commit that changes `src/`; turn it on once per clone with `git config core.hooksPath eng/hooks`. Without it, run `bash scripts/generate-api-docs.sh` and commit `docs/api` |
-| An application can restore and run the packages | `rm -rf artifacts/libraries && mkdir artifacts/libraries && cp artifacts/*.nupkg artifacts/libraries/ && rm artifacts/libraries/Tenantry.Templates.[0-9]*.nupkg`, then `bash scripts/check-package-consumer.sh artifacts/libraries 'Tenantry.*'`: the packages without the templates package, which an application cannot reference | From an empty cache, with package source mapping, on every target framework, with the packages' analyzers reaching its compiler |
-| The templates work | `bash scripts/smoke-templates.sh artifacts` | Each `dotnet new` template is created from the templates package in `artifacts`, builds against the packages with warnings as errors, and runs |
+| An application can restore and run the packages | `rm -rf artifacts/libraries && mkdir artifacts/libraries && cp artifacts/*.nupkg artifacts/libraries/ && rm artifacts/libraries/Tenantry.Templates.[0-9]*.nupkg`, then `bash scripts/check-package-consumer.sh artifacts/libraries 'Tenantry.*'`: the packages without the templates package, which an application cannot reference | From an empty cache, with package source mapping, on every target framework |
+| The templates work | `bash scripts/smoke-templates.sh artifacts` | Each `dotnet new` template is created from the templates package in `artifacts`, builds with the .NET 10 SDK against the packages with warnings as errors, and runs; `--TenantryVersion` sets the version of every Tenantry reference; and the API template's code is the `SecureApi` sample's, comments and the lines the script lists aside. Make a change to one in the other too |
 | The docs' code blocks build | `bash scripts/check-doc-snippets.sh artifacts 'Tenantry.Core' 'Tenantry.*'` | Every `csharp` code block in the README and `docs/` builds against the packages |
 | Native AOT publish | `dotnet publish samples/Tenantry.Samples.Aot -c Release` | No trim or AOT warnings |
 | Native AOT smoke test | For each of `net10.0` and `net11.0`: `dotnet publish eng/aot-smoke -c Release -f <framework> -o artifacts/aot-smoke/<framework>`, then `artifacts/aot-smoke/<framework>/AotSmoke` | Tenantry.Http and Tenantry.Caching compile whole for Native AOT, and the binary runs them |

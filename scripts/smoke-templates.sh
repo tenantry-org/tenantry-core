@@ -2,11 +2,13 @@
 # Installs the dotnet new templates from the Tenantry.Templates package in the package folder, the one a release
 # publishes, into a template hive of their own, creates an application from each, and builds it against the Tenantry
 # packages of the same build, restored from an empty cache with package source mapping, as check-package-consumer.sh
-# restores, and with warnings as errors, so the analyzers the packages carry must find nothing. Then it runs each, for
-# a minute at most. The API, started with dotnet run so that its launch profile sets the environment, with tokens
-# from its development endpoint: an anonymous caller gets 401, a token for acme gets 403 for globex, acme's new note is
-# listed for acme and not for globex. The worker: it processes its demonstration messages, drops those for an unknown
-# and a suspended tenant, logs the one that fails, and keeps running.
+# restores, with the .NET 10 SDK, the one the templates' net10.0 projects need, and with warnings as errors, so the
+# analyzers the packages carry must find nothing. Then it runs each, for a minute at most. The API, started with dotnet
+# run so that its launch profile sets the environment, with tokens from its development endpoint: an anonymous caller
+# gets 401, a token for acme gets 403 for globex, acme's new note is listed for acme and not for globex. The worker: it
+# processes acme's and globex's first orders, drops the messages for an unknown and a suspended tenant, logs the one
+# that fails, and keeps running. It also checks that --TenantryVersion sets the version of every Tenantry reference,
+# and that the API template's code is still the SecureApi sample's, which the integration tests test.
 # Usage, after dotnet pack of src/ and templates/ (build-test.yml's Pack step):
 #
 #   scripts/smoke-templates.sh <package folder>
@@ -40,6 +42,36 @@ if [[ "$template_version" != "$version" ]]; then
   exit 1
 fi
 
+failed=0
+
+# The API template is the SecureApi sample under its own namespace, and the integration tests test only the sample,
+# so a change to one must be made to the other. Comments may differ; the code may differ only by these lines, which
+# the template adds (HSTS and HTTPS redirection as ASP.NET Core's templates have them, and a using its namespace needs).
+sample="$repo/samples/Tenantry.Samples.SecureApi"
+api_template="$repo/templates/content/tenantry-api"
+template_only=(
+  "AuthSettings.cs|"
+  "Notes.cs|> using Tenantry;"
+  "Program.cs|> if (!app.Environment.IsDevelopment())
+> {
+>     app.UseHsts();
+> }
+> app.UseHttpsRedirection();"
+)
+code() { # <file>: its lines of code, under the template's namespace
+  sed -e '/^[[:space:]]*\/\//d' -e '/^[[:space:]]*$/d' -e 's/Tenantry\.Samples\.SecureApi/TenantryApi/g' "$1"
+}
+for entry in "${template_only[@]}"; do
+  file="${entry%%|*}"
+  differences=$(diff <(code "$sample/$file") <(code "$api_template/$file") | grep '^[<>]' || true)
+  if [[ "$differences" != "${entry#*|}" ]]; then
+    echo "FAIL tenantry-api ($file is not samples/Tenantry.Samples.SecureApi/$file: make the change in both, or" \
+      "update template_only in $0)" >&2
+    diff <(code "$sample/$file") <(code "$api_template/$file") | sed 's/^/     /' >&2 || true
+    failed=1
+  fi
+done
+
 work="$(mktemp -d)"
 pid=""
 cleanup() {
@@ -51,7 +83,17 @@ trap cleanup EXIT
 hive="$work/hive"
 dotnet new install "${template_package[0]}" --debug:custom-hive "$hive" >/dev/null
 
-cp "$repo/global.json" "$work/"
+# The templates' projects target net10.0, so the .NET 10 SDK must build them, as it does for a user who has no later
+# one. The builds and runs below start in the project's folder, under this global.json, not the repository's.
+cat > "$work/global.json" <<EOF
+{
+  "sdk": {
+    "version": "10.0.100",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}
+EOF
 cat > "$work/nuget.config" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -92,24 +134,38 @@ stop() {
   pid=""
 }
 
-failed=0
+# Whether the project has Tenantry package references, and each is at the version.
+references() { # <project> <version>
+  local all at
+  all=$(grep -c 'Include="Tenantry\.' "$1" || true)
+  at=$(grep 'Include="Tenantry\.' "$1" | grep -cF "Version=\"$2\"" || true)
+  [[ $all -gt 0 && $at -eq $all ]]
+}
+
 for template in tenantry-api tenantry-worker; do
   app="$work/$template"
   log="$work/$template.log"
+  pinned="$work/$template-pinned"
+  if ! dotnet new "$template" -n Pinned -o "$pinned" --TenantryVersion 9.9.9 --debug:custom-hive "$hive" >/dev/null ||
+     ! references "$pinned/Pinned.csproj" 9.9.9; then
+    echo "FAIL $template (--TenantryVersion 9.9.9 does not set the version of every Tenantry reference)" >&2
+    failed=1
+  fi
   dotnet new "$template" -n Smoke -o "$app" --debug:custom-hive "$hive" >/dev/null
-  if ! grep -q "Version=\"$version\"" "$app/Smoke.csproj"; then
+  if ! references "$app/Smoke.csproj" "$version"; then
     echo "FAIL $template (does not reference Tenantry $version)" >&2
     failed=1
     continue
   fi
-  if ! dotnet build "$app/Smoke.csproj" -c Release -warnaserror > "$log" 2>&1; then
+  cd "$app"
+  if ! dotnet build Smoke.csproj -c Release -warnaserror > "$log" 2>&1; then
     echo "FAIL $template (build)" >&2
     sed 's/^/     /' "$log" >&2
     failed=1
+    cd "$repo"
     continue
   fi
 
-  cd "$app"
   : > "$log"
   if [[ "$template" == tenantry-api ]]; then
     # Without this script's environment, so the launch profile sets it, as it does for a user.
@@ -153,11 +209,14 @@ for template in tenantry-api tenantry-worker; do
     dotnet bin/Release/net10.0/Smoke.dll > "$log" 2>&1 &
     pid=$!
     status=0
+    # Globex's message is the last: processed or failed, the worker has handled every message by then.
     wait_for "$log" "for tenant globex" || status=$?
     running=no
     kill -0 "$pid" 2>/dev/null && running=yes
     stop
-    if [[ $status -eq 0 && $running == yes ]] && grep -q "for tenant acme" "$log" &&
+    # The success lines in full, as the failure line also names the tenant.
+    if [[ $status -eq 0 && $running == yes ]] && grep -q "Processed 'Acme's first order' for tenant acme" "$log" &&
+       grep -q "Processed 'Globex's first order' for tenant globex" "$log" &&
        grep -q "Dropped a message for tenant initech" "$log" && grep -q "Dropped a message for tenant umbrella" "$log" &&
        grep -q "Failed to process a message for tenant acme" "$log"; then
       echo "ok   $template (processed acme's and globex's messages; dropped initech's and suspended umbrella's; logged the failing one and kept running)"
