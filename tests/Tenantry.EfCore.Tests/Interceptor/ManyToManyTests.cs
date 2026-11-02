@@ -278,6 +278,30 @@ public sealed class ManyToManyTests : IDisposable
         (await LinksAsync()).Should().Equal("1-1", "1-2", "1-3");
     }
 
+    // ── No transaction ──
+
+    [Fact]
+    public async Task WithoutATransaction_WhenSuchSavesAreRejected_TheRefusalNamesJoinRows_AndNothingIsSent()
+    {
+        await SeedAsync();
+
+        _tenant.As("acme");
+        await using var db = await CreateAsync<ImplicitContext>(
+            new EfCoreIsolationOptions { OnSaveWithoutTransaction = SaveWithoutTransactionBehavior.Reject });
+        db.Database.AutoTransactionBehavior = AutoTransactionBehavior.Never;
+        var post = await db.Set<Post>().Include(p => p.Tags).SingleAsync(TestContext.Current.CancellationToken);
+        post.Tags.RemoveAll(t => t.Id == 1);
+        _statements.Reset();
+
+        // A model with only join rows to check has no owned or split entities: the message must name what it has.
+        var refused = (await db.Awaiting(d => d.SaveChangesAsync())
+            .Should().ThrowAsync<TenantIsolationViolationException>()).Which;
+        refused.Kind.Should().Be(TenantIsolationViolationKind.SaveWithoutTransaction);
+        refused.Message.Should().Contain("the join rows of a many-to-many relationship");
+        _statements.Count.Should().Be(0);
+        (await LinksAsync()).Should().Equal("1-1", "1-2");
+    }
+
     // ── Other shapes ──
 
     [Fact]
