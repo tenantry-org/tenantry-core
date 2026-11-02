@@ -10,9 +10,11 @@ namespace Tenantry;
 /// It may depend on scoped services such as a <c>DbContext</c>, but must not keep scope-bound state across calls.
 /// </para>
 /// <para>
-/// Return every tenant that exists, suspended or inactive ones included, from both methods: tools that
-/// maintain each tenant's database, such as migrations, find tenants here. Decide whether work may run for a tenant
-/// with an <see cref="ITenantActivityValidator{TKey}"/> (<c>tenant.ValidateTenantActivity(…)</c>).
+/// Return every tenant that exists, suspended or inactive ones included, from every method,
+/// <see cref="FindByIdentifierAsync"/> included: requests find their tenant with it, and a suspended tenant it leaves
+/// out is reported as not found instead of inactive. Tools that maintain each tenant's database, such as migrations,
+/// find tenants here too. Decide whether work may run for a tenant with an
+/// <see cref="ITenantActivityValidator{TKey}"/> (<c>tenant.ValidateTenantActivity(…)</c>).
 /// </para>
 /// </remarks>
 /// <typeparam name="TKey">

@@ -6,7 +6,7 @@ Finds and lists the application's tenants. Implement it to keep tenants in a dat
 
 A store registered with `UseStore` is scoped, and Tenantry reads it through [`ITenantLookup<TKey>`](tenantry-itenantlookup.md). It may depend on scoped services such as a `DbContext`, but must not keep scope-bound state across calls.
 
-Return every tenant that exists, suspended or inactive ones included, from both methods: tools that maintain each tenant's database, such as migrations, find tenants here. Decide whether work may run for a tenant with an [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) (`tenant.ValidateTenantActivity(…)`).
+Return every tenant that exists, suspended or inactive ones included, from every method, [`ITenantStore<TKey>.FindByIdentifierAsync`](tenantry-itenantstore.md) included: requests find their tenant with it, and a suspended tenant it leaves out is reported as not found instead of inactive. Tools that maintain each tenant's database, such as migrations, find tenants here too. Decide whether work may run for a tenant with an [`ITenantActivityValidator<TKey>`](tenantry-itenantactivityvalidator.md) (`tenant.ValidateTenantActivity(…)`).
 
 ```csharp
 public interface ITenantStore<TKey> where TKey : IEquatable<TKey>, IParsable<TKey>

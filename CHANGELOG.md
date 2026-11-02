@@ -214,6 +214,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   authentication, is refused on every endpoint, and that `OnRejected` runs for it.
 - `ITenantInvalidator<TKey>`'s docs now say that a cancelled call stops before the next handler, and that several
   handler failures are thrown as an `AggregateException`.
+- `ITenantStore<TKey>`'s docs said to return suspended and inactive tenants from "both methods" of a store with three.
+  They now say every method, `FindByIdentifierAsync` included: a store whose `FindByIdentifierAsync` leaves a suspended
+  tenant out has that tenant's requests rejected as not found, not as inactive.
 - The AI agents guide now says that SQL Server's default collation ignores case but not accents.
 - The diagnostics guide named three log categories. Event 1009 is logged under a fourth,
   `Tenantry.AspNetCore.OutputCache`.

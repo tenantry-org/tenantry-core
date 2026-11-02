@@ -81,8 +81,9 @@ Register one store: a second throws.
 ## Suspended and inactive tenants
 
 Return every tenant from the store, suspended ones included, and tell Tenantry which may have work run for them with
-`ValidateTenantActivity`. Tenantry has no tenant status of its own: a descriptor carries only `TenantId` and `Name`, so
-keep the status on your own descriptor type.
+`ValidateTenantActivity`. That holds for each of the store's methods: a `FindByIdentifierAsync` that leaves a suspended
+tenant out has the tenant's requests rejected as not found instead of inactive. Tenantry has no tenant status of its
+own: a descriptor carries only `TenantId` and `Name`, so keep the status on your own descriptor type.
 
 ```csharp
 public class Tenant : TenantDescriptor<string>
