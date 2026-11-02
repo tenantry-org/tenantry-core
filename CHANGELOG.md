@@ -53,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   application through its .NET runtime ([Compatibility](docs/compatibility.md)).
 - .NET 11: every package also targets `net11.0`, and `Tenantry.EfCore`'s `net11.0` build takes EF Core 11.0.0 or a
   later 11.x. It is tested on SQL Server, PostgreSQL and SQLite. No MySQL provider supports EF Core 11 yet. See
+- .NET 11: every library package also targets `net11.0`, and `Tenantry.EfCore`'s `net11.0` build takes EF Core 11.0.0
+  or a later 11.x. It is tested on SQL Server, PostgreSQL and SQLite. No MySQL provider supports EF Core 11 yet. See
   [Compatibility](docs/compatibility.md).
 - `hubOptions.AddTenantry()` and `AddInteractiveServerComponents().AddTenantry()` (Tenantry.AspNetCore) check, before
   each SignalR hub method call and each Blazor Server circuit event, that the connection's tenant still exists and is

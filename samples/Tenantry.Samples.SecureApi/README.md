@@ -12,5 +12,5 @@ dotnet new install Tenantry.Templates
 dotnet new tenantry-api -n Orders.Api
 ```
 
-`dotnet run` here starts it in Development on port 5160. The comment at the top of `Program.cs` has the `curl` calls
-to try.
+`dotnet run` here starts it in Development on port 5160. The comment at the top of the template's
+[`Program.cs`](../../templates/content/tenantry-api/Program.cs) has the `curl` calls to try.
