@@ -288,11 +288,13 @@ maintainer creates it: a fine-grained personal access token with `tenantry-org` 
 `repository_dispatch` event needs. Renew it before it expires. Without it, the step skips with a notice, so a
 release never fails on it.
 
-`ci.yml`'s prerelease job tells Tenantry Pro, with the `PRO_DISPATCH_TOKEN` repository secret, when a push to `master`
-changed a file that `eng/common/shared-files.txt` lists: Pro's copies are checked against the Core it pins, so such a
-push leaves Pro's CI red until its pin moves, and the `tenantry-core-prerelease` event starts Pro's `update-core-pin.yml`
-with the version just published. The token is made like the skills' one, with access to the `tenantry-pro` repository
-only. Without it, the step skips with a notice, and Pro's Monday run moves the pin.
+`ci.yml`'s prerelease job tells Tenantry Pro, with the `PRO_DISPATCH_TOKEN` repository secret, when a prerelease
+changes a file that `eng/common/shared-files.txt` lists since the prerelease before it, whose commit its nuspec names:
+a change pushed in a commit whose run failed, which published nothing, counts with the next prerelease. Pro's copies
+are checked against the Core it pins, so such a prerelease leaves Pro's CI red until its pin moves, and the
+`tenantry-core-prerelease` event starts Pro's `update-core-pin.yml` with the version just published. The token is made
+like the skills' one, with access to the `tenantry-pro` repository only. Without it, the step skips with a notice, and
+Pro's Monday run moves the pin.
 
 ## After any release
 

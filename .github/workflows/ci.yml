@@ -140,7 +140,12 @@ jobs:
               exit 1
             fi
           fi
+          # The prerelease before this one, from which the last step looks for a changed shared file
+          previous="$(jq -r --arg prefix "$prefix" --argjson height "$height" '[.versions[]
+            | select(startswith($prefix)) | ltrimstr($prefix) | select(test("^[0-9]+$")) | tonumber
+            | select(. < $height)] | max // empty' <<<"$published")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "previous=${previous:+$prefix$previous}" >> "$GITHUB_OUTPUT"
 
       - name: Check the version is unpublished on NuGet.org
         # A rerun of a commit already published skips the push. A version only some packages have fails, and so does one
@@ -205,26 +210,42 @@ jobs:
 
       - name: Tell Tenantry Pro when a shared file changed
         # Tenantry Pro copies the files eng/common/shared-files.txt lists, and its CI checks the copies against the
-        # Core it pins, so a push that changes one leaves Pro red until its pin moves to this version. The
-        # tenantry-core-prerelease event starts Pro's update-core-pin.yml with the version; a push that changes no
-        # shared file sends nothing, and Pro's Monday run moves the pin. A missing PRO_DISPATCH_TOKEN (RELEASING.md,
-        # Repository settings) or a refused event is reported without failing the run, and a comparison GitHub cannot
-        # make counts as a change.
+        # Core it pins, so a prerelease that changes one leaves Pro red until its pin moves to it. The
+        # tenantry-core-prerelease event starts Pro's update-core-pin.yml with the version. The comparison runs from
+        # the commit of the prerelease before this one, which its nuspec names, not from the push's previous commit: a
+        # push whose run failed published nothing, so its changes reach Pro with this prerelease. A prerelease that
+        # changes no shared file sends nothing, and Pro's Monday run moves the pin. A missing PRO_DISPATCH_TOKEN
+        # (RELEASING.md, Repository settings) or a refused event is reported without failing the run. No earlier
+        # prerelease in the minor, a commit that cannot be read, a comparison GitHub cannot make, or one of 300 files
+        # or more (GitHub lists no more) counts as a change.
         env:
           GH_TOKEN: ${{ github.token }}
           PRO_DISPATCH_TOKEN: ${{ secrets.PRO_DISPATCH_TOKEN }}
-          BEFORE: ${{ github.event.before }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           shared="$(sed '/^#/d;/^$/d' eng/common/shared-files.txt)"
-          if changed="$(gh api --paginate "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$GITHUB_SHA" \
+          base=""
+          if [ -n "$PREVIOUS" ]; then
+            url="https://api.nuget.org/v3-flatcontainer/tenantry.core/$PREVIOUS/tenantry.core.nuspec"
+            if nuspec="$(curl --proto '=https' --fail --silent --show-error --max-time 60 --retry 3 "$url")"; then
+              base="$(sed -n 's:.*<repository [^>]*commit="\([0-9a-f]*\)".*:\1:p' <<<"$nuspec" | head -n 1)"
+            fi
+          fi
+          if [ -z "$base" ]; then
+            echo "::warning::Could not read the commit of the prerelease before $VERSION (${PREVIOUS:-none in this" \
+              "minor}), so Tenantry Pro is told as if a shared file changed."
+          elif changed="$(gh api --paginate "repos/$GITHUB_REPOSITORY/compare/$base...$GITHUB_SHA" \
             --jq '.files[].filename')"; then
-            if ! grep -qFx -f <(echo "$shared") <<<"$changed"; then
-              echo "No shared file changed between $BEFORE and $GITHUB_SHA, so Tenantry Pro was not told."
+            if (( $(grep -c . <<<"$changed") >= 300 )); then
+              echo "::notice::$base...$GITHUB_SHA changes 300 files or more, more than GitHub lists, so Tenantry Pro" \
+                "is told as if a shared file changed."
+            elif ! grep -qFx -f <(echo "$shared") <<<"$changed"; then
+              echo "No shared file changed between $PREVIOUS ($base) and $GITHUB_SHA, so Tenantry Pro was not told."
               exit 0
             fi
           else
-            echo "::warning::Could not compare $BEFORE and $GITHUB_SHA, so Tenantry Pro is told as if a shared file" \
+            echo "::warning::Could not compare $base and $GITHUB_SHA, so Tenantry Pro is told as if a shared file" \
               "changed."
           fi
           if [ -z "$PRO_DISPATCH_TOKEN" ]; then
