@@ -102,7 +102,8 @@ public static class TenantryAspNetCoreTenantBuilderExtensions
     /// </summary>
     /// <remarks>
     /// A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant
-    /// here, and the next resolver runs.
+    /// here, and the next resolver runs. A tenant listed twice, such as by two identities that both carry the claim,
+    /// counts once.
     /// </remarks>
     /// <typeparam name="TKey">The tenant identifier type.</typeparam>
     /// <param name="builder">The tenant builder.</param>

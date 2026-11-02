@@ -45,9 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hubOptions.AddTenantry()` and `AddInteractiveServerComponents().AddTenantry()` (Tenantry.AspNetCore) check, before
   each SignalR hub method call and each Blazor Server circuit event, that the connection's tenant still exists and is
   active. A tenant suspended or deleted while its connections are open has its next hub call fail with
-  `TenantInactiveException` or `TenantNotFoundException`, and its circuits end. An app with Blazor Server adds both:
-  `hubOptions.AddTenantry()` does not check Blazor Server's own hub. The docs have a new section on resolving and
-  checking the tenant of a connection: see
+  `TenantInactiveException` or `TenantNotFoundException`, and its circuits end. A circuit keeps the tenant it opened
+  with: when Blazor reconnects it over a connection whose request resolved another tenant or none, as for a tenant
+  suspended in the meantime, it ends at its next activity. A streaming hub method is checked when the stream starts,
+  and a stream already running keeps sending. An app with Blazor Server adds both: `hubOptions.AddTenantry()` does not
+  check Blazor Server's own hub. The docs have a new section on resolving and checking the tenant of a connection: see
   [SignalR and Blazor Server](docs/aspnetcore-integration.md#signalr-and-blazor-server).
 - `Tenantry.Templates`, `dotnet new` templates for applications that use Tenantry, published with each release.
   Install them with `dotnet new install Tenantry.Templates`, then create a project with
@@ -115,7 +117,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UseTenantry()` on an HTTP or gRPC client registers what sending the tenant needs, and `tenant.AddHttpPropagation()`
   is removed.
 - `ResolveFromClaim` reads its claims as `ValidateTenantAccessByClaim` does, repeated or as one claim holding a JSON
-  array (`["acme","globex"]`), and resolves no tenant when they list more than one, so the next resolver runs. It took
+  array (`["acme","globex"]`), and resolves no tenant when they list more than one, so the next resolver runs. A tenant
+  listed twice, such as by two identities that both carry the claim, counts once. It took
   the first claim's whole value, so a token that listed several tenants resolved whichever came first, and a claim
   holding a JSON array, even of one id, was looked up as written and found no tenant.
 - Three registration errors now stop the host as it starts, rather than failing the first request or job that meets
@@ -168,6 +171,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tenant's cached value, so an ordinary `Configure<TDep>` step that reads a scoped service, such as the signed-in user,
   runs once per tenant and its result reaches every later request of the tenant
   ([When settings change](docs/per-tenant-options.md#when-settings-change)).
+- `[RequireTenant]` and `[AllowMissingTenant]` on a controller, action or Razor Page win over `.RequireTenant()` or
+  `.AllowMissingTenant()` on `MapControllers()` or `MapRazorPages()`, which now applies only to the actions and pages
+  without one. Before, the convention won, so `app.MapControllers().AllowMissingTenant()` let an action marked
+  `[RequireTenant]` run without a tenant, and `app.MapControllers().RequireTenant()` refused a tenantless request to an
+  action marked `[AllowMissingTenant]`. See [Access control](docs/access-control.md).
 - A hub method on a long-polling SignalR connection keeps the connection's tenant after a `CreateScope` or
   `MakeCurrent` scope it opened closes. Before, no tenant was current after it, and the first per-tenant options value
   read in a hub method could be built without the tenant and kept as that tenant's. The same holds for any flow that

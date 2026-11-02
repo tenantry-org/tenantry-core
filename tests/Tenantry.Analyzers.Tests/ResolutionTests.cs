@@ -131,4 +131,17 @@ public sealed class ResolutionTests
                 }
             }
             """);
+
+    // The rule reads only a lambda's body, as it does not follow a builder the lambda hands on.
+    [Fact]
+    public Task AMethodGivenToAddTenantry_IsNotRead() =>
+        Verify.AnalyzerAsync<UnvalidatedResolutionAnalyzer>(Usings + """
+            public static class Startup
+            {
+                public static void Register(IServiceCollection services) => services.AddTenantry<string>(Configure);
+
+                private static void Configure(ITenantBuilder<string> tenant) =>
+                    tenant.ResolveFromHeader("X-Tenant-Id").UseInMemoryStore([]);
+            }
+            """);
 }

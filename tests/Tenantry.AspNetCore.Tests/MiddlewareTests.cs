@@ -775,6 +775,52 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
         optionalBody.Should().Be("(none)");
     }
 
+    // A convention on MapControllers() comes after the attributes in the endpoint's metadata, yet the attribute on the
+    // controller or action wins; an action without one takes the convention.
+    [Theory]
+    [InlineData(false, "/tenant-requirement/required", 400)]
+    [InlineData(false, "/tenant-requirement/unmarked", 200)]
+    [InlineData(true, "/tenant-requirement/optional", 200)]
+    [InlineData(true, "/tenant-requirement/unmarked", 400)]
+    public async Task ControllerAttributes_WinOverAConventionOnMapControllers(
+        bool conventionRequires,
+        string path,
+        int status)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddControllers()
+            .AddApplicationPart(typeof(TenantRequirementTestController).Assembly);
+
+        builder.Services.AddTenantry<string>(tenant =>
+        {
+            tenant.ResolveFromHeader("X-Tenant-Id");
+            tenant.UseInMemoryStore(
+            [
+                new TenantDescriptor<string> { TenantId = "acme", Name = "Acme Corp" },
+            ]);
+        });
+
+        await using var app = builder.Build();
+        app.UseTenantry();
+
+        if (conventionRequires)
+        {
+            app.MapControllers().RequireTenant();
+        }
+        else
+        {
+            app.MapControllers().AllowMissingTenant();
+        }
+
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+
+        ((int)response.StatusCode).Should().Be(status);
+    }
+
     [Fact]
     public async Task Middleware_WhenNoTenantAndNotRequired_WithDebugLogging_ContinuesWithoutTenant()
     {
@@ -1111,5 +1157,9 @@ public sealed class TenantRequirementTestController : ControllerBase
     [HttpGet("optional")]
     [AllowMissingTenant]
     public ActionResult<string> GetOptional(ITenantContext<string> tenantContext) =>
+        tenantContext.CurrentTenantId ?? "(none)";
+
+    [HttpGet("unmarked")]
+    public ActionResult<string> GetUnmarked(ITenantContext<string> tenantContext) =>
         tenantContext.CurrentTenantId ?? "(none)";
 }

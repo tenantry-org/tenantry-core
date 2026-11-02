@@ -186,8 +186,9 @@ controllers, and `.RequireTenant()` and `.AllowMissingTenant()` on minimal APIs 
 ## SignalR and Blazor Server
 
 A SignalR connection takes its tenant from the request that opened it, which `UseTenantry()` resolves like any other.
-The tenant then stays current for every hub method call on the connection, and for a Blazor Server circuit, which runs
-over one. The negotiate request and the later requests of a long-polling connection do not change it.
+The tenant then stays current for every hub method call on the connection, and for the activity of a Blazor Server
+circuit while the circuit uses that connection. The negotiate request and the later requests of a long-polling
+connection do not change it.
 
 Resolve the tenant from the host, a subdomain, a claim, or a route value in the hub's path
 (`app.MapHub<ChatHub>("/{tenant}/chat")`). Do not resolve it from a header: a browser cannot set headers on a WebSocket
@@ -215,6 +216,14 @@ circuit ends
 ([`AddTenantry`](api/microsoft-extensions-dependencyinjection-tenantryserversideblazorbuilderextensions.md)). With
 `CacheTenants`, a change reaches open connections once the cached tenant expires or `ITenantInvalidator` removes it.
 The descriptor that is current does not change: a connection sees other changes to its tenant when it reconnects.
+
+The check runs as a call starts. A streaming hub method is checked when the client starts the stream, and a stream
+already running when its tenant is suspended or deleted keeps sending until it ends or the client stops it, as does any
+other call already running. Messages your code sends with `IHubContext` are not checked either.
+
+A circuit keeps the tenant it opened with. When Blazor reconnects a circuit after its connection drops, the new
+connection's request is resolved again, and for a suspended tenant it resolves none. The check then ends the circuit
+at its next activity, as it does when the reconnecting request resolves another tenant.
 
 ## Details
 

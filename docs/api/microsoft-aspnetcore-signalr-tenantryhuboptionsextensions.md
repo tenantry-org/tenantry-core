@@ -12,7 +12,7 @@ public static class TenantryHubOptionsExtensions
 
 ### `AddTenantry(HubOptions)`
 
-Refuses each hub method call whose tenant no longer exists or is no longer active, so suspending or deleting a tenant stops the calls on the connections it already has open.
+Refuses each hub method call whose tenant no longer exists or is no longer active, so suspending or deleting a tenant stops the next calls on the connections it already has open.
 
 ```csharp
 public static void AddTenantry(this HubOptions options)
@@ -25,5 +25,7 @@ Parameters:
 A connection's tenant is the one `app.UseTenantry()` resolved for the request that opened it, and it stays current for every call on the connection. Before each call, the filter looks the tenant up again with [`ITenantLookup<TKey>`](tenantry-itenantlookup.md), through the cache with `CacheTenants`, and checks it with [`ITenantActivity<TKey>`](tenantry-itenantactivity.md). A tenant the store no longer has fails the call with [`TenantNotFoundException`](tenantry-tenantnotfoundexception.md), and one an activity validator refuses with [`TenantInactiveException`](tenantry-tenantinactiveexception.md). The method does not run, the client sees the call fail, and the connection stays open. A call on a connection without a tenant is not checked.
 
 The connection's tenant itself does not change: the call runs with the tenant as the store returned it when the connection opened. A call fails with `InvalidOperationException` if Tenantry is not registered.
+
+The check runs once, as a call starts. A streaming method is checked when the client starts the stream, and a stream, or any other call, that is already running when the tenant is suspended or deleted runs on until it ends or the client stops it. Messages the server sends with `IHubContext` are not checked.
 
 In an app with Blazor Server, also check circuits with `AddInteractiveServerComponents().AddTenantry()`. This filter does not check Blazor Server's own hub.

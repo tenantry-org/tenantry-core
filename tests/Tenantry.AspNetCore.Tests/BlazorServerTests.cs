@@ -18,11 +18,12 @@ namespace Tenantry.AspNetCore.Tests;
 /// <summary>
 /// The circuit handler <c>AddInteractiveServerComponents().AddTenantry()</c> adds: in a circuit opened over Blazor
 /// Server's hub, with <c>hubOptions.AddTenantry()</c> on every hub as well, and called directly with the tenant current,
-/// as Blazor calls it for a circuit's inbound activity.
+/// as Blazor calls it when it opens a circuit and for the circuit's inbound activity.
 /// </summary>
 public sealed partial class BlazorServerTests
 {
     private static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme" };
+    private static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex" };
 
     private readonly SignalRTests.Tenants _tenants = new();
     private int _runs;
@@ -37,7 +38,7 @@ public sealed partial class BlazorServerTests
         await using var circuit = await CircuitConnection.OpenAsync(app, "acme");
 
         await circuit.SendActivityAsync();
-        await circuit.ReceiveAsync("JS.EndInvokeDotNet");
+        await circuit.ReceiveCallAsync("JS.EndInvokeDotNet");
 
         _tenants.Suspend("acme");
         await circuit.SendActivityAsync();
@@ -45,6 +46,36 @@ public sealed partial class BlazorServerTests
         // The hub filter lets Blazor's own hub through, so the circuit handler refuses the activity and the circuit ends.
         (await circuit.ReceiveErrorAsync()).Should().Contain("this circuit will be terminated");
         await app.Services.GetRequiredService<ClosedCircuits>().First.WaitAsync(TestContext.Current.CancellationToken);
+    }
+
+    // A reconnect after acme is suspended: the new connection's request resolves no tenant, and /_blazor does not
+    // require one, so the activity would otherwise run unchecked.
+    [Theory(Timeout = 30_000)]
+    [InlineData("acme")]
+    [InlineData("globex")]
+    public async Task ACircuit_EndsAtItsNextActivity_WhenItReconnectsWithoutItsTenant(string reconnectingTenant)
+    {
+        await using var app = await StartAsync();
+        await using var opened = await CircuitConnection.OpenAsync(app, "acme");
+        _tenants.Suspend("acme");
+
+        await using var circuit = await opened.ReconnectAsync(app, reconnectingTenant);
+        await circuit.SendActivityAsync();
+
+        (await circuit.ReceiveCallAsync("JS.EndInvokeDotNet", "JS.Error")).Should().Be("JS.Error");
+        await app.Services.GetRequiredService<ClosedCircuits>().First.WaitAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ACircuitsActivityRuns_AfterItReconnectsWithItsTenant()
+    {
+        await using var app = await StartAsync();
+        await using var opened = await CircuitConnection.OpenAsync(app, "acme");
+
+        await using var circuit = await opened.ReconnectAsync(app, "acme");
+        await circuit.SendActivityAsync();
+
+        (await circuit.ReceiveCallAsync("JS.EndInvokeDotNet", "JS.Error")).Should().Be("JS.EndInvokeDotNet");
     }
 
     [Fact]
@@ -98,9 +129,62 @@ public sealed partial class BlazorServerTests
         using var circuit = provider.CreateScope();
         _tenants.Suspend("acme");
 
+        await Open(circuit);
         await Activity(circuit)(null!);
 
         _runs.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AnActivityWithoutTheCircuitsTenant_IsRefused()
+    {
+        await using var provider = Build();
+        using var circuit = provider.CreateScope();
+
+        using (Current(provider))
+        {
+            await Open(circuit);
+        }
+
+        await Activity(circuit).Awaiting(run => run(null!)).Should().ThrowAsync<TenantNotResolvedException>()
+            .WithMessage("*opened for tenant 'acme'*identifies no tenant*");
+        _runs.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AnActivityWithAnotherTenant_IsRefused()
+    {
+        await using var provider = Build();
+        using var circuit = provider.CreateScope();
+
+        using (Current(provider))
+        {
+            await Open(circuit);
+        }
+
+        using (provider.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(Globex))
+        {
+            await Activity(circuit).Awaiting(run => run(null!)).Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("*opened for tenant 'acme'*identifies tenant 'globex'*");
+        }
+
+        _runs.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AnActivityWithATenant_IsRefused_InACircuitOpenedWithoutOne()
+    {
+        await using var provider = Build();
+        using var circuit = provider.CreateScope();
+        await Open(circuit);
+
+        using (Current(provider))
+        {
+            await Activity(circuit).Awaiting(run => run(null!)).Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("*opened without a tenant*identifies tenant 'acme'*");
+        }
+
+        _runs.Should().Be(0);
     }
 
     [Fact]
@@ -149,9 +233,15 @@ public sealed partial class BlazorServerTests
     private static IDisposable Current(IServiceProvider provider) =>
         provider.GetRequiredService<ITenantContextSetter<string>>().MakeCurrent(Acme);
 
+    private static TenantActivityCircuitHandler Handler(IServiceScope circuit) =>
+        circuit.ServiceProvider.GetServices<CircuitHandler>().OfType<TenantActivityCircuitHandler>().Single();
+
+    // The handler does not read the circuit, which only Blazor can create.
+    private static Task Open(IServiceScope circuit) => Handler(circuit).OnCircuitOpenedAsync(null!, Ct);
+
     // The handler from the circuit's scope, around an activity that counts its runs.
     private Func<CircuitInboundActivityContext, Task> Activity(IServiceScope circuit) =>
-        circuit.ServiceProvider.GetServices<CircuitHandler>().OfType<TenantActivityCircuitHandler>().Single()
+        Handler(circuit)
             .CreateInboundActivityHandler(_ =>
             {
                 _runs++;
@@ -199,10 +289,14 @@ public sealed partial class BlazorServerTests
     /// </summary>
     private sealed partial class CircuitConnection : IAsyncDisposable, IInvocationBinder
     {
+        // The invocation of ConnectCircuit, whose result is a bool where StartCircuit's is the circuit's id.
+        private const string ConnectCircuitInvocation = "2";
+
         private readonly WebSocket _socket;
         private readonly IHubProtocol _protocol;
         private readonly Queue<HubMessage> _received = new();
         private byte[] _unread = [];
+        private string _circuitId = "";
 
         private CircuitConnection(WebSocket socket, IHubProtocol protocol)
         {
@@ -216,6 +310,36 @@ public sealed partial class BlazorServerTests
             var page = await client.GetStringAsync($"/?tenant={tenant}", Ct);
             var marker = BlazorMarker().Match(page).Groups[1].Value;
 
+            var circuit = await ConnectAsync(app, tenant);
+            await circuit.SendAsync(new InvocationMessage(
+                "1", "StartCircuit", ["http://localhost/", "http://localhost/", "[]", ""]));
+            var started = await circuit.ReceiveAsync<CompletionMessage>(_ => true);
+            started.Error.Should().BeNull();
+            circuit._circuitId = (string)started.Result!;
+
+            await circuit.SendAsync(new InvocationMessage(
+                "UpdateRootComponents",
+                [$$"""{"batchId":1,"operations":[{"type":"add","ssrComponentId":1,"marker":{{marker}}}]}""", ""]));
+            await circuit.ReceiveCallAsync("JS.RenderBatch");
+            return circuit;
+        }
+
+        // Closes this connection and connects to the circuit again over a new one, as Blazor's script does when its
+        // connection drops.
+        public async Task<CircuitConnection> ReconnectAsync(WebApplication app, string tenant)
+        {
+            await DisposeAsync();
+
+            var circuit = await ConnectAsync(app, tenant);
+            circuit._circuitId = _circuitId;
+            await circuit.SendAsync(new InvocationMessage(ConnectCircuitInvocation, "ConnectCircuit", [_circuitId]));
+            var connected = await circuit.ReceiveAsync<CompletionMessage>(_ => true);
+            connected.Result.Should().Be(true, "the server still has the circuit");
+            return circuit;
+        }
+
+        private static async Task<CircuitConnection> ConnectAsync(WebApplication app, string tenant)
+        {
             var protocol = app.Services.GetServices<IHubProtocol>().Single(p => p.Name == "blazorpack");
             var socket = await app.GetTestServer().CreateWebSocketClient()
                 .ConnectAsync(new Uri($"ws://localhost/_blazor?tenant={tenant}"), Ct);
@@ -227,16 +351,6 @@ public sealed partial class BlazorServerTests
                 endOfMessage: true,
                 Ct);
             Encoding.UTF8.GetString(await circuit.ReceiveFrameAsync()).Should().Be("{}\u001e", "the server accepts the handshake");
-
-            await circuit.SendAsync(new InvocationMessage(
-                "1", "StartCircuit", ["http://localhost/", "http://localhost/", "[]", ""]));
-            var started = await circuit.ReceiveAsync<CompletionMessage>(_ => true);
-            started.Error.Should().BeNull();
-
-            await circuit.SendAsync(new InvocationMessage(
-                "UpdateRootComponents",
-                [$$"""{"batchId":1,"operations":[{"type":"add","ssrComponentId":1,"marker":{{marker}}}]}""", ""]));
-            await circuit.ReceiveAsync("JS.RenderBatch");
             return circuit;
         }
 
@@ -249,14 +363,9 @@ public sealed partial class BlazorServerTests
         public ValueTask SendActivityAsync() =>
             SendAsync(new InvocationMessage("BeginInvokeDotNetFromJS", ["1", "NoSuchAssembly", "NoSuchMethod", 0L, "[]"]));
 
-        // Skips the messages before the next call of the browser method named, and returns that call.
-        public Task<HubInvocationMessage> ReceiveAsync(string target) =>
-            ReceiveAsync<HubInvocationMessage>(message => message switch
-            {
-                InvocationMessage invocation => invocation.Target == target,
-                InvocationBindingFailureMessage failure => failure.Target == target,
-                _ => false,
-            });
+        // Skips the messages before the next call of one of the browser methods named, and returns its name.
+        public async Task<string?> ReceiveCallAsync(params string[] targets) =>
+            Target(await ReceiveAsync<HubInvocationMessage>(message => targets.Contains(Target(message))));
 
         // The error Blazor's script shows when the circuit ends.
         public async Task<string?> ReceiveErrorAsync() =>
@@ -274,7 +383,8 @@ public sealed partial class BlazorServerTests
 
         // Only the error message's argument is read: the other browser methods' arguments fail to bind, which still
         // gives their names.
-        Type IInvocationBinder.GetReturnType(string invocationId) => typeof(string);
+        Type IInvocationBinder.GetReturnType(string invocationId) =>
+            invocationId == ConnectCircuitInvocation ? typeof(bool) : typeof(string);
 
         IReadOnlyList<Type> IInvocationBinder.GetParameterTypes(string methodName) =>
             methodName == "JS.Error" ? [typeof(string)] : Type.EmptyTypes;
@@ -304,6 +414,13 @@ public sealed partial class BlazorServerTests
                 }
             }
         }
+
+        private static string? Target(HubMessage message) => message switch
+        {
+            InvocationMessage invocation => invocation.Target,
+            InvocationBindingFailureMessage failure => failure.Target,
+            _ => null,
+        };
 
         private ValueTask SendAsync(HubMessage message) =>
             _socket.SendAsync(_protocol.GetMessageBytes(message), WebSocketMessageType.Binary, endOfMessage: true, Ct);

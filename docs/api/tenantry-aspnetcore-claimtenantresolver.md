@@ -2,7 +2,7 @@
 
 Namespace: `Tenantry.AspNetCore` · Package: `Tenantry.AspNetCore` · [API reference](README.md)
 
-Resolves the tenant from a claim on the current request principal. A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant here, and the next resolver runs.
+Resolves the tenant from a claim on the current request principal. A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant here, and the next resolver runs. A tenant listed twice, such as by two identities that both carry the claim, counts once.
 
 ```csharp
 public sealed class ClaimTenantResolver : ITenantResolver
@@ -14,7 +14,7 @@ Implements [`ITenantResolver`](tenantry-aspnetcore-itenantresolver.md).
 
 ### `ClaimTenantResolver(string)`
 
-Resolves the tenant from a claim on the current request principal. A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant here, and the next resolver runs.
+Resolves the tenant from a claim on the current request principal. A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant here, and the next resolver runs. A tenant listed twice, such as by two identities that both carry the claim, counts once.
 
 ```csharp
 public ClaimTenantResolver(string claimType = "tenant_id")

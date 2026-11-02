@@ -97,7 +97,7 @@ Parameters:
 
 Returns: [`ITenantBuilder<TKey>`](tenantry-itenantbuilder-1.md): The same `builder` for chaining.
 
-A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant here, and the next resolver runs.
+A user whose claims of the type list more than one tenant, as repeated claims or a JSON array, resolves no tenant here, and the next resolver runs. A tenant listed twice, such as by two identities that both carry the claim, counts once.
 
 ### `ResolveFromHeader<TKey>(ITenantBuilder<TKey>, string)`
 

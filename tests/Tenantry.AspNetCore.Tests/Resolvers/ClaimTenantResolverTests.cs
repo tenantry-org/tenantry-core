@@ -98,11 +98,29 @@ public sealed class ClaimTenantResolverTests
         (await resolver.ResolveAsync(one, TestContext.Current.CancellationToken)).Should().Be("acme");
     }
 
+    [Fact]
+    public async Task OneTenantInTwoClaims_IsReturned()
+    {
+        // A principal merged from two schemes whose identities both carry the claim.
+        ClaimTenantResolver resolver = new();
+        DefaultHttpContext context = new()
+        {
+            User = new ClaimsPrincipal(
+            [
+                new ClaimsIdentity([new Claim("tenant_id", "acme")], "cookie"),
+                new ClaimsIdentity([new Claim("tenant_id", "acme")], "bearer"),
+            ]),
+        };
+
+        (await resolver.ResolveAsync(context, TestContext.Current.CancellationToken)).Should().Be("acme");
+    }
+
     [Theory]
     [InlineData("[\"acme\"]", "acme")]
     [InlineData(" [ \" acme \" ] ", "acme")]
     [InlineData("[7]", "7")]
     [InlineData("[\"acme\",\"globex\"]", null)]
+    [InlineData("[\"acme\",\" acme \"]", "acme")]
     [InlineData("[]", null)]
     [InlineData("[\"acme\"", "[\"acme\"")]
     public async Task OneClaimHoldingAJsonArray_IsReadAsTheTenantsItLists(string claimValue, string? expected)

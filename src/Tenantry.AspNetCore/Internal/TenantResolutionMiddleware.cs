@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -380,9 +381,21 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             return _options.RequireTenantByDefault;
         }
 
-        for (var i = endpoint.Metadata.Count - 1; i >= 0; i--)
+        // An MVC action's or Razor Page's descriptor holds only the attributes on its code. In the endpoint's metadata,
+        // a convention on MapControllers() or MapRazorPages() comes after them, and would otherwise win over them.
+        return (endpoint.Metadata.GetMetadata<ActionDescriptor>() is { } action
+                   ? LastRequirement(action.EndpointMetadata.AsReadOnly())
+                   : null)
+               ?? LastRequirement(endpoint.Metadata)
+               ?? _options.RequireTenantByDefault;
+    }
+
+    // What the last RequireTenant or AllowMissingTenant in the metadata says, or null without either.
+    private static bool? LastRequirement(IReadOnlyList<object> metadata)
+    {
+        for (var i = metadata.Count - 1; i >= 0; i--)
         {
-            switch (endpoint.Metadata[i])
+            switch (metadata[i])
             {
                 case AllowMissingTenantAttribute:
                     return false;
@@ -391,7 +404,7 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
             }
         }
 
-        return _options.RequireTenantByDefault;
+        return null;
     }
 
     private async Task RejectAsync(HttpContext context, TenantResolution<TKey> resolution)

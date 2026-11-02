@@ -10,7 +10,7 @@ public static class TenantryHubOptionsExtensions
 {
     /// <summary>
     /// Refuses each hub method call whose tenant no longer exists or is no longer active, so suspending or deleting a
-    /// tenant stops the calls on the connections it already has open.
+    /// tenant stops the next calls on the connections it already has open.
     /// </summary>
     /// <param name="options">
     /// The options of every hub (<c>AddSignalR(options =&gt; …)</c>), or of one hub (<c>AddHubOptions&lt;THub&gt;</c>).
@@ -28,6 +28,11 @@ public static class TenantryHubOptionsExtensions
     /// <para>
     /// The connection's tenant itself does not change: the call runs with the tenant as the store returned it when the
     /// connection opened. A call fails with <see cref="InvalidOperationException"/> if Tenantry is not registered.
+    /// </para>
+    /// <para>
+    /// The check runs once, as a call starts. A streaming method is checked when the client starts the stream, and a
+    /// stream, or any other call, that is already running when the tenant is suspended or deleted runs on until it
+    /// ends or the client stops it. Messages the server sends with <c>IHubContext</c> are not checked.
     /// </para>
     /// <para>
     /// In an app with Blazor Server, also check circuits with <c>AddInteractiveServerComponents().AddTenantry()</c>.

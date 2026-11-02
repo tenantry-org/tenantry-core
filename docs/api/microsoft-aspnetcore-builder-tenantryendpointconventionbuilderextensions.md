@@ -28,6 +28,8 @@ Parameters:
 
 Returns: `TBuilder`: The same `builder` for chaining.
 
+With both this and `RequireTenant` on an endpoint, the one added last wins. On `MapControllers()` or `MapRazorPages()`, it applies to the actions and pages without a [`RequireTenantAttribute`](tenantry-aspnetcore-requiretenantattribute.md) or [`AllowMissingTenantAttribute`](tenantry-aspnetcore-allowmissingtenantattribute.md) on their controller, action or page, which wins over it.
+
 ### `RequireTenant<TBuilder>(TBuilder)`
 
 Requires Tenantry to resolve a tenant for the endpoint.
@@ -45,3 +47,5 @@ Parameters:
 - `builder` `TBuilder`: The endpoint, or group of endpoints, to configure.
 
 Returns: `TBuilder`: The same `builder` for chaining.
+
+With both this and `AllowMissingTenant` on an endpoint, the one added last wins. On `MapControllers()` or `MapRazorPages()`, it applies to the actions and pages without a [`RequireTenantAttribute`](tenantry-aspnetcore-requiretenantattribute.md) or [`AllowMissingTenantAttribute`](tenantry-aspnetcore-allowmissingtenantattribute.md) on their controller, action or page, which wins over it.

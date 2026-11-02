@@ -13,6 +13,12 @@ public static class TenantryEndpointConventionBuilderExtensions
     /// <typeparam name="TBuilder">The endpoint convention builder type.</typeparam>
     /// <param name="builder">The endpoint, or group of endpoints, to configure.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// With both this and <c>AllowMissingTenant</c> on an endpoint, the one added last wins. On
+    /// <c>MapControllers()</c> or <c>MapRazorPages()</c>, it applies to the actions and pages without a
+    /// <see cref="RequireTenantAttribute"/> or <see cref="AllowMissingTenantAttribute"/> on their controller, action
+    /// or page, which wins over it.
+    /// </remarks>
     public static TBuilder RequireTenant<TBuilder>(this TBuilder builder)
         where TBuilder : IEndpointConventionBuilder
     {
@@ -27,6 +33,12 @@ public static class TenantryEndpointConventionBuilderExtensions
     /// <typeparam name="TBuilder">The endpoint convention builder type.</typeparam>
     /// <param name="builder">The endpoint, or group of endpoints, to configure.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
+    /// <remarks>
+    /// With both this and <c>RequireTenant</c> on an endpoint, the one added last wins. On
+    /// <c>MapControllers()</c> or <c>MapRazorPages()</c>, it applies to the actions and pages without a
+    /// <see cref="RequireTenantAttribute"/> or <see cref="AllowMissingTenantAttribute"/> on their controller, action
+    /// or page, which wins over it.
+    /// </remarks>
     public static TBuilder AllowMissingTenant<TBuilder>(this TBuilder builder)
         where TBuilder : IEndpointConventionBuilder
     {

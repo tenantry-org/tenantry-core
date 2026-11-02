@@ -51,7 +51,10 @@ public class OrdersController : ControllerBase
 ```
 
 Endpoint metadata overrides `RequireTenantByDefault()`. Give an endpoint one of `RequireTenant` and
-`AllowMissingTenant`: with both, the one added last wins.
+`AllowMissingTenant`: with both, the one added last wins. On controllers and Razor Pages, an attribute on the
+controller, action or page wins over `.RequireTenant()` or `.AllowMissingTenant()` on `MapControllers()` or
+`MapRazorPages()`, which applies to the actions and pages without one. So `app.MapControllers().AllowMissingTenant()`
+with `[RequireTenant]` on an action still requires a tenant for that action.
 
 ## Validating tenant access
 

@@ -185,6 +185,10 @@ The rule reports nothing when:
   `services.AddScoped<ITenantAccessValidator<Guid>, MembershipValidator>()`, or a `typeof`;
 - the `AddTenantry` lambda passes its builder, or the builder's `Services`, to other code.
 
+It also does not read a method given to `AddTenantry` in place of a lambda, as in
+`services.AddTenantry<Guid>(Tenancy.Configure)`, any more than the code a lambda passes its builder to: a resolver
+called there is not reported.
+
 It does not see a validator registered only by a library's own extension method, in another assembly.
 
 Where any caller may use any tenant on purpose, turn the rule off for that project or those files. Examples are a
