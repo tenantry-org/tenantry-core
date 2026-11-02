@@ -17,6 +17,7 @@ public sealed class PerTenantOptionsTests
     private static readonly TenantDescriptor<string> Acme = new() { TenantId = "acme", Name = "Acme" };
     private static readonly TenantDescriptor<string> Globex = new() { TenantId = "globex", Name = "Globex" };
 
+    private readonly TaskCompletionSource _slowBuildStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _built;
     private string? _slowName;
 
@@ -473,7 +474,8 @@ public sealed class PerTenantOptionsTests
         var first = Task.Run(
             () => reader.Names(new TenantDescriptor<string> { TenantId = "x", Name = "A" }),
             TestContext.Current.CancellationToken);
-        await Task.Delay(50, TestContext.Current.CancellationToken);
+        // The second read must start while the first is inside its build, or it builds alone and proves nothing.
+        await _slowBuildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         var second = reader.Names(new TenantDescriptor<string> { TenantId = "x", Name = "B" });
 
         (await first).Should().Equal("A");
@@ -601,7 +603,10 @@ public sealed class PerTenantOptionsTests
                 Interlocked.Increment(ref _built);
 
                 if (t.Name == _slowName)
+                {
+                    _slowBuildStarted.TrySetResult();
                     Thread.Sleep(300);
+                }
 
                 o.Name = t.Name;
             }));
