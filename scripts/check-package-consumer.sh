@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds and runs eng/package-consumer against Tenantry packages the way an application consumes them:
 # outside the repository, from an empty NuGet cache, and with package source mapping that sends the given
-# package patterns to one source and everything else to nuget.org. The source is either a folder of freshly
+# package patterns to one source and everything else to nuget.org. It also checks that the analyzers of
+# Tenantry.Core, Tenantry.EfCore and Tenantry.AspNetCore, those it restored, reach the consumer's compiler. The source is either a folder of freshly
 # packed packages (CI), or a published feed as a customer sees it (the release, after publishing). Usage:
 #
 #   scripts/check-package-consumer.sh <package folder> <pattern>...
@@ -123,6 +124,21 @@ if ! dotnet restore "$work/PackageConsumer.csproj" --configfile "$work/nuget.con
   exit 1
 fi
 dotnet build "$work/PackageConsumer.csproj" -c Release --no-restore -p:TenantryVersion="$version"
+
+# The analyzers of each Tenantry package that carries them reach the compiler, as they do an application's, whether the
+# consumer references the package or gets it through another. Without them the build is as clean as with them, so
+# nothing else would notice a package that lost them.
+framework="$(basename "$(ls -d "$work"/bin/Release/*/ | head -n 1)")"
+analyzers="$(dotnet msbuild "$work/PackageConsumer.csproj" -t:ResolveLockFileAnalyzers -getItem:Analyzer \
+  -p:TargetFramework="$framework" -p:Configuration=Release -p:TenantryVersion="$version")"
+for id in Tenantry.Core Tenantry.EfCore Tenantry.AspNetCore; do
+  folder="$(tr '[:upper:]' '[:lower:]' <<<"$id")"
+  [[ -d "$NUGET_PACKAGES/$folder" ]] || continue
+  if ! grep -q "/$folder/[^/]*/analyzers/dotnet/cs/$id.Analyzers.dll" <<<"$analyzers"; then
+    echo "The consumer restored $id, but its compiler does not get $id.Analyzers.dll" >&2
+    exit 1
+  fi
+done
 
 for output in "$work"/bin/Release/*/; do
   echo "Running the consumer on $(basename "$output")"

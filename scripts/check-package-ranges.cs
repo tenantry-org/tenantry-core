@@ -1,4 +1,5 @@
-// Fails if any packed dependency lacks its intended version range. Usage, after dotnet pack:
+// Fails if any packed dependency lacks its intended version range, or a package that carries analyzers lacks them.
+// Usage, after dotnet pack:
 //
 //   dotnet run scripts/check-package-ranges.cs -- <directory containing the .nupkg files>
 //
@@ -8,9 +9,7 @@
 //     the dependant then works only with the same release (Tenantry Pro's integration and EF Core packages). Any other
 //     sibling must take this release up to the next that may break it, [x.y.z, x.(y+1).0) in 0.x, so a consumer can
 //     update one package of the set within that band. eng/common/Build.targets packs project references that way: a
-//     reference marked PinExact="true" as exact, the others as a band. A dependency on a sibling that carries
-//     analyzers must not exclude them (a ProjectReference does by default; PrivateAssets="none" keeps them), or an
-//     application that references only the dependant loses the sibling's analyzers.
+//     reference marked PinExact="true" as exact, the others as a band.
 //   - Microsoft.Extensions.* take a minimum only (">= x.y.z", no upper bound). Microsoft ships every
 //     Microsoft.Extensions major for every supported framework and keeps it compatible, and current Azure SDKs need
 //     Microsoft.Extensions 10.x even on net8.0, so a cap would stop consumers restoring. The minimum must be the
@@ -20,6 +19,10 @@
 //     package, where a minor release may break (SemVer), [0.b.c, 0.(b+1).0) (Tenantry Core in beta). Microsoft.AspNetCore.*
 //     and Microsoft.EntityFrameworkCore* must also match the target framework's major version (net10.0 depends on
 //     10.x), because each framework's build is compiled against that major.
+//   - Tenantry.Core, Tenantry.EfCore and Tenantry.AspNetCore must each hold analyzers/dotnet/cs/<id>.Analyzers.dll,
+//     which Directory.Build.targets packs. Without it an application builds clean, with none of its warnings, so
+//     nothing else would notice. (A dependency's exclude="Analyzers" does not matter: NuGet gives an application the
+//     analyzers of every package it restores, a transitive one's too.)
 using System.IO.Compression;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
@@ -78,6 +81,16 @@ foreach (var package in packages)
     Console.WriteLine($"{package.Id} {package.Version}: {package.Dependencies.Count} dependencies checked");
 }
 
+string[] packagesWithAnalyzers = ["Tenantry.Core", "Tenantry.EfCore", "Tenantry.AspNetCore"];
+foreach (var package in packages.Where(package => packagesWithAnalyzers.Contains(package.Id, StringComparer.OrdinalIgnoreCase)))
+{
+    var analyzer = $"analyzers/dotnet/cs/{package.Id}.Analyzers.dll";
+    if (!package.Files.Contains(analyzer))
+    {
+        failures.Add($"{package.Id} {package.Version} does not hold {analyzer}, so an application gets none of its analyzers (see PackTenantryAnalyzers in Directory.Build.targets)");
+    }
+}
+
 // docs/compatibility.md names the target frameworks ("The packages target net8.0, net9.0 and net10.0", the list in
 // bold or not, as each repository writes it); the list must match what the packages ship.
 var compatibility = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(directory))!, "docs", "compatibility.md");
@@ -102,7 +115,7 @@ foreach (var failure in failures)
 
 Console.WriteLine(failures.Count == 0
     ? $"All dependency ranges in {packages.Count} packages are as intended."
-    : $"{failures.Count} problem(s): dependencies without their intended range, or docs/compatibility.md out of date.");
+    : $"{failures.Count} problem(s): dependencies without their intended range, a package without its analyzers, or docs/compatibility.md out of date.");
 
 return failures.Count == 0 ? 0 : 1;
 
@@ -118,14 +131,9 @@ static string? CheckSibling(Dependency dependency, Package package, Package sibl
     var expected = $"[{package.Version}, {NextBreaking(package.Version)})";
 
     // A nuspec writes the range without the space.
-    if (dependency.Version.Replace(" ", "") != expected.Replace(" ", ""))
-    {
-        return $"expected {expected}, this release up to the next that may break it, because {sibling.Id} shares no internals with it (only a ProjectReference to a package that does takes PinExact=\"true\")";
-    }
-
-    return sibling.CarriesAnalyzers && dependency.Exclude.Split(',').Any(asset => asset.Trim().Equals("Analyzers", StringComparison.OrdinalIgnoreCase))
-        ? $"excludes the analyzers {sibling.Id} carries, so an application that references only {package.Id} loses them (set PrivateAssets=\"none\" on the ProjectReference)"
-        : null;
+    return dependency.Version.Replace(" ", "") == expected.Replace(" ", "")
+        ? null
+        : $"expected {expected}, this release up to the next that may break it, because {sibling.Id} shares no internals with it (only a ProjectReference to a package that does takes PinExact=\"true\")";
 }
 
 static string? CheckBand(Dependency dependency)
@@ -205,13 +213,12 @@ static Package ReadPackage(string path)
             .Select(d => new Dependency(
                 (string?)group.Attribute("targetFramework") ?? "any",
                 (string)d.Attribute("id")!,
-                (string?)d.Attribute("version") ?? "",
-                (string?)d.Attribute("exclude") ?? "")))
+                (string?)d.Attribute("version") ?? "")))
         .ToList();
 
     var id = Value("id");
-    var carriesAnalyzers = archive.Entries.Any(e => e.FullName.StartsWith("analyzers/", StringComparison.Ordinal));
-    return new Package(id, Value("version"), dependencies, ReadInternalsVisibleTo(archive, id), carriesAnalyzers);
+    var files = archive.Entries.Select(e => e.FullName).ToHashSet(StringComparer.Ordinal);
+    return new Package(id, Value("version"), dependencies, ReadInternalsVisibleTo(archive, id), files);
 }
 
 // The assembly names an assembly in the package grants its internals to (its InternalsVisibleTo attributes).
@@ -252,6 +259,6 @@ static HashSet<string> ReadInternalsVisibleTo(ZipArchive archive, string id)
     return names;
 }
 
-internal sealed record Package(string Id, string Version, List<Dependency> Dependencies, HashSet<string> InternalsVisibleTo, bool CarriesAnalyzers);
+internal sealed record Package(string Id, string Version, List<Dependency> Dependencies, HashSet<string> InternalsVisibleTo, HashSet<string> Files);
 
-internal sealed record Dependency(string Framework, string Id, string Version, string Exclude);
+internal sealed record Dependency(string Framework, string Id, string Version);

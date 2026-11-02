@@ -139,13 +139,15 @@ jobs:
 
       - name: Check package dependency ranges
         # Fails on a dependency without its intended range: exact for a sibling whose internals it uses, a minimum only
-        # for Microsoft.Extensions.*, otherwise up to the next breaking version (see the script)
+        # for Microsoft.Extensions.*, otherwise up to the next breaking version; and on a package that should carry
+        # analyzers and does not (see the script)
         run: dotnet run scripts/check-package-ranges.cs -- ./artifacts
 
       - name: Consumer check
-        # A stand-in application restores these packages from an empty cache with package source mapping,
-        # builds for every target framework and runs, as an application would (see the script). Without the templates
-        # package, which an application cannot reference: the script checks every package in the folder it is given.
+        # A stand-in application restores these packages from an empty cache with package source mapping, builds for
+        # every target framework and runs, as an application would, and its compiler gets the packages' analyzers (see
+        # the script). Without the templates package, which an application cannot reference: the script checks every
+        # package in the folder it is given.
         run: |
           rm -rf ./artifacts/libraries
           mkdir ./artifacts/libraries
