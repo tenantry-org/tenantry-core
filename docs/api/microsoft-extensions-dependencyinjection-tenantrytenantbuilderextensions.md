@@ -56,7 +56,7 @@ Exceptions:
 
 - `ArgumentOutOfRangeException`: [`TenantStoreCacheOptions.Duration`](tenantry-tenantstorecacheoptions.md) is not positive.
 
-Lookups that find nothing, and [`ITenantStore<TKey>.GetAllTenantsAsync`](tenantry-itenantstore.md), are not cached. Call [`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md) when a tenant changes. It uses a registered `TimeProvider` if there is one.
+Lookups that find nothing, lookups by an identifier longer than 256 characters, and [`ITenantStore<TKey>.GetAllTenantsAsync`](tenantry-itenantstore.md), are not cached. Call [`ITenantInvalidator<TKey>.InvalidateAsync`](tenantry-itenantinvalidator.md) when a tenant changes. It uses a registered `TimeProvider` if there is one.
 
 ```csharp
 builder.Services.AddTenantry<Guid>(tenant => tenant

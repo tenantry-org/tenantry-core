@@ -42,6 +42,32 @@ internal sealed class InMemoryHybridCache : HybridCache, IDisposable
         return value;
     }
 
+#if NET11_0_OR_GREATER
+    /// <summary>The expiration each entry was written with, after its factory changed the context.</summary>
+    public ConcurrentDictionary<string, TimeSpan?> Expirations { get; } = new();
+
+    // As Microsoft's HybridCache does once it honours the context: the factory's changes decide how the entry is kept.
+    public override async ValueTask<T> GetOrCreateAsync<TState, T>(
+        string key,
+        TState state,
+        Func<TState, HybridCacheEntryContext, CancellationToken, ValueTask<T>> factory,
+        HybridCacheEntryOptions? options = null,
+        IEnumerable<string>? tags = null,
+        CancellationToken cancellationToken = default)
+    {
+        HybridCacheEntryContext context = new(options);
+        var value = await GetOrCreateAsync(
+            key,
+            (state, factory, context),
+            static (call, token) => call.factory(call.state, call.context, token),
+            options,
+            tags,
+            cancellationToken);
+        Expirations[key] = context.Expiration;
+        return value;
+    }
+
+#endif
     public override ValueTask SetAsync<T>(
         string key,
         T value,

@@ -196,6 +196,31 @@ public sealed class PerTenantOptionsTests
     }
 
     [Fact]
+    public void AnOrdinaryStepWithAScopedService_RunsOncePerTenant_WithTheFirstRequestsService()
+    {
+        // Pinned: a tenant's snapshot is its cached value, not one built per request as Microsoft's snapshot is.
+        ServiceCollection services = new();
+        services.AddScoped<SignedInUser>();
+        services.AddOptions<BrandingOptions>().Configure<SignedInUser>((o, user) => o.Name = user.Name);
+        services.AddTenantry<string>(tenant => tenant
+            .UseInMemoryStore([Acme])
+            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, _) => o.Colour = "red")));
+        using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
+        List<string> names = [];
+
+        foreach (var user in new[] { "ada", "grace" })
+        {
+            using var scope = provider.CreateScope();
+            scope.ServiceProvider.GetRequiredService<SignedInUser>().Name = user;
+
+            using (MakeCurrent(provider, Acme))
+                names.Add(scope.ServiceProvider.GetRequiredService<IOptionsSnapshot<BrandingOptions>>().Value.Name);
+        }
+
+        names.Should().Equal("ada", "ada");
+    }
+
+    [Fact]
     public void AChangeToTheBoundConfiguration_ClearsEveryTenantsValue()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection([new("Branding:Name", "first")]).Build();
@@ -700,6 +725,11 @@ public sealed class PerTenantOptionsTests
         {
             // Dropped: nothing runs what is posted here.
         }
+    }
+
+    private sealed class SignedInUser
+    {
+        public string Name { get; set; } = "";
     }
 
     private sealed class ColourSource : IDisposable

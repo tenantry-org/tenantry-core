@@ -39,6 +39,35 @@ internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant curren
         return inner.GetOrCreateAsync(tenant.Prefix + key, asTheTenant, options, Tags(tenant.Prefix, tags), cancellationToken);
     }
 
+#if NET11_0_OR_GREATER
+    // The factory may change how its result is cached through the context (a failure for a few seconds, say).
+    // HybridCache's own implementation of this overload calls the one above with the caller's options, which would
+    // drop those changes, so the context goes on to the inner cache.
+    public override ValueTask<T> GetOrCreateAsync<TState, T>(
+        string key,
+        TState state,
+        Func<TState, HybridCacheEntryContext, CancellationToken, ValueTask<T>> factory,
+        HybridCacheEntryOptions? options = null,
+        IEnumerable<string>? tags = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(factory);
+        var tenant = currentTenant.Require(Name);
+
+        // A closure of one type per T, as above.
+        Func<HybridCacheEntryContext, CancellationToken, ValueTask<T>> asTheTenant = async (context, token) =>
+        {
+            using (tenant.MakeCurrent())
+            {
+                return await factory(state, context, token).ConfigureAwait(false);
+            }
+        };
+
+        return inner.GetOrCreateAsync(tenant.Prefix + key, asTheTenant, options, Tags(tenant.Prefix, tags), cancellationToken);
+    }
+#endif
+
     public override ValueTask SetAsync<T>(
         string key,
         T value,

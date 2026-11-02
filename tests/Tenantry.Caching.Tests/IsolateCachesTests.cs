@@ -60,6 +60,36 @@ public sealed class IsolateCachesTests
         tenantContext.HasTenant.Should().BeFalse("the tenant is current only inside the factory and the caller's scope");
     }
 
+#if NET11_0_OR_GREATER
+    [Fact]
+    public async Task AFactorysChangesToItsEntry_ReachTheInnerCache_AsTheTenantOrAsNoTenant()
+    {
+        await using var provider = Build();
+        var cache = provider.GetRequiredService<HybridCache>();
+        var shared = provider.GetRequiredService<SharedHybridCache>();
+        var tenantContext = provider.GetRequiredService<ITenantContext<string>>();
+        HybridCacheEntryOptions nineMinutes = new() { Expiration = TimeSpan.FromMinutes(9) };
+
+        // A failure is cached briefly, so it is retried soon.
+        ValueTask<string> Failed(HybridCacheEntryContext context)
+        {
+            context.Expiration = TimeSpan.FromSeconds(5);
+            return ValueTask.FromResult(tenantContext.CurrentTenantId ?? "none");
+        }
+
+        (await AsAsync(provider, Acme, () => cache.GetOrCreateAsync("orders", (context, _) => Failed(context), nineMinutes, cancellationToken: Ct)))
+            .Should().Be("acme");
+        (await AsAsync(provider, Acme, () => shared.GetOrCreateAsync("rates", (context, _) => Failed(context), nineMinutes, cancellationToken: Ct)))
+            .Should().Be("none");
+
+        _inner.Expirations.Should().BeEquivalentTo(new Dictionary<string, TimeSpan?>
+        {
+            ["t:acme:orders"] = TimeSpan.FromSeconds(5),
+            [TenantCacheKeys.Shared("rates")] = TimeSpan.FromSeconds(5),
+        });
+    }
+
+#endif
     [Fact]
     public async Task TheTagStar_RemovesEveryEntryOfTheCurrentTenant_OrEverySharedEntry_AndNoOther()
     {

@@ -51,17 +51,22 @@ provider built without a host, the client fails when it is created.
   `RequireTenant()`.
 - A request that already carries the header throws `InvalidOperationException` unless it names the current tenant, so
   it always throws with no tenant current. The header may be forwarded from the incoming request or set in
-  `DefaultRequestHeaders`. To call as another tenant, make it current with `MakeCurrent` or `RunInScopeAsync`.
+  `DefaultRequestHeaders`. To call as another tenant, make it current with `MakeCurrent` or `RunInScopeAsync`. The id
+  is compared as the called service reads it, so a forwarded uppercase GUID names its tenant, and the request then
+  carries the id once, in the form `TenantIds.Format` writes.
 - Call `UseTenantry()` after `AddHeaderPropagation()` and after any handler that sets headers: a handler added after it
   sets headers Tenantry does not see.
 - Only requests to the scheme, host and port of the address passed to `UseTenantry`, or else of the registration's
-  `BaseAddress`, get the header. A request with an absolute address elsewhere goes without it.
+  `BaseAddress`, get the header. A request with an absolute address elsewhere goes without it. The address is
+  compared before any handler changes it, so a service discovery address such as `https+http://billing` (.NET Aspire's
+  service defaults) works: the request carries the tenant to whichever endpoint service discovery picks.
 - A redirect keeps the header: `HttpClient` follows it inside its primary handler with the request's headers, so a
   service that redirects to another passes the tenant id on. If a service you call may redirect where the id should
   not go, turn redirects off for the client
   (`ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })`).
-- Tenant ids must be printable ASCII with no leading or trailing space (a GUID, number or slug). Sending any other id
-  throws `InvalidOperationException`.
+- Tenant ids must be printable ASCII with no leading or trailing space (a GUID, number or slug), and the key type must
+  read the id back from the text it is formatted as ([The tenant key](core-concepts.md#the-tenant-key-tkey)). Sending
+  any other id throws `InvalidOperationException`.
 
 `UseTenantry()` refuses `ConfigureHttpClientDefaults`, which configures every client in the application, third-party
 SDKs' included: tenant ids go only to the services you name.

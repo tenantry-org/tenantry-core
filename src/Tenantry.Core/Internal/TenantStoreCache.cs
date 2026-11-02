@@ -6,7 +6,8 @@ namespace Tenantry.Internal;
 /// The cache <c>CacheTenants</c> puts in front of the tenant store: <see cref="ITenantLookup{TKey}"/>, and
 /// so the request middleware, read tenants through it. It keeps tenants the store found, by the id or identifier
 /// they were looked up with, for <see cref="TenantStoreCacheOptions.Duration"/>; a lookup that finds no tenant is
-/// not cached, so a new tenant is found at once.
+/// not cached, so a new tenant is found at once, and neither is one by an identifier longer than
+/// <see cref="MaxIdentifierLength"/>.
 /// </summary>
 internal sealed class TenantStoreCache<TKey>
     where TKey : IEquatable<TKey>, IParsable<TKey>
@@ -14,6 +15,12 @@ internal sealed class TenantStoreCache<TKey>
     // Each map stops growing at this size: identifiers are request input, and a store that matches them without
     // regard to case would otherwise cache every variant a client sends.
     internal const int MaxEntries = 100_000;
+
+    // An identifier longer than this is read from the store each time, not cached. The count limit alone bounds
+    // memory only when entries are small, and a store's default parse reads one id from unlimited spellings (leading
+    // zeros, padding), so anonymous requests could fill the map with long copies of one tenant's id. The longest host
+    // name is 253 characters.
+    internal const int MaxIdentifierLength = 256;
 
     private readonly Map<TKey> _byId = new(null);
     private readonly Map<string> _byIdentifier = new(StringComparer.Ordinal);
@@ -42,8 +49,13 @@ internal sealed class TenantStoreCache<TKey>
 
     public void Set(TKey tenantId, ITenantDescriptor<TKey> tenant, long generation) => Set(_byId, tenantId, tenant, generation);
 
-    public void SetByIdentifier(string identifier, ITenantDescriptor<TKey> tenant, long generation) =>
-        Set(_byIdentifier, identifier, tenant, generation);
+    public void SetByIdentifier(string identifier, ITenantDescriptor<TKey> tenant, long generation)
+    {
+        if (identifier.Length <= MaxIdentifierLength)
+        {
+            Set(_byIdentifier, identifier, tenant, generation);
+        }
+    }
 
     /// <summary>Removes the tenant's cached copies, by its id and every identifier, without running the handlers.</summary>
     public void Remove(TKey tenantId)

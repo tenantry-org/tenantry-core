@@ -145,6 +145,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A client with `UseTenantry()` whose address is a service discovery name, such as `https+http://billing` with .NET
+  Aspire's service defaults, sends the tenant. Before, service discovery replaced the address with the endpoint it
+  resolved before Tenantry compared it with the client's, so every request went without the header and nothing was
+  logged ([Which requests carry it](docs/http-propagation.md#which-requests-carry-it)).
+- A request through a `UseTenantry()` client that already carries the `tenantry-tenant-id` header in another form of
+  the current tenant's id, such as an uppercase GUID forwarded with `AddHeaderPropagation()`, is sent with the id once,
+  in the form `TenantIds.Format` writes. Before, it threw `InvalidOperationException`, though the header named the
+  current tenant.
+- A `UseTenantry()` client throws `InvalidOperationException` when the key type's `Parse` does not read back the text
+  its id is formatted as, such as a `record struct` id that does not override `ToString()`. Before, the request went
+  with an id the called service could not read, and ran there without a tenant. The key type's requirement is in
+  [The tenant key](docs/core-concepts.md#the-tenant-key-tkey).
+- `CacheTenants` no longer caches a tenant found by an identifier longer than 256 characters; it reads the store each
+  time. An `int` id parses from any number of leading zeros, so anonymous requests could fill the cache with long
+  spellings of one tenant's id, gigabytes held for the cache's duration
+  ([Caching](docs/tenant-stores.md#caching)).
+- On .NET 11, with `IsolateCaches()`, a `HybridCache.GetOrCreateAsync` factory that changes its entry through
+  `HybridCacheEntryContext` (a shorter expiration for a failure, say) has the change reach the cache, in the injected
+  `HybridCache` and in `SharedHybridCache`. Before, the entry was cached with the caller's options.
+- The per-tenant options guide and `TenantOptionsBuilder<TKey>`'s docs now say that `IOptionsSnapshot<T>` gives the
+  tenant's cached value, so an ordinary `Configure<TDep>` step that reads a scoped service, such as the signed-in user,
+  runs once per tenant and its result reaches every later request of the tenant
+  ([When settings change](docs/per-tenant-options.md#when-settings-change)).
 - A hub method on a long-polling SignalR connection keeps the connection's tenant after a `CreateScope` or
   `MakeCurrent` scope it opened closes. Before, no tenant was current after it, and the first per-tenant options value
   read in a hub method could be built without the tenant and kept as that tenant's. The same holds for any flow that

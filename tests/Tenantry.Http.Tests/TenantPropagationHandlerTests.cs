@@ -89,6 +89,24 @@ public sealed class TenantPropagationHandlerTests
     }
 
     [Fact]
+    public async Task AHeaderNamingTheCurrentTenantInAnotherForm_IsSentOnce_InTheFormTenantryWrites()
+    {
+        // A caller that is not a Tenantry service may send an uppercase GUID, which the service read as this tenant.
+        var tenantId = Guid.NewGuid();
+        var (provider, recorder) = Build<Guid>(client => client.BaseAddress = Billing);
+        await using var _ = provider;
+
+        using (MakeCurrent(provider, tenantId))
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, "/invoices");
+            request.Headers.Add(TenantPropagation.HeaderName, [tenantId.ToString().ToUpperInvariant(), $" {tenantId:B} "]);
+            await Client(provider).SendAsync(request, TestContext.Current.CancellationToken);
+        }
+
+        recorder.TenantHeaders.Should().Equal(tenantId.ToString());
+    }
+
+    [Fact]
     public async Task AHeaderTheCallerSet_IsRefused_WhenNoTenantIsCurrent()
     {
         // A header an untrusted client sent, forwarded by header propagation from an endpoint that allows a missing
@@ -137,6 +155,57 @@ public sealed class TenantPropagationHandlerTests
         }
 
         recorder.TenantHeaders.Should().Equal("acme", "acme", null, null, null);
+    }
+
+    [Fact]
+    public async Task AServiceDiscoveryAddress_CarriesTheTenant_ToTheEndpointItResolvesTo()
+    {
+        // .NET Aspire's service defaults add service discovery to every client, in a handler outside the client's own,
+        // which replaces https+http://billing with the endpoint it resolves before UseTenantry()'s handler runs.
+        var (provider, recorder) = Build<string>(
+            client => client.BaseAddress = new Uri("https+http://billing"),
+            defaultsHandler: () => new ResolvesServiceAddresses());
+        await using var _ = provider;
+
+        using (MakeCurrent(provider, "acme"))
+        {
+            await Client(provider).GetAsync("/invoices", TestContext.Current.CancellationToken);
+            await Client(provider).GetAsync("https+http://payments/charge", TestContext.Current.CancellationToken);
+        }
+
+        recorder.Requests.Should().Equal("https://localhost:7001/invoices", "https://localhost:7001/charge");
+        recorder.TenantHeaders.Should().Equal("acme", null);
+    }
+
+    [Fact]
+    public async Task ACopyOfTheRequest_SentByAHandlerBeforeUseTenantry_IsCheckedByItsAddress()
+    {
+        var (provider, recorder) = Build<string>(client => client.BaseAddress = Billing, handlerBefore: () => new SendsACopy());
+        await using var _ = provider;
+
+        using (MakeCurrent(provider, "acme"))
+        {
+            await Client(provider).GetAsync("/invoices", TestContext.Current.CancellationToken);
+            await Client(provider).GetAsync("https://payments.example.com/charge", TestContext.Current.CancellationToken);
+        }
+
+        recorder.TenantHeaders.Should().Equal("acme", null);
+    }
+
+    [Fact]
+    public async Task AKeyTypeWhoseParseCannotReadItsToString_FailsTheRequest_RatherThanSendingNoTenant()
+    {
+        var (provider, recorder) = Build<RecordTenantId>(client => client.BaseAddress = Billing);
+        await using var _ = provider;
+
+        using (MakeCurrent(provider, new RecordTenantId(Guid.NewGuid())))
+        {
+            await FluentActions.Awaiting(() => Client(provider).GetAsync("/invoices", TestContext.Current.CancellationToken))
+                .Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("*formats as 'RecordTenantId { Value = *RecordTenantId.TryParse does not read back*IFormattable*");
+        }
+
+        recorder.TenantHeaders.Should().BeEmpty();
     }
 
     [Fact]
@@ -320,11 +389,16 @@ public sealed class TenantPropagationHandlerTests
         Action<HttpClient>? configureAfter = null,
         Uri? serviceAddress = null,
         Func<DelegatingHandler>? handlerBefore = null,
-        Func<DelegatingHandler>? handlerAfter = null)
+        Func<DelegatingHandler>? handlerAfter = null,
+        Func<DelegatingHandler>? defaultsHandler = null)
         where TKey : IEquatable<TKey>, IParsable<TKey>
     {
         Recorder recorder = new();
         ServiceCollection services = new();
+
+        if (defaultsHandler is not null)
+            services.ConfigureHttpClientDefaults(defaults => defaults.AddHttpMessageHandler(defaultsHandler));
+
         services.AddTenantry<TKey>(tenant => tenant.UseInMemoryStore([]));
         var client = services.AddHttpClient("billing", c => configure?.Invoke(c));
 
@@ -362,16 +436,54 @@ public sealed class TenantPropagationHandlerTests
         }
     }
 
-    // The primary handler: answers 200 and records the header each request arrived with.
+    // Stands in for service discovery: sends a request for https+http://name to the endpoint it resolves to.
+    private sealed class ResolvesServiceAddresses : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is { Scheme: "https+http" } logical)
+                request.RequestUri = new Uri($"https://localhost:7001{logical.PathAndQuery}");
+
+            return base.SendAsync(request, cancellationToken);
+        }
+    }
+
+    // Sends a copy of the request, as a handler that retries or hedges with copies does.
+    private sealed class SendsACopy : DelegatingHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            using HttpRequestMessage copy = new(request.Method, request.RequestUri);
+            return await base.SendAsync(copy, cancellationToken);
+        }
+    }
+
+    // A strongly typed id whose compiler-generated ToString() is not what its Parse reads.
+    public readonly record struct RecordTenantId(Guid Value) : IParsable<RecordTenantId>
+    {
+        public static RecordTenantId Parse(string s, IFormatProvider? provider) => new(Guid.Parse(s, provider));
+
+        public static bool TryParse(string? s, IFormatProvider? provider, out RecordTenantId result)
+        {
+            var parsed = Guid.TryParse(s, provider, out var value);
+            result = new RecordTenantId(value);
+            return parsed;
+        }
+    }
+
+    // The primary handler: answers 200 and records the address and the header each request arrived with.
     private sealed class Recorder : HttpMessageHandler
     {
         public List<string?> TenantHeaders { get; } = [];
+
+        public List<string> Requests { get; } = [];
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(Send(request, cancellationToken));
 
         protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            Requests.Add(request.RequestUri!.ToString());
             TenantHeaders.Add(request.Headers.TryGetValues(TenantPropagation.HeaderName, out var values)
                 ? string.Join(",", values)
                 : null);

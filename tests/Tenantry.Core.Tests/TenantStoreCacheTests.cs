@@ -269,6 +269,27 @@ public sealed class TenantStoreCacheTests
     }
 
     [Fact]
+    public async Task ALongIdentifier_FindsItsTenant_ButIsReadFromTheStoreEachTime()
+    {
+        // A store's default parse reads "0000…042" as 42, so one tenant has unlimited long spellings, and caching
+        // each would let anonymous requests hold gigabytes for the cache's duration.
+        await using var provider = Build();
+        var tenants = provider.GetRequiredService<ITenantLookup<string>>();
+        var longest = new string('a', TenantStoreCache<string>.MaxIdentifierLength - 4) + "acme";
+        var tooLong = new string('a', TenantStoreCache<string>.MaxIdentifierLength - 3) + "acme";
+        _store.Add(new TenantDescriptor<string> { TenantId = longest, Name = "Longest" });
+        _store.Add(new TenantDescriptor<string> { TenantId = tooLong, Name = "Too long" });
+
+        foreach (var identifier in new[] { longest, longest, tooLong, tooLong })
+        {
+            (await tenants.FindByIdentifierAsync(identifier, TestContext.Current.CancellationToken))!.TenantId
+                .Should().Be(identifier);
+        }
+
+        _store.Reads.Should().Equal($"identifier:{longest}", $"identifier:{tooLong}", $"identifier:{tooLong}");
+    }
+
+    [Fact]
     public void AFullCache_StopsGrowing_UntilItsEntriesExpire()
     {
         TenantStoreCache<string> cache = new(
@@ -561,6 +582,8 @@ public sealed class TenantStoreCacheTests
         private readonly List<TenantDescriptor<string>> _tenants = [.. tenants];
 
         public List<string> Reads { get; } = [];
+
+        public void Add(TenantDescriptor<string> tenant) => _tenants.Add(tenant);
 
         public int Scopes { get; set; }
 

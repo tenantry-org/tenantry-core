@@ -52,10 +52,32 @@ public sealed class SharedHybridCache : HybridCache, IDisposable
 
         // A closure of one type per T, not a state type that wraps TState, which Native AOT could not compile were the
         // inner cache this type again.
-        Func<CancellationToken, ValueTask<T>> withoutTenant = token => WithoutTenant(state, factory, token);
+        Func<CancellationToken, ValueTask<T>> withoutTenant = token => WithoutTenant(() => factory(state, token).AsTask(), token);
 
         return _inner.GetOrCreateAsync(TenantCacheKeys.Shared(key), withoutTenant, options, Tags(tags), cancellationToken);
     }
+
+#if NET11_0_OR_GREATER
+    /// <inheritdoc />
+    public override ValueTask<T> GetOrCreateAsync<TState, T>(
+        string key,
+        TState state,
+        Func<TState, HybridCacheEntryContext, CancellationToken, ValueTask<T>> factory,
+        HybridCacheEntryOptions? options = null,
+        IEnumerable<string>? tags = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+
+        // The context goes on to the inner cache, so the factory's changes to how its result is cached apply:
+        // HybridCache's own implementation of this overload calls the one above with the caller's options, which would
+        // drop them.
+        Func<HybridCacheEntryContext, CancellationToken, ValueTask<T>> withoutTenant = (context, token) =>
+            WithoutTenant(() => factory(state, context, token).AsTask(), token);
+
+        return _inner.GetOrCreateAsync(TenantCacheKeys.Shared(key), withoutTenant, options, Tags(tags), cancellationToken);
+    }
+#endif
 
     /// <inheritdoc />
     public override ValueTask SetAsync<T>(
@@ -114,15 +136,14 @@ public sealed class SharedHybridCache : HybridCache, IDisposable
 
     // On the thread pool with the caller's async context left behind, so no tenant is current: an inner cache may run
     // the factory in the caller's context (Microsoft's does, for a call whose token cannot be cancelled).
-    private static ValueTask<T> WithoutTenant<TState, T>(
-        TState state, Func<TState, CancellationToken, ValueTask<T>> factory, CancellationToken token)
+    private static ValueTask<T> WithoutTenant<T>(Func<Task<T>> factory, CancellationToken token)
     {
         if (ExecutionContext.IsFlowSuppressed())
-            return new ValueTask<T>(Task.Run(() => factory(state, token).AsTask(), token));
+            return new ValueTask<T>(Task.Run(factory, token));
 
         using (ExecutionContext.SuppressFlow())
         {
-            return new ValueTask<T>(Task.Run(() => factory(state, token).AsTask(), token));
+            return new ValueTask<T>(Task.Run(factory, token));
         }
     }
 }

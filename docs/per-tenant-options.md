@@ -95,7 +95,12 @@ the tenant is invalidated (below). A step that throws is run again on the next r
 
 ## When settings change
 
-Each tenant's value is built on first use and cached. After a tenant's settings change, invalidate the tenant:
+Each tenant's value is built on first use and cached, and `IOptionsSnapshot<T>` gives the cached value rather than
+building one per request. The ordinary steps run then too, once per tenant: a `Configure<TDep>` step that reads a
+scoped service, such as the signed-in user, runs with the first request's, and every later request of the tenant gets
+that value. Read per-request values from the request, not from a per-tenant options type.
+
+After a tenant's settings change, invalidate the tenant:
 `ITenantInvalidator<TKey>.InvalidateAsync(tenantId)` clears its options with everything else Tenantry keeps for it
 ([Tenant stores](tenant-stores.md#everything-kept-for-a-tenant)), and `InvalidateAllAsync()` clears every tenant's.
 

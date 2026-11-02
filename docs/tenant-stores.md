@@ -171,8 +171,10 @@ builder.Services.AddTenantry<string>(tenant => tenant
 `CacheTenants` keeps each tenant the store finds in memory for the duration, by the id or identifier it was looked up
 with. It serves Tenantry's own lookups: the request middleware's and `ITenantLookup<TKey>`'s, which
 `ITenantScopeFactory.RunInScopeAsync` and Tenantry.Pro's jobs and messages use. A lookup that finds no tenant is not
-cached, so a tenant you add is found at once. `GetAllTenantsAsync` is never cached. Code that injects
-`ITenantStore<TKey>` itself reads the store.
+cached, so a tenant you add is found at once. An identifier longer than 256 characters is read from the store each
+time: identifiers are request input, and caching every long spelling of one id (`00…042` reads as 42) would let
+clients fill memory. `GetAllTenantsAsync` is never cached. Code that injects `ITenantStore<TKey>` itself reads the
+store.
 
 When a tenant changes, invalidate it with `ITenantInvalidator<TKey>`, or it is served as it was until its entry
 expires. That covers a tenant suspended, renamed or deleted, or whose slug changes. `ValidateTenantActivity` checks the

@@ -115,7 +115,8 @@ public static class TenantryTenantBuilderExtensions
     /// <param name="configure">Sets how long a tenant is cached, or <see langword="null"/> for the default.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
     /// <remarks>
-    /// Lookups that find nothing, and <see cref="ITenantStore{TKey}.GetAllTenantsAsync"/>, are not cached. Call
+    /// Lookups that find nothing, lookups by an identifier longer than 256 characters, and
+    /// <see cref="ITenantStore{TKey}.GetAllTenantsAsync"/>, are not cached. Call
     /// <see cref="ITenantInvalidator{TKey}.InvalidateAsync"/> when a tenant changes. It uses a registered
     /// <see cref="TimeProvider"/> if there is one.
     /// </remarks>

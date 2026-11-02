@@ -15,6 +15,12 @@ where TKey : IEquatable<TKey>, IParsable<TKey>
 - `IParsable<TKey>` lets Tenantry turn text, such as the identifier a request carries in a header, route or
   claim, into a `TKey`, with the invariant culture.
 
+Tenantry writes an id as text with `IFormattable.ToString(null, CultureInfo.InvariantCulture)`, or `ToString()` for a
+type that is not `IFormattable`, and reads it back with `Parse`. A key type of your own, such as a strongly typed id,
+must read back what it writes: a `record struct` that does not override `ToString()` writes
+`TenantId { Value = … }`, which its `Parse` does not read. Tenantry.Http refuses to send such an id, and a job or
+message that carries one resolves no tenant.
+
 An application has one key type, used by its entities, store and registration. Calling `AddTenantry` with a second
 one throws. An entity that implements `ITenantEntity<string>` in a `Guid` application fails its model's first query or
 save, instead of going unisolated.

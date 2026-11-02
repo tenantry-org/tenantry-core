@@ -24,8 +24,11 @@ public static class TenantryHttpClientBuilderExtensions
     /// <para>
     /// The header goes only to the scheme, host and port of <paramref name="serviceAddress"/>, or else of the base
     /// address set in the client's registration (<c>AddHttpClient(c =&gt; c.BaseAddress = …)</c>), not to an absolute
-    /// address elsewhere. A redirect the client follows keeps it. The id must be printable ASCII with no space at
-    /// either end.
+    /// address elsewhere. The request's address is compared before any handler changes it, so a service discovery
+    /// address such as <c>https+http://billing</c> (.NET Aspire) works. A redirect the client follows keeps the header.
+    /// A header the request already carries that names the current tenant in another form, such as an uppercase GUID,
+    /// is sent in the form <see cref="TenantIds.Format{TKey}"/> writes. The id must be printable ASCII with no space at
+    /// either end, and the key type's <c>Parse</c> must read it back as the same id.
     /// </para>
     /// </remarks>
     /// <param name="builder">The client's builder, from <c>AddHttpClient</c> or <c>AddGrpcClient</c>.</param>
@@ -41,8 +44,9 @@ public static class TenantryHttpClientBuilderExtensions
     /// its registration (thrown as the host starts, or, in a service provider built without a host, when the client is
     /// created). Tenantry is not registered with <c>AddTenantry</c> (thrown as the host starts, or, in a service
     /// provider built without a host, when the client is created).
-    /// A request already carries the header with an id other than the current tenant's, or with no tenant current, or
-    /// the tenant's id is not printable ASCII without a space at either end (thrown when the request is sent).
+    /// A request already carries the header with an id other than the current tenant's, or with no tenant current, the
+    /// tenant's id is not printable ASCII without a space at either end, or the key type's <c>Parse</c> does not read
+    /// the formatted id back as the same id (thrown when the request is sent).
     /// </exception>
     /// <exception cref="ArgumentException"><paramref name="serviceAddress"/> is not absolute.</exception>
     /// <example>
@@ -80,6 +84,13 @@ public static class TenantryHttpClientBuilderExtensions
 
         // Read when the factory builds the client's handlers, not added to HttpClientActions: gRPC's client factory
         // refuses those (before Grpc.Net.ClientFactory 2.64) or warns about them each time it creates a client.
-        return builder.AddHttpMessageHandler(sp => TenantPropagationHandler.Create(sp, name, serviceAddress));
+        // TargetCheck goes first, before service discovery replaces the request's address; the handler that adds the
+        // header goes where UseTenantry() is called, after header propagation.
+        return builder.ConfigureAdditionalHttpMessageHandlers((handlers, sp) =>
+        {
+            var handler = TenantPropagationHandler.Create(sp, name, serviceAddress);
+            handlers.Insert(0, new TargetCheck(handler.Target));
+            handlers.Add(handler);
+        });
     }
 }
