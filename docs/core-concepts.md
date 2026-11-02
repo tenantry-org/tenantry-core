@@ -262,11 +262,19 @@ host Tenantry does not cover, builds on these:
   ([`ITenantRegistration`](api/tenantry-itenantregistration.md)).
 - [`ITenantContext<TKey>`](api/tenantry-itenantcontext.md): the current tenant, read on every query and save.
 - [`ITenantScopeFactory<TKey>`](api/tenantry-itenantscopefactory.md): runs work as a tenant, for jobs and messages.
+- [`ITenantLookup<TKey>`](api/tenantry-itenantlookup.md): finds a tenant, or lists every tenant, through the cache
+  `CacheTenants` adds and in a scope of its own, so the integration does not resolve the scoped store itself. Work that
+  runs for each tenant, such as creating its indexes at startup, starts from `GetAllTenantsAsync`.
 - [`ITenantConnectionStringProvider<TKey>`](api/tenantry-itenantconnectionstringprovider.md) and
   [`CurrentTenantConnectionString<TKey>`](api/tenantry-currenttenantconnectionstring.md): a tenant's connection string,
   for a database per tenant.
+- [`DecorateConnectionStrings`](api/microsoft-extensions-dependencyinjection-tenantrytenantbuilderextensions.md):
+  `tenant.DecorateConnectionStrings(…)` wraps the application's connection-string provider, for example to cache the
+  strings it returns, whichever way the application registered it.
 - [`ITenantEntity<TKey>`](api/tenantry-itenantentity.md) and [`TenantIds`](api/tenantry-tenantids.md): which entities
   are tenant-owned, and the ids that mean no tenant, formatted and parsed as Tenantry does.
+- [`ITenantInvalidator<TKey>`](api/tenantry-itenantinvalidator.md): clears what Tenantry and each handler keep for a
+  tenant, when the integration itself changes or removes the tenant.
 - [`ITenantInvalidationHandler<TKey>`](api/tenantry-itenantinvalidationhandler.md): clears what the integration keeps
   per tenant when a tenant changes.
 - [`TenantTelemetry`](api/tenantry-tenanttelemetry.md): the names a tenant is recorded under in logs and traces, so
