@@ -36,11 +36,20 @@ public abstract class DatabaseFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await DatabaseContainers.StartedAsync(Container);
+        try
+        {
+            await DatabaseContainers.StartedAsync(Container);
 
-        var options = UseProvider(new DbContextOptionsBuilder<ProviderOrdersContext>());
-        await using ProviderOrdersContext db = new((DbContextOptions<ProviderOrdersContext>)options.Options);
-        await db.Database.EnsureCreatedAsync();
+            var options = UseProvider(new DbContextOptionsBuilder<ProviderOrdersContext>());
+            await using ProviderOrdersContext db = new((DbContextOptions<ProviderOrdersContext>)options.Options);
+            await db.Database.EnsureCreatedAsync();
+        }
+        catch
+        {
+            // xUnit creates no further fixture once one fails, so none would dispose the containers started for them.
+            await DatabaseContainers.DisposeAllAsync();
+            throw;
+        }
     }
 
     public ValueTask DisposeAsync()
@@ -68,26 +77,19 @@ internal static partial class DatabaseContainers
     public static IDatabaseContainer PostgreSql { get; } = new PostgreSqlBuilder(ContainerImages.PostgreSql).Build();
 
     /// <summary>Starts every container the first time it is called; waits for <paramref name="container"/>.</summary>
-    public static async Task StartedAsync(IDatabaseContainer container)
-    {
-        try
+    public static Task StartedAsync(IDatabaseContainer container) => Started.Value[container];
+
+    /// <summary>
+    /// Once every start has finished, successful or not, disposes every container. A fixture xUnit did create disposes
+    /// its container again, which Testcontainers allows. A failure to dispose one is dropped, so the failure that led
+    /// here is the one reported.
+    /// </summary>
+    public static async Task DisposeAllAsync() =>
+        await Task.WhenAll(Started.Value.Select(async started =>
         {
-            await Started.Value[container];
-        }
-        catch
-        {
-            // xUnit creates no further fixture once one fails, so none would dispose the containers started for them:
-            // once every start has finished, successful or not, dispose them all. A fixture xUnit did create disposes
-            // its container again, which Testcontainers allows. A failure to dispose one is dropped, so the start's
-            // failure is the one reported.
-            await Task.WhenAll(Started.Value.Select(async started =>
-            {
-                await Task.WhenAny(started.Value);
-                await started.Key.DisposeAsync();
-            })).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-            throw;
-        }
-    }
+            await Task.WhenAny(started.Value);
+            await started.Key.DisposeAsync();
+        })).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
 
     private static Dictionary<IDatabaseContainer, Task> StartAll()
     {
