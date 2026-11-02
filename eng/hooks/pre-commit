@@ -6,6 +6,12 @@
 set -euo pipefail
 
 git diff --cached --quiet -- 'src/*.cs' && exit 0
+# docfx reads src/ from the working tree, not from the commit: with an edit left out of the commit, docs/api would
+# describe code the commit does not have, and CI's check would fail on it.
+if ! git diff --quiet -- 'src/*.cs' || [[ -n "$(git ls-files --others --exclude-standard -- 'src/*.cs')" ]]; then
+  echo "pre-commit: src/ has C# changes that are not staged. Stage or stash them, so docs/api matches the commit." >&2
+  exit 1
+fi
 echo "pre-commit: regenerating docs/api"
 bash scripts/generate-api-docs.sh > /dev/null
 git add -A -- docs/api

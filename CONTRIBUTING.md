@@ -13,6 +13,9 @@ Once per clone, turn on the repository's git hooks, which keep `docs/api` up to 
 git config core.hooksPath eng/hooks
 ```
 
+The hook builds `docs/api` from the files on disk, so it refuses a commit that changes C# under `src/` while other C#
+changes there are not staged. Stage or stash them first.
+
 ## Build & test
 
 ```bash
