@@ -3,9 +3,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Tenantry.Samples.EfCoreWeb.Data;
 
 /// <summary>
-/// EF Core-backed tenant store. Registered as scoped: one instance per request,
-/// sharing the request's AppDbContext. No caching: the middleware calls this once
-/// per request, so a single DB lookup is fine.
+/// EF Core-backed tenant store. Registered as scoped: Tenantry resolves it in a scope
+/// of its own for each lookup, with an AppDbContext of its own. It caches nothing:
+/// Program.cs adds CacheTenants, so a request finds its tenant in memory.
 /// Returns every tenant, active or not: Program.cs refuses inactive tenants with
 /// ValidateTenantActivity, so tools that maintain every tenant's database still find them.
 /// </summary>

@@ -77,6 +77,25 @@ and the ids an integration registered, and throws for any other id. Events 2002 
 `OnMissingTenant` and `OnUnmarkedEntityType`. Each call adds to the ids of the others. Call it after the method that
 adds an integration whose warning it names.
 
+The warnings for a refused request, 1003, 1004, 1005 and 1012, are not among those ids: `IgnoreWarnings` throws for
+them. A public app with a subdomain per tenant can log one for each request a bot or a stale link sends. Lower them
+with your logging configuration instead. Microsoft's logging filters by category and level, not by event id, so this
+setting in `appsettings.json` also hides the other warnings in the category, 1007, 1008, 1010, 1014 and 1016, which
+report the order of your middleware and are logged once each:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Tenantry.AspNetCore": "Error"
+    }
+  }
+}
+```
+
+Check that none of those is logged before you raise the level, or drop only the four ids in a logging provider that
+filters by event id, such as Serilog. The [`tenantry.resolutions` metric](#metrics) still counts every refused request.
+
 An integration registers the warnings it lets the application turn off with `TenantryWarnings.Register`, in the method
 that adds it, with ids from 10000 up, and reads `TenantryWarnings.IsIgnored` before it logs one:
 

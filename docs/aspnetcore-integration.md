@@ -209,10 +209,10 @@ builder.Services.AddRazorComponents()
 ```
 
 Before each hub method call, and each event, JavaScript interop call or navigation of a circuit, the check looks the
-tenant up again, through the cache with [`CacheTenants`](tenant-stores.md#caching). It checks that the tenant is
-[active](tenant-stores.md#suspended-and-inactive-tenants). A refused hub method call fails and does not run, and the
-connection stays open ([`AddTenantry`](api/microsoft-aspnetcore-signalr-tenantryhuboptionsextensions.md)). A refused
-circuit ends
+tenant up again, through the cache with [`CacheTenants`](tenant-stores.md#caching); without it, each one queries the
+store. It checks that the tenant is [active](tenant-stores.md#suspended-and-inactive-tenants). A refused hub method
+call fails and does not run, and the connection stays open
+([`AddTenantry`](api/microsoft-aspnetcore-signalr-tenantryhuboptionsextensions.md)). A refused circuit ends
 ([`AddTenantry`](api/microsoft-extensions-dependencyinjection-tenantryserversideblazorbuilderextensions.md)). With
 `CacheTenants`, a change reaches open connections once the cached tenant expires or `ITenantInvalidator` removes it.
 The descriptor that is current does not change: a connection sees other changes to its tenant when it reconnects.

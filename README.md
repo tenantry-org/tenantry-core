@@ -142,14 +142,18 @@ using Tenantry;
 builder.Services.AddTenantry<Guid>(tenant => tenant.UseStore<EfCoreTenantStore>()); // your ITenantStore<Guid>
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString).UseTenantry());
 
-// …later, in a hosted service (inject ITenantScopeFactory<Guid> scopes and ITenantLookup<Guid> tenants).
+// …later, in a hosted service (inject ITenantScopeFactory<Guid> scopes, ITenantLookup<Guid> tenants and
+// ITenantActivity<Guid> activity).
 // With an id (e.g. from a queue message), look the tenant up in the store and run as it. A tenant the store does not
 // hold, or one that ValidateTenantActivity refuses, throws.
 await scopes.RunInScopeAsync(message.TenantId, (scope, ct) => HandleAsync(scope, message, ct), cancellationToken);
 
-// With a tenant already loaded from the store, open a fresh DI scope with it current.
+// With a tenant already loaded from the store, open a fresh DI scope with it current. CreateScope does not check
+// activity and the store lists suspended tenants too, so skip them, unless the work must reach them (migrations).
 foreach (var tenant in await tenants.GetAllTenantsAsync(cancellationToken))
 {
+    if (!await activity.IsActiveAsync(tenant, cancellationToken)) continue;
+
     await using var scope = scopes.CreateScope(tenant);
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     // EF Core reads are filtered to this tenant and writes are stamped with it.

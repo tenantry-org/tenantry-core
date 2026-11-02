@@ -138,10 +138,14 @@ tests, as it is not relational. SQLite in memory is fast, and Tenantry's own uni
 test what depends on your database (a database per tenant, your migrations), run the same tests against the database
 you deploy on, in a container ([Testcontainers](https://dotnet.testcontainers.org/), for example).
 
-With these entities:
+Build the test's provider with the application's own registration of its context, and replace only the database. A
+test that registers the context again with its own `AddDbContext(… .UseTenantry())` passes whatever the application
+does, so it would stay green if `Program.cs` lost `UseTenantry()`. Keep the registration in an extension method that
+`Program.cs` and the tests both call:
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Tenantry;
 
 public class Order : TenantEntity<string>
@@ -154,9 +158,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<Order> Orders => Set<Order>();
 }
+
+public static class AppRegistration
+{
+    // The one registration of the context: Program.cs passes its database, the tests SQLite in memory.
+    public static IServiceCollection AddAppDbContext(
+        this IServiceCollection services, Action<DbContextOptionsBuilder> database) =>
+        services.AddDbContext<AppDbContext>(options =>
+        {
+            database(options);
+            options.UseTenantry();
+        });
+}
 ```
 
-each test writes as one tenant and reads as another:
+Each test writes as one tenant and reads as another:
 
 ```csharp
 using Microsoft.Data.Sqlite;
@@ -180,7 +196,7 @@ public sealed class OrderIsolationTests : IAsyncLifetime
         await _connection.OpenAsync();
         _services = new ServiceCollection()
             .AddTenantry<string>(tenant => tenant.UseInMemoryStore([Acme, Globex]))
-            .AddDbContext<AppDbContext>(options => options.UseSqlite(_connection).UseTenantry())
+            .AddAppDbContext(options => options.UseSqlite(_connection))   // the application's own registration
             .BuildServiceProvider(validateScopes: true);
 
         // CreateAsyncScope is .NET's plain DI scope and sets no tenant.
@@ -245,8 +261,8 @@ public sealed class OrderIsolationTests : IAsyncLifetime
 }
 ```
 
-The same tests run against your application's own registration if you build the provider from it, for example
-with an extension method that both `Program.cs` and the tests call.
+Check that the tests can fail: remove `options.UseTenantry()` from `AddAppDbContext` and run them. They must fail;
+put the call back.
 
 ### Entity types left unisolated
 

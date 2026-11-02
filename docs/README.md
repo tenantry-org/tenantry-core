@@ -26,7 +26,7 @@ Start with [Getting started](getting-started.md) and [Core concepts](core-concep
 13. [Owned and multi-table entities](efcore-advanced.md): how owned entities, entities split across tables and many-to-many join rows are checked, saves that succeed or fail as a whole, and models that cannot be isolated.
 14. [Non-HTTP hosts](non-http-hosts.md): `AddTenantry` for worker services, scheduled jobs, CLI tools and desktop apps, and running work as a tenant.
 15. [Testing](testing.md): tests that use Tenantry's real services, with tenant scopes, `WebApplicationFactory` and EF Core isolation.
-16. [Diagnostics](diagnostics.md): log event ids, the `tenant.id` trace tag and log scope, and the resolution metric.
+16. [Diagnostics](diagnostics.md): log event ids and how to turn a warning off, the `tenant.id` trace tag and log scope, and the resolution metric.
 17. [AOT & trimming](aot-and-trimming.md): what is supported, per package, and why EF Core differs.
 18. [Compatibility](compatibility.md): supported .NET and EF Core versions, databases, and dependency ranges.
 19. [Troubleshooting](troubleshooting.md): common pitfalls and how to diagnose them.

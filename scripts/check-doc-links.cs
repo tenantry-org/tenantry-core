@@ -9,8 +9,8 @@
 // other relative link inside docs/ (an image, a folder) would not be served, so it fails. Headings get the ids the site
 // gives them: a trailing [#id], or else the heading's text slugged the way github-slugger does, with repeats numbered.
 // README.md, CONTRIBUTING.md, RELEASING.md, RELEASE-CHECKLIST.md and the samples' READMEs are read on GitHub, so their
-// relative links resolve from their own folder. eng/package-readme.md is shown on NuGet, which cannot follow relative
-// links, so it may only use absolute ones.
+// relative links resolve from their own folder. eng/package-readme.md and templates/package-readme.md are shown on
+// NuGet, which cannot follow relative links, so they may only use absolute ones.
 //
 // Absolute links are checked when they point into documentation this script can read: https://tenantry.dev/docs/<group>/
 // for this repository's group, and https://github.com/tenantry-org/<repository>/blob|tree/<ref>/<path> for this
@@ -28,9 +28,11 @@ var docRoots = new Dictionary<string, string> { [group] = "." };
 if (Directory.Exists(Path.Combine(otherRoot, "docs"))) docRoots[otherGroup] = otherRoot;
 
 string[] githubFiles = ["README.md", "CONTRIBUTING.md", "RELEASING.md", "RELEASE-CHECKLIST.md"];
+// The READMEs packed into NuGet packages: the libraries' and the templates'.
+string[] nugetFiles = ["eng/package-readme.md", "templates/package-readme.md"];
 var files = githubFiles.Where(File.Exists)
     .Concat(Directory.Exists("samples") ? Directory.EnumerateFiles("samples", "README.md", SearchOption.AllDirectories) : [])
-    .Concat(File.Exists("eng/package-readme.md") ? ["eng/package-readme.md"] : [])
+    .Concat(nugetFiles.Where(File.Exists))
     .Concat(Directory.Exists("docs") ? Directory.EnumerateFiles("docs", "*.md", SearchOption.AllDirectories) : [])
     .Select(Normalize)
     .Where(path => !path.Split('/').Any(part => part is "bin" or "obj" or "node_modules"))
@@ -94,7 +96,7 @@ string? Check(string page, string target)
     if (Regex.IsMatch(link, @"^[a-z][a-z0-9+.-]*:", RegexOptions.IgnoreCase) || link.StartsWith("//")) return null;
     if (link.StartsWith('/')) return "a site path only works on the site; use a relative link or a full URL";
 
-    if (page == "eng/package-readme.md") return "NuGet cannot follow relative links; use a full URL";
+    if (nugetFiles.Contains(page)) return "NuGet cannot follow relative links; use a full URL";
 
     var resolved = Normalize(Path.Combine(Path.GetDirectoryName(page) ?? "", Uri.UnescapeDataString(link)));
     if (resolved.StartsWith("../")) return $"points outside the repository";

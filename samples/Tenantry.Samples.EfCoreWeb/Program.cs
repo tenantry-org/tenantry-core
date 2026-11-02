@@ -47,6 +47,10 @@ builder.Services.AddTenantry<string>(tenant =>
     tenant.ResolveFromHeader("X-Tenant-Id");
     tenant.UseStore<EfCoreTenantStore>();
 
+    // Keeps each tenant the store finds in memory, so a request does not query the Tenants table to resolve its
+    // tenant. An app that changes a tenant calls ITenantInvalidator; this sample never does.
+    tenant.CacheTenants();
+
     // The store returns inactive tenants too. Refuse them here: requests get 403, and no scope opens for them.
     tenant.ValidateTenantActivity(t => t is Tenant { IsActive: true });
 

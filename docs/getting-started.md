@@ -10,9 +10,12 @@ SDK or later and runs on the .NET 10 runtime.
 
 ## 1. Install the packages
 
-For an ASP.NET Core app backed by EF Core, with SQLite as the database:
+Create an empty web project and add Tenantry's ASP.NET Core and EF Core packages. This guide stores its data in a
+SQLite file, so it adds EF Core's SQLite provider too; use your own database's provider instead.
 
 ```bash
+dotnet new web -n Orders
+cd Orders
 dotnet add package Tenantry.AspNetCore
 dotnet add package Tenantry.EfCore
 dotnet add package Microsoft.EntityFrameworkCore.Sqlite
@@ -118,19 +121,19 @@ builder.Services.AddDbContext<AppDbContext>(options => options
 ```csharp
 var app = builder.Build();
 
-// Create the database and its tables on startup. Use EF Core migrations in production.
-await using (var scope = app.Services.CreateAsyncScope())
+// Creates app.db and the Orders table on the first run. A real application applies migrations instead.
+using (var scope = app.Services.CreateScope())
 {
-    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
+    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreated();
 }
 
 app.UseTenantry();   // resolves the tenant; place after UseAuthentication() if resolving from claims
 ```
 
 `UseTenantry()` must run before any endpoint that needs a tenant
-([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). `EnsureCreatedAsync` creates `app.db` with an
-`Orders` table the first time the app starts. It cannot change a database it has already created, so once your model
-changes, use migrations instead ([Migrations](efcore-integration.md#migrations)).
+([Pipeline ordering](aspnetcore-integration.md#pipeline-ordering)). `EnsureCreated` needs no tenant: it creates the
+schema and reads no rows. [Migrations](efcore-integration.md#migrations) has the `dotnet ef` commands for a real
+application.
 
 ## 8. Use the tenant in your endpoints
 
@@ -152,20 +155,20 @@ app.Run();
 
 ## 9. Try it
 
-Start the app with `dotnet run`, and use the address it prints in place of `…`:
+Start the app with `dotnet run --urls http://localhost:5000`, then, from another terminal:
 
 ```bash
 # Acme creates and lists an order
-curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000001" -X POST "…/orders?description=Widgets"
-curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000001" "…/orders"   # shows the order
+curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000001" -X POST "http://localhost:5000/orders?description=Widgets"
+curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000001" http://localhost:5000/orders   # shows the order
 
 # Globex sees none of Acme's data
-curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000002" "…/orders"   # empty
+curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000002" http://localhost:5000/orders   # empty
 
 # Missing/unknown/invalid tenant
-curl "…/orders"                                                          # 400 (RequireTenant)
-curl -H "X-Tenant-Id: not-a-guid" "…/orders"                             # 404 (names no tenant)
-curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000099" "…/orders"  # 404 (not in store)
+curl http://localhost:5000/orders                                                          # 400 (RequireTenant)
+curl -H "X-Tenant-Id: not-a-guid" http://localhost:5000/orders                             # 404 (names no tenant)
+curl -H "X-Tenant-Id: 00000000-0000-0000-0000-000000000099" http://localhost:5000/orders  # 404 (not in store)
 ```
 
 The rejections have an empty body. Add `builder.Services.AddProblemDetails()` for `application/problem+json` bodies

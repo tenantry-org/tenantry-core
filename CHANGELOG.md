@@ -262,6 +262,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not install. The sample applies its migrations as it starts, so the steps are now `dotnet run` alone.
 - The samples folder had no README. [`samples/README.md`](samples/README.md) gives each sample's command, port and
   first request.
+- The getting started guide runs as written in an empty `dotnet new web` project: it adds EF Core's SQLite provider,
+  creates the database with `EnsureCreated`, and its `curl` examples name the address it starts the app on. Before, it
+  called `UseSqlServer(connectionString)` with neither the provider nor a connection string, and created no tables, so
+  the first request failed.
+- The testing guide's EF Core isolation test registers the context through the application's own extension method, as
+  the AI agents guide's test does. It registered the context again with `AddDbContext(… .UseTenantry())`, so it stayed
+  green when the application's own registration lost `UseTenantry()`.
+- The owned and multi-table entities guide says what the `UPDATE` that confirms a many-to-many end or an owner does to
+  its row: it holds the row's lock until the transaction ends, changes its `rowversion` or `xmin`, so two saves that
+  link rows to the same tag can fail with `DbUpdateConcurrencyException`, and fires its triggers and temporal history
+  ([Many-to-many relationships](docs/efcore-advanced.md#many-to-many-relationships)).
+- The diagnostics guide says how to lower the warnings logged for each refused request (1003, 1004, 1005 and 1012),
+  which `IgnoreWarnings` does not accept, and which other warnings a level filter on `Tenantry.AspNetCore` hides
+  ([Turning off a warning](docs/diagnostics.md#turning-off-a-warning)).
+- The tenant stores guide says that a request naming no tenant queries the store every time, with or without
+  `CacheTenants`, and to rate-limit such requests where anyone can send them ([Caching](docs/tenant-stores.md#caching)).
+  The SignalR and Blazor Server section says that without `CacheTenants` each hub method call and circuit event
+  queries the store.
+- The README's worker example skips suspended tenants when it loops over every tenant with `CreateScope`, which does
+  not check activity.
+- The `EfCoreWeb` sample caches its tenants with `CacheTenants`, so a request no longer queries the `Tenants` table to
+  resolve its tenant.
 
 ## [0.7.0] - 2026-10-05
 

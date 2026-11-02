@@ -76,6 +76,21 @@ existing tags to an existing post sends six. New ends cost nothing, as their `IN
 - Deleting an end deletes its join rows. EF Core deletes those it tracks, which the end's own `DELETE` checks, and the
   database's cascade deletes the others.
 
+Each `UPDATE` that confirms an end is a real write of its row, though it changes no value, and so is the one that
+confirms an owner ([below](#how-an-owner-is-confirmed)):
+
+- It holds the row's lock until the save's transaction ends, so saves that link rows to the same popular tag wait for
+  each other.
+- Its `WHERE` names every concurrency token of the end, and it changes a SQL Server `rowversion` or PostgreSQL `xmin`.
+  Two saves that each loaded the same tag, and then link it to different posts, can fail with
+  `DbUpdateConcurrencyException` (and warning 2003) for a tag neither changed. Catch it, reload the tag and save again.
+- It fires the row's update triggers, and writes temporal-table history and change data capture rows.
+- A `SavingChanges` interceptor of yours that runs after Tenantry's sees the end as `Modified`, so one that sets an
+  `UpdatedAt` column on modified entities sets it on the end too.
+
+An end whose key in the join row includes its `TenantId` is not written, as the join row can only name that tenant's
+row ([how](#how-a-join-rows-ends-are-confirmed)).
+
 Change join rows through the navigations. `ExecuteUpdate` and `ExecuteDelete` on the join entity's set, and raw SQL
 against the join table, are not covered: they reach every tenant's join rows, as the join entity has no query filter.
 
@@ -162,7 +177,10 @@ concurrency token. So the interceptors check each model on its first query and f
 ### How an owner is confirmed
 
 - An owner the save does not otherwise write (loaded or only attached, or modified with nothing EF Core writes) has
-  its `TenantId` written back with its concurrency token, so an audit log sees an update of the owner.
+  its `TenantId` written back with its concurrency token, so an audit log sees an update of the owner. As with a join
+  row's end, that `UPDATE` locks the row, changes its `rowversion` or `xmin`, and fires its triggers
+  ([what it does](#many-to-many-relationships)): adding a line item to an order the save does not otherwise change
+  updates the order.
 - An owner deleted and added again under the same key, which EF Core saves as one `UPDATE` of what differs, has its
   stored row read.
 - An owner whose `TenantId` is part of the key its owned types are owned through needs neither: their foreign key

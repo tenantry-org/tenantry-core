@@ -181,6 +181,12 @@ time: identifiers are request input, and caching every long spelling of one id (
 clients fill memory. `GetAllTenantsAsync` is never cached. Code that injects `ITenantStore<TKey>` itself reads the
 store.
 
+So a request that names no tenant, through a made-up subdomain, header, route value or claim, queries the store every
+time, with or without the cache. Where anyone can send such requests, as with a wildcard DNS record for your
+subdomains, rate-limit them before they reach Tenantry, for example with ASP.NET Core's rate limiter
+(`AddRateLimiter` with a `GlobalLimiter` partitioned by client IP, and `app.UseRateLimiter()` before
+`app.UseTenantry()`).
+
 When a tenant changes, invalidate it with `ITenantInvalidator<TKey>`, or it is served as it was until its entry
 expires. That covers a tenant suspended, renamed or deleted, or whose slug changes. `ValidateTenantActivity` checks the
 cached descriptor, so a suspension waits for the invalidation too. When an identifier moves from one tenant to
