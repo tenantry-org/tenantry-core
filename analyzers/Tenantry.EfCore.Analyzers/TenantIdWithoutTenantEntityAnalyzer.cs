@@ -204,14 +204,16 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
                  !SymbolEqualityComparer.Default.Equals(current, types.DbContext);
                  current = current.BaseType, definition = definition.BaseType)
             {
-                var declared = types.DbSets(definition).ToDictionary(set => set.Property.Name, set => set.Entity);
+                var passed = new HashSet<ISymbol>(
+                    types.DbSets(definition)
+                        .Where(set => set.Entity is ITypeParameterSymbol)
+                        .Select(set => set.Property.OriginalDefinition),
+                    SymbolEqualityComparer.Default);
 
                 foreach (var set in types.DbSets(current))
                 {
-                    var passed = declared.TryGetValue(set.Property.Name, out var declaredEntity) &&
-                                 declaredEntity is ITypeParameterSymbol;
-
-                    yield return (set.Entity, declaration.Location, declaration.Generated, passed);
+                    yield return (set.Entity, declaration.Location, declaration.Generated,
+                        passed.Contains(set.Property.OriginalDefinition));
                 }
             }
         }
