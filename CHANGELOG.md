@@ -117,6 +117,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 1.0 now comes no earlier than 10 May 2027, not 10 November 2027. It drops net8.0 and net9.0, which until then are
+  still built, tested and shipped. Microsoft stops patching .NET 8 and 9, EF Core 8 and 9 included, on 10 November
+  2026.
 - An `ITenantActivityValidator<TKey>` registered as scoped or transient makes `ITenantActivity<TKey>` throw
   `InvalidOperationException` when it is first resolved, which `RunInScopeAsync` and the request middleware do. Such a
   validator was resolved once, from the root provider, and shared by every request.

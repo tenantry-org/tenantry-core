@@ -31,7 +31,7 @@ Tenantry Core that gets them too. Of the minor versions released before Tenantry
 gets security fixes, and only while it is the latest: older ones are not patched, and their users upgrade. A patch to
 a minor version older than the latest is released from that minor's `release/X.Y` branch. The supported versions
 from 1.0 will be set out here before 1.0 is released. The prereleases each push to `master` publishes
-(`0.7.0-alpha.0.126`) are not supported: a fix reaches them only in a later prerelease.
+(`0.9.0-alpha.0.1`) are not supported: a fix reaches them only in a later prerelease.
 
 | Package | Supported until 1.0 |
 |---|---|

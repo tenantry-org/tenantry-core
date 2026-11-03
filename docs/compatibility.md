@@ -8,12 +8,12 @@ The .NET versions, EF Core versions and databases Tenantry supports, and how its
 |------|-------------------|----------|-----------------|
 | .NET 10 | LTS, until 14 November 2028 | Primary | .NET 10's end of support |
 | .NET 11 | STS, two years from its release on 10 November 2026 | Primary (built and tested against the release candidate until it ships) | .NET 11's end of support |
-| .NET 9 | STS, until 10 November 2026 | Legacy | 10 November 2027, one year after Microsoft's end of support |
-| .NET 8 | LTS, until 10 November 2026 | Legacy | 10 November 2027, one year after Microsoft's end of support |
+| .NET 9 | STS, until 10 November 2026 | Legacy | 1.0, no earlier than 10 May 2027 |
+| .NET 8 | LTS, until 10 November 2026 | Legacy | 1.0, no earlier than 10 May 2027 |
 
 Move to .NET 10: Microsoft stops patching .NET 8 and .NET 9, EF Core 8 and 9 included, on 10 November 2026. Legacy
-means the net8.0 and net9.0 builds are still shipped, built and tested. They stay through the beta. 1.0 ends the beta
-and drops them, and comes no earlier than 10 November 2027.
+means the net8.0 and net9.0 builds are still shipped, built and tested. They stay until 1.0, which drops them and comes
+no earlier than 10 May 2027.
 
 The packages target net8.0, net9.0, net10.0 and net11.0. Until .NET 11 ships, only prereleases include net11.0, built
 against its release candidate; the first stable release that includes it depends on .NET 11.0.0 and is cut after it
@@ -80,7 +80,7 @@ compares ids under it. SQL Server's and MySQL's defaults ignore case
 - `Tenantry.EfCore`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` take
   `Tenantry.Core` from their own release up to the next minor (`[x.y.z, x.(y+1).0)`), as a minor release may break
   the API before 1.0. Within a minor they can be updated separately.
-- In the beta, Tenantry.Pro releases each minor version with Tenantry Core's, and runs on that Core minor.
+- Until 1.0, Tenantry.Pro releases each minor version with Tenantry Core's, and runs on that Core minor.
 
 CI checks that every minimum is a version the tests run against. A weekly job runs the whole test suite with every
 dependency at the newest version it allows.

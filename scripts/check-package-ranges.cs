@@ -16,9 +16,9 @@
 //     target framework's own major (net8.0 needs 8.x or later, not 10.x), except where an API arrived in a later
 //     major that still supports the framework (HybridCache, in Microsoft.Extensions.Caching.Abstractions 9.0).
 //   - Every other dependency must be bounded below its next breaking version: [a.b.c, (a+1).0.0), or for a 0.x
-//     package, where a minor release may break (SemVer), [0.b.c, 0.(b+1).0) (Tenantry Core in beta). Microsoft.AspNetCore.*
-//     and Microsoft.EntityFrameworkCore* must also match the target framework's major version (net10.0 depends on
-//     10.x), because each framework's build is compiled against that major.
+//     package, where a minor release may break (SemVer), [0.b.c, 0.(b+1).0) (Tenantry Core before 1.0).
+//     Microsoft.AspNetCore.* and Microsoft.EntityFrameworkCore* must also match the target framework's major version
+//     (net10.0 depends on 10.x), because each framework's build is compiled against that major.
 //   - Tenantry.Core, Tenantry.EfCore and Tenantry.AspNetCore must each hold analyzers/dotnet/cs/<id>.Analyzers.dll,
 //     which Directory.Build.targets packs. Without it an application builds clean, with none of its warnings, so
 //     nothing else would notice. (A dependency's exclude="Analyzers" does not matter: NuGet gives an application the

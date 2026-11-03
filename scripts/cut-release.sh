@@ -110,8 +110,6 @@ if [[ "$(git config --get gpg.format || true)" != ssh && "$key" != */* && "$key"
   key=""
 fi
 key="${key:-<your signing key, such as ~/.ssh/id_ed25519.pub>}"
-title="Tenantry $version"
-[[ "$minor" == 0.* ]] && title="$title (beta)"
 cat <<EOF
 Prepared $branch at $(git rev-parse --short "$release"), and two commits on master. Nothing is pushed or tagged.
 
@@ -121,7 +119,7 @@ Prepared $branch at $(git rev-parse --short "$release"), and two commits on mast
    git push origin master
 3. Tag the branch's head, signed with your signing key's public key file, and push the tag:
    git -c gpg.format=ssh -c "user.signingkey=$key" \\
-     tag -s v$version -m "$title" origin/$branch
+     tag -s v$version -m "Tenantry $version" origin/$branch
    git push origin v$version
 
 To undo everything before pushing:

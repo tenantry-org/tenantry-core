@@ -54,7 +54,7 @@ Only the maintainer can push `v*` tags.
 
    ```sh
    git -c gpg.format=ssh -c user.signingkey=~/.ssh/id_ed25519.pub \
-     tag -s v0.8.0 -m "Tenantry 0.8.0 (beta)" origin/release/0.8
+     tag -s v0.8.0 -m "Tenantry 0.8.0" origin/release/0.8
    git push origin v0.8.0
    ```
 

@@ -35,7 +35,8 @@ app.UseTenantry();
   `HybridCache` entries and options per tenant.
 - `Tenantry.Templates` for `dotnet new tenantry-api` and `dotnet new tenantry-worker`.
 
-Tenantry is in beta until 1.0: a 0.x minor release can change the API, and the changelog says how to update.
+Releases are numbered 0.x until 1.0, no earlier than 10 May 2027: a 0.x minor release can change the API, and the
+changelog says how to update.
 
 Moving from Finbuckle.MultiTenant: [how the two compare](https://tenantry.dev/compare) and
 [the migration guide](https://tenantry.dev/docs/core/migrating-from-finbuckle).
