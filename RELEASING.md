@@ -89,6 +89,12 @@ the cherry-pick in step 4 above, so push `master` before its tag, as for a new m
    `release/X.Y` (Actions → Dependency lanes → Run workflow), as its weekly run tests only `master`, and read the
    run itself, as a run started by hand opens no issue when it fails. Fix a failure from a new dependency or database
    server version in the patch, or note it in its `CHANGELOG.md` section, before tagging.
+   Then run Tenantry Pro's Dependency lanes workflow on Pro's `release/X.Y` the same way: its "Latest in every range"
+   job builds Pro's branch against this `release/X.Y` and runs Pro's tests. Pro's packages accept any Core release in
+   their minor, so the patch reaches Pro's customers without a Pro release. Read that run too, and when it fails, fix
+   Core before tagging, or patch Pro and release both together, as
+   [When Core patches a released minor](https://github.com/tenantry-org/tenantry-pro/blob/master/RELEASE-CHECKLIST.md#when-core-patches-a-released-minor)
+   in Pro's release checklist says.
 5. Before tagging, check that the tag is the line's next patch (`git tag --list 'v0.7.*'`), that `git log
    v0.7.0..origin/release/0.7` holds only what the patch should, that `TenantryPackageBaseline` names the line's last
    release, and that the `CHANGELOG.md` section is there, and on `master`. The workflow checks the section on both
