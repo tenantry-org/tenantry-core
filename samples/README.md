@@ -7,7 +7,7 @@ SDK, and the samples target `net10.0`, so they also need the .NET 10 runtime
 
 | Sample | Demonstrates |
 |--------|--------------|
-| [`SecureApi`](Tenantry.Samples.SecureApi) | Production starting point: JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation, integration tests |
+| [`SecureApi`](Tenantry.Samples.SecureApi) | The [`tenantry-api` template's](../templates/content/tenantry-api) application, built from its source for the integration tests: JWT authentication, tenant selection validated against the caller's claims, required tenants, EF Core isolation. Start an application from the template with `dotnet new tenantry-api` |
 | [`Quickstart`](Tenantry.Samples.Quickstart) | Minimal ASP.NET Core setup, resolvers, access validators, endpoint metadata |
 | [`EfCoreWeb`](Tenantry.Samples.EfCoreWeb) | An EF Core app with migrations, DB-backed store, mixed tenanted/global entities, admin queries |
 | [`EfCoreConsole`](Tenantry.Samples.EfCoreConsole) | EF Core isolation with no ASP.NET Core, using `AddTenantry` and manual scopes |

@@ -7,8 +7,8 @@
 # run so that its launch profile sets the environment, with tokens from its development endpoint: an anonymous caller
 # gets 401, a token for acme gets 403 for globex, acme's new note is listed for acme and not for globex. The worker: it
 # processes acme's and globex's first orders, drops the messages for an unknown and a suspended tenant, logs the one
-# that fails, and keeps running. It also checks that --TenantryVersion sets the version of every Tenantry reference,
-# and that the API template's code is still the SecureApi sample's, which the integration tests test.
+# that fails, and keeps running. It also checks that --TenantryVersion sets the version of every Tenantry reference.
+# The integration tests test the API template's code itself: the SecureApi sample compiles the template's source files.
 # Usage, after dotnet pack of src/ and templates/ (build-test.yml's Pack step):
 #
 #   scripts/smoke-templates.sh <package folder>
@@ -43,34 +43,6 @@ if [[ "$template_version" != "$version" ]]; then
 fi
 
 failed=0
-
-# The API template is the SecureApi sample under its own namespace, and the integration tests test only the sample,
-# so a change to one must be made to the other. Comments may differ; the code may differ only by these lines, which
-# the template adds (HSTS and HTTPS redirection as ASP.NET Core's templates have them, and a using its namespace needs).
-sample="$repo/samples/Tenantry.Samples.SecureApi"
-api_template="$repo/templates/content/tenantry-api"
-template_only=(
-  "AuthSettings.cs|"
-  "Notes.cs|> using Tenantry;"
-  "Program.cs|> if (!app.Environment.IsDevelopment())
-> {
->     app.UseHsts();
-> }
-> app.UseHttpsRedirection();"
-)
-code() { # <file>: its lines of code, under the template's namespace
-  sed -e '/^[[:space:]]*\/\//d' -e '/^[[:space:]]*$/d' -e 's/Tenantry\.Samples\.SecureApi/TenantryApi/g' "$1"
-}
-for entry in "${template_only[@]}"; do
-  file="${entry%%|*}"
-  differences=$(diff <(code "$sample/$file") <(code "$api_template/$file") | grep '^[<>]' || true)
-  if [[ "$differences" != "${entry#*|}" ]]; then
-    echo "FAIL tenantry-api ($file is not samples/Tenantry.Samples.SecureApi/$file: make the change in both, or" \
-      "update template_only in $0)" >&2
-    diff <(code "$sample/$file") <(code "$api_template/$file") | sed 's/^/     /' >&2 || true
-    failed=1
-  fi
-done
 
 work="$(mktemp -d)"
 pid=""
