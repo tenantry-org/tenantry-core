@@ -18,7 +18,9 @@ internal interface ICapturedTenant
     /// <summary>The prefix of the tenant's keys and tags (<see cref="TenantCacheKeys.TenantPrefix"/>).</summary>
     string Prefix { get; }
 
-    /// <summary>The tenant's tag, which every entry of the tenant has (<see cref="TenantCacheKeys.TenantTag"/>).</summary>
+    /// <summary>
+    /// The tenant's tag, which every entry of the tenant has (<see cref="TenantCacheKeys.TenantTag"/>).
+    /// </summary>
     string Tag { get; }
 
     /// <summary>

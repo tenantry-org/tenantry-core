@@ -141,18 +141,26 @@ public sealed class PerTenantOptionsTests
     [Fact]
     public void ATenantsId_IsFormattedOncePerDescriptor_AndAgainWhenItChanges()
     {
-        using var provider = Build();
+        // A Guid, as formatting one makes a new string each time. A string id is its own text, so it would prove
+        // nothing.
+        var acme = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var globex = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        ServiceCollection services = new();
+        services.AddTenantry<Guid>(tenant => tenant
+            .UseInMemoryStore([new TenantDescriptor<Guid> { TenantId = acme, Name = "Acme" }])
+            .ConfigurePerTenant(perTenant => perTenant.Configure<BrandingOptions>((o, t) => o.Name = t.Name)));
+        using var provider = services.BuildServiceProvider(Conformance.ProviderOptions);
         var currentTenantId = provider.GetRequiredService<ICurrentTenantId>();
-        var tenant = new ChangingIdTenant { TenantId = "acme" };
+        var tenant = new ChangingIdTenant { TenantId = acme };
 
-        using (MakeCurrent(provider, tenant))
+        using (provider.GetRequiredService<ITenantContextSetter<Guid>>().MakeCurrent(tenant))
         {
             var first = currentTenantId.Current;
-            first.Should().Be("acme");
+            first.Should().Be(acme.ToString());
             currentTenantId.Current.Should().BeSameAs(first);
 
-            tenant.TenantId = "globex";
-            currentTenantId.Current.Should().Be("globex");
+            tenant.TenantId = globex;
+            currentTenantId.Current.Should().Be(globex.ToString());
         }
     }
 
@@ -716,11 +724,11 @@ public sealed class PerTenantOptionsTests
     }
 
     // A descriptor whose id the application changes after the tenant was made current.
-    private sealed class ChangingIdTenant : ITenantDescriptor<string>
+    private sealed class ChangingIdTenant : ITenantDescriptor<Guid>
     {
-        public required string TenantId { get; set; }
+        public required Guid TenantId { get; set; }
 
-        public string Name => TenantId;
+        public string Name => "Changing";
     }
 
     private sealed class ChangingStore(ITenantDescriptor<string> tenant) : ITenantStore<string>

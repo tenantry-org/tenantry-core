@@ -168,9 +168,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   template does, and it listens on port 5160, as the template's projects do.
 - The `HybridCache` and `ITenantDistributedCache` of `IsolateCaches()`, and the per-tenant options values, build a
   tenant's key prefix, tags and id text once per tenant descriptor instead of on every call, and an options read that
-  finds its value no longer allocates a closure. With `CacheTenants` or the in-memory store, a request's cache and
-  options reads reuse them. The check before each command of an `AddDbContextPerTenantDatabase` context formats tenant
-  ids only for the exception it throws.
+  finds its value no longer allocates a closure. A request builds them once, and with `CacheTenants` or the in-memory
+  store, which keep each tenant's descriptor, every request of the tenant reuses them. The check before each command of
+  an `AddDbContextPerTenantDatabase` context formats tenant ids only for the exception it throws.
 
 ### Fixed
 
@@ -282,8 +282,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   queries the store.
 - The README's worker example skips suspended tenants when it loops over every tenant with `CreateScope`, which does
   not check activity.
-- The `EfCoreWeb` sample caches its tenants with `CacheTenants`, so a request no longer queries the `Tenants` table to
-  resolve its tenant.
+- The `EfCoreWeb` sample caches its tenants with `CacheTenants`, so a request resolves a tenant the store has already
+  returned from memory, instead of querying the `Tenants` table each time.
 
 ## [0.7.0] - 2026-10-05
 

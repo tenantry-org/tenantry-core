@@ -288,7 +288,8 @@ internal sealed class TenantOptionsManager<[DynamicallyAccessedMembers(Dynamical
     public TOptions Get(string? name)
     {
         name ??= Microsoft.Extensions.Options.Options.DefaultName;
-        return cache.GetOrAdd(name, static (optionsName, optionsFactory) => optionsFactory.Create(optionsName), factory);
+        return cache.GetOrAdd(
+            name, static (optionsName, optionsFactory) => optionsFactory.Create(optionsName), factory);
     }
 }
 

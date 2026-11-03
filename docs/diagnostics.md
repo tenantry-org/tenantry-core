@@ -79,9 +79,10 @@ adds an integration whose warning it names.
 
 The warnings for a refused request, 1003, 1004, 1005 and 1012, are not among those ids: `IgnoreWarnings` throws for
 them. A public app with a subdomain per tenant can log one for each request a bot or a stale link sends. Lower them
-with your logging configuration instead. Microsoft's logging filters by category and level, not by event id, so this
-setting in `appsettings.json` also hides the other warnings in the category, 1007, 1008, 1010, 1014 and 1016, which
-report the order of your middleware and are logged once each:
+with your logging configuration instead. Microsoft's logging filters by category and level, not by event id, and a
+category's setting covers the categories whose names start with it. So this setting in `appsettings.json` also hides
+the other warnings of `Tenantry.AspNetCore` and `Tenantry.AspNetCore.OutputCache`, 1007 to 1010, 1014 and 1016. Each
+reports middleware in the wrong order, or that Tenantry cannot check the order, and is logged once:
 
 ```json
 {
