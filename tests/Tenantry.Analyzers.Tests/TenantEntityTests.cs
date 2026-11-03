@@ -321,6 +321,87 @@ public sealed class TenantEntityTests
             ]);
 
     [Fact]
+    public Task ABaseContextFromAnotherAssembly_ItsOwnTypesAreLeftToItsProject() =>
+        Verify.AnalyzerWithLibrariesAsync<TenantIdWithoutTenantEntityAnalyzer>(
+            Usings + """
+                // Country is marked shared in the other project, by a marker this compilation cannot see.
+                public class TestAppDbContext(DbContextOptions<AppDbContext> options) : AppDbContext(options);
+                """,
+            [
+                new("App", """
+                    using System;
+                    using Microsoft.EntityFrameworkCore;
+                    using Tenantry;
+                    using Tenantry.EfCore;
+
+                    public class Payment : TenantEntity<Guid>
+                    {
+                        public int Id { get; set; }
+                    }
+
+                    public class Country
+                    {
+                        public int Id { get; set; }
+                        public Guid TenantId { get; set; }
+                    }
+
+                    public class AppDbContext(DbContextOptions options) : DbContext(options)
+                    {
+                        public DbSet<Payment> Payments => Set<Payment>();
+                        public DbSet<Country> Countries => Set<Country>();
+
+                        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+                            modelBuilder.Entity<Country>().IsSharedAcrossTenants();
+                    }
+                    """, AsReferenceAssembly: true),
+            ]);
+
+    [Fact]
+    public Task ABaseContextFromAnotherAssembly_ReportsOnlyTheTypesThisContextPasses_NotThoseItsBasePasses() =>
+        Verify.AnalyzerWithLibrariesAsync<TenantIdWithoutTenantEntityAnalyzer>(
+            Usings + """
+                public class Member
+                {
+                    public int Id { get; set; }
+                    public Guid TenantId { get; set; }
+                }
+
+                public class {|TNY1001:MembersDbContext|}(DbContextOptions<MembersDbContext> options)
+                    : RegionalUsersDbContext<Member>(options)
+                {
+                    public DbSet<Invoice> Invoices => Set<Invoice>();
+                }
+                """,
+            [
+                new("Users", """
+                    using System;
+                    using Microsoft.EntityFrameworkCore;
+
+                    public class Region
+                    {
+                        public int Id { get; set; }
+                        public Guid TenantId { get; set; }
+                    }
+
+                    public class UsersDbContext<TUser, TRegion>(DbContextOptions options) : DbContext(options)
+                        where TUser : class
+                        where TRegion : class
+                    {
+                        public DbSet<TUser> Users => Set<TUser>();
+                        public DbSet<TRegion> Regions => Set<TRegion>();
+                    }
+
+                    // Region is marked shared here, by a marker the derived context's compilation cannot see.
+                    public class RegionalUsersDbContext<TUser>(DbContextOptions options) : UsersDbContext<TUser, Region>(options)
+                        where TUser : class
+                    {
+                        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+                            modelBuilder.Entity<Region>().IsSharedAcrossTenants();
+                    }
+                    """, AsReferenceAssembly: true),
+            ]);
+
+    [Fact]
     public Task ABaseContextFromAnotherAssembly_IsReportedOnTheContextsHandWrittenDeclaration_NotInGeneratedCode() =>
         Verify.AnalyzerWithFilesAsync<TenantIdWithoutTenantEntityAnalyzer>(
             Usings + """

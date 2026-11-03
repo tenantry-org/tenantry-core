@@ -225,8 +225,10 @@ Core, workers and a console app's `Main` have no such context, so blocking there
 - A generic base context's type parameters are the types the derived context passes: in
   `class AppDbContext : UsersDbContext<AppUser>`, the base's `DbSet<TUser>` maps `AppUser`.
 - A base context from a package or another project, such as `IdentityDbContext<AppUser>`, adds the types of its
-  `DbSet<T>` properties, not those its own `OnModelCreating` maps. A type it alone maps, such as the user type, is
-  reported on the derived context's declaration.
+  `DbSet<T>` properties, not those its own `OnModelCreating` maps. All of them count toward whether the context maps a
+  tenant-owned type, but only a type the derived context passes as a type argument, such as `AppUser`, is reported, on
+  the derived context's declaration. A type the base context names itself, such as its `DbSet<Country>`, is left to
+  the project that declares it, where the rule sees the markers that project applies.
 - Generated code counts for its contexts, types and markers, and nothing is reported in it. Each type is reported
   once, where it is first mapped outside generated code.
 - A context that maps no tenant-owned type is left alone. A database-per-tenant context, or one Tenantry does not

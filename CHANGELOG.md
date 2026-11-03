@@ -208,8 +208,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   action marked `[AllowMissingTenant]`. See [Access control](docs/access-control.md).
 - TNY1001 checks the types a generic base context or a base context from another assembly maps. An `AppUser` with a
   `TenantId` that does not implement `ITenantEntity<TKey>`, mapped only by `IdentityDbContext<AppUser>`'s `Users`, was
-  not reported, so every tenant read every tenant's users. A type only such a base context maps is reported on the
-  derived context's declaration ([what it counts](docs/analyzers.md#what-tny1001-counts-as-mapped-and-marked)).
+  not reported, so every tenant read every tenant's users. Of the types a base context from another assembly maps,
+  only one the derived context passes as a type argument, such as `AppUser`, is reported, on the derived context's
+  declaration. A type the base context names itself, such as its `DbSet<Country>`, is left to the project that
+  declares it, where its markers are seen
+  ([what it counts](docs/analyzers.md#what-tny1001-counts-as-mapped-and-marked)).
 - TNY2001 reports in an application that calls Tenantry.Pro's `UsePro`. It took `UsePro` for code that might add an
   access validator, so it reported nothing in any application that called it, though `UsePro` adds none.
 - A hub method on a long-polling SignalR connection keeps the connection's tenant after a `CreateScope` or

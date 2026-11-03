@@ -14,10 +14,12 @@ namespace Tenantry.EfCore.Analyzers;
 /// <para>
 /// A context's types are those of its <c>DbSet&lt;T&gt;</c> properties (its own and its base contexts') and of the
 /// <c>modelBuilder.Entity&lt;T&gt;()</c> calls in its methods and its base contexts'. A generic base context's type
-/// parameters stand for the type arguments the derived context passes, so <c>DbSet&lt;TUser&gt;</c> in a base context is
-/// the derived context's user type. A base context from another assembly, such as <c>IdentityDbContext&lt;TUser&gt;</c>,
-/// contributes its <c>DbSet&lt;T&gt;</c> properties, and a type mapped only there is reported on the derived context's
-/// declaration. A context with no tenant-owned type among them (a database-per-tenant context, or one Tenantry does not
+/// parameters stand for the type arguments the derived context passes, so <c>DbSet&lt;TUser&gt;</c> in a base context
+/// is the derived context's user type. A base context from another assembly, such as
+/// <c>IdentityDbContext&lt;TUser&gt;</c>, contributes its <c>DbSet&lt;T&gt;</c> properties. Of those, only a type the
+/// derived context passes as a type argument, such as the user type, is reported, on the derived context's declaration.
+/// A type the base context names itself is left to the project that declares it, where the markers that project applies
+/// are seen. A context with no tenant-owned type among them (a database-per-tenant context, or one Tenantry does not
 /// isolate) is left alone, as Tenantry checks nothing there.
 /// </para>
 /// <para>
@@ -163,28 +165,54 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
 
         var byContext = state.Mapped.ToLookup(mapping => mapping.Context, SymbolEqualityComparer.Default);
 
-        // A context maps its own types and its base contexts'. The mappings are recorded on each context's definition, so
-        // a generic base context's are read from its definition, with the type arguments this context passes for its type
-        // parameters. A base context from another assembly, such as IdentityDbContext<TUser>, has no source the analyzer
-        // sees: its DbSet<T> properties, with the type arguments substituted, are reported on this context's declaration.
-        IEnumerable<(ITypeSymbol Entity, Location Location, bool Generated)> MappedBy(INamedTypeSymbol contextType)
+        // A context maps its own types and its base contexts'. The mappings are recorded on each context's definition,
+        // so a generic base context's are read from its definition, with the type arguments this context passes for its
+        // type parameters. A base context from another assembly, such as IdentityDbContext<TUser>, has no source the
+        // analyzer sees: all its DbSet<T> properties count for whether the context maps a tenant-owned type, and those
+        // whose type this compilation passes as a type argument are reported on this context's declaration. Its other
+        // DbSets are the other project's, where the markers it applies are seen.
+        IEnumerable<(ITypeSymbol Entity, Location Location, bool Generated, bool Reportable)> MappedBy(
+            INamedTypeSymbol contextType)
         {
             for (var current = (INamedTypeSymbol?)contextType;
                  current is not null && !SymbolEqualityComparer.Default.Equals(current, types.DbContext);
                  current = current.BaseType)
             {
-                if (SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, context.Compilation.Assembly))
+                if (!SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, context.Compilation.Assembly))
                 {
-                    foreach (var mapping in byContext[current.OriginalDefinition])
-                        yield return (Substitute(mapping.Entity, current), mapping.Location, mapping.Generated);
+                    foreach (var mapping in MappedByExternal(current, Declaration(contextType, state)))
+                        yield return mapping;
 
-                    continue;
+                    yield break;
                 }
 
-                var (location, generated) = Declaration(contextType, state);
+                foreach (var mapping in byContext[current.OriginalDefinition])
+                    yield return (Substitute(mapping.Entity, current), mapping.Location, mapping.Generated, true);
+            }
+        }
+
+        // The first base context from another assembly and the bases above it, which are all from other assemblies.
+        // Each base is read twice: as this context sees it, for the entity types, and as the first external base's
+        // definition sees it, where a DbSet<T> whose T is one of that definition's type parameters has a type this
+        // compilation passes.
+        IEnumerable<(ITypeSymbol Entity, Location Location, bool Generated, bool Reportable)> MappedByExternal(
+            INamedTypeSymbol external,
+            (Location Location, bool Generated) declaration)
+        {
+            for (INamedTypeSymbol? current = external, definition = external.OriginalDefinition;
+                 current is not null && definition is not null &&
+                 !SymbolEqualityComparer.Default.Equals(current, types.DbContext);
+                 current = current.BaseType, definition = definition.BaseType)
+            {
+                var declared = types.DbSets(definition).ToDictionary(set => set.Property.Name, set => set.Entity);
 
                 foreach (var set in types.DbSets(current))
-                    yield return (set.Entity, location, generated);
+                {
+                    var passed = declared.TryGetValue(set.Property.Name, out var declaredEntity) &&
+                                 declaredEntity is ITypeParameterSymbol;
+
+                    yield return (set.Entity, declaration.Location, declaration.Generated, passed);
+                }
             }
         }
 
@@ -200,10 +228,13 @@ public sealed class TenantIdWithoutTenantEntityAnalyzer : DiagnosticAnalyzer
             if (!mapped.Any(mapping => KnownTypes.Implements(mapping.Entity, types.TenantEntity)))
                 continue;
 
-            foreach (var (entity, location, generated) in mapped)
+            foreach (var (entity, location, generated, reportable) in mapped)
             {
-                if (generated || state.MarkedShared.ContainsKey(entity) || !ShouldBeTenantOwned(entity, types))
+                if (!reportable || generated || state.MarkedShared.ContainsKey(entity) ||
+                    !ShouldBeTenantOwned(entity, types))
+                {
                     continue;
+                }
 
                 KeepFirst(reported, entity, location);
             }
