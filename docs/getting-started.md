@@ -18,7 +18,7 @@ dotnet new web -n Orders
 cd Orders
 dotnet add package Tenantry.AspNetCore
 dotnet add package Tenantry.EfCore
-dotnet add package Microsoft.EntityFrameworkCore.Sqlite --version "10.*"
+dotnet add package Microsoft.EntityFrameworkCore.Sqlite --version "10.*"   # "11.*" in a net11.0 project
 ```
 
 `Tenantry.Core` comes with them. Reference it directly only for the core types in a project that has neither. For
