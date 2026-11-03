@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The latest dependency lane (run weekly by .github/workflows/dependency-lanes.yml): restores every version
+# The latest dependency lane (run on a schedule by .github/workflows/dependency-lanes.yml): restores every version
 # range at the newest release inside it (LatestDependencies=true, see eng/common/Build.targets), then builds
 # and runs every test on every target framework. The committed lock files are left alone: the lane writes
 # obj/latest.packages.lock.json, and copies them to artifacts/latest-dependencies as the record of what it ran.

@@ -17,9 +17,9 @@
 //   - A block that holds only members (a property, a method) goes into a class.
 // A block that is not meant to compile (it shows a mistake, or only the shape of something) is marked
 // ```csharp no-compile, which GitHub and the site ignore.
-// Microsoft.CodeAnalysis.CSharp's version is pinned here, not taken from Directory.Packages.props, which holds the
-// analyzers at the Roslyn the .NET 8 SDK ships: this script parses the docs' code with a current one, and scripts/ is
-// outside central package management, so the two are meant to differ.
+// Microsoft.CodeAnalysis.CSharp's version is pinned here, as scripts/ is outside central package management. This
+// script parses the docs' code with a current Roslyn, while Tenantry Core's Directory.Packages.props holds its
+// analyzers at the Roslyn the .NET 8 SDK ships, so the two versions are meant to differ.
 #:package Microsoft.CodeAnalysis.CSharp@5.0.0
 #:property PublishAot=false
 
