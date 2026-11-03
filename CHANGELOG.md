@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Where a user's token lists several tenants in claims of the type `ResolveFromClaim` reads, resolve the tenant from a
   header or the host instead, and check it with `ValidateTenantAccessByClaim`
   ([Claim-based validation](docs/access-control.md#claim-based-validation)).
+- An attribute on a controller, action or Razor Page now wins over `.RequireTenant()` or `.AllowMissingTenant()` on
+  `MapControllers()` or `MapRazorPages()`, so under `app.MapControllers().AllowMissingTenant()` an action marked
+  `[RequireTenant]` now refuses a request without a tenant. Remove `[RequireTenant]` or `[AllowMissingTenant]` where
+  the convention should decide ([Access control](docs/access-control.md)).
 - Stop setting or forwarding the `tenantry-tenant-id` header on a client with `UseTenantry()` while no tenant is
   current: to call as a tenant, make it current with `MakeCurrent` or `RunInScopeAsync`
   ([Which requests carry it](docs/http-propagation.md#which-requests-carry-it)).
@@ -253,9 +257,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Tenantry.AspNetCore.OutputCache`.
 - The non-HTTP hosts guide's example that holds the scope itself now throws `TenantNotFoundException` for a missing
   tenant and checks that the tenant is active, as `RunInScopeAsync` does.
-- The getting-started guide installs an EF Core provider (SQLite), gives it a connection string and creates the
-  database before its `curl` calls. Followed from an empty project, its code did not build without a provider, and
-  its first request failed without the tables.
 - The README's console quick start says that its `EfCoreTenantStore` is an `ITenantStore<Guid>`, and the tenant stores
   guide, whose `EfCoreTenantStore` has `string` keys, says that the other guides' has `Guid` keys.
 - The `SecureApi` sample starts in Development with `dotnet run`, on the port its `curl` examples use, as a project
@@ -284,8 +285,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The diagnostics guide says how to lower the warnings logged for each refused request (1003, 1004, 1005 and 1012),
   which `IgnoreWarnings` does not accept, and which other warnings a level filter on `Tenantry.AspNetCore` hides
   ([Turning off a warning](docs/diagnostics.md#turning-off-a-warning)).
-- The tenant stores guide says that a request naming no tenant queries the store every time, with or without
-  `CacheTenants`, and to rate-limit such requests where anyone can send them ([Caching](docs/tenant-stores.md#caching)).
+- The tenant stores guide says that a request naming a tenant that does not exist, such as by a made-up subdomain,
+  queries the store every time, with or without `CacheTenants`, and to rate-limit such requests where anyone can send
+  them ([Caching](docs/tenant-stores.md#caching)).
   The SignalR and Blazor Server section says that without `CacheTenants` each hub method call and circuit event
   queries the store.
 - The README's worker example skips suspended tenants when it loops over every tenant with `CreateScope`, which does
