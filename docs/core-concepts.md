@@ -262,9 +262,10 @@ host Tenantry does not cover, builds on these:
   ([`ITenantRegistration`](api/tenantry-itenantregistration.md)).
 - [`ITenantContext<TKey>`](api/tenantry-itenantcontext.md): the current tenant, read on every query and save.
 - [`ITenantScopeFactory<TKey>`](api/tenantry-itenantscopefactory.md): runs work as a tenant, for jobs and messages.
-- [`ITenantLookup<TKey>`](api/tenantry-itenantlookup.md): finds a tenant, or lists every tenant, through the cache
-  `CacheTenants` adds and in a scope of its own, so the integration does not resolve the scoped store itself. Work that
-  runs for each tenant, such as creating its indexes at startup, starts from `GetAllTenantsAsync`.
+- [`ITenantLookup<TKey>`](api/tenantry-itenantlookup.md): finds a tenant through the cache `CacheTenants` adds, or
+  lists every tenant, reading the store in a scope of its own, so the integration does not resolve the scoped store
+  itself. Work that runs for each tenant, such as creating its indexes at startup, starts from `GetAllTenantsAsync`,
+  which is never cached.
 - [`ITenantConnectionStringProvider<TKey>`](api/tenantry-itenantconnectionstringprovider.md) and
   [`CurrentTenantConnectionString<TKey>`](api/tenantry-currenttenantconnectionstring.md): a tenant's connection string,
   for a database per tenant.
