@@ -6,6 +6,8 @@
 // One page per public type, named after its full name ("tenantry-core-itenantscope.md"), plus README.md, the
 // index by package and namespace. The pages are plain markdown that reads the same on GitHub and on the site,
 // whose docs are MDX: everything outside code is escaped for both, and every type or member name is code.
+// YamlDotNet's version is pinned here rather than in Directory.Packages.props, as no project references it, so there
+// is no second version to keep in step.
 #:package YamlDotNet@18.1.0
 #:property PublishAot=false
 
