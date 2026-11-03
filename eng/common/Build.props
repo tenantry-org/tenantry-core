@@ -3,7 +3,7 @@
   <!--
     Settings shared by Tenantry Core and Tenantry Pro, imported by each repository's Directory.Build.props. Core is the
     source: Pro copies the files eng/common/shared-files.txt lists with scripts/sync-shared-files.sh. Pro's CI fails
-    when they differ from the Core it pins; its weekly latest lane reports a difference from Core's master.
+    when they differ from the Core it pins; its latest dependency lane reports a difference from Core's master.
   -->
   <PropertyGroup>
     <LangVersion>14</LangVersion>

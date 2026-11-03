@@ -43,9 +43,9 @@
   </Target>
 
   <!--
-    The latest dependency lane (scripts/test-latest-dependencies.sh, run weekly by dependency-lanes.yml). A package
-    declared with a version range ("[8.0.31, 9.0.0)") normally resolves to the lowest version the graph allows,
-    which the committed lock files record and CI tests (scripts/check-dependency-floors.cs checks every floor is
+    The latest dependency lane (scripts/test-latest-dependencies.sh, run on a schedule by dependency-lanes.yml). A
+    package declared with a version range ("[8.0.31, 9.0.0)") normally resolves to the lowest version the graph
+    allows, which the committed lock files record and CI tests (scripts/check-dependency-floors.cs checks every floor is
     among them). With LatestDependencies=true, restore instead takes the newest release a consumer can get, which
     stays inside the range: up to the next major for a range that ends there ("[8.0.31, 9.0.0)" becomes "8.*"), up
     to the next minor for one that ends there ("[0.4.0, 0.5.0)" becomes "0.4.*", as Tenantry.Core's 0.x ranges do),
