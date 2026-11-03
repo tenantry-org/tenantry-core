@@ -121,6 +121,10 @@ request into `release/0.7`:
 `release/0.7` packs no templates package, so its releases publish the six library packages only. Branches cut from
 `master` from 0.8 on have all of this already.
 
+Skip step 4's run of Tenantry Pro's Dependency lanes workflow for a 0.7 patch: Pro's 0.7 was an internal build with no
+customers and gets no patches, and its `release/0.7` workflow builds against Core's `master`, not `release/0.7`. Pro's
+run applies from 0.8 on.
+
 ## The release
 
 1. The workflow checks that the tag is a release tag on its branch's history, that CI passed on the push to

@@ -5,7 +5,7 @@ by tenant. It is Apache-2.0 and free for commercial use.
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")           // where the tenant comes from
     .ValidateTenantAccessByClaim("tenant_id")   // the caller's token must list it
-    .UseInMemoryStore(tenants));                // where tenants are defined
+    .UseInMemoryStore(tenants));                // for development only
 
 builder.Services.AddDbContext<AppDbContext>(options => options
     .UseSqlServer(connectionString)
