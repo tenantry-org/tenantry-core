@@ -74,7 +74,7 @@ ReSharper's command-line tools); the scripts that need them restore them too.
 | No API or package that no longer exists is named in the README, docs, samples or `src/` | `dotnet run scripts/check-removed-names.cs` | Use the name it gives; the removed names are in `eng/common/removed-names.txt` |
 | Every link reaches a file, page and heading | `dotnet run scripts/check-doc-links.cs` | Fix the link it names. Links in `docs/` are checked as tenantry.dev serves them: another page as `page.md#heading`, any other file through `../` |
 | The lock files are up to date | `dotnet restore Tenantry.slnx --locked-mode` | `dotnet restore Tenantry.slnx`, then commit the lock files |
-| Formatting | `dotnet format Tenantry.slnx --verify-no-changes --no-restore` | `dotnet format Tenantry.slnx` |
+| Whitespace matches `.editorconfig` (the build enforces its other rules) | `dotnet format whitespace Tenantry.slnx --verify-no-changes --no-restore` | `dotnet format Tenantry.slnx` |
 | Rider shows no warnings | `bash scripts/check-inspections.sh Tenantry.slnx`, which builds the solution first and writes each warning to `artifacts/inspect.sarif` | Any warning fails it. Fix it, or suppress it with a comment that says why. Rider's settings are in `.editorconfig` |
 | Every published floor is tested | `dotnet run scripts/check-dependency-floors.cs` | A version range's minimum must be a version some test project resolves |
 | The build has no warnings | `dotnet build Tenantry.slnx -c Release --no-restore` | Warnings are errors, trim (`IL2xxx`) and AOT (`IL3xxx`) warnings in `src/` included. In the test projects a known vulnerability in a package (`NU1901` to `NU1904`) stays a warning: raise the package in `Directory.Packages.props` |

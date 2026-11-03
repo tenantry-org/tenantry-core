@@ -275,8 +275,10 @@ jobs:
         run: dotnet restore Tenantry.slnx --locked-mode
 
       - name: Check formatting
-        # .editorconfig; fix locally with `dotnet format Tenantry.slnx`
-        run: dotnet format Tenantry.slnx --verify-no-changes --no-restore
+        # .editorconfig's whitespace rules. The build enforces its style and analyzer rules (EnforceCodeStyleInBuild,
+        # warnings as errors), so this checks only what the build does not. Fix locally with
+        # `dotnet format Tenantry.slnx`
+        run: dotnet format whitespace Tenantry.slnx --verify-no-changes --no-restore
 
       - name: Check for ReSharper warnings
         # Rider's inspections (see the script). inspectcode builds the solution first, as nothing above has.

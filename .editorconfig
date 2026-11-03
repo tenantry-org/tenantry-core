@@ -1,5 +1,5 @@
 # Code style for tenantry-core and tenantry-pro; the two copies are identical. CI checks C# files with
-# `dotnet format --verify-no-changes`.
+# `dotnet format whitespace --verify-no-changes`.
 root = true
 
 [*]
