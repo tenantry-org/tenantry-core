@@ -324,11 +324,11 @@ Pro's Monday run moves the pin.
   Leave that pull request open until Tenantry.Pro's `X.Y.0` is released. Pro's release checklist (step 10) adds Pro's
   removed names to that pull request and merges it. When the skills for the new minor were prepared on a branch of
   that repository named `tenantry-X.Y` (as `tenantry-0.8` was for 0.8.0), fast-forward the skills' `master` to that
-  branch before the `X.Y.0` reaches NuGet.org, or straight after. `update-version` then finds
-  `scripts/tenantry-version.txt` already at `X.Y.0` and does nothing, so it copies none of Core's removed names either:
-  before the fast-forward, check that the branch's Tenantry Core section of `scripts/removed-names.txt` matches
-  `eng/common/removed-names.txt` in the release. Pro's step 10 then adds Pro's names in a new pull request. If the
-  workflow's pull request came first, fast-forward anyway and close it, since it only puts new numbers in the old
-  text. A patch needs no change to the skills.
+  branch once Tenantry Core's `X.Y.0` is on NuGet.org and Tenantry.Pro's `X.Y.0` is on the package feed at
+  tenantry.dev, as the skills pin both. A later `update-version` run finds `scripts/tenantry-version.txt` already at
+  `X.Y.0` and does nothing, so it copies none of Core's removed names either: before the fast-forward, check that the
+  branch's Tenantry Core section of `scripts/removed-names.txt` matches `eng/common/removed-names.txt` in the release.
+  Pro's step 10 then adds Pro's names in a new pull request. If the workflow's pull request came first, fast-forward
+  anyway and close it, since it only puts new numbers in the old text. A patch needs no change to the skills.
 - The site shows a new minor's docs once Tenantry.Pro has released it too. The home page's code sample follows the
   README's: update it on the site if the README's changed.
