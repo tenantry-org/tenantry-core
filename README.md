@@ -20,7 +20,7 @@ Tenantry Core is Apache-2.0 and free for commercial use. If you are moving from 
 builder.Services.AddTenantry<Guid>(tenant => tenant
     .ResolveFromHeader("X-Tenant-Id")           // where the tenant comes from
     .ValidateTenantAccessByClaim("tenant_id")   // the caller's token must list it
-    .UseInMemoryStore(tenants));                // where tenants are defined
+    .UseInMemoryStore(tenants));                // for development only
 
 builder.Services.AddDbContext<AppDbContext>(options => options
     .UseSqlServer(connectionString)
@@ -172,32 +172,8 @@ and Native AOT. `Tenantry.EfCore` supports trimming only, as EF Core does, and i
 
 ## Documentation
 
-| Guide | What it covers |
-|-------|----------------|
-| [Getting started](docs/getting-started.md) | Install, your first tenant-aware app, end to end |
-| [Core concepts](docs/core-concepts.md) | Tenant key, descriptor, context vs. scope, the `AsyncLocal` model |
-| [Tenant stores](docs/tenant-stores.md) | In-memory and custom stores, service lifetimes, caching tenants |
-| [ASP.NET Core integration](docs/aspnetcore-integration.md) | Registration, middleware, pipeline ordering, status codes, events |
-| [Tenant resolution](docs/tenant-resolution.md) | Header, subdomain, host, route, claim, query-string, and custom resolvers; slugs and custom domains |
-| [Authentication per tenant](docs/authentication-per-tenant.md) | JWT bearer, OpenID Connect and cookie settings per tenant |
-| [Access control](docs/access-control.md) | Requiring tenants, access validators, claim-based validation |
-| [Calling other services](docs/http-propagation.md) | Sending the tenant with `HttpClient` and gRPC calls, and reading it in the called service |
-| [Caching per tenant](docs/caching.md) | `HybridCache`, `IDistributedCache` and output cache entries per tenant |
-| [Options per tenant](docs/per-tenant-options.md) | `IOptionsSnapshot<T>` and `IOptionsMonitor<T>` values per tenant |
-| [ASP.NET Core Identity](docs/aspnetcore-identity.md) | Users per tenant in a shared database, and sign-in cookies tied to their tenant |
-| [EF Core integration](docs/efcore-integration.md) | Query filters, the interceptor, isolation policy, migrations, admin queries |
-| [Owned and multi-table entities](docs/efcore-advanced.md) | How owned entities, split tables and many-to-many join rows are checked, all-or-nothing saves, unsupported models |
-| [Non-HTTP hosts](docs/non-http-hosts.md) | `AddTenantry` for worker services, scheduled jobs, CLI tools and desktop apps |
-| [Testing](docs/testing.md) | Tests with Tenantry's real services: scopes, `WebApplicationFactory`, EF Core isolation |
-| [Diagnostics](docs/diagnostics.md) | Log event ids, the `tenant.id` trace tag and log scope, the resolution metric |
-| [AOT & trimming](docs/aot-and-trimming.md) | What is supported, per package, and why |
-| [Compatibility](docs/compatibility.md) | Supported .NET and EF Core versions, databases, and dependency ranges |
-| [Troubleshooting](docs/troubleshooting.md) | Common pitfalls and how to diagnose them |
-| [Migrating from Finbuckle.MultiTenant](docs/migrating-from-finbuckle.md) | Finbuckle's concepts and EF Core setup in Tenantry, and what changes |
-| [Analyzers](docs/analyzers.md) | The build warnings for code that leaves tenant data unprotected, and how to configure them |
-| [For AI coding agents](docs/ai-agents.md) | Steps for an agent adding Tenantry, an isolation test, common mistakes, rules for AGENTS.md |
-
-The [documentation index](docs/README.md) also links the API reference.
+The [documentation index](docs/README.md) lists the guides in reading order, from
+[Getting started](docs/getting-started.md) to the API reference, with what each one covers.
 
 ## Samples
 
