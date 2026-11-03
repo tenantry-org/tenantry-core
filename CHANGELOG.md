@@ -263,9 +263,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The samples folder had no README. [`samples/README.md`](samples/README.md) gives each sample's command, port and
   first request.
 - The getting started guide runs as written in an empty `dotnet new web` project: it adds EF Core's SQLite provider,
-  creates the database with `EnsureCreated`, and its `curl` examples name the address it starts the app on. Before, it
-  called `UseSqlServer(connectionString)` with neither the provider nor a connection string, and created no tables, so
-  the first request failed.
+  pinned to the EF Core major `Tenantry.EfCore` uses on the project's target framework (`"10.*"` on net10.0, `"11.*"`
+  on net11.0), creates the database with `EnsureCreated`, and its `curl` examples name the address it starts the app
+  on. Before, it called `UseSqlServer(connectionString)` with neither the provider nor a connection string, and created
+  no tables, so the first request failed.
 - The testing guide's EF Core isolation test registers the context through the application's own extension method, as
   the AI agents guide's test does. It registered the context again with `AddDbContext(… .UseTenantry())`, so it stayed
   green when the application's own registration lost `UseTenantry()`.

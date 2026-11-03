@@ -18,15 +18,18 @@ dotnet new web -n Orders
 cd Orders
 dotnet add package Tenantry.AspNetCore
 dotnet add package Tenantry.EfCore
-dotnet add package Microsoft.EntityFrameworkCore.Sqlite
+dotnet add package Microsoft.EntityFrameworkCore.Sqlite --version "10.*"
 ```
 
 `Tenantry.Core` comes with them. Reference it directly only for the core types in a project that has neither. For
 another database, add its EF Core provider in place of SQLite's ([Databases](compatibility.md#databases)).
 
-Tenantry is built for .NET 10 and .NET 11, and still ships for .NET 8 and 9 ([Compatibility](compatibility.md)). Each
-build of `Tenantry.EfCore` uses the EF Core major of its target framework (8.x, 9.x, 10.x or 11.x), so the provider must
-be of that major too.
+Tenantry is built for .NET 10 and 11, and still ships for .NET 8 and 9 ([Compatibility](compatibility.md)). Each build
+of `Tenantry.EfCore` uses the EF Core major of its target framework (8.x to 11.x), and the provider must use the same
+major, so the last command pins it. `dotnet new web` targets the SDK's .NET version, shown as `TargetFramework` in
+`Orders.csproj`: `"10.*"` is for net10.0, and a net11.0 project takes `"11.*"`. Without `--version`, NuGet adds the
+newest provider whatever the framework: on net10.0 that is EF Core 11, which is not added (NU1202), and a provider a
+major behind `Tenantry.EfCore` makes the app fail at startup with a `MissingMethodException`.
 
 ## 2. Choose your tenant key type
 
