@@ -15,7 +15,20 @@ public sealed class ClaimTenantResolver(string claimType = "tenant_id") : ITenan
     public ValueTask<string?> ResolveAsync(HttpContext context, CancellationToken cancellationToken = default)
     {
         // A token that lists several tenants names none of them as the one to use. One tenant repeated is still one.
-        var ids = ClaimTenantIds.Read(context.User, claimType).Distinct(StringComparer.Ordinal).Take(2).ToArray();
-        return new ValueTask<string?>(ids is [var id] ? id : null);
+        string? first = null;
+
+        foreach (var id in ClaimTenantIds.Read(context.User, claimType))
+        {
+            if (first is null)
+            {
+                first = id;
+            }
+            else if (!string.Equals(first, id, StringComparison.Ordinal))
+            {
+                return ValueTask.FromResult<string?>(null);
+            }
+        }
+
+        return ValueTask.FromResult(first);
     }
 }

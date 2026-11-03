@@ -382,9 +382,11 @@ internal sealed class TenantResolutionMiddleware<TKey> where TKey : IEquatable<T
         }
 
         // An MVC action's or Razor Page's descriptor holds only the attributes on its code. In the endpoint's metadata,
-        // a convention on MapControllers() or MapRazorPages() comes after them, and would otherwise win over them.
+        // a convention on MapControllers() or MapRazorPages() comes after them, and would otherwise win over them. Its
+        // list is a List<object> or an array, so it is read as it is, without a wrapper for each request.
         return (endpoint.Metadata.GetMetadata<ActionDescriptor>() is { } action
-                   ? LastRequirement(action.EndpointMetadata.AsReadOnly())
+                   ? LastRequirement(
+                       action.EndpointMetadata as IReadOnlyList<object> ?? action.EndpointMetadata.AsReadOnly())
                    : null)
                ?? LastRequirement(endpoint.Metadata)
                ?? _options.RequireTenantByDefault;
