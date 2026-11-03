@@ -48,7 +48,8 @@ cd samples/Tenantry.Samples.Aot/bin/Release/net10.0/<runtime identifier>/publish
 ```
 
 The published app is a native executable. Run it from its folder, where it reads `appsettings.json`: it listens on
-`http://localhost:5268`, the address `dotnet run` uses and the sample's `.http` file calls.
+`http://localhost:5268`, the address `dotnet run` uses and the sample's `.http` file calls. The `Urls` setting there
+takes precedence over `ASPNETCORE_URLS`; to listen elsewhere, pass `--urls`, and set `SelfUrl` to match.
 
 ## `Tenantry.EfCore`: trimmable, not AOT-compatible
 

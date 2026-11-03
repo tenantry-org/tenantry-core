@@ -14,8 +14,8 @@ SDK, and the samples target `net10.0`, so they also need the .NET 10 runtime
 | [`DatabasePerTenant`](Tenantry.Samples.DatabasePerTenant) | A database per tenant with `UseConnectionStrings` and a pooled `AddDbContextPerTenantDatabase`, plus worker scopes |
 | [`Aot`](Tenantry.Samples.Aot) | Native-AOT-published ASP.NET Core app: header, subdomain and custom resolvers, problem details |
 
-The quickstarts, `EfCoreWeb` and `Aot` take the tenant from a header and do not authenticate callers, so any caller can
-act as any tenant. `SecureApi` shows how to check the tenant against the caller's token.
+`Quickstart`, `EfCoreWeb` and `Aot` take the tenant from a header and do not authenticate callers, so any caller can act
+as any tenant. `SecureApi` shows how to check the tenant against the caller's token.
 
 ## SecureApi
 

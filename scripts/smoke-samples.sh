@@ -94,7 +94,9 @@ for entry in "${samples[@]}"; do
     continue
   fi
 
-  ASPNETCORE_URLS="http://127.0.0.1:0" dotnet "$name.dll" > "$log" 2>&1 &
+  # A free port, on the command line: it overrides a Urls setting in appsettings.json, as the Aot sample has, where
+  # ASPNETCORE_URLS does not.
+  dotnet "$name.dll" --urls "http://127.0.0.1:0" > "$log" 2>&1 &
   pid=$!
   url=""
   if wait_for "$log" "Now listening on: http:"; then
