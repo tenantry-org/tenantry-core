@@ -268,11 +268,13 @@ public sealed class SignalRTests
 
             foreach (var message in body.Split(RecordSeparator, StringSplitOptions.RemoveEmptyEntries))
             {
-                var element = JsonDocument.Parse(message).RootElement;
+                using var document = JsonDocument.Parse(message);
+                var element = document.RootElement;
 
                 if (element.TryGetProperty("invocationId", out var id) && id.GetString() == invocationId)
                 {
-                    return element;
+                    // Cloned, as the caller reads it after the document is disposed.
+                    return element.Clone();
                 }
             }
         }
@@ -395,12 +397,14 @@ public sealed class SignalRTests
 
             while (true)
             {
-                var element = JsonDocument.Parse(await ReceiveAsync()).RootElement;
+                using var document = JsonDocument.Parse(await ReceiveAsync());
+                var element = document.RootElement;
 
                 // Pings (type 6) are skipped.
                 if (element.GetProperty("type").GetInt32() == 3 && element.GetProperty("invocationId").GetString() == id)
                 {
-                    return element;
+                    // Cloned, as the caller reads it after the document is disposed.
+                    return element.Clone();
                 }
             }
         }

@@ -1000,7 +1000,8 @@ public sealed partial class MiddlewareTests : IAsyncDisposable
 
             ((int)response.StatusCode).Should().Be(status);
             response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
-            var problem = System.Text.Json.JsonDocument.Parse(body).RootElement;
+            using var document = System.Text.Json.JsonDocument.Parse(body);
+            var problem = document.RootElement;
             problem.GetProperty("status").GetInt32().Should().Be(status);
             problem.GetProperty("title").GetString().Should().Be(title);
             if (header is not null)
