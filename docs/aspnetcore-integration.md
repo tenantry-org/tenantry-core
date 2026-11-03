@@ -226,6 +226,12 @@ connection's request is resolved again. For a suspended tenant it resolves none,
 requires a tenant. The check then ends the circuit at its next activity, as it does when the reconnecting request
 resolves another tenant.
 
+On .NET 10, Blazor can also pause a circuit, when the page calls `Blazor.pauseCircuit()` or when the server evicts a
+circuit that stayed disconnected, and later resume its state in a new circuit, opened by a new request. The check
+records the circuit's tenant in the state Blazor keeps. When the resuming request resolves another tenant or none, or
+the state records no tenant, as for a circuit paused before the check was added, the new circuit ends before it
+renders anything.
+
 ## Details
 
 ### When the order is wrong

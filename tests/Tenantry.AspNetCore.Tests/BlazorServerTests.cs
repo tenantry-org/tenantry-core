@@ -4,6 +4,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Components;
+#if NET10_0_OR_GREATER
+using Microsoft.AspNetCore.Components.Infrastructure;
+#endif
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.Components.Web;
@@ -187,6 +190,124 @@ public sealed partial class BlazorServerTests
         _runs.Should().Be(0);
     }
 
+#if NET10_0_OR_GREATER
+    [Fact]
+    public async Task APausedCircuit_RendersAgain_WhenItsTenantResumesIt()
+    {
+        await using var app = await StartAsync();
+        await using var opened = await CircuitConnection.OpenAsync(app, "acme");
+        var paused = await opened.PauseAsync();
+
+        await using var circuit = await paused.ResumeAsync(app, "acme");
+
+        (await circuit.ReceiveCallAsync("JS.RenderBatch", "JS.Error")).Should().Be("JS.RenderBatch");
+    }
+
+    // The resuming request resolves another tenant, or none for a tenant suspended while the circuit was paused, and
+    // /_blazor does not require one, so the paused state would otherwise render in a circuit of the resuming tenant.
+    [Theory(Timeout = 30_000)]
+    [InlineData("globex", false)]
+    [InlineData("acme", true)]
+    public async Task APausedCircuit_EndsBeforeItRenders_WhenResumedWithoutItsTenant(string tenant, bool suspendAcme)
+    {
+        await using var app = await StartAsync();
+        await using var opened = await CircuitConnection.OpenAsync(app, "acme");
+        var paused = await opened.PauseAsync();
+        if (suspendAcme)
+        {
+            _tenants.Suspend("acme");
+        }
+
+        await using var circuit = await paused.ResumeAsync(app, tenant);
+
+        // The paused circuit closed first, then the resumed one, which sent no render batch: the hub refuses the next
+        // call, as the circuit is gone.
+        await app.Services.GetRequiredService<ClosedCircuits>().Second.WaitAsync(TestContext.Current.CancellationToken);
+        await circuit.SendActivityAsync();
+        (await circuit.ReceiveCallAsync("JS.RenderBatch", "JS.Error")).Should().Be("JS.Error");
+    }
+
+    [Fact]
+    public async Task AResumedCircuitsActivityRuns_WithTheTenantItsStateRecords()
+    {
+        await using var provider = Build();
+        using var circuit = provider.CreateScope();
+        await Resume(circuit, "acme");
+
+        using (Current(provider))
+        {
+            await Open(circuit);
+            await Activity(circuit)(null!);
+        }
+
+        _runs.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AResumedCircuitsActivity_IsRefused_WithoutTheTenantItsStateRecords()
+    {
+        await using var provider = Build();
+        using var circuit = provider.CreateScope();
+        await Resume(circuit, "acme");
+        await Open(circuit);
+
+        await Activity(circuit).Awaiting(run => run(null!)).Should().ThrowAsync<TenantNotResolvedException>()
+            .WithMessage("*state of a circuit of tenant 'acme'*identifies no tenant*");
+        _runs.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AResumedCircuitsActivity_IsRefused_WithATenant_WhenItsStateRecordsNone()
+    {
+        await using var provider = Build();
+        using var circuit = provider.CreateScope();
+        await Resume(circuit, null);
+
+        using (Current(provider))
+        {
+            await Open(circuit);
+            await Activity(circuit).Awaiting(run => run(null!)).Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("*state of a circuit without a tenant*identifies tenant 'acme'*");
+        }
+
+        _runs.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AResumedCircuitsActivity_IsRefused_WhenItsStateDoesNotSayItsTenant()
+    {
+        await using var provider = Build();
+        using var circuit = provider.CreateScope();
+        await Restore(circuit, new Dictionary<string, byte[]>(), RestoreContext.LastSnapshot);
+
+        using (Current(provider))
+        {
+            await Open(circuit);
+            await Activity(circuit).Awaiting(run => run(null!)).Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("*does not say its tenant*");
+        }
+
+        _runs.Should().Be(0);
+    }
+
+    // Prerendering's state is not a paused circuit's, and records no tenant.
+    [Fact]
+    public async Task ACircuitWithPrerenderedState_IsNotRefused()
+    {
+        await using var provider = Build();
+        using var circuit = provider.CreateScope();
+        await Restore(circuit, new Dictionary<string, byte[]>(), RestoreContext.InitialValue);
+
+        using (Current(provider))
+        {
+            await Open(circuit);
+            await Activity(circuit)(null!);
+        }
+
+        _runs.Should().Be(1);
+    }
+#endif
+
     [Fact]
     public void AddingItTwice_AddsOneHandler()
     {
@@ -221,8 +342,8 @@ public sealed partial class BlazorServerTests
 
     private ServiceProvider Build()
     {
-        ServiceCollection services = new();
-        services.AddLogging();
+        // A web application's services, with the environment and configuration that restoring a circuit's state needs.
+        var services = WebApplication.CreateBuilder().Services;
         services.AddTenantry<string>(tenant => tenant
             .UseStore(_ => _tenants)
             .ValidateTenantActivity(t => !t.As<SignalRTests.AppTenant>().Suspended));
@@ -248,6 +369,30 @@ public sealed partial class BlazorServerTests
                 return Task.CompletedTask;
             });
 
+#if NET10_0_OR_GREATER
+    // Restores the state of a paused circuit of the tenant given, or of none, into the circuit's scope, as Blazor does
+    // before it opens a resumed circuit.
+    private static Task Resume(IServiceScope circuit, string? tenant) =>
+        Restore(
+            circuit,
+            new Dictionary<string, byte[]>
+            {
+                [TenantActivityCircuitHandler.StateKey] = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(tenant),
+            },
+            RestoreContext.LastSnapshot);
+
+    private static Task Restore(IServiceScope circuit, IDictionary<string, byte[]> state, RestoreContext context) =>
+        circuit.ServiceProvider.GetRequiredService<ComponentStatePersistenceManager>()
+            .RestoreStateAsync(new StateStore(state), context);
+
+    private sealed class StateStore(IDictionary<string, byte[]> state) : IPersistentComponentStateStore
+    {
+        public Task<IDictionary<string, byte[]>> GetPersistedStateAsync() => Task.FromResult(state);
+
+        public Task PersistStateAsync(IReadOnlyDictionary<string, byte[]> state) => Task.CompletedTask;
+    }
+#endif
+
     [Route("/")]
     public sealed class HomePage : ComponentBase
     {
@@ -264,14 +409,25 @@ public sealed partial class BlazorServerTests
         protected override void BuildRenderTree(RenderTreeBuilder builder) => builder.AddContent(0, "Hello");
     }
 
-    /// <summary>Completes when the first circuit closes.</summary>
+    /// <summary>Completes when the first circuit closes, and when the second does.</summary>
     private sealed class ClosedCircuits
     {
         private readonly TaskCompletionSource _first = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _second = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _closed;
 
         public Task First => _first.Task;
 
-        public void Closed() => _first.TrySetResult();
+        public Task Second => _second.Task;
+
+        public void Closed()
+        {
+            _first.TrySetResult();
+            if (Interlocked.Increment(ref _closed) == 2)
+            {
+                _second.TrySetResult();
+            }
+        }
     }
 
     private sealed class ClosedCircuitHandler(ClosedCircuits closed) : CircuitHandler
@@ -289,14 +445,17 @@ public sealed partial class BlazorServerTests
     /// </summary>
     private sealed partial class CircuitConnection : IAsyncDisposable, IInvocationBinder
     {
-        // The invocation of ConnectCircuit, whose result is a bool where StartCircuit's is the circuit's id.
+        // The invocations of ConnectCircuit and PauseCircuit, whose results are a bool where StartCircuit's and
+        // ResumeCircuit's are the circuit's id.
         private const string ConnectCircuitInvocation = "2";
+        private const string PauseCircuitInvocation = "3";
 
         private readonly WebSocket _socket;
         private readonly IHubProtocol _protocol;
         private readonly Queue<HubMessage> _received = new();
         private byte[] _unread = [];
         private string _circuitId = "";
+        private string _operations = "";
 
         private CircuitConnection(WebSocket socket, IHubProtocol protocol)
         {
@@ -317,9 +476,9 @@ public sealed partial class BlazorServerTests
             started.Error.Should().BeNull();
             circuit._circuitId = (string)started.Result!;
 
-            await circuit.SendAsync(new InvocationMessage(
-                "UpdateRootComponents",
-                [$$"""{"batchId":1,"operations":[{"type":"add","ssrComponentId":1,"marker":{{marker}}}]}""", ""]));
+            circuit._operations =
+                $$"""{"batchId":1,"operations":[{"type":"add","ssrComponentId":1,"marker":{{marker}}}]}""";
+            await circuit.SendAsync(new InvocationMessage("UpdateRootComponents", [circuit._operations, ""]));
             await circuit.ReceiveCallAsync("JS.RenderBatch");
             return circuit;
         }
@@ -337,6 +496,35 @@ public sealed partial class BlazorServerTests
             connected.Result.Should().Be(true, "the server still has the circuit");
             return circuit;
         }
+
+#if NET10_0_OR_GREATER
+        // Pauses the circuit as Blazor.pauseCircuit() does, keeps the state the server sends, as Blazor's script does,
+        // and closes this connection.
+        public async Task<PausedCircuit> PauseAsync()
+        {
+            await SendAsync(new InvocationMessage(PauseCircuitInvocation, "PauseCircuit", []));
+            var save = await ReceiveAsync<InvocationMessage>(message => message.Target == "JS.SavePersistedState");
+            await SendAsync(CompletionMessage.WithResult(save.InvocationId!, true));
+            await DisposeAsync();
+            return new(_circuitId, _operations, (string)save.Arguments[1]!, (string)save.Arguments[2]!);
+        }
+
+        // Resumes a paused circuit over a new connection, as Blazor's script does, with the state it kept.
+        public static async Task<CircuitConnection> ResumeAsync(WebApplication app, string tenant, PausedCircuit paused)
+        {
+            var circuit = await ConnectAsync(app, tenant);
+            await circuit.SendAsync(new InvocationMessage(
+                "4",
+                "ResumeCircuit",
+                [paused.CircuitId, "http://localhost/", "http://localhost/", paused.RootComponents, paused.State]));
+            var resumed = await circuit.ReceiveAsync<CompletionMessage>(_ => true);
+            resumed.Result.Should().NotBeNull("the server resumes the circuit");
+            circuit._circuitId = (string)resumed.Result!;
+
+            await circuit.SendAsync(new InvocationMessage("UpdateRootComponents", [paused.Operations, ""]));
+            return circuit;
+        }
+#endif
 
         private static async Task<CircuitConnection> ConnectAsync(WebApplication app, string tenant)
         {
@@ -384,10 +572,14 @@ public sealed partial class BlazorServerTests
         // Only the error message's argument is read: the other browser methods' arguments fail to bind, which still
         // gives their names.
         Type IInvocationBinder.GetReturnType(string invocationId) =>
-            invocationId == ConnectCircuitInvocation ? typeof(bool) : typeof(string);
+            invocationId is ConnectCircuitInvocation or PauseCircuitInvocation ? typeof(bool) : typeof(string);
 
-        IReadOnlyList<Type> IInvocationBinder.GetParameterTypes(string methodName) =>
-            methodName == "JS.Error" ? [typeof(string)] : Type.EmptyTypes;
+        IReadOnlyList<Type> IInvocationBinder.GetParameterTypes(string methodName) => methodName switch
+        {
+            "JS.Error" => [typeof(string)],
+            "JS.SavePersistedState" => [typeof(string), typeof(string), typeof(string)],
+            _ => Type.EmptyTypes,
+        };
 
         Type IInvocationBinder.GetStreamItemType(string streamId) => typeof(object);
 
@@ -441,4 +633,15 @@ public sealed partial class BlazorServerTests
             return frame.ToArray();
         }
     }
+
+#if NET10_0_OR_GREATER
+    /// <summary>
+    /// What Blazor's script keeps of a paused circuit: its id, its components, and the state the server sent it.
+    /// </summary>
+    private sealed record PausedCircuit(string CircuitId, string Operations, string RootComponents, string State)
+    {
+        public Task<CircuitConnection> ResumeAsync(WebApplication app, string tenant) =>
+            CircuitConnection.ResumeAsync(app, tenant, this);
+    }
+#endif
 }

@@ -34,6 +34,14 @@ public static class TenantryServerSideBlazorBuilderExtensions
     /// checked.
     /// </para>
     /// <para>
+    /// On .NET 10 and later, Blazor can pause a circuit (<c>Blazor.pauseCircuit()</c>, or when it evicts a disconnected
+    /// one) and resume its state in a new circuit, whose tenant is the resuming request's. The handler records the
+    /// circuit's tenant in the state Blazor keeps, and refuses the resumed circuit's first activity, which adds its
+    /// components, when the request that resumed it resolved another tenant or none, or when the state records no
+    /// tenant (a circuit paused without this handler): <see cref="TenantNotResolvedException"/> for a request without a
+    /// tenant, and <see cref="InvalidOperationException"/> otherwise. The circuit then ends before it renders anything.
+    /// </para>
+    /// <para>
     /// A refused activity does not run, and Blazor ends the circuit as it does for any unhandled exception.
     /// </para>
     /// <para>

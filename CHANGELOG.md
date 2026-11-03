@@ -56,9 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   active. A tenant suspended or deleted while its connections are open has its next hub call fail with
   `TenantInactiveException` or `TenantNotFoundException`, and its circuits end. A circuit keeps the tenant it opened
   with: when Blazor reconnects it over a connection whose request resolved another tenant or none, as for a tenant
-  suspended in the meantime, it ends at its next activity. A streaming hub method is checked when the stream starts,
-  and a stream already running keeps sending. An app with Blazor Server adds both: `hubOptions.AddTenantry()` does not
-  check Blazor Server's own hub. The docs have a new section on resolving and checking the tenant of a connection: see
+  suspended in the meantime, it ends at its next activity. On .NET 10, the state of a paused circuit records its tenant,
+  and a circuit that resumes it ends before it renders when the resuming request resolved another tenant or none. A
+  streaming hub method is checked when the stream starts, and a stream already running keeps sending. An app with Blazor
+  Server adds both: `hubOptions.AddTenantry()` does not check Blazor Server's own hub. The docs have a new section on
+  resolving and checking the tenant of a connection: see
   [SignalR and Blazor Server](docs/aspnetcore-integration.md#signalr-and-blazor-server).
 - `Tenantry.Templates`, `dotnet new` templates for applications that use Tenantry, published with each release.
   Install them with `dotnet new install Tenantry.Templates`, then create a project with

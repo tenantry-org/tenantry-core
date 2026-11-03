@@ -54,6 +54,18 @@ internal static class TenantActivityCheck
     public static ITenantDescriptor? CurrentTenant(IServiceProvider services, string registration) =>
         KeyType(services, registration).Accept(new Current(services));
 
+    /// <summary>
+    /// <paramref name="tenant"/>'s id as text (<see cref="TenantIds.Format{TKey}"/>), or <see langword="null"/> for
+    /// none.
+    /// </summary>
+    /// <param name="services">The services of the call.</param>
+    /// <param name="registration">
+    /// The Tenantry method that added the check, for the error without <c>AddTenantry</c>.
+    /// </param>
+    /// <param name="tenant">A tenant from <see cref="CurrentTenant"/>, or <see langword="null"/>.</param>
+    public static string? FormatId(IServiceProvider services, string registration, ITenantDescriptor? tenant) =>
+        tenant is null ? null : KeyType(services, registration).Accept(new Format(tenant));
+
     private static ITenantKeyType KeyType(IServiceProvider services, string registration) =>
         services.GetService<ITenantKeyType>() ?? throw new InvalidOperationException(
             $"{registration} checks the tenant of each call, but Tenantry is not registered. Register it with " +
@@ -110,6 +122,13 @@ internal static class TenantActivityCheck
             await services.GetRequiredService<ITenantActivity<TKey>>()
                 .ThrowIfInactiveAsync(current, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private sealed class Format(ITenantDescriptor tenant) : ITenantKeyTypeVisitor<string>
+    {
+        public string Visit<TKey>()
+            where TKey : IEquatable<TKey>, IParsable<TKey> =>
+            TenantIds.Format(((ITenantDescriptor<TKey>)tenant).TenantId);
     }
 
     private sealed class Current(IServiceProvider services) : ITenantKeyTypeVisitor<ITenantDescriptor?>
