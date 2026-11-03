@@ -389,7 +389,7 @@ public sealed partial class BlazorServerTests
     {
         public Task<IDictionary<string, byte[]>> GetPersistedStateAsync() => Task.FromResult(state);
 
-        public Task PersistStateAsync(IReadOnlyDictionary<string, byte[]> state) => Task.CompletedTask;
+        public Task PersistStateAsync(IReadOnlyDictionary<string, byte[]> persisted) => Task.CompletedTask;
     }
 #endif
 
@@ -418,6 +418,8 @@ public sealed partial class BlazorServerTests
 
         public Task First => _first.Task;
 
+        // Read by the pause and resume tests, which exist only on .NET 10 and later.
+        // ReSharper disable once UnusedMember.Local
         public Task Second => _second.Task;
 
         public void Closed()
