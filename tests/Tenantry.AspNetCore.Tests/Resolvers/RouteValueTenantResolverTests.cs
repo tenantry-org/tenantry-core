@@ -45,6 +45,17 @@ public sealed class RouteValueTenantResolverTests
     }
 
     [Fact]
+    public async Task RouteValue_IsTrimmed()
+    {
+        RouteValueTenantResolver resolver = new();
+        var context = ContextWithRouteValue("tenant", " acme ");
+
+        var result = await resolver.ResolveAsync(context, TestContext.Current.CancellationToken);
+
+        result.Should().Be("acme");
+    }
+
+    [Fact]
     public async Task CustomRouteKey_IsUsed()
     {
         RouteValueTenantResolver resolver = new("org");

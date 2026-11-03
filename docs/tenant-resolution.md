@@ -79,7 +79,8 @@ tenant.ResolveFromRouteValue();          // default key "tenant": /api/{tenant}/
 tenant.ResolveFromRouteValue("org");     // /api/{org}/orders
 ```
 
-Routing must run before `UseTenantry()`, which `WebApplication` arranges.
+Routing must run before `UseTenantry()`, which `WebApplication` arranges. The value is trimmed, and an empty one names
+no tenant ([`RouteValueTenantResolver`](api/tenantry-aspnetcore-routevaluetenantresolver.md)).
 
 ### Claim
 

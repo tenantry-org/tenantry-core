@@ -4,6 +4,8 @@ Namespace: `Tenantry.AspNetCore` · Package: `Tenantry.AspNetCore` · [API refer
 
 Resolves the tenant from a route value (e.g. `/api/{tenant}/resource`).
 
+The value is trimmed, as a header's and a query parameter's are, and an empty one names no tenant.
+
 ```csharp
 public sealed class RouteValueTenantResolver : ITenantResolver
 ```
@@ -23,6 +25,8 @@ public RouteValueTenantResolver(string routeValueKey = "tenant")
 Parameters:
 
 - `routeValueKey` `string`: The name of the route value that carries the tenant identifier.
+
+The value is trimmed, as a header's and a query parameter's are, and an empty one names no tenant.
 
 ## Methods
 

@@ -171,6 +171,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finds its value no longer allocates a closure. A request builds them once, and with `CacheTenants` or the in-memory
   store, which keep each tenant's descriptor, every request of the tenant reuses them. The check before each command of
   an `AddDbContextPerTenantDatabase` context formats tenant ids only for the exception it throws.
+- `ResolveFromRouteValue` trims the route value, as `ResolveFromHeader` and `ResolveFromQueryString` trim theirs, so
+  `/api/%20acme/orders` names `acme`. Before, the value was looked up with its spaces, and `CacheTenants` kept each such
+  spelling of an id as an entry of its own.
 
 ### Fixed
 

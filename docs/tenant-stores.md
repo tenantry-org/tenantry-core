@@ -178,7 +178,10 @@ with. It serves Tenantry's own lookups: the request middleware's and `ITenantLoo
 `ITenantScopeFactory.RunInScopeAsync` and Tenantry.Pro's jobs and messages use. A lookup that finds no tenant is not
 cached, so a tenant you add is found at once. An identifier longer than 256 characters is read from the store each
 time: identifiers are request input, and caching every long spelling of one id (`00…042` reads as 42) would let
-clients fill memory. `GetAllTenantsAsync` is never cached. Code that injects `ITenantStore<TKey>` itself reads the
+clients fill memory. The cache holds at most 100,000 identifiers, and the length limit keeps that small in memory, but
+it does not stop clients filling it with short spellings of real ids (`042`, `+42`, or `ACME` for a store that ignores
+case), after which identifiers not yet cached are read from the store until the entries expire. Rate limiting, as
+below, limits that too. `GetAllTenantsAsync` is never cached. Code that injects `ITenantStore<TKey>` itself reads the
 store.
 
 So a request that names no tenant, through a made-up subdomain, header, route value or claim, queries the store every
