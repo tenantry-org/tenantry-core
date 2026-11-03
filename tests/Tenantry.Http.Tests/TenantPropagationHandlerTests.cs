@@ -458,7 +458,9 @@ public sealed class TenantPropagationHandlerTests
         }
     }
 
-    // A strongly typed id whose compiler-generated ToString() is not what its Parse reads.
+    // A strongly typed id whose compiler-generated ToString() is not what its Parse reads. Nothing reads Value: it is
+    // there so that ToString() prints "RecordTenantId { Value = ... }", the text the test expects in the exception.
+    // ReSharper disable once NotAccessedPositionalProperty.Global
     public readonly record struct RecordTenantId(Guid Value) : IParsable<RecordTenantId>
     {
         public static RecordTenantId Parse(string s, IFormatProvider? provider) => new(Guid.Parse(s, provider));
