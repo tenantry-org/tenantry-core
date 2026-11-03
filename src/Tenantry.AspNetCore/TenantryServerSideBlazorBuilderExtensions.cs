@@ -38,8 +38,8 @@ public static class TenantryServerSideBlazorBuilderExtensions
     /// one) and resume its state in a new circuit, whose tenant is the resuming request's. The handler records the
     /// circuit's tenant in the state Blazor keeps, and refuses the resumed circuit's first activity, which adds its
     /// components, when the request that resumed it resolved another tenant or none, or when the state records no
-    /// tenant (a circuit paused without this handler): <see cref="TenantNotResolvedException"/> when the state records a
-    /// tenant and the request resolved none, and <see cref="InvalidOperationException"/> otherwise. The circuit then
+    /// tenant (a circuit paused without this handler): <see cref="TenantNotResolvedException"/> when the state records
+    /// a tenant and the request resolved none, and <see cref="InvalidOperationException"/> otherwise. The circuit then
     /// ends before it renders anything.
     /// </para>
     /// <para>
