@@ -117,10 +117,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UseTenantry()` on an HTTP or gRPC client registers what sending the tenant needs, and `tenant.AddHttpPropagation()`
   is removed.
 - `ResolveFromClaim` reads its claims as `ValidateTenantAccessByClaim` does, repeated or as one claim holding a JSON
-  array (`["acme","globex"]`), and resolves no tenant when they list more than one, so the next resolver runs. A tenant
-  listed twice, such as by two identities that both carry the claim, counts once. It took
+  array (`["acme","globex"]`), and resolves no tenant when they list more than one, so the next resolver runs. It took
   the first claim's whole value, so a token that listed several tenants resolved whichever came first, and a claim
-  holding a JSON array, even of one id, was looked up as written and found no tenant.
+  holding a JSON array, even of one id, was looked up as written and found no tenant. A tenant listed twice, such as
+  by two identities that both carry the claim, counts once.
 - Three registration errors now stop the host as it starts, rather than failing the first request or job that meets
   them: an HTTP or gRPC client with `UseTenantry()` and no address to send the tenant to; such a client in an
   application without `AddTenantry`; and `AddDbContextPerTenantDatabase` with an `ITenantConnectionStringProvider<TKey>`

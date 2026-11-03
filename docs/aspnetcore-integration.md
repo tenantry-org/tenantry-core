@@ -222,8 +222,9 @@ already running when its tenant is suspended or deleted keeps sending until it e
 other call already running. Messages your code sends with `IHubContext` are not checked either.
 
 A circuit keeps the tenant it opened with. When Blazor reconnects a circuit after its connection drops, the new
-connection's request is resolved again, and for a suspended tenant it resolves none. The check then ends the circuit
-at its next activity, as it does when the reconnecting request resolves another tenant.
+connection's request is resolved again. For a suspended tenant it resolves none, or is refused where `/_blazor`
+requires a tenant. The check then ends the circuit at its next activity, as it does when the reconnecting request
+resolves another tenant.
 
 ## Details
 

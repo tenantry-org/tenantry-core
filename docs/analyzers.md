@@ -183,11 +183,9 @@ The rule reports nothing when:
 - the project adds an access validator anywhere with those methods;
 - the project names `ITenantAccessValidator<TKey>` at all: a type that implements it, a registration such as
   `services.AddScoped<ITenantAccessValidator<Guid>, MembershipValidator>()`, or a `typeof`;
-- the `AddTenantry` lambda passes its builder, or the builder's `Services`, to other code.
-
-It also does not read a method given to `AddTenantry` in place of a lambda, as in
-`services.AddTenantry<Guid>(Tenancy.Configure)`, any more than the code a lambda passes its builder to: a resolver
-called there is not reported.
+- the `AddTenantry` lambda passes its builder, or the builder's `Services`, to other code;
+- `AddTenantry` is given a method in place of a lambda, as in `services.AddTenantry<Guid>(Tenancy.Configure)`: the rule
+  does not read that method.
 
 It does not see a validator registered only by a library's own extension method, in another assembly.
 
