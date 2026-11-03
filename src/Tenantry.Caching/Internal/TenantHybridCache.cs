@@ -64,7 +64,7 @@ internal sealed class TenantHybridCache(HybridCache inner, ICurrentTenant curren
             }
         };
 
-        return inner.GetOrCreateAsync(tenant.Prefix + key, asTheTenant, options, Tags(tenant.Prefix, tags), cancellationToken);
+        return inner.GetOrCreateAsync(tenant.Prefix + key, asTheTenant, options, Tags(tenant, tags), cancellationToken);
     }
 #endif
 
