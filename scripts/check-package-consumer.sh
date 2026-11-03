@@ -2,8 +2,9 @@
 # Builds and runs eng/package-consumer against Tenantry packages the way an application consumes them:
 # outside the repository, from an empty NuGet cache, and with package source mapping that sends the given
 # package patterns to one source and everything else to nuget.org. It also checks that the analyzers of
-# Tenantry.Core, Tenantry.EfCore and Tenantry.AspNetCore, those it restored, reach the consumer's compiler. The source is either a folder of freshly
-# packed packages (CI), or a published feed as a customer sees it (the release, after publishing). Usage:
+# Tenantry.Core, Tenantry.EfCore and Tenantry.AspNetCore, those it restored, reach the consumer's compiler. The
+# source is either a folder of freshly packed packages (CI), or a published feed as a customer sees it (the release,
+# after publishing). Usage:
 #
 #   scripts/check-package-consumer.sh <package folder> <pattern>...
 #   scripts/check-package-consumer.sh artifacts 'Tenantry.Pro' 'Tenantry.Pro.*'

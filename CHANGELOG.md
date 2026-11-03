@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.7
 
-- TNY1004 is a new warning, and TNY1001 and TNY1002 report more code, so a build that treats warnings as errors can fail
-  ([Analyzers](docs/analyzers.md)). Add `.UseTenantry()` to the options TNY1004 names, fix or suppress the query
-  TNY1002 names, and make the type TNY1001 names tenant-owned (`ITenantEntity<TKey>`) or mark it shared.
+- TNY1004 is a new warning, and TNY1001, TNY1002 and TNY2001 report more code, so a build that treats warnings as
+  errors can fail ([Analyzers](docs/analyzers.md)). Add `.UseTenantry()` to the options TNY1004 names, fix or suppress
+  the query TNY1002 names, and make the type TNY1001 names tenant-owned (`ITenantEntity<TKey>`) or mark it shared. In
+  an application that calls Tenantry.Pro's `UsePro`, add an access validator where TNY2001 names a resolver
+  ([Validating tenant access](docs/access-control.md#validating-tenant-access)).
 - An `ITenantActivityValidator<TKey>` registered as scoped or transient is now refused. Register it as a singleton with
   `tenant.ValidateTenantActivity<TValidator>()`, and have it create a scope for any scoped service it needs
   ([Suspended and inactive tenants](docs/tenant-stores.md#suspended-and-inactive-tenants)).
