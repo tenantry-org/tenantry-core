@@ -44,18 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- net11.0 builds of every package, so the packages now target net8.0 to net11.0. The net11.0 build of
+- net11.0 builds of every library package, so the packages now target net8.0 to net11.0. The net11.0 build of
   `Tenantry.EfCore` takes EF Core 11.0.0 or a later 11.x, and is tested on SQLite, SQL Server and PostgreSQL. MySQL is
   not tested on .NET 11: Pomelo's provider has no EF Core 11 release, and Oracle's only a preview. On net11.0,
   `Tenantry.Core`, `Tenantry.Caching` and `Tenantry.Options` take
   `Microsoft.Extensions.DependencyInjection.Abstractions`, `Caching.Abstractions`, `Logging.Abstractions` and `Options`
   from the shared framework and declare no package dependency on them, so a security fix to them reaches an
   application through its .NET runtime ([Compatibility](docs/compatibility.md)).
-- .NET 11: every package also targets `net11.0`, and `Tenantry.EfCore`'s `net11.0` build takes EF Core 11.0.0 or a
-  later 11.x. It is tested on SQL Server, PostgreSQL and SQLite. No MySQL provider supports EF Core 11 yet. See
-- .NET 11: every library package also targets `net11.0`, and `Tenantry.EfCore`'s `net11.0` build takes EF Core 11.0.0
-  or a later 11.x. It is tested on SQL Server, PostgreSQL and SQLite. No MySQL provider supports EF Core 11 yet. See
-  [Compatibility](docs/compatibility.md).
 - `hubOptions.AddTenantry()` and `AddInteractiveServerComponents().AddTenantry()` (Tenantry.AspNetCore) check, before
   each SignalR hub method call and each Blazor Server circuit event, that the connection's tenant still exists and is
   active. A tenant suspended or deleted while its connections are open has its next hub call fail with
