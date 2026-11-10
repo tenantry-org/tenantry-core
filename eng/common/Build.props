@@ -15,11 +15,11 @@
     <!-- CI builds are deterministic: PDBs and SourceLink record /_/ instead of the runner's source path -->
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
     <!--
-      The .NET 11 release the net11.0 builds take their Microsoft packages from, and their floor: the release candidate
-      until .NET 11 ships (10 November 2026), then 11.0.0: a stable package cannot depend on a prerelease (NU5104,
-      an error here), and scripts/cut-release.sh refuses one. global.json names the matching SDK.
+      The .NET 11 release the net11.0 builds take their Microsoft packages from, and their floor: 11.0.0, released on
+      10 November 2026. Never a prerelease: a stable package cannot depend on one (NU5104, an error here), and
+      scripts/cut-release.sh refuses one. global.json names the matching SDK.
     -->
-    <Net11Version>11.0.0-rc.1.26425.128</Net11Version>
+    <Net11Version>11.0.0</Net11Version>
     <!-- The latest dependency lane floats central versions (see Build.targets) -->
     <CentralPackageFloatingVersionsEnabled Condition="'$(LatestDependencies)' == 'true'">true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
