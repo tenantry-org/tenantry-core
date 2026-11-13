@@ -7,6 +7,9 @@
   <PropertyGroup>
     <!-- One framework at a time, so that one container per database runs at a time -->
     <TestTfmsInParallel>false</TestTfmsInParallel>
+    <!-- No Hot Reload browser tools, which the .NET 11 Web SDK adds to a Debug build: with the SecureApi sample, also a
+         web project, referenced on net10.0, the build fails as their JS module has no matching endpoint. -->
+    <EnableHotReloadInRuntimeConfigDevFile>false</EnableHotReloadInRuntimeConfigDevFile>
   </PropertyGroup>
 
   <ItemGroup>
