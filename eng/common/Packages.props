@@ -81,8 +81,9 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-    <!-- Npgsql's release candidate for EF Core 11, until its 11.0.0 -->
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[11.0.0-rc.1.1, 12.0.0)" />
+    <!-- Npgsql's newest release candidate for EF Core 11, until its 11.0.0. Each one requires exactly its EF Core
+         release candidate; the integration tests reference EF Core 11.0.0 directly, which wins over that. -->
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[11.0.0-rc.3, 12.0.0)" />
   </ItemGroup>
 
 </Project>

@@ -76,6 +76,8 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
     <!-- Per-tenant authentication tests (ConfigurePerTenant<JwtBearerOptions>) -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="[$(Net11Version), 12.0.0)" />
+    <!-- The integration tests' direct reference over Npgsql's release candidate (Tenantry.IntegrationTests.csproj) -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="[$(Net11Version), 12.0.0)" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(Net11Version)" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="[$(Net11Version), 12.0.0)" />
     <!-- HybridCache's implementation has no 11.x release yet, so net11.0 takes the 10.x one. A band over two majors

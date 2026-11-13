@@ -1,7 +1,11 @@
 version: 2
 updates:
   - package-ecosystem: "nuget"
-    directory: "/"
+    # The root finds the solution's projects. The projects under eng/ are not in it and restore from nuget.org on their
+    # own, with exact versions that must move with the central ones (scripts/check-dependabot.cs), so they are listed.
+    directories:
+      - "/"
+      - "/eng/doc-snippets"
     schedule:
       interval: "weekly"
     # Wait a week after a release before proposing it (security updates are not delayed).
@@ -27,6 +31,7 @@ updates:
       - dependency-name: "Microsoft.CodeAnalysis.CSharp"
       - dependency-name: "Microsoft.CodeAnalysis.CSharp.Workspaces"
       - dependency-name: "Microsoft.Data.SqlClient"
+      - dependency-name: "Microsoft.EntityFrameworkCore"
       - dependency-name: "Microsoft.EntityFrameworkCore.Design"
       - dependency-name: "Microsoft.EntityFrameworkCore.InMemory"
       - dependency-name: "Microsoft.EntityFrameworkCore.Relational"

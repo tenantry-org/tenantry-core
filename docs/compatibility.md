@@ -7,7 +7,7 @@ The .NET versions, EF Core versions and databases Tenantry supports, and how its
 | .NET | Microsoft support | Tenantry | Supported until |
 |------|-------------------|----------|-----------------|
 | .NET 10 | LTS, until 14 November 2028 | Primary | .NET 10's end of support |
-| .NET 11 | STS, two years from its release on 10 November 2026 | Primary (built and tested against the release candidate until it ships) | .NET 11's end of support |
+| .NET 11 | STS, two years from its release on 10 November 2026 | Primary | .NET 11's end of support |
 | .NET 9 | STS, until 10 November 2026 | Legacy | 1.0, no earlier than 10 May 2027 |
 | .NET 8 | LTS, until 10 November 2026 | Legacy | 1.0, no earlier than 10 May 2027 |
 
@@ -15,9 +15,8 @@ Move to .NET 10: Microsoft stops patching .NET 8 and .NET 9, EF Core 8 and 9 inc
 means the net8.0 and net9.0 builds are still shipped, built and tested. They stay until 1.0, which drops them and comes
 no earlier than 10 May 2027.
 
-The packages target net8.0, net9.0, net10.0 and net11.0. Until .NET 11 ships, only prereleases include net11.0, built
-against its release candidate; the first stable release that includes it depends on .NET 11.0.0 and is cut after it
-ships.
+The packages target net8.0, net9.0, net10.0 and net11.0. The net11.0 builds depend on .NET 11.0.0; prereleases
+before .NET 11 shipped on 10 November 2026 were built against its release candidate.
 
 ## EF Core
 
@@ -29,7 +28,7 @@ and is compiled and tested against it. EF Core 9 on .NET 8 is not supported.
 | net8.0 | 8.0.31 or later 8.x |
 | net9.0 | 9.0.20 or later 9.x |
 | net10.0 | 10.0.12 or later 10.x |
-| net11.0 | 11.0.0 or later 11.x (the release candidate in prereleases until .NET 11 ships) |
+| net11.0 | 11.0.0 or later 11.x |
 
 The tests run against these minimums.
 
@@ -43,8 +42,8 @@ These combinations run the write-isolation suite against a real database on ever
 | Database | EF Core provider | Framework | Status |
 |----------|------------------|-----------|--------|
 | SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 8, 9, 10, 11 | Tested (unit suite) |
-| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 8.0.31, 9.0.20, 10.0.12, 11.0 release candidate | .NET 8, 9, 10, 11 | Tested |
-| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.4, 9.0.0, 10.0.3, 11.0 release candidate | .NET 8, 9, 10, 11 | Tested |
+| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 8.0.31, 9.0.20, 10.0.12, 11.0.0 | .NET 8, 9, 10, 11 | Tested |
+| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.4, 9.0.0, 10.0.3, 11.0.0-rc.3 on EF Core 11.0.0 (no 11.0.0 yet) | .NET 8, 9, 10, 11 | Tested |
 | MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` 8.0.2, 9.0.0 | .NET 8, 9 | Tested |
 | MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
 | MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | .NET 10 | Not tested (no EF Core 10 release) |

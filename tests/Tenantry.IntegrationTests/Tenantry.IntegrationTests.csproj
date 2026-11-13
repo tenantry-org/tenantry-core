@@ -7,6 +7,9 @@
   <PropertyGroup>
     <!-- One framework at a time, so that one container per database runs at a time -->
     <TestTfmsInParallel>false</TestTfmsInParallel>
+    <!-- No Hot Reload browser tools, which the .NET 11 Web SDK adds to a Debug build: with the SecureApi sample, also a
+         web project, referenced on net10.0, the build fails as their JS module has no matching endpoint. -->
+    <EnableHotReloadInRuntimeConfigDevFile>false</EnableHotReloadInRuntimeConfigDevFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -51,6 +54,14 @@
 
   <ItemGroup Condition="'$(TargetFramework)' != 'net10.0'">
     <Compile Remove="SecureApiTests.cs" />
+  </ItemGroup>
+
+  <!-- net11.0: Npgsql has no EF Core 11 release yet, and each of its release candidates requires exactly the EF Core
+       release candidate it was built against. Referenced directly, EF Core 11.0.0 wins over that requirement, which
+       NU1608 reports. Remove this group when Npgsql.EntityFrameworkCore.PostgreSQL 11.0.0 ships. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" NoWarn="NU1608" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" NoWarn="NU1608" />
   </ItemGroup>
 
   <!-- net11.0: no MySQL provider has an EF Core 11 release yet, only Oracle's preview -->
