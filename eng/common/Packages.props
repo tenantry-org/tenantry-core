@@ -18,7 +18,7 @@
     <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
-    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>
 
   <!--
