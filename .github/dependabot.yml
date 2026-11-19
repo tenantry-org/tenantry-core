@@ -1,11 +1,10 @@
 version: 2
 updates:
   - package-ecosystem: "nuget"
-    # The root finds the solution's projects. The projects under eng/ are not in it and restore from nuget.org on their
-    # own, with exact versions that must move with the central ones (scripts/check-dependabot.cs), so they are listed.
-    directories:
-      - "/"
-      - "/eng/doc-snippets"
+    # The solution's projects. eng/doc-snippets pins its own versions, but Dependabot cannot read it (its Tenantry
+    # versions come from a property only scripts/check-doc-snippets.sh sets), so dependabot-lock-files.yml gives it the
+    # new exact versions on Dependabot's branches (scripts/sync-eng-versions.cs).
+    directory: "/"
     schedule:
       interval: "weekly"
     # Wait a week after a release before proposing it (security updates are not delayed).
