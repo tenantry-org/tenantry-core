@@ -40,20 +40,12 @@ jobs:
           < /dev/null > "$RUNNER_TEMP/database-images.log" 2>&1 &
 
       - name: Setup .NET
+        # The SDK global.json names, which builds both target frameworks and runs net11.0's tests, and the .NET 10
+        # runtime, for net10.0's tests
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
-
-      - name: Setup .NET 11
-        # The SDK global.json names, with the net11.0 runtime.
-        # global.json rolls forward to a newer 11.0 SDK when one is installed, so a runner image that brings one would
-        # build with it instead.
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: 11.0.100
+          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       - name: Show selected SDK
         # A warning when it is not the one global.json names, since a runner image's newer 11.0 SDK is taken instead
@@ -203,20 +195,12 @@ jobs:
           fetch-depth: 0   # MinVer needs full history
 
       - name: Setup .NET
+        # The SDK global.json names, which builds both target frameworks and runs net11.0's tests, and the .NET 10
+        # runtime, for net10.0's tests
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
-
-      - name: Setup .NET 11
-        # The SDK global.json names, with the net11.0 runtime.
-        # global.json rolls forward to a newer 11.0 SDK when one is installed, so a runner image that brings one would
-        # build with it instead.
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: 11.0.100
+          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       - name: Show selected SDK
         # A warning when it is not the one global.json names, since a runner image's newer 11.0 SDK is taken instead
@@ -234,17 +218,6 @@ jobs:
         run: |
           if grep -rnE '^\s*(-\s*)?uses:\s*[^./][^@]*@' .github/workflows | grep -vE '@[0-9a-f]{40}( |$)'; then
             echo "::error::Pin these actions to a full commit SHA, with the version in a comment (uses: owner/repo@<sha> # vX.Y.Z)"
-            exit 1
-          fi
-
-      - name: Check every workflow installs the SDK global.json names
-        # Some workflows run only weekly or on a release, so one left on another 11.0 SDK when global.json moves would
-        # otherwise fail only then, with no compatible SDK
-        run: |
-          named="$(jq -r .sdk.version global.json)"
-          if grep -rnE '^\s*(dotnet-version:\s*)?11\.[0-9]' .github/workflows \
-            | grep -vE "^[^:]+:[0-9]+:\s*(dotnet-version:\s*)?${named//./\\.}\s*$"; then
-            echo "::error::Install $named, the SDK global.json names, in these steps"
             exit 1
           fi
 
