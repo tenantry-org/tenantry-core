@@ -93,7 +93,7 @@
 
   <ItemGroup>
     <!-- Microsoft.Data.SqlClient allows the vulnerable System.Security.Cryptography.Pkcs 9.0.11; an application raises it, and so does this build -->
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
   </ItemGroup>
 
 </Project>
