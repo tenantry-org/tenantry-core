@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 0.7
 
+- Move to .NET 10 or later: 0.8 has no net8.0 or net9.0 builds ([Compatibility](docs/compatibility.md)). Microsoft
+  stopped patching .NET 8 and 9, EF Core 8 and 9 included, on 10 November 2026. With EF Core 10, the tenant filter is
+  a named filter of its own instead of merged into the entity's: an unnamed filter of yours is named
+  `TenantryQueryFilters.Application`, and `IgnoreQueryFilters(["SoftDelete"])` keeps the tenant filter
+  ([EF Core integration](docs/efcore-integration.md)).
 - TNY1004 is a new warning, and TNY1001, TNY1002 and TNY2001 report more code, so a build that treats warnings as
   errors can fail ([Analyzers](docs/analyzers.md)). Add `.UseTenantry()` to the options TNY1004 names, fix or suppress
   the query TNY1002 names, and make the type TNY1001 names tenant-owned (`ITenantEntity<TKey>`) or mark it shared. In
@@ -48,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- net11.0 builds of every library package, so the packages now target net8.0 to net11.0. The net11.0 build of
+- net11.0 builds of every library package, so the packages now target net10.0 and net11.0. The net11.0 build of
   `Tenantry.EfCore` takes EF Core 11.0.0 or a later 11.x, and is tested on SQLite, SQL Server and PostgreSQL. MySQL is
   not tested on .NET 11: Pomelo's provider has no EF Core 11 release, and Oracle's only a preview. On net11.0,
   `Tenantry.Core`, `Tenantry.Caching` and `Tenantry.Options` take
@@ -124,9 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- 1.0 now comes no earlier than 10 May 2027, not 10 November 2027. It drops net8.0 and net9.0, which until then are
-  still built, tested and shipped. Microsoft stops patching .NET 8 and 9, EF Core 8 and 9 included, on 10 November
-  2026.
+- The packages target net10.0 and net11.0. The net8.0 and net9.0 builds are gone, and with them the EF Core 8 and 9
+  code paths, the tests on Pomelo's MySQL provider (which has no EF Core 10 release), and the .NET 8 and 9 floors of
+  `Microsoft.Extensions.*`, EF Core and ASP.NET Core.
 - An `ITenantActivityValidator<TKey>` registered as scoped or transient makes `ITenantActivity<TKey>` throw
   `InvalidOperationException` when it is first resolved, which `RunInScopeAsync` and the request middleware do. Such a
   validator was resolved once, from the root provider, and shared by every request.

@@ -614,11 +614,7 @@ public sealed class RegistrationTests
             }
             """.Replace(
                 "REGISTRATION",
-#if NET9_0_OR_GREATER
                 "services.AddDbContext<Data.AppDbContext>(options => options.EnableSensitiveDataLogging())",
-#else
-                "{|TNY1004:services.AddDbContext<Data.AppDbContext>(options => options.EnableSensitiveDataLogging())|}",
-#endif
                 StringComparison.Ordinal),
             [
                 new("Data", """
@@ -832,7 +828,6 @@ public sealed class RegistrationTests
             }
             """);
 
-#if NET9_0_OR_GREATER
     [Fact]
     public Task AnotherRegistrationOfTheSameContextWithUseTenantry_ClearsIt_FromEfCore9() =>
         Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
@@ -862,37 +857,6 @@ public sealed class RegistrationTests
                 }
             }
             """);
-#else
-    [Fact]
-    public Task OnEfCore8_OnlyAnEarlierRegistrationWithUseTenantry_OrOneElsewhere_ClearsIt() =>
-        Verify.AnalyzerAsync<ContextWithoutUseTenantryAnalyzer>(Model + """
-            public static class Startup
-            {
-                public static void Register(IServiceCollection services)
-                {
-                    // The first registration's options are the context's.
-                    {|TNY1004:services.AddDbContext<AppDbContext>(options => options.EnableSensitiveDataLogging())|};
-                    services.AddDbContextFactory<AppDbContext>(options => options.UseTenantry());
-
-                    services.AddDbContextFactory<ReportsDbContext>(options => options.UseTenantry());
-                    services.AddDbContext<ReportsDbContext>(options => options.EnableSensitiveDataLogging());
-
-                    services.AddDbContext<BillingDbContext>(options => options.EnableSensitiveDataLogging());
-                    AddIsolatedBilling(services);
-
-                    // A local function runs where it is called, not where it is declared.
-                    AddIsolatedAudit();
-                    services.AddDbContext<AuditDbContext>(options => options.EnableSensitiveDataLogging());
-
-                    void AddIsolatedAudit() => services.AddDbContextFactory<AuditDbContext>(options => options.UseTenantry());
-                }
-
-                // Its order against the registration above is not known here.
-                private static void AddIsolatedBilling(IServiceCollection services) =>
-                    services.AddDbContextFactory<BillingDbContext>(options => options.UseTenantry());
-            }
-            """);
-#endif
 
     [Fact]
     public Task AGenericRegistrationWithUseTenantry_ClearsTheContextsThatMeetItsConstraints() =>

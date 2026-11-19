@@ -41,8 +41,7 @@ builder.Services.AddDbContext<AppDbContext>(options => options
   `UseTenantry()`, `IgnoreQueryFilters()` on a tenant-owned entity, and a tenant taken from the request with no access
   check ([analyzers](docs/analyzers.md)).
 - One `AddTenantry` serves ASP.NET Core, console apps, workers and desktop apps.
-- Built for .NET 10 and .NET 11. .NET 8 and 9 are supported until 1.0, which comes no earlier than 10 May 2027
-  ([compatibility](docs/compatibility.md)).
+- Built for .NET 10 and .NET 11 ([compatibility](docs/compatibility.md)).
 
 [Tenantry Pro](https://tenantry.dev/pro), a paid subscription, adds schema per tenant, provisioning and migrations
 across tenant databases, offboarding, audit logging, and the tenant in background jobs and messages.

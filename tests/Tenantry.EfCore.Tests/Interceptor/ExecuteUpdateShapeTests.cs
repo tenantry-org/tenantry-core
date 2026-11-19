@@ -1,13 +1,8 @@
 using System.Linq.Expressions;
-#if EFCORE10_OR_GREATER
 using System.Runtime.CompilerServices;
-#endif
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-#if !EFCORE10_OR_GREATER
-using Microsoft.EntityFrameworkCore.Query;
-#endif
 using Tenantry.EfCore.Internal;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
@@ -34,24 +29,12 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
             .SetProperty(o => EF.Property<string>(o, nameof(Order.Description)), o => o.Description + "!")));
 
         ExecuteUpdateSetterReader.IsExecuteUpdate(call).Should().BeTrue();
-#if EFCORE10_OR_GREATER
         call.Method.DeclaringType.Should().Be(typeof(EntityFrameworkQueryableExtensions));
         var setters = call.Arguments[1].Should().BeAssignableTo<NewArrayExpression>().Subject;
         setters.Type.Should().Be<ITuple[]>();
         setters.Expressions.Should().HaveCount(2)
             .And.AllSatisfy(setter => setter.Should().BeAssignableTo<NewExpression>()
                 .Which.Type.Should().Be<Tuple<Delegate, object>>());
-#else
-#if NET9_0
-        call.Method.DeclaringType.Should().Be(typeof(EntityFrameworkQueryableExtensions));
-#else
-        call.Method.DeclaringType.Should().Be(typeof(RelationalQueryableExtensions));
-#endif
-        var setters = call.Arguments[1].Should().BeAssignableTo<UnaryExpression>()
-            .Which.Operand.Should().BeAssignableTo<LambdaExpression>().Subject;
-        setters.Parameters.Should().ContainSingle().Which.Type.Should().Be<SetPropertyCalls<Order>>();
-        setters.Body.Should().BeAssignableTo<MethodCallExpression>().Which.Method.Name.Should().Be("SetProperty");
-#endif
     }
 
     [Fact]
@@ -71,12 +54,7 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
     {
         var call = await CaptureExecuteUpdateAsync(orders => orders.ExecuteUpdateAsync(s => s.SetProperty(o => o.Description, "fixed")));
 
-#if EFCORE10_OR_GREATER
         var unknown = Expression.Call(call.Method, call.Arguments[0], Expression.Constant(Array.Empty<ITuple>(), typeof(IReadOnlyList<ITuple>)));
-#else
-        var calls = Expression.Parameter(typeof(SetPropertyCalls<Order>), "s");
-        var unknown = Expression.Call(call.Method, call.Arguments[0], Expression.Quote(Expression.Lambda(calls, calls)));
-#endif
 
         ExecuteUpdateSetterReader.ReadSelectors(unknown).Should().BeEmpty();
         FluentActions.Invoking(() => TenantBulkUpdateGuard.Check(unknown, model: null, TenantIsolation.ForModel(_capture.Model!)!))
@@ -84,26 +62,6 @@ public sealed class ExecuteUpdateShapeTests : IDisposable
             .WithMessage("Tenantry cannot read the setters of this ExecuteUpdate on EF Core *");
     }
 
-#if !EFCORE10_OR_GREATER
-    [Fact]
-    public async Task SettersComposedWithInvoke_AreReadAndChecked()
-    {
-        // EF Core 8 and 9 accept a setter lambda that invokes another; the guard reads through the invocation.
-        await using var db = await DbContextFactory.CreateContextAsync(TestTenantContext.For("acme"), _connection);
-
-        (await db.Orders.ExecuteUpdateAsync(Invoking(s => s.SetProperty(o => o.Description, "fixed")), cancellationToken: TestContext.Current.CancellationToken)).Should().Be(0);
-        await db.Awaiting(context => context.Orders.ExecuteUpdateAsync(Invoking(s => s.SetProperty(o => o.TenantId, "other"))))
-            .Should().ThrowAsync<TenantIsolationViolationException>().WithMessage("ExecuteUpdate cannot set TenantId*");
-    }
-
-    // s => inner(s)
-    private static Expression<Func<SetPropertyCalls<Order>, SetPropertyCalls<Order>>> Invoking(
-        Expression<Func<SetPropertyCalls<Order>, SetPropertyCalls<Order>>> inner)
-    {
-        var calls = Expression.Parameter(typeof(SetPropertyCalls<Order>), "s");
-        return Expression.Lambda<Func<SetPropertyCalls<Order>, SetPropertyCalls<Order>>>(Expression.Invoke(inner, calls), calls);
-    }
-#endif
 
     // Runs the query on a context without Tenantry's guard and returns the ExecuteUpdate call EF Core compiled.
     private async Task<MethodCallExpression> CaptureExecuteUpdateAsync(Func<IQueryable<Order>, Task> run)

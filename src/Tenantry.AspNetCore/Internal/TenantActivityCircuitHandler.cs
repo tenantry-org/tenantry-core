@@ -1,10 +1,8 @@
 using Microsoft.AspNetCore.Components.Server.Circuits;
-#if NET10_0_OR_GREATER
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
-#endif
 
 namespace Tenantry.AspNetCore.Internal;
 
@@ -22,24 +20,20 @@ internal sealed class TenantActivityCircuitHandler(IServiceProvider services) : 
     private bool _opened;
     private ITenantDescriptor? _tenant;
 
-#if NET10_0_OR_GREATER
     // Where a paused circuit's state records its tenant's id, so the circuit that resumes it can be checked.
     internal const string StateKey = "Tenantry.CircuitTenant";
 
     // Why a resumed circuit's activity is refused: it resumed the state of another tenant's circuit.
     private InvalidOperationException? _refusal;
-#endif
 
     public override Task OnCircuitOpenedAsync(Circuit circuit, CancellationToken cancellationToken)
     {
         _tenant = TenantActivityCheck.CurrentTenant(services, Registration);
         _opened = true;
-#if NET10_0_OR_GREATER
         if (services.GetService<PersistentComponentState>() is { } state)
         {
             CheckResumedState(state);
         }
-#endif
         return Task.CompletedTask;
     }
 
@@ -47,12 +41,10 @@ internal sealed class TenantActivityCircuitHandler(IServiceProvider services) : 
         Func<CircuitInboundActivityContext, Task> next) =>
         async context =>
         {
-#if NET10_0_OR_GREATER
             if (_refusal is not null)
             {
                 throw _refusal;
             }
-#endif
 
             // Blazor opens a circuit before its first activity. An activity that came first would still be on the
             // opening connection, so it is checked against the current tenant alone rather than refused.
@@ -69,7 +61,6 @@ internal sealed class TenantActivityCircuitHandler(IServiceProvider services) : 
             await next(context).ConfigureAwait(true);
         };
 
-#if NET10_0_OR_GREATER
     // .NET 10 can pause a circuit (Blazor.pauseCircuit(), or when it evicts a disconnected one) and resume its state in
     // a new circuit, whose tenant is the resuming request's. Blazor restores that state before it opens the circuit,
     // and adds the circuit's components as its first activity, so a circuit that resumes another tenant's state, or
@@ -115,5 +106,4 @@ internal sealed class TenantActivityCircuitHandler(IServiceProvider services) : 
                 $", but the request that resumed it identifies tenant '{resumed}', so the circuit ends. A circuit " +
                 "keeps the tenant it opened with, through a pause too."),
         };
-#endif
 }

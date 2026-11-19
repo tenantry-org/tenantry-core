@@ -13,10 +13,9 @@ namespace Tenantry.EfCore.Internal;
 ///   <item>Rejects an <c>ExecuteUpdate</c> that sets <c>TenantId</c> (<see cref="TenantBulkUpdateGuard"/>).</item>
 ///   <item>Keeps the tenant filter on the query behind <c>Reload</c> and <c>GetDatabaseValues</c> (<see cref="DatabaseValuesQuery"/>).</item>
 /// </list>
-/// On EF Core 10 and later, query-expression interceptors are singleton interceptors and EF Core keys its internal
-/// service provider on their instances, so a new instance per context (or per host) would make EF build a new
-/// internal provider each time; EF Core 8 and 9 resolve them per context. The interceptor is stateless and always used
-/// through the single <see cref="Instance"/>.
+/// Query-expression interceptors are singleton interceptors and EF Core keys its internal service provider on their
+/// instances, so a new instance per context (or per host) would make EF build a new internal provider each time. The
+/// interceptor is stateless and always used through the single <see cref="Instance"/>.
 /// </remarks>
 internal sealed class TenantQueryInterceptor : IQueryExpressionInterceptor
 {

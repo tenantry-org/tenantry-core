@@ -5,7 +5,7 @@
     management, for src, tests and samples). Core is the source (see Build.props), and its Dependabot maintains the
     ones with a single exact version; Pro's ignores them.
 
-    A version range ("[8.0.31, 9.0.0)") is what a package publishes: its floor is the oldest version supported, which
+    A version range ("[10.0.12, 11.0.0)") is what a package publishes: its floor is the oldest version supported, which
     some test must resolve (scripts/check-dependency-floors.cs). A per-framework band stays in its framework's major.
     Microsoft.Extensions.* take a minimum only (see scripts/check-package-ranges.cs).
   -->
@@ -27,18 +27,6 @@
     tests run against, and the framework's band ending at the next major. Set in a framework's own evaluation only:
     every project here multi-targets, or sets its framework in its folder's Directory.Build.props, as the samples do.
   -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <MicrosoftExtensionsFloor>8.0.0</MicrosoftExtensionsFloor>
-    <EfCoreFloor>8.0.31</EfCoreFloor>
-    <FrameworkNextMajor>9.0.0</FrameworkNextMajor>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <MicrosoftExtensionsFloor>9.0.0</MicrosoftExtensionsFloor>
-    <EfCoreFloor>9.0.20</EfCoreFloor>
-    <FrameworkNextMajor>10.0.0</FrameworkNextMajor>
-  </PropertyGroup>
-
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <MicrosoftExtensionsFloor>10.0.0</MicrosoftExtensionsFloor>
     <EfCoreFloor>10.0.12</EfCoreFloor>
@@ -61,19 +49,7 @@
     <PackageVersion Include="Microsoft.Extensions.Http" Version="[$(MicrosoftExtensionsFloor), )" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="[$(MicrosoftExtensionsFloor), )" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="[$(MicrosoftExtensionsFloor), )" />
-    <!-- HybridCache's base type arrived in 9.0, which supports net8.0 (scripts/check-package-ranges.cs allows it) -->
-    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="[$(MicrosoftExtensionsFloor), )" Condition="'$(TargetFramework)' != 'net8.0'" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="[9.0.0, )" Condition="'$(TargetFramework)' == 'net8.0'" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[8.0.4, 9.0.0)" />
-    <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="[8.0.2, 9.0.0)" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="[9.0.0, 10.0.0)" />
-    <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="[9.0.0, 10.0.0)" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="[$(MicrosoftExtensionsFloor), )" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">

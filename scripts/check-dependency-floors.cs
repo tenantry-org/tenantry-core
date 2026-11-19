@@ -3,7 +3,7 @@
 //
 //   dotnet run scripts/check-dependency-floors.cs
 //
-// A range ("[8.0.31, 9.0.0)") tells consumers the oldest version that works: its floor. NuGet resolves a range
+// A range ("[10.0.12, 11.0.0)") tells consumers the oldest version that works: its floor. NuGet resolves a range
 // to the lowest version the graph allows, but a test graph can lift it (a test's own provider package can
 // need a newer EF Core), and then the floor is promised without ever being tested. For each range a src project
 // depends on, per target framework (its central version in Directory.Packages.props, as MSBuild evaluates it for
@@ -15,7 +15,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-string[] defaultFrameworks = ["net8.0", "net9.0", "net10.0", "net11.0"];
+string[] defaultFrameworks = ["net10.0", "net11.0"];
 
 var floors = new List<(string Project, string Package, string Framework, string Floor)>();
 foreach (var path in Directory.EnumerateFiles("src", "*.csproj", SearchOption.AllDirectories))

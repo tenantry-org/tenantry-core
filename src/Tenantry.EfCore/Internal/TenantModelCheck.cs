@@ -197,11 +197,7 @@ internal static class TenantModelCheck
 
     private static bool HasTenantFilter(IEntityType rootType, Type keyType)
     {
-#if EFCORE10_OR_GREATER
         return rootType.GetDeclaredQueryFilters().Any(filter => filter.Expression is { } lambda && IsTenantFilter(lambda, keyType));
-#else
-        return rootType.GetQueryFilter() is { } lambda && IsTenantFilter(lambda, keyType);
-#endif
     }
 
     // `TenantFilter.HasTenant<TKey>(context) && entity.TenantId.Equals(TenantFilter.CurrentTenantId<TKey>(context))`,

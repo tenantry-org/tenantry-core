@@ -3,10 +3,6 @@ using Microsoft.Data.Sqlite;
 
 namespace Tenantry.EfCore.Tests.Interceptor;
 
-// These tests set properties through EF.Property inside ExecuteUpdate on purpose. On EF Core 8 and 9,
-// SetProperty takes its selector as a Func nested in ExecuteUpdate's expression tree, so ReSharper reads
-// EF.Property there as a client-side call; EF translates it (and EF Core 10 takes an Expression instead).
-// ReSharper disable EntityFramework.ClientSideDbFunctionCall
 
 /// <summary>
 /// Pins the isolation boundary for writes that bypass <c>SaveChanges</c>: bulk <c>ExecuteUpdate</c> and

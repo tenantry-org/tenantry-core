@@ -141,7 +141,7 @@ For code that extends the package, such as another package that builds on it. An
 |------|------|---------|
 | [`EfCoreIsolationOptions`](tenantry-efcore-efcoreisolationoptions.md) | class | Options for EF Core tenant isolation: the application's, set with `tenant.ConfigureEfCoreIsolation(options => …)`, or one context's, set with `options.UseTenantry(o => …)`. |
 | [`SaveWithoutTransactionBehavior`](tenantry-efcore-savewithouttransactionbehavior.md) | enum | What `SaveChanges` does when `Database.AutoTransactionBehavior` is `Never`, no transaction is open, and some rows it writes are tenant-checked by another of its statements. Set with [`EfCoreIsolationOptions.OnSaveWithoutTransaction`](tenantry-efcore-efcoreisolationoptions.md). |
-| [`TenantryQueryFilters`](tenantry-efcore-tenantryqueryfilters.md) | class | The names of the query filters Tenantry adds or names on EF Core 10 and later. |
+| [`TenantryQueryFilters`](tenantry-efcore-tenantryqueryfilters.md) | class | The names of the query filters Tenantry adds, or gives to an unnamed filter of yours. |
 | [`UnmarkedEntityTypeBehavior`](tenantry-efcore-unmarkedentitytypebehavior.md) | enum | What a context does when its model has tenant-owned entity types and also entity types that are neither tenant-owned nor marked as shared across tenants. Set with [`EfCoreIsolationOptions.OnUnmarkedEntityType`](tenantry-efcore-efcoreisolationoptions.md). |
 
 ### Extension points

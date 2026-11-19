@@ -1,7 +1,4 @@
 using System.Linq.Expressions;
-#if !EFCORE10_OR_GREATER
-using Microsoft.EntityFrameworkCore.Query;
-#endif
 
 namespace Tenantry.EfCore.Internal;
 
@@ -30,7 +27,6 @@ internal static class ExecuteUpdateSetterReader
     {
         List<LambdaExpression> selectors = [];
 
-#if EFCORE10_OR_GREATER
         // EF Core 10: ExecuteUpdate(source, IReadOnlyList<ITuple>), the list being
         // new ITuple[] { new Tuple<Delegate, object>(selector, value), … }.
         if (executeUpdate.Arguments is not [_, NewArrayExpression { NodeType: ExpressionType.NewArrayInit } setters])
@@ -49,41 +45,6 @@ internal static class ExecuteUpdateSetterReader
 
             selectors.Add(lambda);
         }
-#else
-        // EF Core 8 and 9: ExecuteUpdate(source, s => s.SetProperty(selector, value).SetProperty(…)), a chain of
-        // SetPropertyCalls<T>.SetProperty calls on the lambda's parameter. EF Core also accepts a chain composed from
-        // other setter lambdas by invoking them (s => inner.Invoke(s)), which is read with the invocation inlined.
-        if (executeUpdate.Arguments is not [_, var argument] || AsLambda(argument) is not { Parameters: [var calls] } setters)
-        {
-            return [];
-        }
-
-        var current = setters.Body;
-
-        while (current != calls)
-        {
-            if (current is InvocationExpression { Arguments: [var invokedWith] } invocation &&
-                AsLambda(invocation.Expression) is { Parameters: [var parameter] } inner)
-            {
-                current = ParameterReplacer.Replace(inner.Body, parameter, invokedWith);
-                continue;
-            }
-
-            if (current is not MethodCallExpression { Method.Name: "SetProperty", Object: { } previous, Arguments: [var selector, _] } call ||
-                call.Method.DeclaringType is not { IsGenericType: true } declaringType ||
-                declaringType.GetGenericTypeDefinition() != typeof(SetPropertyCalls<>) ||
-                AsLambda(selector) is not { } lambda)
-            {
-                return [];
-            }
-
-            selectors.Add(lambda);
-            current = previous;
-        }
-
-        // The chain was read from the last call back to the first.
-        selectors.Reverse();
-#endif
 
         return selectors;
     }
@@ -99,15 +60,4 @@ internal static class ExecuteUpdateSetterReader
         ConstantExpression { Value: LambdaExpression constant } => constant,
         _ => null,
     };
-#if !EFCORE10_OR_GREATER
-
-    private sealed class ParameterReplacer(ParameterExpression parameter, Expression replacement) : ExpressionVisitor
-    {
-        public static Expression Replace(Expression expression, ParameterExpression parameter, Expression replacement) =>
-            new ParameterReplacer(parameter, replacement).Visit(expression);
-
-        protected override Expression VisitParameter(ParameterExpression node) =>
-            node == parameter ? replacement : base.VisitParameter(node);
-    }
-#endif
 }

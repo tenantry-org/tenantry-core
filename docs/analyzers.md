@@ -95,11 +95,9 @@ var categories = await db.Categories
 
 - If the query is meant to cross tenants (an admin report, maintenance), put it behind an authorization check of its
   own, and suppress the warning there with the reason.
-- If it is meant to ignore another filter only, on EF Core 10 and later name that filter, which keeps the tenant filter:
+- If it is meant to ignore another filter only, name that filter, which keeps the tenant filter:
   `IgnoreQueryFilters(["SoftDelete"])`. A call that names filters is reported only when a name among them is the
   tenant filter's, `TenantryQueryFilters.Tenant`.
-- On EF Core 8 and 9, which cannot name a filter, read the tenant-owned rows in a query of their own, without
-  `IgnoreQueryFilters()`.
 
 The rule looks at one expression ([Details](#what-tny1002-looks-at)). It does not see:
 
@@ -149,9 +147,8 @@ The rule reports a registration only when it can see everything the options do. 
   package that references `Tenantry.EfCore`;
 - the context, or a base context, has an `OnConfiguring` that calls `UseTenantry()`, passes the builder on in the same
   way, or is in another assembly;
-- another registration of the context, or a `ConfigureDbContext<TContext>`, in the same project calls `UseTenantry()`
-  (on EF Core 8, not one later in the same method, as EF Core 8 uses only a context's first options);
-- on EF Core 9 and later, the context is declared in another project, whose own registration may call `UseTenantry()`;
+- another registration of the context, or a `ConfigureDbContext<TContext>`, in the same project calls `UseTenantry()`;
+- the context is declared in another project, whose own registration may call `UseTenantry()`;
 - the registration has no options, is in generated code, or is in a generic method whose context type the rule cannot
   tell.
 
@@ -160,8 +157,6 @@ It reports these cases anyway:
 - A context declared in the same project, when only a library's `ConfigureDbContext<TContext>` helper applies
   `UseTenantry()`. Add `.UseTenantry()` to the registration too, which is harmless: `UseTenantry()` returns at once
   when the options already have it.
-- On EF Core 8, a test project's second registration of the context. Add `.UseTenantry()` to it, or set
-  `dotnet_diagnostic.TNY1004.severity = none` for the test project.
 - Options that pass or store the builder inside an array, a tuple or a `params object[]`, through reflection, or as a
   method group to a framework or third-party method. Suppress the warning there.
 

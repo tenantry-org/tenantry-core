@@ -2,9 +2,7 @@
 
 Namespace: `Tenantry.EfCore` · Package: `Tenantry.EfCore` · [API reference](README.md)
 
-The names of the query filters Tenantry adds or names on EF Core 10 and later.
-
-EF Core 8 and 9 have no named filters: there the tenant filter is merged into the entity's own filter, and only `IgnoreQueryFilters()` removes it, together with your own.
+The names of the query filters Tenantry adds, or gives to an unnamed filter of yours.
 
 ```csharp
 public static class TenantryQueryFilters

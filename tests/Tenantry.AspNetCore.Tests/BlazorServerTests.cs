@@ -4,9 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Components;
-#if NET10_0_OR_GREATER
 using Microsoft.AspNetCore.Components.Infrastructure;
-#endif
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.Components.Web;
@@ -190,7 +188,6 @@ public sealed partial class BlazorServerTests
         _runs.Should().Be(0);
     }
 
-#if NET10_0_OR_GREATER
     [Fact]
     public async Task APausedCircuit_RendersAgain_WhenItsTenantResumesIt()
     {
@@ -306,7 +303,6 @@ public sealed partial class BlazorServerTests
 
         _runs.Should().Be(1);
     }
-#endif
 
     [Fact]
     public void AddingItTwice_AddsOneHandler()
@@ -369,7 +365,6 @@ public sealed partial class BlazorServerTests
                 return Task.CompletedTask;
             });
 
-#if NET10_0_OR_GREATER
     // Restores the state of a paused circuit of the tenant given, or of none, into the circuit's scope, as Blazor does
     // before it opens a resumed circuit.
     private static Task Resume(IServiceScope circuit, string? tenant) =>
@@ -391,7 +386,6 @@ public sealed partial class BlazorServerTests
 
         public Task PersistStateAsync(IReadOnlyDictionary<string, byte[]> persisted) => Task.CompletedTask;
     }
-#endif
 
     [Route("/")]
     public sealed class HomePage : ComponentBase
@@ -499,7 +493,6 @@ public sealed partial class BlazorServerTests
             return circuit;
         }
 
-#if NET10_0_OR_GREATER
         // Pauses the circuit as Blazor.pauseCircuit() does, keeps the state the server sends, as Blazor's script does,
         // and closes this connection.
         public async Task<PausedCircuit> PauseAsync()
@@ -526,7 +519,6 @@ public sealed partial class BlazorServerTests
             await circuit.SendAsync(new InvocationMessage("UpdateRootComponents", [paused.Operations, ""]));
             return circuit;
         }
-#endif
 
         private static async Task<CircuitConnection> ConnectAsync(WebApplication app, string tenant)
         {
@@ -636,7 +628,6 @@ public sealed partial class BlazorServerTests
         }
     }
 
-#if NET10_0_OR_GREATER
     /// <summary>
     /// What Blazor's script keeps of a paused circuit: its id, its components, and the state the server sent it.
     /// </summary>
@@ -645,5 +636,4 @@ public sealed partial class BlazorServerTests
         public Task<CircuitConnection> ResumeAsync(WebApplication app, string tenant) =>
             CircuitConnection.ResumeAsync(app, tenant, this);
     }
-#endif
 }
