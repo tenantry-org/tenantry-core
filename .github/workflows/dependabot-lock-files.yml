@@ -2,9 +2,12 @@ name: Dependabot lock files
 
 # Dependabot's NuGet updater rewrites each multi-targeted packages.lock.json for one target framework only, so
 # its pull requests fail CI's locked restore (NU1004). This regenerates the lock files for every framework on
-# Dependabot's NuGet branches and commits them. Regenerating runs the pull request's restore, so it gets a
-# read-only token; the job that commits runs nothing from the branch and commits only lock files. A push made
-# with the workflow's token starts no workflow itself, so the commit job then starts CI on the new commit.
+# Dependabot's NuGet branches and commits them. It also gives eng/doc-snippets the exact versions the central package
+# files now set (scripts/sync-eng-versions.cs): Dependabot cannot read that project, so a bump otherwise leaves its
+# copies behind and scripts/check-dependabot.cs fails. Regenerating runs the pull request's restore, so it gets a
+# read-only token; the job that commits runs nothing from the branch, and commits only lock files and, in
+# eng/doc-snippets, changed Version attributes. A push made with the workflow's token starts no workflow itself, so the
+# commit job then starts CI on the new commit.
 
 on:
   pull_request:
@@ -53,10 +56,13 @@ jobs:
       - name: Regenerate
         run: dotnet restore Tenantry.slnx --force-evaluate
 
-      - name: Collect changed lock files
+      - name: Raise eng/doc-snippets' exact versions
+        run: dotnet run scripts/sync-eng-versions.cs
+
+      - name: Collect changed files
         id: collect
         run: |
-          git diff --name-only -- '*packages.lock.json' > changed.txt
+          git diff --name-only -- '*packages.lock.json' eng/doc-snippets/DocSnippets.csproj > changed.txt
           if [ -s changed.txt ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             tar -cf lock-files.tar -T changed.txt
@@ -74,7 +80,7 @@ jobs:
           retention-days: 1
 
   commit:
-    name: Commit lock files
+    name: Commit lock files and eng/doc-snippets' versions
     needs: regenerate
     if: needs.regenerate.outputs.changed == 'true'
     runs-on: ubuntu-latest
@@ -99,16 +105,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.head_ref }}
         run: |
-          # Only lock files, at paths the repository already tracks.
+          # Only lock files at paths the repository already tracks, and eng/doc-snippets
           tar -tf lock-files.tar | while read -r path; do
             case "$path" in
               */packages.lock.json) git ls-files --error-unmatch -- "$path" > /dev/null ;;
+              eng/doc-snippets/DocSnippets.csproj) ;;
               *) echo "Unexpected file in the artifact: $path"; exit 1 ;;
             esac
           done
           tar -xf lock-files.tar && rm lock-files.tar
+          # In eng/doc-snippets, nothing but Version attributes may change
+          path=eng/doc-snippets/DocSnippets.csproj
+          if ! diff <(git show "HEAD:$path" | sed -E 's/ Version="[^"]*"//') <(sed -E 's/ Version="[^"]*"//' "$path"); then
+            echo "$path changed more than Version attributes"
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Regenerate lock files for every target framework"
+          git commit -am "Regenerate lock files for every target framework, and give eng/doc-snippets the new exact versions"
           git push origin "HEAD:$BRANCH"
           gh workflow run ci.yml --ref "$BRANCH"
