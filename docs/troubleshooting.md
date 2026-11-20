@@ -156,8 +156,8 @@ Call `UseApplicationServiceProvider` before `UseTenantry()`, or set the option o
 
 Treat `null` as "not found" in a `DbUpdateConcurrencyException` handler. Read a soft-deleted row with
 `IgnoreQueryFilters()` and your own key and `TenantId` predicate. Tenantry keeps the tenant filter on EF Core's read by
-key, so another tenant's row, or any row with no tenant current, reads as deleted. On EF Core 8 and 9 so does a
-soft-deleted row ([What is and isn't isolated](efcore-integration.md#what-is-and-isnt-isolated)).
+key, so another tenant's row, or any row with no tenant current, reads as deleted
+([What is and isn't isolated](efcore-integration.md#what-is-and-isnt-isolated)).
 
 ## "has no application service provider"
 

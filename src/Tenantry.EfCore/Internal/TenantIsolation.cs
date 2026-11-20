@@ -144,7 +144,6 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
     {
         var tenantFilter = BuildFilter(entityType.ClrType, context);
 
-#if EFCORE10_OR_GREATER
         // EF Core 10 names filters, so the tenant filter can be removed on its own. It does not allow a named filter
         // beside an unnamed one, so an unnamed filter of the application's is given a name, to keep the two apart.
         var declared = entityType.GetDeclaredQueryFilters();
@@ -166,9 +165,6 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
         }
 
         builder.HasQueryFilter(TenantryQueryFilters.Tenant, tenantFilter);
-#else
-        builder.HasQueryFilter(entityType.GetQueryFilter() is { } existing ? Combine(existing, tenantFilter) : tenantFilter);
-#endif
     }
 
     // The filter reads TenantId as a CLR property, and stamping writes it through EF Core, so it must be a mapped
@@ -217,13 +213,6 @@ internal sealed class TenantIsolation<TKey> : TenantIsolation
         return Expression.Lambda(body, entity);
     }
 
-#if !EFCORE10_OR_GREATER
-    [RequiresDynamicCode("Builds a lambda for an entity type known only at run time.")]
-    private static LambdaExpression Combine(LambdaExpression existing, LambdaExpression tenant) =>
-        Expression.Lambda(
-            Expression.AndAlso(existing.Body, ParameterReplacer.Replace(tenant.Body, tenant.Parameters[0], existing.Parameters[0])),
-            existing.Parameters);
-#endif
 
     public override void SavingChanges(DbContext context) => TenantWriteGuard<TKey>.Check(context);
 

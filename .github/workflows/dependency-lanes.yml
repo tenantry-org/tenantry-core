@@ -3,7 +3,7 @@ name: Dependency lanes
 # The latest lane: every version range restored at the newest release in its major, then the full build and
 # test suite on every target framework and database provider (scripts/test-latest-dependencies.sh). It catches
 # a new release inside a range that breaks us before a consumer updates to it. The integration tests also take the
-# providers' ADO.NET drivers (Npgsql, Microsoft.Data.SqlClient, MySqlConnector, MySql.Data) at their newest there
+# providers' ADO.NET drivers (Npgsql, Microsoft.Data.SqlClient, MySql.Data) at their newest there
 # (Directory.Packages.props). The lowest end of each range is CI's job (scripts/check-dependency-floors.cs). The
 # resolved versions are kept as an artifact.
 #
@@ -36,20 +36,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup .NET
+        # The SDK global.json names, which builds both target frameworks and runs net11.0's tests, and the .NET 10
+        # runtime, for net10.0's tests
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
-
-      - name: Setup .NET 11
-        # The SDK global.json names, with the net11.0 runtime.
-        # global.json rolls forward to a newer 11.0 SDK when one is installed, so a runner image that brings one would
-        # build with it instead.
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: 11.0.100
+          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       - name: Restore, build and test at the latest versions
         run: bash scripts/test-latest-dependencies.sh
@@ -86,20 +78,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup .NET
+        # The SDK global.json names, which builds both target frameworks and runs net11.0's tests, and the .NET 10
+        # runtime, for net10.0's tests
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
-
-      - name: Setup .NET 11
-        # The SDK global.json names, with the net11.0 runtime.
-        # global.json rolls forward to a newer 11.0 SDK when one is installed, so a runner image that brings one would
-        # build with it instead.
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: 11.0.100
+          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       - name: Restore
         run: dotnet restore tests/Tenantry.IntegrationTests --locked-mode

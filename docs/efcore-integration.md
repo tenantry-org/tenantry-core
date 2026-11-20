@@ -107,10 +107,9 @@ checked. If your ids cannot collide, turn it off with [`IgnoreWarnings`](diagnos
 Your own query filters still apply. The tenant filter is added after your `OnModelCreating` and ANDed with your filter
 on the entity, so your configuration can go anywhere, including `IEntityTypeConfiguration` classes.
 
-On EF Core 8 and 9 the tenant filter is merged into the entity's filter. On EF Core 10 and later it is a named filter,
-`TenantryQueryFilters.Tenant`. EF Core does not allow a named filter beside an unnamed one, so Tenantry names an
-unnamed filter of yours `TenantryQueryFilters.Application`. Both still apply, and each can be ignored alone. You can
-name your own:
+The tenant filter is a named filter, `TenantryQueryFilters.Tenant`. EF Core does not allow a named filter beside an
+unnamed one, so Tenantry names an unnamed filter of yours `TenantryQueryFilters.Application`. Both still apply, and each
+can be ignored alone. You can name your own:
 
 ```csharp
 modelBuilder.Entity<Order>().HasQueryFilter("SoftDelete", o => !o.IsDeleted);
@@ -517,9 +516,8 @@ tenant's join rows ([Many-to-many relationships](efcore-advanced.md#many-to-many
 
 ### Reloading an entity
 
-EF Core reads the row by key without query filters, but Tenantry keeps the tenant filter. On EF Core 10 and later the
-entity's other filters are still ignored (an unnamed one is named `TenantryQueryFilters.Application`). On EF Core 8
-and 9 its own filter applies too, merged with the tenant filter.
+EF Core reads the row by key without query filters, but Tenantry keeps the tenant filter. The entity's
+other filters are still ignored (an unnamed one is named `TenantryQueryFilters.Application`).
 
 ### Why database per tenant has its own registration
 

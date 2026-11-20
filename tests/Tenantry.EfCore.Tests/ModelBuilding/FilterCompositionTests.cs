@@ -74,21 +74,6 @@ public sealed class FilterCompositionTests : IDisposable
         (await db.Items.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).TenantId.Should().Be("acme");
     }
 
-#if !EFCORE10_OR_GREATER
-    [Fact]
-    public async Task DatabaseValues_KeepTheTenantFilter_AndTheOwnFilterItWasMergedWith()
-    {
-        // On EF Core 8 and 9 the tenant filter is part of the entity's one filter, so Reload and GetDatabaseValues
-        // apply all of it.
-        await using var db = await CreateAsync<UnnamedFilterContext>();
-        await SeedAsync(db);
-        var rows = await db.Items.IgnoreQueryFilters().AsNoTracking().ToDictionaryAsync(item => item.Name, item => item.Id, cancellationToken: TestContext.Current.CancellationToken);
-
-        db.Attach(new Item { Id = rows["acme active"], TenantId = "acme" }).GetDatabaseValues().Should().NotBeNull();
-        db.Attach(new Item { Id = rows["acme deleted"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
-        db.Attach(new Item { Id = rows["globex active"], TenantId = "acme" }).GetDatabaseValues().Should().BeNull();
-    }
-#else
     [Fact]
     public async Task DatabaseValues_KeepTheTenantFilter_AndIgnoreAnUnnamedOwnFilter()
     {
@@ -164,7 +149,6 @@ public sealed class FilterCompositionTests : IDisposable
         (await db.Items.IgnoreQueryFilters([TenantryQueryFilters.Application]).Select(item => item.Name).ToListAsync(cancellationToken: TestContext.Current.CancellationToken))
             .Should().BeEquivalentTo("acme active", "acme deleted");
     }
-#endif
 
     private async Task<TContext> CreateAsync<TContext>()
         where TContext : DbContext
@@ -238,11 +222,9 @@ public sealed class FilterCompositionTests : IDisposable
         }
     }
 
-#if EFCORE10_OR_GREATER
     public sealed class NamedFilterContext(DbContextOptions<NamedFilterContext> options) : ItemsContext(options)
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
             modelBuilder.Entity<Item>().HasQueryFilter("SoftDelete", item => !item.IsDeleted);
     }
-#endif
 }

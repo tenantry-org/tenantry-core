@@ -8,25 +8,20 @@ The .NET versions, EF Core versions and databases Tenantry supports, and how its
 |------|-------------------|----------|-----------------|
 | .NET 10 | LTS, until 14 November 2028 | Primary | .NET 10's end of support |
 | .NET 11 | STS, two years from its release on 10 November 2026 | Primary | .NET 11's end of support |
-| .NET 9 | STS, until 10 November 2026 | Legacy | 1.0, no earlier than 10 May 2027 |
-| .NET 8 | LTS, until 10 November 2026 | Legacy | 1.0, no earlier than 10 May 2027 |
 
-Move to .NET 10: Microsoft stops patching .NET 8 and .NET 9, EF Core 8 and 9 included, on 10 November 2026. Legacy
-means the net8.0 and net9.0 builds are still shipped, built and tested. They stay until 1.0, which drops them and comes
-no earlier than 10 May 2027.
+The packages target net10.0 and net11.0. The net11.0 builds depend on .NET 11.0.0; prereleases before .NET 11 shipped on
+10 November 2026 were built against its release candidate.
 
-The packages target net8.0, net9.0, net10.0 and net11.0. The net11.0 builds depend on .NET 11.0.0; prereleases
-before .NET 11 shipped on 10 November 2026 were built against its release candidate.
+.NET 8 and 9, which Microsoft stopped patching on 10 November 2026, are not supported from 0.8: Tenantry 0.7 is the
+last release with net8.0 and net9.0 builds. Move to .NET 10.
 
 ## EF Core
 
 Each target framework's build of `Tenantry.EfCore` accepts only that framework's EF Core major, from the release below,
-and is compiled and tested against it. EF Core 9 on .NET 8 is not supported.
+and is compiled and tested against it.
 
 | Target framework | EF Core |
 |------------------|---------|
-| net8.0 | 8.0.31 or later 8.x |
-| net9.0 | 9.0.20 or later 9.x |
 | net10.0 | 10.0.12 or later 10.x |
 | net11.0 | 11.0.0 or later 11.x |
 
@@ -41,10 +36,9 @@ These combinations run the write-isolation suite against a real database on ever
 
 | Database | EF Core provider | Framework | Status |
 |----------|------------------|-----------|--------|
-| SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 8, 9, 10, 11 | Tested (unit suite) |
-| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 8.0.31, 9.0.20, 10.0.12, 11.0.0 | .NET 8, 9, 10, 11 | Tested |
-| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.4, 9.0.0, 10.0.3, 11.0.0-rc.3 on EF Core 11.0.0 (no 11.0.0 yet) | .NET 8, 9, 10, 11 | Tested |
-| MySQL 8.4 | `Pomelo.EntityFrameworkCore.MySql` 8.0.2, 9.0.0 | .NET 8, 9 | Tested |
+| SQLite (in-memory) | `Microsoft.EntityFrameworkCore.Sqlite` | .NET 10, 11 | Tested (unit suite) |
+| SQL Server 2022 | `Microsoft.EntityFrameworkCore.SqlServer` 10.0.12, 11.0.0 | .NET 10, 11 | Tested |
+| PostgreSQL 16 | `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, 11.0.0-rc.3 on EF Core 11.0.0 (no 11.0.0 yet) | .NET 10, 11 | Tested |
 | MySQL 8.4 | `MySql.EntityFrameworkCore` (Oracle) 10.0.9 | .NET 10 | Tested |
 | MySQL / MariaDB | `Pomelo.EntityFrameworkCore.MySql` | .NET 10 | Not tested (no EF Core 10 release) |
 | MySQL / MariaDB | any | .NET 11 | Not tested (Pomelo has no EF Core 11 release, and Oracle's `MySql.EntityFrameworkCore` only 11.0.0-preview, built against an EF Core 11 preview) |
@@ -66,15 +60,13 @@ compares ids under it. SQL Server's and MySQL's defaults ignore case
 
 ## Dependency versions
 
-- `Microsoft.Extensions.*` packages take a minimum from the target framework's own major (8.0 on net8.0), with no
+- `Microsoft.Extensions.*` packages take a minimum from the target framework's own major (10.0 on net10.0), with no
   upper bound. Microsoft ships every `Microsoft.Extensions` major for all supported frameworks, and current Azure SDKs
-  need 10.x even on .NET 8.
+  can need a newer major than the framework's own.
 - On net11.0, `Tenantry.Core`, `Tenantry.Caching` and `Tenantry.Options` declare no `Microsoft.Extensions.*` package
   dependency: they use the copies of `DependencyInjection.Abstractions`, `Caching.Abstractions`,
   `Logging.Abstractions` and `Options` in the shared framework, which the .NET runtime's own updates patch.
   `Tenantry.Http` still depends on `Microsoft.Extensions.Http`, which the shared framework does not include.
-- `Tenantry.Caching` takes `Microsoft.Extensions.Caching.Abstractions` 9.0 or later on net8.0 too, the first with
-  `HybridCache`.
 - EF Core is taken in the target framework's major only, as above.
 - `Tenantry.EfCore`, `Tenantry.AspNetCore`, `Tenantry.Http`, `Tenantry.Caching` and `Tenantry.Options` take
   `Tenantry.Core` from their own release up to the next minor (`[x.y.z, x.(y+1).0)`), as a minor release may break
@@ -109,14 +101,13 @@ The suite covers forged writes, entities loaded under another tenant, unchanged-
 and a database per tenant.
 
 Every build runs it against the versions in the table: the oldest release of each provider that the tests allow, with
-the ADO.NET driver that provider requires at the least. The exception is MySqlConnector under Pomelo's provider, raised
-to 2.6.1 because older releases have a known vulnerability. The server images are pinned: SQL Server 2022 CU27,
+the ADO.NET driver that provider requires at the least. The server images are pinned: SQL Server 2022 CU27,
 PostgreSQL 16.15 and MySQL 8.4.11. Only these versions run on every build.
 
 Each week two more runs report what has changed since, so they find a break soon after a release:
 
 - The newest release of each provider within its major, against the pinned images. It runs with the newest ADO.NET
-  driver an application can update to: Npgsql and MySqlConnector in the major their provider supports,
+  driver an application can update to: Npgsql in the major its provider supports,
   `Microsoft.Data.SqlClient` and `MySql.Data` at their newest release.
 - The pinned packages against the newest server releases: SQL Server 2025, the latest PostgreSQL and MySQL releases,
   and MySQL's long-term support release.

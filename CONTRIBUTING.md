@@ -4,9 +4,9 @@ This guide covers the local workflow and the checks your change must pass.
 
 ## Prerequisites
 
-The .NET 11 SDK builds every target framework (`net8.0;net9.0;net10.0;net11.0`): `global.json` names the one CI
-installs. A newer 11.0 SDK, if you have one, is used instead, and ReSharper's
-`inspectcode` may not load it. To run the tests on every target framework you also need the 8.0, 9.0 and 10.0 runtimes.
+The .NET 11 SDK builds both target frameworks (`net10.0;net11.0`): `global.json` names the one CI installs. A newer
+11.0 SDK, if you have one, is used instead, and ReSharper's `inspectcode` may not load it. To run the tests on both
+target frameworks you also need the .NET 10 runtime.
 `scripts/smoke-templates.sh` also needs the .NET 10 SDK: it builds the templates' `net10.0` projects with it, as a user
 without a later SDK does.
 

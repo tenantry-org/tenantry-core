@@ -52,9 +52,8 @@ public class InvoiceNumbersTests
 
 ## Requests: `WebApplicationFactory`
 
-`WebApplicationFactory<Program>`, from Microsoft.AspNetCore.Mvc.Testing, runs the application in memory. On .NET 8 and
-9, the `Program` class that top-level statements produce is internal: add `public partial class Program;` at the end of
-`Program.cs` for the tests to name it. .NET 10 makes it public. Send the tenant the way the application resolves it,
+`WebApplicationFactory<Program>`, from Microsoft.AspNetCore.Mvc.Testing, runs the application in memory. The `Program` class
+that top-level statements produce is public from .NET 10, so the tests can name it. Send the tenant the way the application resolves it,
 here in a header:
 
 ```csharp

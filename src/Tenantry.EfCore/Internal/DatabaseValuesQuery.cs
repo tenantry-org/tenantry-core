@@ -1,6 +1,4 @@
-#if EFCORE10_OR_GREATER
 using System.Diagnostics.CodeAnalysis;
-#endif
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -17,9 +15,8 @@ namespace Tenantry.EfCore.Internal;
 /// another tenant's key (a forged write, which then fails with <c>DbUpdateConcurrencyException</c>) would get that
 /// tenant's values. When EF Core compiles that query for a tenant-owned entity type, or an entity type it owns,
 /// <see cref="KeepTenantFilter"/> takes <c>IgnoreQueryFilters()</c> out, so the row is read only if it belongs to the
-/// current tenant: another tenant's row reads as deleted. On EF Core 10 and later it ignores the model's other named
-/// filters in its place, as EF Core meant to (an unnamed one is named <see cref="TenantryQueryFilters.Application"/>);
-/// on EF Core 8 and 9, where Tenantry merges the tenant filter into the entity's own, that filter applies as well.
+/// current tenant: another tenant's row reads as deleted. It ignores the model's other named filters in its place, as
+/// EF Core meant to (an unnamed one is named <see cref="TenantryQueryFilters.Application"/>).
 /// </para>
 /// <para>
 /// EF Core does not document the query. It builds
@@ -84,7 +81,6 @@ internal static class DatabaseValuesQuery
             return node.Update(null, [where.Update(null, [KeepFilters(ignore), where.Arguments[1]]), node.Arguments[1]]);
         }
 
-#if EFCORE10_OR_GREATER
         // EF Core 10 names filters, and Tenantry names an unnamed one, so the others can still be ignored by name.
         [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Runs while EF Core compiles a query, which requires dynamic code anyway.")]
         [UnconditionalSuppressMessage("Trimming", "IL2060", Justification = "IgnoreQueryFilters has no trimming requirements on its type parameter.")]
@@ -112,14 +108,6 @@ internal static class DatabaseValuesQuery
                 source,
                 Expression.Constant(others, typeof(IReadOnlyCollection<string>)));
         }
-#else
-        // EF Core 8 and 9 have one filter per entity type, so the tenant filter comes with the entity's own.
-        private Expression KeepFilters(MethodCallExpression ignore)
-        {
-            _ = model;
-            return ignore.Arguments[0];
-        }
-#endif
     }
 
     private sealed class TenantRootFinder(TenantIsolation isolation) : ExpressionVisitor

@@ -428,7 +428,6 @@ public sealed class QueryTests
             }
             """);
 
-#if NET10_0_OR_GREATER
     [Fact]
     public Task IgnoreQueryFilters_ByName_IsReportedOnlyWhenItNamesTheTenantFilter() =>
         Verify.AnalyzerAsync<IgnoreQueryFiltersAnalyzer>(Model + """
@@ -448,7 +447,6 @@ public sealed class QueryTests
                     {|TNY1002:db.Categories.IgnoreQueryFilters([TenantryQueryFilters.Tenant])|}.Include(c => c.Purchases).ToList();
             }
             """);
-#endif
 
     [Fact]
     public Task RawSqlOnTheDatabase_IsReported_AndFromSqlOnASetIsNot() =>

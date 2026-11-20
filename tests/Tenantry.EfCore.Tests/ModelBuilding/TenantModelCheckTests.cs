@@ -193,7 +193,6 @@ public sealed class TenantModelCheckTests : IDisposable
             .Where(e => e.Kind == TenantIsolationViolationKind.ModelConfiguration);
     }
 
-#if EFCORE10_OR_GREATER
     [Fact]
     public void OwnFilterNamedLikeTheTenantFilter_FailsToBuildTheModel()
     {
@@ -203,7 +202,6 @@ public sealed class TenantModelCheckTests : IDisposable
             .Should().Throw<TenantIsolationViolationException>()
             .WithMessage("*query filter named 'Tenantry.Tenant'*Give your filter another name*");
     }
-#endif
 
     [Fact]
     public void UseInternalServiceProvider_IsRefused()
@@ -749,7 +747,6 @@ public sealed class TenantModelCheckTests : IDisposable
             modelBuilder.Entity<JsonOrder>().OwnsMany(order => order.Lines, line => line.ToJson());
     }
 
-#if EFCORE10_OR_GREATER
     private sealed class ReservedFilterNameContext(DbContextOptions<ReservedFilterNameContext> options) : DbContext(options)
     {
         public DbSet<Item> Items => Set<Item>();
@@ -757,7 +754,6 @@ public sealed class TenantModelCheckTests : IDisposable
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
             modelBuilder.Entity<Item>().HasQueryFilter(TenantryQueryFilters.Tenant, item => item.Name != "");
     }
-#endif
 
     private sealed class TwoKeyTypesContext(DbContextOptions<TwoKeyTypesContext> options) : DbContext(options)
     {

@@ -6,7 +6,7 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0;net10.0;net11.0</TargetFrameworks>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <!-- A symbol package beside each package, which NuGet.org serves to debuggers; or, in a repository that sets
@@ -25,7 +25,7 @@
     <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://tenantry.dev</PackageProjectUrl>
     <!-- Pack checks that each target framework's assembly keeps the API of the lower ones: a library built against
-         the net8.0 assembly runs in an application that gets the net10.0 one. -->
+         the net10.0 assembly runs in an application that gets the net11.0 one. -->
     <EnablePackageValidation>true</EnablePackageValidation>
     <!-- Release tags are v-prefixed (v1.2.3), as release.yml expects -->
     <MinVerTagPrefix>v</MinVerTagPrefix>

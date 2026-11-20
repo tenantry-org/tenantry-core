@@ -15,11 +15,9 @@ namespace Tenantry.EfCore.Internal;
 /// </summary>
 /// <remarks>
 /// <para>
-/// EF Core's own read of a row (<c>GetDatabaseValues</c>) comes back through <see cref="DatabaseValuesQuery"/> with the
-/// tenant filter, and on EF Core 8 and 9 with the entity's own filter too, which the tenant filter is merged into, so a
-/// row of the current tenant's that the application's filter hides (a soft-deleted one) would read as missing. This
-/// query names the tenant itself instead, as the tenant filter does, so no filter applies and another tenant's row is
-/// never read. Writes ignore query filters too.
+/// It names the tenant itself, as the tenant filter does, so no query filter applies: a row of the current tenant's that
+/// the application's filter hides (a soft-deleted one) is still read, and another tenant's row never is. Writes ignore
+/// query filters too.
 /// </para>
 /// <para>
 /// The tenant and the key values are captured, so EF Core sends them as parameters and compiles the query once per

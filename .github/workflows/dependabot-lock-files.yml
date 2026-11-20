@@ -38,20 +38,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup .NET
+        # The SDK global.json names, which builds both target frameworks and runs net11.0's tests, and the .NET 10
+        # runtime, for net10.0's tests
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
-
-      - name: Setup .NET 11
-        # The SDK global.json names, with the net11.0 runtime.
-        # global.json rolls forward to a newer 11.0 SDK when one is installed, so a runner image that brings one would
-        # build with it instead.
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: 11.0.100
+          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       - name: Regenerate
         run: dotnet restore Tenantry.slnx --force-evaluate

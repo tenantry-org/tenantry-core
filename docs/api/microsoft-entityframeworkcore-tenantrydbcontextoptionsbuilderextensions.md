@@ -26,7 +26,7 @@ Parameters:
 
 Returns: `DbContextOptionsBuilder`: The same `optionsBuilder` for chaining.
 
-Any `DbContext` works, pooled or not, with no base class or interface. The tenant query filter is added after `OnModelCreating`, so your configuration can come in any order, and is combined with your own filters: on EF Core 10 and later it is named [`TenantryQueryFilters.Tenant`](tenantry-efcore-tenantryqueryfilters.md), and an unnamed filter of yours beside it is named [`TenantryQueryFilters.Application`](tenantry-efcore-tenantryqueryfilters.md); on EF Core 8 and 9 it is merged into your filter. Each tenant-owned entity's `TenantId` becomes a concurrency token, so every `UPDATE` and `DELETE` matches only a row stored under the tenant the entity was loaded as.
+Any `DbContext` works, pooled or not, with no base class or interface. The tenant query filter is added after `OnModelCreating`, so your configuration can come in any order, and is combined with your own filters: it is named [`TenantryQueryFilters.Tenant`](tenantry-efcore-tenantryqueryfilters.md), and an unnamed filter of yours beside it is named [`TenantryQueryFilters.Application`](tenantry-efcore-tenantryqueryfilters.md). Each tenant-owned entity's `TenantId` becomes a concurrency token, so every `UPDATE` and `DELETE` matches only a row stored under the tenant the entity was loaded as.
 
 The current tenant is read from the context's application service provider, which `AddDbContext`, `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbContextFactory` supply, so register Tenantry there with `AddTenantry` for your entities' key type. A context built by hand without `UseApplicationServiceProvider` builds its model, for design-time tools, but throws on its first query or save.
 
@@ -87,7 +87,7 @@ Parameters:
 
 Returns: `DbContextOptionsBuilder<TContext>`: The same `optionsBuilder` for chaining.
 
-Any `DbContext` works, pooled or not, with no base class or interface. The tenant query filter is added after `OnModelCreating`, so your configuration can come in any order, and is combined with your own filters: on EF Core 10 and later it is named [`TenantryQueryFilters.Tenant`](tenantry-efcore-tenantryqueryfilters.md), and an unnamed filter of yours beside it is named [`TenantryQueryFilters.Application`](tenantry-efcore-tenantryqueryfilters.md); on EF Core 8 and 9 it is merged into your filter. Each tenant-owned entity's `TenantId` becomes a concurrency token, so every `UPDATE` and `DELETE` matches only a row stored under the tenant the entity was loaded as.
+Any `DbContext` works, pooled or not, with no base class or interface. The tenant query filter is added after `OnModelCreating`, so your configuration can come in any order, and is combined with your own filters: it is named [`TenantryQueryFilters.Tenant`](tenantry-efcore-tenantryqueryfilters.md), and an unnamed filter of yours beside it is named [`TenantryQueryFilters.Application`](tenantry-efcore-tenantryqueryfilters.md). Each tenant-owned entity's `TenantId` becomes a concurrency token, so every `UPDATE` and `DELETE` matches only a row stored under the tenant the entity was loaded as.
 
 The current tenant is read from the context's application service provider, which `AddDbContext`, `AddDbContextPool`, `AddDbContextFactory` and `AddPooledDbContextFactory` supply, so register Tenantry there with `AddTenantry` for your entities' key type. A context built by hand without `UseApplicationServiceProvider` builds its model, for design-time tools, but throws on its first query or save.
 
